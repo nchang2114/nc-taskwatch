@@ -162,6 +162,15 @@ html[data-theme='light'] .brand-text {
   text-align: center;
 }
 
+.time-display .time-value {
+  width: min(100%, 11.5ch);
+  margin-inline: auto;
+}
+
+.time-display .time-value[data-hours-visible='true'] {
+  width: min(100%, 15.5ch);
+}
+
 .time-label {
   text-transform: uppercase;
   letter-spacing: 0.16em;
@@ -173,7 +182,7 @@ html[data-theme='light'] .brand-text {
 
 .time-value {
   font-family: var(--font-numeric);
-  font-size: clamp(3.9rem, 11.8vw, 6.9rem);
+  font-size: clamp(3.6rem, 10.4vw, 6.2rem);
   font-weight: 600;
   letter-spacing: 0.05em;
   font-variant-numeric: tabular-nums;
@@ -181,6 +190,10 @@ html[data-theme='light'] .brand-text {
   color: var(--text-primary);
   text-shadow: 0 12px 22px rgba(0, 0, 0, 0.18);
   line-height: 1.05;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(3.9rem, 11.8vw, 6.9rem);
 }
 
 .status-row {

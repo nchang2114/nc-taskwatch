@@ -1,0 +1,11 @@
+@media (max-width: 414px) {
+  .time-value {
+    font-size: clamp(3.2rem, 10.5vw, 5.4rem);
+    min-height: clamp(3.6rem, 11vw, 6.2rem);
+    width: min(100%, 12.5ch);
+  }
+
+  .time-value[data-hours-visible='true'] {
+    width: min(100%, 16.5ch);
+  }
+}

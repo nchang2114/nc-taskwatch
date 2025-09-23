@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import './mobile.css'
 
 type Theme = 'light' | 'dark'
 
@@ -136,7 +137,9 @@ function App() {
       <main className="stopwatch-card" role="region" aria-live="polite">
         <div className="time-display">
           <span className="time-label">elapsed</span>
-          <span className="time-value">{formattedTime}</span>
+          <span className="time-value" data-hours-visible={formattedTime.split(':').length > 2}>
+            {formattedTime}
+          </span>
         </div>
 
         <div className="status-row" aria-live="polite">
