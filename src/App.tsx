@@ -122,57 +122,64 @@ function App() {
   const primaryLabel = isRunning ? 'Pause' : elapsed > 0 ? 'Resume' : 'Start'
   const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
   return (
-    <div className="app-shell">
-      <header className="top-bar">
-        <div className="brand">
-          <span className="brand-pulse" aria-hidden="true" />
-          <span className="brand-text">NC Stopwatch</span>
+    <div className="page">
+      <header className="site-header">
+        <div className="site-header__inner">
+          <nav className="top-bar" aria-label="Primary">
+            <div className="brand">
+              <span className="brand-text">NC-STOPWATCH</span>
+            </div>
+            <button
+              className="theme-toggle"
+              type="button"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${nextThemeLabel} mode`}
+            >
+              <span className="theme-toggle-label">{nextThemeLabel}</span>
+            </button>
+          </nav>
         </div>
-        <button
-          className="theme-toggle"
-          type="button"
-          onClick={toggleTheme}
-          aria-label={`Switch to ${nextThemeLabel} mode`}
-        >
-          <span className="theme-toggle-label">{nextThemeLabel}</span>
-        </button>
       </header>
 
-      <main className="stopwatch-card" role="region" aria-live="polite">
-        <div className="time-display">
-          <span className="time-label">elapsed</span>
-          <span className="time-value">
-            {formattedTime}
-          </span>
-        </div>
+      <main className="site-main">
+        <div className="site-main__inner">
+          <h1 className="stopwatch-heading">Stopwatch</h1>
+          <section className="stopwatch-card" role="region" aria-live="polite">
+            <div className="time-display">
+              <span className="time-label">elapsed</span>
+              <span className="time-value">
+                {formattedTime}
+              </span>
+            </div>
 
-        <div className="status-row" aria-live="polite">
-          <span className={`status-dot status-${statusText}`} aria-hidden="true" />
-          <span className="status-text">{statusText}</span>
-        </div>
+            <div className="status-row" aria-live="polite">
+              <span className={`status-dot status-${statusText}`} aria-hidden="true" />
+              <span className="status-text">{statusText}</span>
+            </div>
 
-        <div className="controls">
-          <button
-            className="control control-primary"
-            type="button"
-            onClick={handleStartStop}
-          >
-            {primaryLabel}
-          </button>
-          <button
-            className="control control-secondary"
-            type="button"
-            onClick={handleReset}
-            disabled={elapsed === 0}
-          >
-            Reset
-          </button>
+            <div className="controls">
+              <button
+                className="control control-primary"
+                type="button"
+                onClick={handleStartStop}
+              >
+                {primaryLabel}
+              </button>
+              <button
+                className="control control-secondary"
+                type="button"
+                onClick={handleReset}
+                disabled={elapsed === 0}
+              >
+                Reset
+              </button>
+            </div>
+          </section>
+
+          <p className="meta meta-note">Built with React + Vite for seamless desktop and mobile use.</p>
         </div>
       </main>
 
-      <footer className="meta">
-        <p>Built with React + Vite for seamless desktop and mobile use.</p>
-      </footer>
     </div>
   )
 }
