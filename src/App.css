@@ -163,12 +163,16 @@ html[data-theme='light'] .brand-text {
 }
 
 .time-display .time-value {
-  width: min(100%, 11.5ch);
+  width: min(100%, 9.5ch);
   margin-inline: auto;
 }
 
 .time-display .time-value[data-hours-visible='true'] {
-  width: min(100%, 15.5ch);
+  width: min(100%, 13.8ch);
+}
+
+.time-display .time-value[data-days-visible='true'] {
+  width: min(100%, 19ch);
 }
 
 .time-label {
@@ -182,9 +186,9 @@ html[data-theme='light'] .brand-text {
 
 .time-value {
   font-family: var(--font-numeric);
-  font-size: clamp(3.6rem, 10.4vw, 6.2rem);
+  font-size: clamp(2.8rem, 9vw, 5.8rem);
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.045em;
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1, 'ss01' 1;
   color: var(--text-primary);
@@ -193,7 +197,19 @@ html[data-theme='light'] .brand-text {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: clamp(3.9rem, 11.8vw, 6.9rem);
+  min-height: clamp(3.2rem, 10vw, 6.2rem);
+}
+
+.time-value[data-hours-visible='true'] {
+  font-size: clamp(2.5rem, 8.2vw, 4.8rem);
+  letter-spacing: 0.036em;
+  min-height: clamp(3rem, 9.2vw, 5.6rem);
+}
+
+.time-value[data-days-visible='true'] {
+  font-size: clamp(2.2rem, 7.4vw, 4.4rem);
+  letter-spacing: 0.03em;
+  min-height: clamp(2.8rem, 8.4vw, 5.3rem);
 }
 
 .status-row {

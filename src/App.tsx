@@ -22,15 +22,21 @@ const getInitialTheme = (): Theme => {
 
 const formatTime = (milliseconds: number) => {
   const totalMs = Math.max(0, Math.floor(milliseconds))
-  const hours = Math.floor(totalMs / 3_600_000)
+  const days = Math.floor(totalMs / 86_400_000)
+  const hours = Math.floor((totalMs % 86_400_000) / 3_600_000)
   const minutes = Math.floor((totalMs % 3_600_000) / 60_000)
   const seconds = Math.floor((totalMs % 60_000) / 1_000)
   const centiseconds = Math.floor((totalMs % 1_000) / 10)
 
-  const segments = [] as string[]
-  if (hours > 0) {
+  const segments: string[] = []
+
+  if (days > 0) {
+    segments.push(days.toString().padStart(2, '0'))
+    segments.push(hours.toString().padStart(2, '0'))
+  } else if (hours > 0) {
     segments.push(hours.toString().padStart(2, '0'))
   }
+
   segments.push(minutes.toString().padStart(2, '0'))
   segments.push(seconds.toString().padStart(2, '0'))
 
@@ -116,6 +122,9 @@ function App() {
   const statusText = isRunning ? 'running' : elapsed > 0 ? 'paused' : 'idle'
   const primaryLabel = isRunning ? 'Pause' : elapsed > 0 ? 'Resume' : 'Start'
   const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
+  const timeSegments = formattedTime.split(':')
+  const hasHours = timeSegments.length >= 3
+  const hasDays = timeSegments.length >= 4
 
   return (
     <div className="app-shell">
@@ -137,7 +146,7 @@ function App() {
       <main className="stopwatch-card" role="region" aria-live="polite">
         <div className="time-display">
           <span className="time-label">elapsed</span>
-          <span className="time-value" data-hours-visible={formattedTime.split(':').length > 2}>
+          <span className="time-value" data-hours-visible={hasHours} data-days-visible={hasDays}>
             {formattedTime}
           </span>
         </div>
