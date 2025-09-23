@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="faceGradient" x1="12" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7c8aff" />
+      <stop offset="1" stop-color="#37c7ff" />
+    </linearGradient>
+    <linearGradient id="handGradient" x1="30" y1="18" x2="36" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.9" />
+      <stop offset="1" stop-color="#cde9ff" stop-opacity="0.5" />
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="28" fill="url(#faceGradient)" />
+  <circle cx="32" cy="32" r="24" fill="none" stroke="rgba(14, 26, 58, 0.28)" stroke-width="2" />
+  <circle cx="32" cy="32" r="20" fill="rgba(8, 15, 38, 0.18)" />
+  <circle cx="32" cy="32" r="3.6" fill="#ffffff" fill-opacity="0.9" />
+  <path d="M32 9c-4 0-7 1.2-7 1.2v3.8c3-1.1 6-1.6 7-1.6s4 .5 7 1.6V10.2S36 9 32 9z" fill="rgba(12, 24, 58, 0.28)" />
+  <path d="M32 32L43 18" fill="none" stroke="url(#handGradient)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="32" cy="32" r="1.4" fill="#0b1c38" />
+  <circle cx="43" cy="18" r="1.6" fill="#ffffff" fill-opacity="0.88" />
+  <circle cx="32" cy="16.2" r="1.2" fill="#ffffff" fill-opacity="0.7" />
+</svg>
