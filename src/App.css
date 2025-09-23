@@ -208,7 +208,7 @@ html[data-theme='light'] .brand-text {
 
 .time-value {
   font-family: var(--font-numeric);
-  font-size: clamp(2.3rem, 7.2vw, 5.8rem);
+  font-size: clamp(2rem, 5vw, 4.2rem);
   font-weight: 600;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
@@ -225,6 +225,21 @@ html[data-theme='light'] .brand-text {
   margin-inline: auto;
   max-width: min(100%, 17ch);
   text-align: center;
+}
+
+.time-value.time-sm {
+  font-size: clamp(1.8rem, 4.6vw, 3.8rem);
+  letter-spacing: 0.03em;
+}
+
+.time-value.time-xs {
+  font-size: clamp(1.65rem, 4.1vw, 3.4rem);
+  letter-spacing: 0.02em;
+}
+
+.time-value.time-xxs {
+  font-size: clamp(1.45rem, 3.6vw, 3rem);
+  letter-spacing: 0.015em;
 }
 
 .status-row {

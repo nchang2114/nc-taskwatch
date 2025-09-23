@@ -118,6 +118,16 @@ function App() {
   }
 
   const formattedTime = useMemo(() => formatTime(elapsed), [elapsed])
+  const timeLength = formattedTime.length
+  let timeSizeClass = ''
+  if (timeLength >= 13) {
+    timeSizeClass = 'time-xxs'
+  } else if (timeLength >= 11) {
+    timeSizeClass = 'time-xs'
+  } else if (timeLength >= 9) {
+    timeSizeClass = 'time-sm'
+  }
+  const timeValueClassName = ['time-value', timeSizeClass].filter(Boolean).join(' ')
   const statusText = isRunning ? 'running' : elapsed > 0 ? 'paused' : 'idle'
   const primaryLabel = isRunning ? 'Pause' : elapsed > 0 ? 'Resume' : 'Start'
   const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
@@ -147,7 +157,7 @@ function App() {
           <section className="stopwatch-card" role="region" aria-live="polite">
             <div className="time-display">
               <span className="time-label">elapsed</span>
-              <span className="time-value">
+              <span className={timeValueClassName}>
                 {formattedTime}
               </span>
             </div>
