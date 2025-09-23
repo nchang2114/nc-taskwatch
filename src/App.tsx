@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
-import './mobile.css'
 
 type Theme = 'light' | 'dark'
 
@@ -31,7 +30,7 @@ const formatTime = (milliseconds: number) => {
   const segments: string[] = []
 
   if (days > 0) {
-    segments.push(days.toString().padStart(2, '0'))
+    segments.push(`${days}D`)
     segments.push(hours.toString().padStart(2, '0'))
   } else if (hours > 0) {
     segments.push(hours.toString().padStart(2, '0'))
@@ -122,10 +121,6 @@ function App() {
   const statusText = isRunning ? 'running' : elapsed > 0 ? 'paused' : 'idle'
   const primaryLabel = isRunning ? 'Pause' : elapsed > 0 ? 'Resume' : 'Start'
   const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
-  const timeSegments = formattedTime.split(':')
-  const hasHours = timeSegments.length >= 3
-  const hasDays = timeSegments.length >= 4
-
   return (
     <div className="app-shell">
       <header className="top-bar">
@@ -146,7 +141,7 @@ function App() {
       <main className="stopwatch-card" role="region" aria-live="polite">
         <div className="time-display">
           <span className="time-label">elapsed</span>
-          <span className="time-value" data-hours-visible={hasHours} data-days-visible={hasDays}>
+          <span className="time-value">
             {formattedTime}
           </span>
         </div>

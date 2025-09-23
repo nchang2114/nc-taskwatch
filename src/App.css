@@ -162,19 +162,6 @@ html[data-theme='light'] .brand-text {
   text-align: center;
 }
 
-.time-display .time-value {
-  width: min(100%, 9.5ch);
-  margin-inline: auto;
-}
-
-.time-display .time-value[data-hours-visible='true'] {
-  width: min(100%, 13.8ch);
-}
-
-.time-display .time-value[data-days-visible='true'] {
-  width: min(100%, 19ch);
-}
-
 .time-label {
   text-transform: uppercase;
   letter-spacing: 0.16em;
@@ -186,9 +173,9 @@ html[data-theme='light'] .brand-text {
 
 .time-value {
   font-family: var(--font-numeric);
-  font-size: clamp(2.8rem, 9vw, 5.8rem);
+  font-size: clamp(2.3rem, 7.2vw, 5.8rem);
   font-weight: 600;
-  letter-spacing: 0.045em;
+  letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1, 'ss01' 1;
   color: var(--text-primary);
@@ -197,19 +184,12 @@ html[data-theme='light'] .brand-text {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: clamp(3.2rem, 10vw, 6.2rem);
-}
-
-.time-value[data-hours-visible='true'] {
-  font-size: clamp(2.5rem, 8.2vw, 4.8rem);
-  letter-spacing: 0.036em;
-  min-height: clamp(3rem, 9.2vw, 5.6rem);
-}
-
-.time-value[data-days-visible='true'] {
-  font-size: clamp(2.2rem, 7.4vw, 4.4rem);
-  letter-spacing: 0.03em;
-  min-height: clamp(2.8rem, 8.4vw, 5.3rem);
+  min-height: clamp(2.7rem, 8.5vw, 5.8rem);
+  padding-inline: 0.35ch;
+  white-space: nowrap;
+  margin-inline: auto;
+  max-width: min(100%, 17ch);
+  text-align: center;
 }
 
 .status-row {
@@ -251,8 +231,9 @@ html[data-theme='light'] .brand-text {
 }
 
 .controls {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: clamp(0.75rem, 2vw, 1rem);
 }
 
@@ -261,7 +242,7 @@ html[data-theme='light'] .brand-text {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(0.85rem, 2.5vw, 1.1rem) clamp(1.4rem, 3.5vw, 1.6rem);
+  padding: clamp(0.78rem, 2.2vw, 1rem) clamp(1.2rem, 3vw, 1.45rem);
   border-radius: 999px;
   border: 1px solid var(--control-border);
   background: linear-gradient(140deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 68%), var(--control-surface);
@@ -275,6 +256,9 @@ html[data-theme='light'] .brand-text {
   backdrop-filter: blur(12px);
   transition: transform 160ms ease, box-shadow 220ms ease, border 200ms ease, background 200ms ease;
   cursor: pointer;
+  flex: 0 0 auto;
+  min-width: clamp(108px, 26vw, 138px);
+  max-width: 180px;
 }
 
 .control::after {
@@ -417,17 +401,57 @@ html[data-theme='light'] .brand-text {
   }
 }
 
+.time-value {
+  font-family: var(--font-numeric);
+  font-size: clamp(3.2rem, 10vw, 6.4rem);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'ss01' 1;
+  color: var(--text-primary);
+  text-shadow: 0 12px 22px rgba(0, 0, 0, 0.18);
+  line-height: 1.05;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(3rem, 9.8vw, 6.4rem);
+  padding-inline: 0.25ch;
+  white-space: nowrap;
+  margin-inline: auto;
+}
+
+@media (max-width: 720px) {
+  .time-value {
+    font-size: clamp(2.1rem, 9.6vw, 4.6rem);
+    letter-spacing: 0.036em;
+    max-width: min(100%, 15ch);
+  }
+
+  .controls {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .control {
+    width: min(100%, 180px);
+    margin-inline: auto;
+  }
+}
+
 @media (max-width: 540px) {
   .brand {
     letter-spacing: 0.12em;
   }
 
   .time-value {
-    letter-spacing: 0.04em;
+    font-size: clamp(1.9rem, 12.5vw, 3.8rem);
+    letter-spacing: 0.032em;
+    max-width: min(100%, 14ch);
   }
 
   .controls {
-    grid-template-columns: 1fr;
+    gap: 0.7rem;
   }
 }
 
@@ -442,6 +466,16 @@ html[data-theme='light'] .brand-text {
 
   .status-row {
     letter-spacing: 0.16em;
+  }
+
+  .time-value {
+    font-size: clamp(1.8rem, 14.5vw, 3.4rem);
+    letter-spacing: 0.028em;
+    max-width: min(100%, 13ch);
+  }
+
+  .controls {
+    gap: 0.6rem;
   }
 }
 
