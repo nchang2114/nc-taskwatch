@@ -208,9 +208,9 @@ html[data-theme='light'] .brand-text {
 
 .time-value {
   font-family: var(--font-numeric);
-  font-size: clamp(2rem, 5vw, 4.2rem);
+  font-size: clamp(2.4rem, 7.4vw, 4.6rem);
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1, 'ss01' 1;
   color: var(--text-primary);
@@ -219,27 +219,32 @@ html[data-theme='light'] .brand-text {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: clamp(2.7rem, 8.5vw, 5.8rem);
-  padding-inline: 0.35ch;
+  width: 100%;
+  min-height: clamp(3rem, 9.4vw, 6.2rem);
+  padding-inline: clamp(0.28ch, 1vw, 0.8ch);
   white-space: nowrap;
   margin-inline: auto;
-  max-width: min(100%, 17ch);
+  max-width: none;
   text-align: center;
 }
 
-.time-value.time-sm {
-  font-size: clamp(1.8rem, 4.6vw, 3.8rem);
-  letter-spacing: 0.03em;
+.time-value.time-minutes {
+  font-size: clamp(3rem, 9.6vw, 5.8rem);
 }
 
-.time-value.time-xs {
-  font-size: clamp(1.65rem, 4.1vw, 3.4rem);
+.time-value.time-hours {
+  font-size: clamp(2.8rem, 9.2vw, 5.4rem);
+  letter-spacing: 0.028em;
+}
+
+.time-value.time-days {
+  font-size: clamp(2.6rem, 8.6vw, 5rem);
+  letter-spacing: 0.024em;
+}
+
+.time-value.time-days-long {
+  font-size: clamp(2.4rem, 7.8vw, 4.6rem);
   letter-spacing: 0.02em;
-}
-
-.time-value.time-xxs {
-  font-size: clamp(1.45rem, 3.6vw, 3rem);
-  letter-spacing: 0.015em;
 }
 
 .status-row {

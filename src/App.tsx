@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
+declare global {
+  interface Window {
+    __ncSetElapsed?: (ms: number) => void
+  }
+}
+
 type Theme = 'light' | 'dark'
 
 const THEME_STORAGE_KEY = 'nc-stopwatch-theme'
@@ -95,6 +101,20 @@ function App() {
   }, [isRunning])
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !import.meta.env.DEV) return
+
+    window.__ncSetElapsed = (ms: number) => {
+      setIsRunning(false)
+      setElapsed(Math.max(0, Math.floor(ms)))
+      lastTickRef.current = null
+    }
+
+    return () => {
+      delete window.__ncSetElapsed
+    }
+  }, [])
+
+  useEffect(() => {
     return () => {
       if (frameRef.current !== null) {
         cancelAnimationFrame(frameRef.current)
@@ -119,13 +139,14 @@ function App() {
 
   const formattedTime = useMemo(() => formatTime(elapsed), [elapsed])
   const timeLength = formattedTime.length
-  let timeSizeClass = ''
-  if (timeLength >= 13) {
-    timeSizeClass = 'time-xxs'
-  } else if (timeLength >= 11) {
-    timeSizeClass = 'time-xs'
-  } else if (timeLength >= 9) {
-    timeSizeClass = 'time-sm'
+  const colonCount = (formattedTime.match(/:/g) ?? []).length
+  const hasDays = formattedTime.includes('D')
+
+  let timeSizeClass: string = 'time-minutes'
+  if (hasDays) {
+    timeSizeClass = timeLength >= 16 ? 'time-days-long' : 'time-days'
+  } else if (colonCount >= 2) {
+    timeSizeClass = 'time-hours'
   }
   const timeValueClassName = ['time-value', timeSizeClass].filter(Boolean).join(' ')
   const statusText = isRunning ? 'running' : elapsed > 0 ? 'paused' : 'idle'
