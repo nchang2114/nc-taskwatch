@@ -242,9 +242,19 @@ html[data-theme='light'] .brand-text {
   letter-spacing: 0.024em;
 }
 
-.time-value.time-days-long {
-  font-size: clamp(2.4rem, 7.8vw, 4.6rem);
+.time-value.time-length-sm {
+  font-size: clamp(2.25rem, 7.2vw, 4.3rem);
+  letter-spacing: 0.024em;
+}
+
+.time-value.time-length-xs {
+  font-size: clamp(2.1rem, 6.6vw, 4rem);
   letter-spacing: 0.02em;
+}
+
+.time-value.time-length-xxs {
+  font-size: clamp(1.95rem, 6vw, 3.7rem);
+  letter-spacing: 0.016em;
 }
 
 .status-row {

@@ -138,17 +138,22 @@ function App() {
   }
 
   const formattedTime = useMemo(() => formatTime(elapsed), [elapsed])
-  const timeLength = formattedTime.length
+  const charCount = formattedTime.replace('.', '').length
   const colonCount = (formattedTime.match(/:/g) ?? []).length
   const hasDays = formattedTime.includes('D')
 
-  let timeSizeClass: string = 'time-minutes'
-  if (hasDays) {
-    timeSizeClass = timeLength >= 16 ? 'time-days-long' : 'time-days'
-  } else if (colonCount >= 2) {
-    timeSizeClass = 'time-hours'
+  const baseTimeClass = hasDays ? 'time-days' : colonCount >= 2 ? 'time-hours' : 'time-minutes'
+
+  let lengthClass = ''
+  if (charCount >= 15) {
+    lengthClass = 'time-length-xxs'
+  } else if (charCount >= 13) {
+    lengthClass = 'time-length-xs'
+  } else if (charCount >= 11) {
+    lengthClass = 'time-length-sm'
   }
-  const timeValueClassName = ['time-value', timeSizeClass].filter(Boolean).join(' ')
+
+  const timeValueClassName = ['time-value', baseTimeClass, lengthClass].filter(Boolean).join(' ')
   const statusText = isRunning ? 'running' : elapsed > 0 ? 'paused' : 'idle'
   const primaryLabel = isRunning ? 'Pause' : elapsed > 0 ? 'Resume' : 'Start'
   const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
