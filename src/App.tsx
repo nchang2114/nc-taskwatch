@@ -1,7 +1,9 @@
 import {
+  type CSSProperties,
   type FocusEvent,
   type FormEvent,
   type KeyboardEvent,
+  type MouseEvent,
   useEffect,
   useMemo,
   useRef,
@@ -28,7 +30,9 @@ type HistoryEntry = {
 const THEME_STORAGE_KEY = 'nc-stopwatch-theme'
 const HISTORY_STORAGE_KEY = 'nc-stopwatch-history'
 const CURRENT_TASK_STORAGE_KEY = 'nc-stopwatch-current-task'
-const MAX_TASK_LENGTH = 32
+const TASK_DISPLAY_LIMIT = 32
+const MAX_TASK_STORAGE_LENGTH = 256
+const SINGLE_CLICK_DELAY_MS = 250
 
 const makeHistoryId = () => {
   try {
@@ -98,8 +102,10 @@ const getStoredTaskName = (): string => {
   }
 
   const trimmed = stored.trim()
-  const base = trimmed.length > 0 ? trimmed : 'New Task'
-  return base.slice(0, MAX_TASK_LENGTH)
+  if (trimmed.length === 0) {
+    return ''
+  }
+  return trimmed.slice(0, MAX_TASK_STORAGE_LENGTH)
 }
 
 const getInitialTheme = (): Theme => {
@@ -251,13 +257,15 @@ function App() {
   const [sessionStart, setSessionStart] = useState<number | null>(null)
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
-  const [isTaskTruncated, setIsTaskTruncated] = useState(false)
   const [isTaskFocused, setIsTaskFocused] = useState(false)
+  const [isTaskExpanded, setIsTaskExpanded] = useState(false)
+  const [isTaskEditing, setIsTaskEditing] = useState(false)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1280
   )
   const taskContentRef = useRef<HTMLSpanElement | null>(null)
+  const singleClickTimerRef = useRef<number | null>(null)
 
   const frameRef = useRef<number | null>(null)
   const lastTickRef = useRef<number | null>(null)
@@ -313,7 +321,7 @@ function App() {
     if (typeof window === 'undefined') return
 
     const trimmed = currentTaskName.trim()
-    const value = trimmed.length > 0 ? trimmed : 'New Task'
+    const value = trimmed.length > 0 ? trimmed : ''
 
     try {
       window.localStorage.setItem(CURRENT_TASK_STORAGE_KEY, value)
@@ -378,6 +386,15 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (singleClickTimerRef.current !== null && typeof window !== 'undefined') {
+        window.clearTimeout(singleClickTimerRef.current)
+        singleClickTimerRef.current = null
+      }
+    }
+  }, [])
+
   const toggleTheme = () => {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
   }
@@ -396,14 +413,13 @@ function App() {
     })
   }
 
-  const limitedTaskName = useMemo(() => currentTaskName.slice(0, MAX_TASK_LENGTH), [currentTaskName])
-  const safeTaskName = useMemo(() => {
-    if (isTaskFocused) {
-      return limitedTaskName
-    }
-    const trimmed = limitedTaskName.trim()
-    return trimmed.length > 0 ? trimmed : 'New Task'
-  }, [limitedTaskName, isTaskFocused])
+  const safeTaskName = useMemo(() => currentTaskName.trim(), [currentTaskName])
+
+  const hasTaskOverflow = safeTaskName.length > TASK_DISPLAY_LIMIT
+  const shouldShowFullTask = isTaskExpanded || isTaskFocused || isTaskEditing
+  const displayTaskName = shouldShowFullTask
+    ? safeTaskName
+    : safeTaskName.slice(0, TASK_DISPLAY_LIMIT)
 
   const handleReset = () => {
     const recordedElapsed = elapsed
@@ -427,14 +443,14 @@ function App() {
 
     setSessionStart(null)
     setCurrentTaskName('New Task')
-    setIsTaskTruncated(false)
+    setIsTaskExpanded(false)
+    setIsTaskEditing(false)
   }
 
   const handleTaskNameInput = (event: FormEvent<HTMLSpanElement>) => {
     const raw = event.currentTarget.textContent ?? ''
     const sanitized = raw.replace(/\n+/g, ' ')
-    const truncated = sanitized.length > MAX_TASK_LENGTH
-    const limited = truncated ? sanitized.slice(0, MAX_TASK_LENGTH) : sanitized
+    const limited = sanitized.slice(0, MAX_TASK_STORAGE_LENGTH)
 
     const selection = window.getSelection()
     let caretOffset: number | null = null
@@ -459,7 +475,6 @@ function App() {
     if (limited !== currentTaskName) {
       setCurrentTaskName(limited)
     }
-    setIsTaskTruncated(truncated)
   }
 
   const handleTaskNameFocus = () => {
@@ -470,20 +485,77 @@ function App() {
     if (event.key === 'Enter') {
       event.preventDefault()
       event.currentTarget.blur()
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      event.currentTarget.blur()
     }
+  }
+
+  const toggleTaskExpansion = () => {
+    if (!hasTaskOverflow || isTaskEditing) {
+      return
+    }
+    setIsTaskExpanded((current) => !current)
+  }
+
+  const handleTaskHeadingClick = () => {
+    if (!hasTaskOverflow || isTaskEditing) {
+      return
+    }
+    if (singleClickTimerRef.current !== null) {
+      return
+    }
+    if (typeof window === 'undefined') {
+      toggleTaskExpansion()
+      return
+    }
+    singleClickTimerRef.current = window.setTimeout(() => {
+      singleClickTimerRef.current = null
+      toggleTaskExpansion()
+    }, SINGLE_CLICK_DELAY_MS)
+  }
+
+  const handleTaskHeadingDoubleClick = () => {
+    if (isTaskEditing) {
+      return
+    }
+    if (singleClickTimerRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(singleClickTimerRef.current)
+      singleClickTimerRef.current = null
+    }
+    setIsTaskEditing(true)
+  }
+
+  const handleTaskHeadingKeyDown = (event: KeyboardEvent<HTMLSpanElement>) => {
+    if (isTaskEditing) {
+      return
+    }
+    if (!hasTaskOverflow) {
+      return
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      toggleTaskExpansion()
+    }
+  }
+
+  const handleToggleButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    toggleTaskExpansion()
   }
 
   const handleTaskNameBlur = (event: FocusEvent<HTMLSpanElement>) => {
     setIsTaskFocused(false)
     const value = (event.currentTarget.textContent ?? '').replace(/\n+/g, ' ').trim()
-    const truncated = value.length > MAX_TASK_LENGTH
-    const limited = truncated ? value.slice(0, MAX_TASK_LENGTH) : value
-    const fallback = limited.length > 0 ? limited : 'New Task'
-    if (taskContentRef.current && taskContentRef.current.textContent !== fallback) {
-      taskContentRef.current.textContent = fallback
+    const limited = value.slice(0, MAX_TASK_STORAGE_LENGTH)
+    if (taskContentRef.current && taskContentRef.current.textContent !== limited) {
+      taskContentRef.current.textContent = limited
     }
-    setCurrentTaskName(fallback)
-    setIsTaskTruncated(truncated)
+    if (limited !== currentTaskName) {
+      setCurrentTaskName(limited)
+    }
+    setIsTaskEditing(false)
   }
 
   const beginEditing = (entry: HistoryEntry) => {
@@ -516,20 +588,54 @@ function App() {
   useEffect(() => {
     if (!taskContentRef.current) return
     const text = taskContentRef.current.textContent ?? ''
-    if (text !== safeTaskName) {
-      taskContentRef.current.textContent = safeTaskName
+    if (text !== displayTaskName) {
+      taskContentRef.current.textContent = displayTaskName
     }
-    if (!isTaskFocused && safeTaskName.length < MAX_TASK_LENGTH && isTaskTruncated) {
-      setIsTaskTruncated(false)
+  }, [displayTaskName])
+
+  useEffect(() => {
+    if (!hasTaskOverflow && isTaskExpanded) {
+      setIsTaskExpanded(false)
     }
-  }, [safeTaskName, isTaskFocused, isTaskTruncated])
+  }, [hasTaskOverflow, isTaskExpanded])
+
+  useEffect(() => {
+    if (!isTaskEditing || typeof window === 'undefined') {
+      return
+    }
+    const node = taskContentRef.current
+    if (!node) {
+      return
+    }
+
+    const focusTask = () => {
+      node.focus()
+      const selection = window.getSelection()
+      if (!selection) {
+        return
+      }
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      range.collapse(false)
+      selection.removeAllRanges()
+      selection.addRange(range)
+    }
+
+    const rafId = window.requestAnimationFrame(focusTask)
+    return () => {
+      window.cancelAnimationFrame(rafId)
+    }
+  }, [isTaskEditing])
 
   const formattedTime = useMemo(() => formatTime(elapsed), [elapsed])
   const formattedClock = useMemo(() => formatClockTime(currentTime), [currentTime])
   const clockDateTime = useMemo(() => new Date(currentTime).toISOString(), [currentTime])
   const hasHistory = history.length > 0
-  const displayTaskText = `Task: ${safeTaskName}${isTaskTruncated ? '...' : ''}`
-  const displayLength = displayTaskText.length
+  const previewTaskText = useMemo(() => {
+    const preview = safeTaskName.slice(0, TASK_DISPLAY_LIMIT)
+    return `Task: ${preview}${hasTaskOverflow ? '...' : ''}`
+  }, [safeTaskName, hasTaskOverflow])
+  const displayLength = previewTaskText.length
   const taskHeadingMetrics = useMemo(
     () => computeTaskHeadingMetrics(displayLength, viewportWidth),
     [displayLength, viewportWidth]
@@ -539,11 +645,38 @@ function App() {
       fontSize: taskHeadingMetrics.fontSize,
       letterSpacing: taskHeadingMetrics.letterSpacing,
       lineHeight: 1.2,
-      whiteSpace: 'nowrap',
+      whiteSpace: shouldShowFullTask ? 'normal' : 'nowrap',
       maxWidth: '100%',
     }),
-    [taskHeadingMetrics]
+    [taskHeadingMetrics, shouldShowFullTask]
   )
+  const taskHeadingClassName = useMemo(
+    () =>
+      ['task-heading', shouldShowFullTask ? 'task-heading--expanded' : '', isTaskEditing ? 'task-heading--editing' : '']
+        .filter(Boolean)
+        .join(' '),
+    [shouldShowFullTask, isTaskEditing]
+  )
+  const taskNameStyle = useMemo<CSSProperties>(
+    () => ({
+      whiteSpace: shouldShowFullTask ? 'normal' : 'nowrap',
+      maxWidth: shouldShowFullTask ? '100%' : `${TASK_DISPLAY_LIMIT}ch`,
+      wordBreak: shouldShowFullTask ? 'break-word' : 'normal',
+    }),
+    [shouldShowFullTask]
+  )
+  const taskHeadingTextStyle = useMemo<CSSProperties>(
+    () => ({
+      cursor: isTaskEditing ? 'text' : hasTaskOverflow ? 'pointer' : 'default',
+    }),
+    [isTaskEditing, hasTaskOverflow]
+  )
+  const showToggleIndicator = hasTaskOverflow && !isTaskEditing && !isTaskFocused
+  const toggleIndicatorLabel = shouldShowFullTask ? 'show less' : '...'
+  const toggleIndicatorAriaLabel = shouldShowFullTask ? 'Collapse full task name' : 'Expand full task name'
+  const taskHeadingTitle = hasTaskOverflow
+    ? 'Click to toggle the full task name or double-click to edit.'
+    : 'Double-click to edit the task name.'
   const charCount = formattedTime.replace('.', '').length
   const colonCount = (formattedTime.match(/:/g) ?? []).length
   const hasDays = formattedTime.includes('D')
@@ -587,30 +720,50 @@ function App() {
         <div className="site-main__inner">
           <h1 className="stopwatch-heading">Stopwatch</h1>
           <div
-            className="task-heading"
+            className={taskHeadingClassName}
             role="group"
             aria-label="Task heading"
             style={taskHeadingStyle}
           >
-            <span className="task-heading__prefix">Task:</span>
             <span
-              className="task-heading__free"
-              contentEditable
-              suppressContentEditableWarning
-              ref={taskContentRef}
-              onInput={handleTaskNameInput}
-              onBlur={handleTaskNameBlur}
-              onFocus={handleTaskNameFocus}
-              onKeyDown={handleTaskNameKeyDown}
-              role="textbox"
-              tabIndex={0}
-              aria-label="Task name"
-              spellCheck={false}
-            />
-            {isTaskTruncated && !isTaskFocused ? (
-              <span className="task-heading__ellipsis" aria-hidden="true">
-                ...
-              </span>
+              className="task-heading__text"
+              style={taskHeadingTextStyle}
+              onClick={handleTaskHeadingClick}
+              onDoubleClick={handleTaskHeadingDoubleClick}
+              onKeyDown={handleTaskHeadingKeyDown}
+              role={!isTaskEditing && hasTaskOverflow ? 'button' : undefined}
+              tabIndex={!isTaskEditing && hasTaskOverflow ? 0 : -1}
+              aria-expanded={hasTaskOverflow ? shouldShowFullTask : undefined}
+              aria-label={!isTaskEditing && hasTaskOverflow ? 'Toggle full task name' : undefined}
+              title={!isTaskEditing ? taskHeadingTitle : undefined}
+            >
+              <span className="task-heading__prefix">Task:</span>
+              <span
+                className="task-heading__free"
+                style={taskNameStyle}
+                contentEditable={isTaskEditing}
+                suppressContentEditableWarning
+                ref={taskContentRef}
+                onInput={handleTaskNameInput}
+                onBlur={handleTaskNameBlur}
+                onFocus={handleTaskNameFocus}
+                onKeyDown={handleTaskNameKeyDown}
+                role={isTaskEditing ? 'textbox' : undefined}
+                tabIndex={isTaskEditing ? 0 : -1}
+                aria-label="Task name"
+                spellCheck={false}
+              />
+            </span>
+            {showToggleIndicator ? (
+              <button
+                type="button"
+                className="task-heading__toggle"
+                onClick={handleToggleButtonClick}
+                aria-label={toggleIndicatorAriaLabel}
+                aria-expanded={shouldShowFullTask}
+              >
+                {toggleIndicatorLabel}
+              </button>
             ) : null}
           </div>
           <section className="stopwatch-card" role="region" aria-live="polite">
