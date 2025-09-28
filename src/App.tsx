@@ -415,7 +415,12 @@ function App() {
     })
   }
 
-  const safeTaskName = useMemo(() => currentTaskName.trim(), [currentTaskName])
+  const safeTaskName = useMemo(() => {
+    if (isTaskEditing || isTaskFocused) {
+      return currentTaskName
+    }
+    return currentTaskName.trim()
+  }, [currentTaskName, isTaskEditing, isTaskFocused])
 
   const hasTaskOverflow = safeTaskName.length > TASK_DISPLAY_LIMIT
   const shouldShowFullTask = isTaskExpanded || isTaskFocused || isTaskEditing
@@ -450,28 +455,72 @@ function App() {
   }
 
   const handleTaskNameInput = (event: FormEvent<HTMLSpanElement>) => {
+    const element = taskContentRef.current
+    if (!element) {
+      return
+    }
+
     const raw = event.currentTarget.textContent ?? ''
     const sanitized = raw.replace(/\n+/g, ' ')
     const limited = sanitized.slice(0, MAX_TASK_STORAGE_LENGTH)
 
-    const selection = window.getSelection()
+    const previous = element.textContent ?? ''
+    const needsUpdate = previous !== limited
+
     let caretOffset: number | null = null
-    if (selection && taskContentRef.current && selection.focusNode && taskContentRef.current.contains(selection.focusNode)) {
-      caretOffset = selection.focusOffset
+    if (typeof window !== 'undefined') {
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        if (range && element.contains(range.endContainer)) {
+          const preRange = range.cloneRange()
+          preRange.selectNodeContents(element)
+          try {
+            preRange.setEnd(range.endContainer, range.endOffset)
+            caretOffset = preRange.toString().length
+          } catch (error) {
+            caretOffset = null
+          }
+        }
+      }
     }
 
-    if (taskContentRef.current && taskContentRef.current.textContent !== limited) {
-      taskContentRef.current.textContent = limited
-    }
+    if (needsUpdate) {
+      element.textContent = limited
 
-    const textNode = taskContentRef.current?.firstChild
-    if (selection && textNode && textNode.nodeType === Node.TEXT_NODE) {
-      const range = document.createRange()
-      const pos = Math.min(caretOffset ?? limited.length, (textNode.textContent ?? '').length)
-      range.setStart(textNode, pos)
-      range.collapse(true)
-      selection.removeAllRanges()
-      selection.addRange(range)
+      if (caretOffset !== null && typeof window !== 'undefined') {
+        const selection = window.getSelection()
+        if (selection) {
+          const targetOffset = Math.min(caretOffset, element.textContent?.length ?? 0)
+          const range = document.createRange()
+
+          let remaining = targetOffset
+          const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+          let found = false
+          while (!found) {
+            const textNode = walker.nextNode()
+            if (!textNode) {
+              break
+            }
+            const length = textNode.textContent?.length ?? 0
+            if (remaining <= length) {
+              range.setStart(textNode, Math.max(0, remaining))
+              found = true
+            } else {
+              remaining -= length
+            }
+          }
+
+          if (!found) {
+            range.selectNodeContents(element)
+            range.collapse(false)
+          }
+
+          range.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(range)
+        }
+      }
     }
 
     if (limited !== currentTaskName) {
