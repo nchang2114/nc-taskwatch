@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type ClipboardEvent,
   type FocusEvent,
   type FormEvent,
   type KeyboardEvent,
@@ -32,6 +33,71 @@ const HISTORY_STORAGE_KEY = 'nc-stopwatch-history'
 const CURRENT_TASK_STORAGE_KEY = 'nc-stopwatch-current-task'
 const TASK_DISPLAY_LIMIT = 32
 const MAX_TASK_STORAGE_LENGTH = 256
+const sanitizeEditableValue = (
+  element: HTMLSpanElement,
+  rawValue: string,
+  maxLength: number
+) => {
+  const sanitized = rawValue.replace(/\n+/g, ' ')
+  const limited = sanitized.slice(0, maxLength)
+  const previous = element.textContent ?? ''
+  const changed = previous !== limited
+
+  let caretOffset: number | null = null
+  if (typeof window !== 'undefined') {
+    const selection = window.getSelection()
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0)
+      if (range && element.contains(range.endContainer)) {
+        const preRange = range.cloneRange()
+        preRange.selectNodeContents(element)
+        try {
+          preRange.setEnd(range.endContainer, range.endOffset)
+          caretOffset = preRange.toString().length
+        } catch (error) {
+          caretOffset = null
+        }
+      }
+    }
+  }
+
+  if (changed) {
+    element.textContent = limited
+
+    if (caretOffset !== null && typeof window !== 'undefined') {
+      const selection = window.getSelection()
+      if (selection) {
+        const range = document.createRange()
+        const targetOffset = Math.min(caretOffset, element.textContent?.length ?? 0)
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+        let remaining = targetOffset
+        let node: Node | null = null
+        let positioned = false
+        while ((node = walker.nextNode())) {
+          const length = node.textContent?.length ?? 0
+          if (remaining <= length) {
+            range.setStart(node, Math.max(0, remaining))
+            positioned = true
+            break
+          }
+          remaining -= length
+        }
+
+        if (!positioned) {
+          range.selectNodeContents(element)
+          range.collapse(false)
+        } else {
+          range.collapse(true)
+        }
+
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+    }
+  }
+
+  return { value: limited, changed }
+}
 const SINGLE_CLICK_DELAY_MS = 250
 
 const makeHistoryId = () => {
@@ -255,8 +321,6 @@ function App() {
   const [history, setHistory] = useState<HistoryEntry[]>(() => getStoredHistory())
   const [currentTaskName, setCurrentTaskName] = useState<string>(initialTaskName)
   const [sessionStart, setSessionStart] = useState<number | null>(null)
-  const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
-  const [editingValue, setEditingValue] = useState('')
   const [isTaskFocused, setIsTaskFocused] = useState(false)
   const [isTaskExpanded, setIsTaskExpanded] = useState(false)
   const [isToggleVisible, setIsToggleVisible] = useState(false)
@@ -267,6 +331,7 @@ function App() {
   )
   const taskContentRef = useRef<HTMLSpanElement | null>(null)
   const taskHeadingRef = useRef<HTMLDivElement | null>(null)
+  const historyTaskRefs = useRef(new Map<string, HTMLSpanElement>())
   const singleClickTimerRef = useRef<number | null>(null)
 
   const frameRef = useRef<number | null>(null)
@@ -461,70 +526,10 @@ function App() {
     }
 
     const raw = event.currentTarget.textContent ?? ''
-    const sanitized = raw.replace(/\n+/g, ' ')
-    const limited = sanitized.slice(0, MAX_TASK_STORAGE_LENGTH)
+    const { value } = sanitizeEditableValue(element, raw, MAX_TASK_STORAGE_LENGTH)
 
-    const previous = element.textContent ?? ''
-    const needsUpdate = previous !== limited
-
-    let caretOffset: number | null = null
-    if (typeof window !== 'undefined') {
-      const selection = window.getSelection()
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0)
-        if (range && element.contains(range.endContainer)) {
-          const preRange = range.cloneRange()
-          preRange.selectNodeContents(element)
-          try {
-            preRange.setEnd(range.endContainer, range.endOffset)
-            caretOffset = preRange.toString().length
-          } catch (error) {
-            caretOffset = null
-          }
-        }
-      }
-    }
-
-    if (needsUpdate) {
-      element.textContent = limited
-
-      if (caretOffset !== null && typeof window !== 'undefined') {
-        const selection = window.getSelection()
-        if (selection) {
-          const targetOffset = Math.min(caretOffset, element.textContent?.length ?? 0)
-          const range = document.createRange()
-
-          let remaining = targetOffset
-          const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
-          let found = false
-          while (!found) {
-            const textNode = walker.nextNode()
-            if (!textNode) {
-              break
-            }
-            const length = textNode.textContent?.length ?? 0
-            if (remaining <= length) {
-              range.setStart(textNode, Math.max(0, remaining))
-              found = true
-            } else {
-              remaining -= length
-            }
-          }
-
-          if (!found) {
-            range.selectNodeContents(element)
-            range.collapse(false)
-          }
-
-          range.collapse(true)
-          selection.removeAllRanges()
-          selection.addRange(range)
-        }
-      }
-    }
-
-    if (limited !== currentTaskName) {
-      setCurrentTaskName(limited)
+    if (value !== currentTaskName) {
+      setCurrentTaskName(value)
     }
   }
 
@@ -631,31 +636,94 @@ function App() {
     setIsTaskEditing(false)
   }
 
-  const beginEditing = (entry: HistoryEntry) => {
-    if (editingEntryId && editingEntryId !== entry.id) {
-      commitEditing()
+  const registerHistoryTaskRef = (id: string, node: HTMLSpanElement | null) => {
+    if (node) {
+      historyTaskRefs.current.set(id, node)
+      const entry = history.find((item) => item.id === id)
+      const text = entry?.taskName ?? ''
+      if (node.textContent !== text) {
+        node.textContent = text
+      }
+    } else {
+      historyTaskRefs.current.delete(id)
     }
-
-    setEditingEntryId(entry.id)
-    setEditingValue(entry.taskName)
   }
 
-  const commitEditing = () => {
-    if (!editingEntryId) {
+  const handleHistoryTaskInput = (entryId: string) => (event: FormEvent<HTMLSpanElement>) => {
+    const node = historyTaskRefs.current.get(entryId)
+    if (!node) {
       return
     }
 
-    const nextName = editingValue.trim() || 'New Task'
+    const raw = event.currentTarget.textContent ?? ''
+    const { value } = sanitizeEditableValue(node, raw, MAX_TASK_STORAGE_LENGTH)
+
     setHistory((current) =>
-      current.map((entry) => (entry.id === editingEntryId ? { ...entry, taskName: nextName } : entry))
+      current.map((entry) =>
+        entry.id === entryId && entry.taskName !== value ? { ...entry, taskName: value } : entry
+      )
     )
-    setEditingEntryId(null)
-    setEditingValue('')
   }
 
-  const cancelEditing = () => {
-    setEditingEntryId(null)
-    setEditingValue('')
+  const handleHistoryTaskBlur = (entryId: string) => (event: FocusEvent<HTMLSpanElement>) => {
+    const node = historyTaskRefs.current.get(entryId)
+    if (!node) {
+      return
+    }
+
+    const value = (event.currentTarget.textContent ?? '').replace(/\n+/g, ' ').trim()
+    const limited = value.slice(0, MAX_TASK_STORAGE_LENGTH)
+    const fallback = limited.length > 0 ? limited : 'New Task'
+
+    if (node.textContent !== fallback) {
+      node.textContent = fallback
+    }
+
+    setHistory((current) =>
+      current.map((entry) => (entry.id === entryId && entry.taskName !== fallback ? { ...entry, taskName: fallback } : entry))
+    )
+  }
+
+  const handleHistoryTaskKeyDown = (event: KeyboardEvent<HTMLSpanElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.currentTarget.blur()
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      event.currentTarget.blur()
+    }
+  }
+
+  const handleHistoryTaskPaste = (entryId: string) => (event: ClipboardEvent<HTMLSpanElement>) => {
+    const node = historyTaskRefs.current.get(entryId)
+    if (!node) {
+      return
+    }
+
+    event.preventDefault()
+    const text = event.clipboardData?.getData('text/plain') ?? ''
+    const sanitized = text.replace(/\n+/g, ' ')
+
+    if (typeof window !== 'undefined') {
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        selection.deleteFromDocument()
+        const range = selection.getRangeAt(0)
+        const textNode = document.createTextNode(sanitized)
+        range.insertNode(textNode)
+        range.setStartAfter(textNode)
+        range.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+    }
+
+    const { value } = sanitizeEditableValue(node, node.textContent ?? '', MAX_TASK_STORAGE_LENGTH)
+    setHistory((current) =>
+      current.map((entry) =>
+        entry.id === entryId && entry.taskName !== value ? { ...entry, taskName: value } : entry
+      )
+    )
   }
 
   useEffect(() => {
@@ -665,6 +733,16 @@ function App() {
       taskContentRef.current.textContent = displayTaskName
     }
   }, [displayTaskName])
+
+  useEffect(() => {
+    const entryMap = new Map(history.map((item) => [item.id, item.taskName]))
+    historyTaskRefs.current.forEach((node, id) => {
+      const text = entryMap.get(id) ?? ''
+      if (node.textContent !== text) {
+        node.textContent = text
+      }
+    })
+  }, [history])
 
   useEffect(() => {
     if (!isTaskEditing || typeof window === 'undefined') {
@@ -901,50 +979,31 @@ function App() {
 
             {hasHistory ? (
               <ol className="history-list">
-                {history.map((entry) => (
-                  <li key={entry.id} className="history-entry">
-                    <div className="history-entry__top">
-                      {editingEntryId === entry.id ? (
-                        <input
-                          className="history-entry__task-input"
-                          type="text"
-                          value={editingValue}
-                          onChange={(event) => setEditingValue(event.target.value)}
-                          onBlur={commitEditing}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              commitEditing()
-                            } else if (event.key === 'Escape') {
-                              event.preventDefault()
-                              cancelEditing()
-                            }
-                          }}
-                          autoFocus
-                        />
-                      ) : (
+                {history.map((entry) => {
+                  const dateRangeLabel = formatDateRange(entry.startedAt, entry.endedAt)
+                  return (
+                    <li key={entry.id} className="history-entry">
+                      <div className="history-entry__top">
                         <span
                           className="history-entry__task"
-                          role="button"
+                          contentEditable
+                          suppressContentEditableWarning
+                          ref={(node) => registerHistoryTaskRef(entry.id, node)}
+                          onInput={handleHistoryTaskInput(entry.id)}
+                          onBlur={handleHistoryTaskBlur(entry.id)}
+                          onKeyDown={handleHistoryTaskKeyDown}
+                          onPaste={handleHistoryTaskPaste(entry.id)}
+                          role="textbox"
                           tabIndex={0}
-                          onDoubleClick={() => beginEditing(entry)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              beginEditing(entry)
-                            }
-                          }}
-                          aria-label={`Rename task "${entry.taskName}"`}
-                          title="Double-click to rename"
-                        >
-                          {entry.taskName}
-                        </span>
-                      )}
-                      <span className="history-entry__duration">{formatTime(entry.elapsed)}</span>
-                    </div>
-                    <div className="history-entry__meta">{formatDateRange(entry.startedAt, entry.endedAt)}</div>
-                  </li>
-                ))}
+                          aria-label={`Edit task name for session ${dateRangeLabel}`}
+                          spellCheck={false}
+                        />
+                        <span className="history-entry__duration">{formatTime(entry.elapsed)}</span>
+                      </div>
+                      <div className="history-entry__meta">{dateRangeLabel}</div>
+                    </li>
+                  )
+                })}
               </ol>
             ) : (
               <p className="history-empty">No sessions yet. Start the stopwatch to build your timeline.</p>
