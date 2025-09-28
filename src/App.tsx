@@ -259,12 +259,14 @@ function App() {
   const [editingValue, setEditingValue] = useState('')
   const [isTaskFocused, setIsTaskFocused] = useState(false)
   const [isTaskExpanded, setIsTaskExpanded] = useState(false)
+  const [isToggleVisible, setIsToggleVisible] = useState(false)
   const [isTaskEditing, setIsTaskEditing] = useState(false)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1280
   )
   const taskContentRef = useRef<HTMLSpanElement | null>(null)
+  const taskHeadingRef = useRef<HTMLDivElement | null>(null)
   const singleClickTimerRef = useRef<number | null>(null)
 
   const frameRef = useRef<number | null>(null)
@@ -479,6 +481,10 @@ function App() {
 
   const handleTaskNameFocus = () => {
     setIsTaskFocused(true)
+    if (hasTaskOverflow) {
+      setIsTaskExpanded(true)
+      setIsToggleVisible(true)
+    }
   }
 
   const handleTaskNameKeyDown = (event: KeyboardEvent<HTMLSpanElement>) => {
@@ -495,11 +501,19 @@ function App() {
     if (!hasTaskOverflow || isTaskEditing) {
       return
     }
-    setIsTaskExpanded((current) => !current)
+    setIsTaskExpanded((current) => {
+      const next = !current
+      setIsToggleVisible(next)
+      return next
+    })
   }
 
   const handleTaskHeadingClick = () => {
     if (!hasTaskOverflow || isTaskEditing) {
+      return
+    }
+    if (shouldShowFullTask) {
+      setIsToggleVisible(true)
       return
     }
     if (singleClickTimerRef.current !== null) {
@@ -523,6 +537,8 @@ function App() {
       window.clearTimeout(singleClickTimerRef.current)
       singleClickTimerRef.current = null
     }
+    setIsTaskExpanded(true)
+    setIsToggleVisible(false)
     setIsTaskEditing(true)
   }
 
@@ -535,13 +551,16 @@ function App() {
     }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      toggleTaskExpansion()
+      if (!shouldShowFullTask) {
+        toggleTaskExpansion()
+      } else {
+        setIsToggleVisible(true)
+      }
     }
   }
 
   const handleToggleButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault()
-    event.stopPropagation()
     toggleTaskExpansion()
   }
 
@@ -554,6 +573,11 @@ function App() {
     }
     if (limited !== currentTaskName) {
       setCurrentTaskName(limited)
+    }
+    const nextTarget = event.relatedTarget as HTMLElement | null
+    const isMovingToToggle = Boolean(nextTarget?.closest('.task-heading__toggle'))
+    if (!isMovingToToggle) {
+      setIsToggleVisible(false)
     }
     setIsTaskEditing(false)
   }
@@ -594,12 +618,6 @@ function App() {
   }, [displayTaskName])
 
   useEffect(() => {
-    if (!hasTaskOverflow && isTaskExpanded) {
-      setIsTaskExpanded(false)
-    }
-  }, [hasTaskOverflow, isTaskExpanded])
-
-  useEffect(() => {
     if (!isTaskEditing || typeof window === 'undefined') {
       return
     }
@@ -626,6 +644,27 @@ function App() {
       window.cancelAnimationFrame(rafId)
     }
   }, [isTaskEditing])
+
+  useEffect(() => {
+    if (!shouldShowFullTask || !isToggleVisible || typeof window === 'undefined') {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const container = taskHeadingRef.current
+      if (!container) {
+        return
+      }
+      if (!container.contains(event.target as Node)) {
+        setIsToggleVisible(false)
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [shouldShowFullTask, isToggleVisible])
 
   const formattedTime = useMemo(() => formatTime(elapsed), [elapsed])
   const formattedClock = useMemo(() => formatClockTime(currentTime), [currentTime])
@@ -671,7 +710,7 @@ function App() {
     }),
     [isTaskEditing, hasTaskOverflow]
   )
-  const showToggleIndicator = hasTaskOverflow && !isTaskEditing && !isTaskFocused
+  const shouldShowToggle = hasTaskOverflow && !isTaskEditing && (!shouldShowFullTask || isToggleVisible)
   const toggleIndicatorLabel = shouldShowFullTask ? 'show less' : '...'
   const toggleIndicatorAriaLabel = shouldShowFullTask ? 'Collapse full task name' : 'Expand full task name'
   const taskHeadingTitle = hasTaskOverflow
@@ -724,6 +763,7 @@ function App() {
             role="group"
             aria-label="Task heading"
             style={taskHeadingStyle}
+            ref={taskHeadingRef}
           >
             <span
               className="task-heading__text"
@@ -754,7 +794,7 @@ function App() {
                 spellCheck={false}
               />
             </span>
-            {showToggleIndicator ? (
+            {shouldShowToggle ? (
               <button
                 type="button"
                 className="task-heading__toggle"
