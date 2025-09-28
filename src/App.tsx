@@ -28,9 +28,9 @@ type HistoryEntry = {
   endedAt: number
 }
 
-const THEME_STORAGE_KEY = 'nc-stopwatch-theme'
-const HISTORY_STORAGE_KEY = 'nc-stopwatch-history'
-const CURRENT_TASK_STORAGE_KEY = 'nc-stopwatch-current-task'
+const THEME_STORAGE_KEY = 'nc-taskwatch-theme'
+const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
+const CURRENT_TASK_STORAGE_KEY = 'nc-taskwatch-current-task'
 const TASK_DISPLAY_LIMIT = 32
 const MAX_TASK_STORAGE_LENGTH = 256
 const sanitizeEditableValue = (
@@ -901,7 +901,7 @@ function App() {
         <div className="site-header__inner">
           <nav className="top-bar" aria-label="Primary">
             <div className="brand">
-              <span className="brand-text">NC-STOPWATCH</span>
+              <span className="brand-text">NC-TASKWATCH</span>
             </div>
             <button
               className="theme-toggle"
@@ -917,7 +917,7 @@ function App() {
 
       <main className="site-main">
         <div className="site-main__inner">
-          <h1 className="stopwatch-heading">Stopwatch</h1>
+          <h1 className="stopwatch-heading">Taskwatch</h1>
           <div
             className={taskHeadingClassName}
             role="group"
