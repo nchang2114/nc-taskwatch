@@ -319,6 +319,7 @@ function App() {
   const [elapsed, setElapsed] = useState(0)
   const [isRunning, setIsRunning] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>(() => getStoredHistory())
+  const [deletedHistoryStack, setDeletedHistoryStack] = useState<{ entry: HistoryEntry; index: number }[]>([])
   const [currentTaskName, setCurrentTaskName] = useState<string>(initialTaskName)
   const [sessionStart, setSessionStart] = useState<number | null>(null)
   const [isTaskFocused, setIsTaskFocused] = useState(false)
@@ -726,6 +727,38 @@ function App() {
     )
   }
 
+  const handleDeleteHistoryEntry = (entryId: string) => (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const index = history.findIndex((entry) => entry.id === entryId)
+    if (index === -1) {
+      return
+    }
+
+    const entry = history[index]
+    setDeletedHistoryStack((stack) => [...stack, { entry, index }])
+    setHistory((current) => [...current.slice(0, index), ...current.slice(index + 1)])
+  }
+
+  const handleUndoDelete = () => {
+    if (deletedHistoryStack.length === 0) {
+      return
+    }
+
+    const { entry, index } = deletedHistoryStack[deletedHistoryStack.length - 1]
+    setDeletedHistoryStack((stack) => stack.slice(0, -1))
+    setHistory((current) => {
+      if (current.some((item) => item.id === entry.id)) {
+        return current
+      }
+      const next = [...current]
+      const insertIndex = Math.min(index, next.length)
+      next.splice(insertIndex, 0, entry)
+      return next
+    })
+  }
+
   useEffect(() => {
     if (!taskContentRef.current) return
     const text = taskContentRef.current.textContent ?? ''
@@ -974,7 +1007,18 @@ function App() {
           >
             <div className="history-section__header">
               <h2 className="history-heading">History</h2>
-              {hasHistory ? <span className="history-count">{history.length}</span> : null}
+              <div className="history-section__controls">
+                {hasHistory ? <span className="history-count">{history.length}</span> : null}
+                <button
+                  type="button"
+                  className="history-undo"
+                  onClick={handleUndoDelete}
+                  disabled={deletedHistoryStack.length === 0}
+                  aria-label="Undo last deleted session"
+                >
+                  Undo
+                </button>
+              </div>
             </div>
 
             {hasHistory ? (
@@ -1000,7 +1044,17 @@ function App() {
                         />
                         <span className="history-entry__duration">{formatTime(entry.elapsed)}</span>
                       </div>
-                      <div className="history-entry__meta">{dateRangeLabel}</div>
+                      <div className="history-entry__footer">
+                        <div className="history-entry__meta">{dateRangeLabel}</div>
+                        <button
+                          type="button"
+                          className="history-entry__delete"
+                          onClick={handleDeleteHistoryEntry(entry.id)}
+                          aria-label={`Delete session ${dateRangeLabel}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </li>
                   )
                 })}
