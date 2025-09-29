@@ -1,0 +1,25 @@
+.goals-handoff {
+  gap: 1.5rem;
+  text-align: center;
+}
+
+.goals-handoff h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.goals-handoff__actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.goals-handoff__actions button {
+  padding: 0.6rem 1.2rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--text-secondary, #888);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}

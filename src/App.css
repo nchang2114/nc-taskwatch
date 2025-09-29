@@ -36,7 +36,7 @@
 }
 
 .site-main__inner {
-  width: min(720px, 100%);
+  width: min(900px, 100%);
   margin: 0 auto;
   padding-inline: clamp(0.75rem, 3vw, 1.5rem);
 }
@@ -55,6 +55,12 @@
   gap: clamp(1.4rem, 3.2vw, 2.4rem);
   padding-block: clamp(2.5rem, 7vw, 4.5rem);
   width: 100%;
+}
+
+.site-main--goals {
+  background: transparent;
+  padding: 0;
+  align-items: stretch;
 }
 
 .task-heading {
@@ -333,6 +339,9 @@ html[data-theme='light'] .brand-text {
   color: var(--text-secondary);
   transition: color 200ms ease, background 200ms ease, box-shadow 220ms ease;
   white-space: nowrap;
+  border: none;
+  background: none;
+  cursor: pointer;
 }
 
 .nav-link:hover,
