@@ -4,13 +4,16 @@
   gap: clamp(2.5rem, 5vw, 3.5rem);
   padding-block: clamp(2.5rem, 6vw, 4rem);
   width: 100%;
-  max-width: min(768px, 100%);
+  max-width: min(1000px, 100%);   /* widened container */
+  align-items: stretch;          /* make all children expand */
 }
 
+/* --- Intro --- */
 .reflection-intro {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .reflection-title {
@@ -32,14 +35,16 @@
   margin: 0;
   font-size: clamp(0.95rem, 2vw, 1.05rem);
   color: var(--text-secondary);
-  max-width: 32rem;
+  max-width: 100%; /* allow full width */
   line-height: 1.6;
 }
 
+/* --- Sections --- */
 .reflection-section {
   display: flex;
   flex-direction: column;
   gap: clamp(1.25rem, 2.5vw, 1.5rem);
+  width: 100%;
 }
 
 .reflection-section__title {
@@ -56,18 +61,22 @@
   font-size: clamp(0.875rem, 1.8vw, 0.95rem);
   color: var(--text-secondary);
   line-height: 1.5;
+  width: 100%;
 }
 
+/* --- Goals --- */
 .reflection-goals {
   display: flex;
   flex-direction: column;
   gap: clamp(1.25rem, 2.5vw, 1.5rem);
+  width: 100%;
 }
 
 .reflection-goal-card {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  width: 100%; /* stretch full width */
   padding: clamp(1rem, 2.5vw, 1.25rem) clamp(1rem, 3vw, 1.5rem);
   border-radius: clamp(1rem, 2.5vw, 1.25rem);
   background: rgba(255, 255, 255, 0.05);
@@ -120,7 +129,7 @@ html[data-theme='light'] .reflection-goal-time {
 
 .reflection-progress {
   width: 100%;
-  height: 0.5rem;
+  height: 0.6rem; /* slightly thicker */
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
@@ -137,6 +146,7 @@ html[data-theme='light'] .reflection-progress {
   transition: width 400ms ease;
 }
 
+/* --- Gradients --- */
 .gradient-fuchsia-purple {
   background: linear-gradient(to right, rgb(217, 70, 239), rgb(168, 85, 247));
 }
@@ -149,13 +159,16 @@ html[data-theme='light'] .reflection-progress {
   background: linear-gradient(to right, rgb(163, 230, 53), rgb(16, 185, 129));
 }
 
+/* --- Prompts --- */
 .reflection-prompts {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  width: 100%;
 }
 
 .reflection-prompt {
+  width: 100%;
   padding: clamp(0.75rem, 2vw, 1rem) clamp(0.875rem, 2.5vw, 1.25rem);
   border-radius: clamp(0.75rem, 2vw, 1rem);
   background: rgba(255, 255, 255, 0.05);
@@ -182,9 +195,10 @@ html[data-theme='light'] .reflection-prompt:hover {
   border-color: rgba(180, 195, 235, 0.6);
 }
 
+/* --- Journal --- */
 .reflection-journal {
   width: 100%;
-  min-height: 120px;
+  min-height: 140px;
   padding: clamp(0.75rem, 2vw, 1rem) clamp(0.875rem, 2.5vw, 1.25rem);
   border-radius: clamp(0.75rem, 2vw, 1rem);
   background: rgba(255, 255, 255, 0.1);
@@ -224,6 +238,7 @@ html[data-theme='light'] .reflection-journal:focus {
   box-shadow: 0 0 0 3px rgba(88, 112, 242, 0.15);
 }
 
+/* --- Actions --- */
 .reflection-actions {
   display: flex;
   justify-content: flex-end;
@@ -264,7 +279,7 @@ html[data-theme='light'] .reflection-save:hover {
   box-shadow: 0 12px 28px rgba(88, 112, 242, 0.35);
 }
 
-/* Responsive adjustments */
+/* --- Responsive --- */
 @media (max-width: 640px) {
   .reflection-page {
     padding-block: clamp(1.5rem, 4vw, 2rem);
@@ -277,7 +292,7 @@ html[data-theme='light'] .reflection-save:hover {
   }
 }
 
-/* Ensure proper styling in the existing layout */
+/* Ensure proper layout */
 .site-main .reflection-page {
   margin: 0 auto;
 }
