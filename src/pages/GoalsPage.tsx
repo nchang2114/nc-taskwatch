@@ -10,11 +10,6 @@ function classNames(...xs: (string | boolean | undefined)[]): string {
   return xs.filter(Boolean).join(' ')
 }
 
-// Type definitions
-interface Suggestion {
-  text: string
-}
-
 interface Bucket {
   id: string
   name: string
