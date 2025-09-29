@@ -1,100 +1,79 @@
-import React, { useMemo, useState, useEffect, type ReactElement } from 'react'
-import './GoalsPage.css'
+// TODO: OG GOALS STYLES I WANT
 
-type GoalsPageProps = {
-  onNavigate: (tab: 'goals' | 'taskwatch' | 'reflection') => void
+import React, { useMemo, useState, useEffect } from "react";
+
+// Goals Layer — sleek list with thin gradient bars
+// • Collapsible rows
+// • Task Bank with suggestions and Favourite toggle
+// • Montserrat font
+
+function classNames(...xs) {
+  return xs.filter(Boolean).join(" ");
 }
 
-// Helper function for class names
-function classNames(...xs: (string | boolean | undefined)[]): string {
-  return xs.filter(Boolean).join(' ')
-}
-
-// Type definitions
-interface Suggestion {
-  text: string
-}
-
-interface Bucket {
-  id: string
-  name: string
-  favorite: boolean
-  suggestions: string[]
-}
-
-interface Goal {
-  id: string
-  name: string
-  color: string
-  buckets: Bucket[]
-  minutes: number
-  weeklyTarget: number
-}
-
-// Default data
-const DEFAULT_GOALS: Goal[] = [
+// --- Data (keeps your PopDot example) ---
+const DEFAULT_GOALS = [
   {
-    id: 'g1',
-    name: 'Finish PopDot Beta',
-    color: 'from-fuchsia-500 to-purple-500',
+    id: "g1",
+    name: "Finish PopDot Beta",
+    color: "from-fuchsia-500 to-purple-500",
     buckets: [
-      { id: 'b1', name: 'Coding', favorite: true, suggestions: ['Chest spawn logic', 'XP scaling', 'Reward tuning'] },
-      { id: 'b2', name: 'Testing', favorite: true, suggestions: ['Challenge balance', 'FPS hitches'] },
-      { id: 'b3', name: 'Art/Polish', favorite: false, suggestions: ['Shop UI polish', 'Icon pass'] },
+      { id: "b1", name: "Coding", favorite: true, suggestions: ["Chest spawn logic", "XP scaling", "Reward tuning"] },
+      { id: "b2", name: "Testing", favorite: true, suggestions: ["Challenge balance", "FPS hitches"] },
+      { id: "b3", name: "Art/Polish", favorite: false, suggestions: ["Shop UI polish", "Icon pass"] },
     ],
     minutes: 420, // 7h
     weeklyTarget: 720, // 12h
   },
   {
-    id: 'g2',
-    name: 'Learn Japanese',
-    color: 'from-emerald-500 to-cyan-500',
+    id: "g2",
+    name: "Learn Japanese",
+    color: "from-emerald-500 to-cyan-500",
     buckets: [
-      { id: 'b4', name: 'Flashcards', favorite: true, suggestions: ['N5 verbs', 'Kana speed run'] },
-      { id: 'b5', name: 'Listening', favorite: true, suggestions: ['NHK Easy', 'Anime w/ JP subs'] },
-      { id: 'b6', name: 'Speaking', favorite: false, suggestions: ['HelloTalk 10m', 'Shadowing'] },
+      { id: "b4", name: "Flashcards", favorite: true, suggestions: ["N5 verbs", "Kana speed run"] },
+      { id: "b5", name: "Listening", favorite: true, suggestions: ["NHK Easy", "Anime w/ JP subs"] },
+      { id: "b6", name: "Speaking", favorite: false, suggestions: ["HelloTalk 10m", "Shadowing"] },
     ],
     minutes: 180, // 3h
     weeklyTarget: 300, // 5h
   },
   {
-    id: 'g3',
-    name: 'Stay Fit',
-    color: 'from-lime-400 to-emerald-500',
+    id: "g3",
+    name: "Stay Fit",
+    color: "from-lime-400 to-emerald-500",
     buckets: [
-      { id: 'b7', name: 'Gym', favorite: true, suggestions: ['Push day', 'Stretch 5m'] },
-      { id: 'b8', name: 'Cooking', favorite: true, suggestions: ['Prep lunches', 'Protein bowl'] },
-      { id: 'b9', name: 'Sleep', favorite: true, suggestions: ['Lights out 11pm'] },
+      { id: "b7", name: "Gym", favorite: true, suggestions: ["Push day", "Stretch 5m"] },
+      { id: "b8", name: "Cooking", favorite: true, suggestions: ["Prep lunches", "Protein bowl"] },
+      { id: "b9", name: "Sleep", favorite: true, suggestions: ["Lights out 11pm"] },
     ],
     minutes: 210, // 3.5h
     weeklyTarget: 360, // 6h
   },
-]
+];
 
-// Components
-const Tab: React.FC<{ label: string; active: boolean }> = ({ label, active }) => (
+const Tab = ({ label, active }) => (
   <button
     className={classNames(
-      'px-3 py-2 text-sm font-medium transition relative',
+      "px-3 py-2 text-sm font-medium transition relative",
       active
-        ? 'text-white after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-0.5 after:bg-white'
-        : 'text-white/70 hover:text-white'
+        ? "text-white after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-0.5 after:bg-white"
+        : "text-white/70 hover:text-white"
     )}
   >
     {label}
   </button>
-)
+);
 
-const ThinProgress: React.FC<{ value: number; gradient: string }> = ({ value, gradient }) => (
+const ThinProgress = ({ value, gradient }) => (
   <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
     <div
-      className={classNames('h-full rounded-full bg-gradient-to-r', gradient)}
+      className={classNames("h-full rounded-full bg-gradient-to-r", gradient)}
       style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
     />
   </div>
-)
+);
 
-const EmptyState: React.FC<{ onCreate: () => void }> = ({ onCreate }) => (
+const EmptyState = ({ onCreate }) => (
   <div className="border border-white/10 rounded-2xl p-8 text-center bg-white/5">
     <h3 className="text-white text-lg font-semibold mb-2">No goals yet</h3>
     <p className="text-white/70 mb-6">Create your first goal. Link buckets so your Stopwatch tab has instant options.</p>
@@ -102,26 +81,16 @@ const EmptyState: React.FC<{ onCreate: () => void }> = ({ onCreate }) => (
       + New Goal
     </button>
   </div>
-)
+);
 
-function formatHours(mins: number): number {
-  return Math.round(mins / 60)
+function formatHours(mins) {
+  return Math.round(mins / 60);
 }
 
-// Row component with Task Bank
-interface GoalRowProps {
-  goal: Goal
-  isOpen: boolean
-  onToggle: () => void
-  onAddBucket: () => void
-  onAddSuggestion: (bucketId: string) => void
-  onToggleBucketFavorite: (bucketId: string) => void
-}
-
-const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, onAddSuggestion, onToggleBucketFavorite }) => {
-  const pct = Math.min(100, Math.round((goal.minutes / Math.max(1, goal.weeklyTarget)) * 100))
-  const right = `${formatHours(goal.minutes)} / ${formatHours(goal.weeklyTarget)} h`
-  
+// Row component with Task Bank (suggestions + add bucket + favourite)
+function GoalRow({ goal, isOpen, onToggle, onAddBucket, onAddSuggestion, onToggleBucketFavorite }) {
+  const pct = Math.min(100, Math.round((goal.minutes / Math.max(1, goal.weeklyTarget)) * 100));
+  const right = `${formatHours(goal.minutes)} / ${formatHours(goal.weeklyTarget)} h`;
   return (
     <div className="rounded-2xl bg-white/5 hover:bg-white/10 transition border border-white/5">
       <button onClick={onToggle} className="w-full text-left p-4 md:p-5">
@@ -129,9 +98,7 @@ const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, 
           <h3 className="text-base md:text-lg font-semibold tracking-tight">{goal.name}</h3>
           <div className="flex items-center gap-3">
             <span className="text-sm text-white/80">{right}</span>
-            <svg className={classNames('w-4 h-4 text-white/70 transition-transform', isOpen && 'rotate-90')} viewBox="0 0 24 24" fill="currentColor">
-              <path fillRule="evenodd" d="M8.47 4.97a.75.75 0 011.06 0l6 6a.75.75 0 010 1.06l-6 6a.75.75 0 11-1.06-1.06L13.94 12 8.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd"/>
-            </svg>
+            <svg className={classNames("w-4 h-4 text-white/70 transition-transform", isOpen && "rotate-90")} viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M8.47 4.97a.75.75 0 011.06 0l6 6a.75.75 0 010 1.06l-6 6a.75.75 0 11-1.06-1.06L13.94 12 8.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd"/></svg>
           </div>
         </div>
         <div className="mt-3">
@@ -146,8 +113,8 @@ const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, 
           <div className="mt-1 flex items-center justify-between">
             <h4 className="text-sm font-medium text-white/90">Task Bank</h4>
             <div className="flex items-center gap-2">
-              <span className="text-xs px-2 py-1 rounded-full bg-white/10">♥ {goal.buckets.filter(b => b.favorite).length} fav</span>
-              <span className="text-xs px-2 py-1 rounded-full bg-white/10">💡 {goal.buckets.reduce((a, b) => a + b.suggestions.length, 0)}</span>
+              <span className="text-xs px-2 py-1 rounded-full bg-white/10">♥ {goal.buckets.filter(b=>b.favorite).length} fav</span>
+              <span className="text-xs px-2 py-1 rounded-full bg-white/10">💡 {goal.buckets.reduce((a,b)=>a+b.suggestions.length,0)}</span>
             </div>
           </div>
 
@@ -168,8 +135,8 @@ const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, 
                       <button
                         onClick={() => onToggleBucketFavorite(b.id)}
                         className="inline-flex items-center justify-center h-6 w-6 rounded-md hover:bg-white/10 transition"
-                        aria-label={b.favorite ? 'Unfavourite' : 'Favourite'}
-                        title={b.favorite ? 'Unfavourite' : 'Favourite'}
+                        aria-label={b.favorite ? "Unfavourite" : "Favourite"}
+                        title={b.favorite ? "Unfavourite" : "Favourite"}
                       >
                         {b.favorite ? (
                           <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -203,15 +170,13 @@ const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, 
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => onAddSuggestion(b.id)} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">
-                      + Suggestion
-                    </button>
+                    <button onClick={() => onAddSuggestion(b.id)} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">+ Suggestion</button>
                     <button
                       onClick={() => onToggleBucketFavorite(b.id)}
-                      className={classNames('text-xs px-3 py-1.5 rounded-lg', b.favorite ? 'bg-white text-gray-900' : 'bg-white/10 hover:bg-white/20')}
+                      className={classNames("text-xs px-3 py-1.5 rounded-lg", b.favorite ? "bg-white text-gray-900" : "bg-white/10 hover:bg-white/20")}
                       title="Toggle favourite (shown in Stopwatch)"
                     >
-                      {b.favorite ? 'Unfavourite' : 'Favourite'}
+                      {b.favorite ? "Unfavourite" : "Favourite"}
                     </button>
                   </div>
                 </div>
@@ -221,44 +186,44 @@ const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, 
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default function GoalsPage({ onNavigate }: GoalsPageProps): ReactElement {
-  const [goals, setGoals] = useState(DEFAULT_GOALS)
-  const [query, setQuery] = useState('')
-  const [showNew, setShowNew] = useState(false)
-  const [draft, setDraft] = useState({ name: '', color: 'from-sky-500 to-indigo-500' })
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+export default function GoalsLayerPreview() {
+  const [goals, setGoals] = useState(DEFAULT_GOALS);
+  const [query, setQuery] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [draft, setDraft] = useState({ name: "", color: "from-sky-500 to-indigo-500" });
+  const [expanded, setExpanded] = useState({});
 
-  // Sanity tests (runtime)
+  // --- Sanity tests (runtime) ---
   useEffect(() => {
     // percentages valid
     goals.forEach((g) => {
-      const pct = (g.minutes / Math.max(1, g.weeklyTarget)) * 100
-      console.assert(pct >= 0 && pct <= 100, `pct out of bounds for ${g.name}`)
-    })
+      const pct = (g.minutes / Math.max(1, g.weeklyTarget)) * 100;
+      console.assert(pct >= 0 && pct <= 100, `pct out of bounds for ${g.name}`);
+    });
     // required PopDot/Coding test
-    const popdot = goals.find((g) => g.name.includes('PopDot'))
-    console.assert(Boolean(popdot), 'Expected a goal named "Finish PopDot Beta"')
+    const popdot = goals.find((g) => g.name.includes("PopDot"));
+    console.assert(Boolean(popdot), 'Expected a goal named "Finish PopDot Beta"');
     if (popdot) {
-      console.assert(popdot.buckets.some((b) => b.name === 'Coding'), 'Expected PopDot to include a "Coding" bucket')
+      console.assert(popdot.buckets.some((b) => b.name === "Coding"), 'Expected PopDot to include a "Coding" bucket');
     }
     // bucket favorite property exists
-    goals.forEach((g) => g.buckets.forEach((b) => console.assert(typeof b.favorite === 'boolean', `Bucket ${b.name} missing favorite flag`)))
+    goals.forEach((g) => g.buckets.forEach((b) => console.assert(typeof b.favorite === "boolean", `Bucket ${b.name} missing favorite flag`)));
     // formatHours test
-    console.assert(formatHours(120) === 2, 'formatHours(120) should be 2')
-  }, [goals])
+    console.assert(formatHours(120) === 2, "formatHours(120) should be 2");
+  }, [goals]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return goals
-    return goals.filter((g) => g.name.toLowerCase().includes(q))
-  }, [goals, query])
+    const q = query.trim().toLowerCase();
+    if (!q) return goals;
+    return goals.filter((g) => g.name.toLowerCase().includes(q));
+  }, [goals, query]);
 
   const addGoal = () => {
-    if (!draft.name.trim()) return
-    const id = `g_${Date.now()}`
+    if (!draft.name.trim()) return;
+    const id = `g_${Date.now()}`;
     setGoals((gs) => [
       {
         id,
@@ -269,55 +234,51 @@ export default function GoalsPage({ onNavigate }: GoalsPageProps): ReactElement 
         weeklyTarget: 300,
       },
       ...gs,
-    ])
-    setDraft({ name: '', color: 'from-sky-500 to-indigo-500' })
-    setShowNew(false)
-  }
+    ]);
+    setDraft({ name: "", color: "from-sky-500 to-indigo-500" });
+    setShowNew(false);
+  };
 
-  const addBucket = (goalId: string) => {
-    const name = prompt('Bucket name (e.g., Coding, Flashcards, Gym)')
-    if (!name) return
+  const addBucket = (goalId) => {
+    const name = prompt("Bucket name (e.g., Coding, Flashcards, Gym)");
+    if (!name) return;
     setGoals((gs) =>
       gs.map((g) =>
         g.id === goalId
           ? { ...g, buckets: [...g.buckets, { id: `b_${Date.now()}`, name, favorite: true, suggestions: [] }] }
           : g
       )
-    )
-  }
+    );
+  };
 
-  const addSuggestion = (goalId: string, bucketId: string) => {
-    const text = prompt('Quick suggestion (15–60 min action)')
-    if (!text) return
+  const addSuggestion = (goalId, bucketId) => {
+    const text = prompt("Quick suggestion (15–60 min action)");
+    if (!text) return;
     setGoals((gs) =>
       gs.map((g) =>
         g.id === goalId
           ? { ...g, buckets: g.buckets.map((b) => (b.id === bucketId ? { ...b, suggestions: [...b.suggestions, text] } : b)) }
           : g
       )
-    )
-  }
+    );
+  };
 
-  const toggleBucketFavorite = (goalId: string, bucketId: string) => {
+  const toggleBucketFavorite = (goalId, bucketId) => {
     setGoals((gs) =>
       gs.map((g) =>
         g.id === goalId
           ? { ...g, buckets: g.buckets.map((b) => (b.id === bucketId ? { ...b, favorite: !b.favorite } : b)) }
           : g
       )
-    )
-  }
+    );
+  };
 
-  const toggleExpand = (id: string) => setExpanded((e) => ({ ...e, [id]: !(e[id] ?? false) }))
+  const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !(e[id] ?? false) }));
 
   return (
-    <div className="goals-layer min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white antialiased">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
-        .goals-layer {
-          font-family: Montserrat, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-        }
-      `}</style>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white antialiased" style={{ fontFamily: "Montserrat, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" }}>
+      {/* Font import */}
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');`}</style>
 
       {/* Top Navbar */}
       <header className="sticky top-0 z-20 backdrop-blur-md supports-[backdrop-filter]:bg-white/5 bg-white/5 border-b border-white/10">
@@ -328,18 +289,12 @@ export default function GoalsPage({ onNavigate }: GoalsPageProps): ReactElement 
           </div>
           <nav className="flex items-center gap-2">
             <Tab label="Goals" active />
-            <button onClick={() => onNavigate('taskwatch')} className="px-3 py-2 text-sm font-medium transition text-white/70 hover:text-white">
-              Stopwatch
-            </button>
-            <button onClick={() => onNavigate('reflection')} className="px-3 py-2 text-sm font-medium transition text-white/70 hover:text-white">
-              Reflection
-            </button>
+            <Tab label="Stopwatch" />
+            <Tab label="Reflection" />
           </nav>
           <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white/70">
-                <path fillRule="evenodd" d="M10.5 3.75a6.75 6.75 0 015.364 10.83l4.278 4.278a.75.75 0 11-1.06 1.06l-4.279-4.277A6.75 6.75 0 1110.5 3.75zm0 1.5a5.25 5.25 0 100 10.5 5.25 5.25 0 000-10.5z" clipRule="evenodd" />
-              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white/70"><path fillRule="evenodd" d="M10.5 3.75a6.75 6.75 0 015.364 10.83l4.278 4.278a.75.75 0 11-1.06 1.06l-4.279-4.277A6.75 6.75 0 1110.5 3.75zm0 1.5a5.25 5.25 0 100 10.5 5.25 5.25 0 000-10.5z" clipRule="evenodd" /></svg>
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -400,20 +355,20 @@ export default function GoalsPage({ onNavigate }: GoalsPageProps): ReactElement 
                 <label className="text-sm text-white/70">Accent Gradient</label>
                 <div className="mt-2 grid grid-cols-3 gap-2">
                   {[
-                    'from-sky-500 to-indigo-500',
-                    'from-fuchsia-500 to-purple-500',
-                    'from-emerald-500 to-cyan-500',
-                    'from-orange-500 to-rose-500',
-                    'from-amber-400 to-rose-500',
-                    'from-lime-400 to-teal-500',
+                    "from-sky-500 to-indigo-500",
+                    "from-fuchsia-500 to-purple-500",
+                    "from-emerald-500 to-cyan-500",
+                    "from-orange-500 to-rose-500",
+                    "from-amber-400 to-rose-500",
+                    "from-lime-400 to-teal-500",
                   ].map((g) => (
                     <button
                       key={g}
                       onClick={() => setDraft((d) => ({ ...d, color: g }))}
                       className={classNames(
-                        'h-10 rounded-xl border border-white/20 bg-gradient-to-br',
+                        "h-10 rounded-xl border border-white/20 bg-gradient-to-br",
                         g,
-                        draft.color === g && 'ring-2 ring-white'
+                        draft.color === g && "ring-2 ring-white"
                       )}
                       title={g}
                     />
@@ -439,5 +394,5 @@ export default function GoalsPage({ onNavigate }: GoalsPageProps): ReactElement 
         <div className="absolute -bottom-28 -right-24 h-80 w-80 bg-indigo-500 blur-3xl rounded-full mix-blend-screen" />
       </div>
     </div>
-  )
+  );
 }
