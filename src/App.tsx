@@ -5,6 +5,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   type MouseEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -33,6 +34,7 @@ const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
 const CURRENT_TASK_STORAGE_KEY = 'nc-taskwatch-current-task'
 const TASK_DISPLAY_LIMIT = 32
 const MAX_TASK_STORAGE_LENGTH = 256
+const NAV_BREAKPOINT = 1024
 const sanitizeEditableValue = (
   element: HTMLSpanElement,
   rawValue: string,
@@ -330,10 +332,21 @@ function App() {
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1280
   )
+  const [isNavCollapsed, setIsNavCollapsed] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth <= NAV_BREAKPOINT : false
+  )
+  const [isNavOpen, setIsNavOpen] = useState(false)
   const taskContentRef = useRef<HTMLSpanElement | null>(null)
   const taskHeadingRef = useRef<HTMLDivElement | null>(null)
   const historyTaskRefs = useRef(new Map<string, HTMLSpanElement>())
   const singleClickTimerRef = useRef<number | null>(null)
+  const computeNavCollapse = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    setIsNavCollapsed(window.innerWidth <= NAV_BREAKPOINT)
+  }, [])
 
   const frameRef = useRef<number | null>(null)
   const lastTickRef = useRef<number | null>(null)
@@ -367,13 +380,42 @@ function App() {
 
     const handleResize = () => {
       setViewportWidth(window.innerWidth)
+      computeNavCollapse()
     }
 
     window.addEventListener('resize', handleResize)
     return () => {
       window.removeEventListener('resize', handleResize)
     }
-  }, [])
+  }, [computeNavCollapse])
+
+  useEffect(() => {
+    computeNavCollapse()
+  }, [computeNavCollapse])
+
+  useEffect(() => {
+    if (!isNavCollapsed && isNavOpen) {
+      setIsNavOpen(false)
+    }
+  }, [isNavCollapsed, isNavOpen])
+
+  useEffect(() => {
+    if (!isNavOpen || typeof window === 'undefined') {
+      return
+    }
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsNavOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isNavOpen])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -465,6 +507,18 @@ function App() {
 
   const toggleTheme = () => {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
+  }
+
+  const toggleNav = () => {
+    if (!isNavCollapsed) {
+      return
+    }
+
+    setIsNavOpen((current) => !current)
+  }
+
+  const closeNav = () => {
+    setIsNavOpen(false)
   }
 
   const handleStartStop = () => {
@@ -895,25 +949,82 @@ function App() {
   const statusText = isRunning ? 'running' : elapsed > 0 ? 'paused' : 'idle'
   const primaryLabel = isRunning ? 'Pause' : elapsed > 0 ? 'Resume' : 'Start'
   const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
+  const topBarClassName = useMemo(
+    () => ['top-bar', isNavCollapsed ? 'top-bar--collapsed' : ''].filter(Boolean).join(' '),
+    [isNavCollapsed]
+  )
+  const navLinksClassName = useMemo(
+    () =>
+      ['nav-links', isNavCollapsed ? 'nav-links--collapsed' : '', isNavCollapsed && isNavOpen ? 'open' : '']
+        .filter(Boolean)
+        .join(' '),
+    [isNavCollapsed, isNavOpen]
+  )
   return (
     <div className="page">
       <header className="site-header">
         <div className="site-header__inner">
-          <nav className="top-bar" aria-label="Primary">
-            <div className="brand">
-              <span className="brand-text">NC-TASKWATCH</span>
-            </div>
+          <nav className={topBarClassName} aria-label="Primary navigation">
             <button
-              className="theme-toggle"
+              className="brand brand--toggle"
               type="button"
               onClick={toggleTheme}
               aria-label={`Switch to ${nextThemeLabel} mode`}
             >
-              <span className="theme-toggle-label">{nextThemeLabel}</span>
+              <span className="brand-text">NC-TASKWATCH</span>
+              <span className="brand-indicator" aria-hidden="true">
+                {theme === 'dark' ? '☾' : '☀︎'}
+              </span>
             </button>
+            <div
+              className={navLinksClassName}
+              id="primary-navigation"
+            >
+              <a
+                href="#goals"
+                className="nav-link"
+                onClick={closeNav}
+              >
+                Goals
+              </a>
+              <a
+                href="#taskwatch"
+                className="nav-link nav-link--active"
+                aria-current="page"
+                onClick={closeNav}
+              >
+                Taskwatch
+              </a>
+              <a
+                href="#reflection"
+                className="nav-link"
+                onClick={closeNav}
+              >
+                Reflection
+              </a>
+            </div>
+            <div className="top-bar__controls">
+              <button
+                className="nav-toggle"
+                type="button"
+                aria-label="Toggle navigation"
+                aria-expanded={isNavCollapsed ? isNavOpen : undefined}
+                aria-controls={isNavCollapsed ? 'primary-navigation' : undefined}
+                onClick={toggleNav}
+                hidden={!isNavCollapsed}
+              >
+                <span className={`hamburger${isNavOpen ? ' open' : ''}`} />
+              </button>
+            </div>
           </nav>
         </div>
       </header>
+
+      <div
+        className={`nav-backdrop${isNavCollapsed && isNavOpen ? ' show' : ''}`}
+        role="presentation"
+        onClick={closeNav}
+      />
 
       <main className="site-main">
         <div className="site-main__inner">
