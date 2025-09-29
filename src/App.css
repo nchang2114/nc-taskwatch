@@ -9,7 +9,7 @@
   --site-header-height: clamp(3.5rem, 5.4vw, 4.25rem);
 }
 
-.site-header {
+.navbar {
   position: sticky;
   top: 0;
   z-index: 10;
@@ -18,10 +18,11 @@
   border-bottom: 1px solid var(--panel-border);
 }
 
-.site-header__inner {
+.navbar__inner {
   width: 100%;
   margin: 0;
-  padding: clamp(0.4rem, 1.5vw, 0.8rem);
+  padding-block: clamp(0.4rem, 1.5vw, 0.8rem);
+  padding-inline: 0;
   display: flex;
   align-items: center;
   min-height: var(--site-header-height);
@@ -164,7 +165,7 @@
   color: var(--text-primary);
 }
 
-html[data-theme='light'] .site-header {
+html[data-theme='light'] .navbar {
   background: var(--page-background);
 }
 
@@ -174,8 +175,16 @@ html[data-theme='light'] .site-header {
   align-items: center;
   width: 100%;
   gap: clamp(0.6rem, 2.2vw, 1.6rem);
-  padding-inline: clamp(0.25rem, 1.2vw, 0.75rem);
+  padding-inline: 0;
   position: relative;
+}
+
+.top-bar .brand {
+  margin-left: clamp(0.4rem, 1.6vw, 1.25rem);
+}
+
+.top-bar .top-bar__controls {
+  margin-right: clamp(0.4rem, 1.6vw, 1.25rem);
 }
 
 
@@ -300,50 +309,51 @@ html[data-theme='light'] .nav-link--active,
 html[data-theme='light'] .nav-link[aria-current='page'] {
   box-shadow: inset 0 0 0 1px rgba(88, 112, 242, 0.32), 0 10px 24px rgba(175, 188, 238, 0.35);
 }
-.nav-links--collapsed {
+.nav-links--drawer {
   position: fixed;
+  top: calc(var(--site-header-height) + clamp(0.35rem, 2vw, 0.75rem));
   left: 0;
   right: 0;
-  top: calc(var(--site-header-height) + clamp(0.4rem, 2vw, 0.9rem));
-  margin: 0 auto;
-  width: min(440px, calc(100% - clamp(2rem, 10vw, 4rem)));
+  width: 100%;
+  max-width: 100vw;
+  transform: translateY(-16px);
   display: flex;
   flex-direction: column;
-  gap: clamp(0.4rem, 2vw, 0.7rem);
-  padding: clamp(1rem, 4vw, 1.4rem);
-  border-radius: clamp(0.9rem, 3vw, 1.25rem);
-  border: 1px solid var(--panel-border);
-  background: linear-gradient(180deg, rgba(26, 34, 72, 0.94) 0%, rgba(12, 18, 40, 0.94) 100%);
-  box-shadow: var(--panel-shadow);
-  backdrop-filter: blur(18px);
+  align-items: stretch;
+  gap: clamp(0.5rem, 2vw, 0.85rem);
+  padding: clamp(0.85rem, 3vw, 1.2rem) clamp(1rem, 5vw, 1.8rem) clamp(1.35rem, 5vw, 1.9rem);
+  border-radius: 0;
+  border: 1px solid rgba(42, 58, 112, 0.65);
+  background: #0e1520;
+  box-shadow: 0 26px 48px rgba(6, 10, 26, 0.45);
   pointer-events: none;
   visibility: hidden;
-  transform: none;
-  clip-path: inset(0 0 100% 0);
-  -webkit-clip-path: inset(0 0 100% 0);
-  transition: clip-path 200ms ease, -webkit-clip-path 200ms ease, visibility 0s linear 200ms;
+  opacity: 0;
+  transition: opacity 220ms ease, transform 240ms ease, visibility 0s linear 220ms;
   z-index: 25;
 }
 
-html[data-theme='light'] .nav-links--collapsed {
-  background: linear-gradient(180deg, rgba(252, 254, 255, 0.94) 0%, rgba(230, 236, 255, 0.94) 100%);
-  border: 1px solid rgba(166, 176, 224, 0.32);
+html[data-theme='light'] .nav-links--drawer {
+  background: #f4f7ff;
+  border-color: rgba(132, 144, 216, 0.5);
+  box-shadow: 0 24px 46px rgba(112, 128, 224, 0.28);
 }
 
-.nav-links--collapsed.open {
+.nav-links--drawer.open {
   pointer-events: auto;
   visibility: visible;
-  clip-path: inset(0 0 0 0);
-  -webkit-clip-path: inset(0 0 0 0);
-  transition: clip-path 220ms ease, -webkit-clip-path 220ms ease;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 260ms ease, transform 280ms ease;
 }
 
-.nav-links--collapsed .nav-link {
+.nav-links--drawer .nav-link {
   justify-content: flex-start;
   width: 100%;
-  padding: clamp(0.7rem, 2.8vw, 0.95rem) clamp(0.8rem, 3vw, 1.1rem);
-  border-radius: clamp(0.7rem, 2.4vw, 1rem);
-  font-size: clamp(0.72rem, 2vw, 0.9rem);
+  padding: clamp(0.7rem, 2.8vw, 0.95rem) clamp(0.8rem, 3.4vw, 1.2rem);
+  border-radius: clamp(0.6rem, 2.6vw, 0.95rem);
+  font-size: clamp(0.78rem, 2.4vw, 0.96rem);
+  letter-spacing: 0.14em;
 }
 
 .top-bar--collapsed .top-bar__controls {
@@ -421,29 +431,6 @@ html[data-theme='light'] .nav-links--collapsed {
 .hamburger.open::after {
   opacity: 0;
   transform: translateY(0);
-}
-
-.nav-backdrop {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: var(--site-header-height);
-  bottom: 0;
-  background: rgba(6, 12, 28, 0);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 180ms ease, background 180ms ease;
-  z-index: 15;
-}
-
-.nav-backdrop.show {
-  background: rgba(6, 12, 28, 0.24);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-html[data-theme='light'] .nav-backdrop.show {
-  background: rgba(120, 134, 255, 0.18);
 }
 
 .stopwatch-card {

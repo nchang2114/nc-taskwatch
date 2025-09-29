@@ -953,17 +953,43 @@ function App() {
     () => ['top-bar', isNavCollapsed ? 'top-bar--collapsed' : ''].filter(Boolean).join(' '),
     [isNavCollapsed]
   )
-  const navLinksClassName = useMemo(
+  const collapsedNavClassName = useMemo(
     () =>
-      ['nav-links', isNavCollapsed ? 'nav-links--collapsed' : '', isNavCollapsed && isNavOpen ? 'open' : '']
+      ['nav-links', 'nav-links--drawer', isNavOpen ? 'open' : '']
         .filter(Boolean)
         .join(' '),
-    [isNavCollapsed, isNavOpen]
+    [isNavOpen]
+  )
+  const navLinks = (
+    <>
+      <a
+        href="#goals"
+        className="nav-link"
+        onClick={closeNav}
+      >
+        Goals
+      </a>
+      <a
+        href="#taskwatch"
+        className="nav-link nav-link--active"
+        aria-current="page"
+        onClick={closeNav}
+      >
+        Taskwatch
+      </a>
+      <a
+        href="#reflection"
+        className="nav-link"
+        onClick={closeNav}
+      >
+        Reflection
+      </a>
+    </>
   )
   return (
     <div className="page">
-      <header className="site-header">
-        <div className="site-header__inner">
+      <header className="navbar">
+        <div className="navbar__inner">
           <nav className={topBarClassName} aria-label="Primary navigation">
             <button
               className="brand brand--toggle"
@@ -976,33 +1002,19 @@ function App() {
                 {theme === 'dark' ? '☾' : '☀︎'}
               </span>
             </button>
-            <div
-              className={navLinksClassName}
-              id="primary-navigation"
-            >
-              <a
-                href="#goals"
-                className="nav-link"
-                onClick={closeNav}
+            {isNavCollapsed ? (
+              <div
+                className={collapsedNavClassName}
+                id="primary-navigation"
+                aria-hidden={!isNavOpen}
               >
-                Goals
-              </a>
-              <a
-                href="#taskwatch"
-                className="nav-link nav-link--active"
-                aria-current="page"
-                onClick={closeNav}
-              >
-                Taskwatch
-              </a>
-              <a
-                href="#reflection"
-                className="nav-link"
-                onClick={closeNav}
-              >
-                Reflection
-              </a>
-            </div>
+                {navLinks}
+              </div>
+            ) : (
+              <div className="nav-links">
+                {navLinks}
+              </div>
+            )}
             <div className="top-bar__controls">
               <button
                 className="nav-toggle"
@@ -1019,12 +1031,6 @@ function App() {
           </nav>
         </div>
       </header>
-
-      <div
-        className={`nav-backdrop${isNavCollapsed && isNavOpen ? ' show' : ''}`}
-        role="presentation"
-        onClick={closeNav}
-      />
 
       <main className="site-main">
         <div className="site-main__inner">
