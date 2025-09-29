@@ -15,6 +15,7 @@
   z-index: 20;
   width: 100%;
   background: var(--page-background);
+  background-attachment: fixed;
   border-bottom: 1px solid var(--panel-border);
   overflow: visible;
   transition: border-color 220ms ease;
@@ -201,7 +202,7 @@ html[data-theme='light'] .navbar {
   --drawer-gap-size: clamp(0.5rem, 2vw, 0.85rem);
   --drawer-gap: 0;
   position: absolute;
-  top: calc(100% - 1px);
+  top: 100%;
   left: 0;
   right: 0;
   z-index: 15;
@@ -210,6 +211,7 @@ html[data-theme='light'] .navbar {
   flex-direction: column;
   align-items: stretch;
   background: var(--page-background);
+  background-attachment: fixed;
   background-clip: padding-box;
   padding: 0 var(--drawer-padding-inline);
   max-height: 0;
@@ -217,7 +219,7 @@ html[data-theme='light'] .navbar {
   pointer-events: none;
   opacity: 0;
   border-bottom: 1px solid transparent;
-  box-shadow: 0 22px 46px rgba(6, 12, 32, 0.32);
+  box-shadow: 0 22px 46px rgba(6, 12, 32, 0.18);
   transition: max-height 360ms cubic-bezier(0.18, 1, 0.32, 1),
     padding 260ms ease,
     opacity 180ms ease,
@@ -229,7 +231,7 @@ html[data-theme='light'] .navbar {
 .top-bar__drawer--open {
   pointer-events: auto;
   opacity: 1;
-  border-bottom-color: var(--panel-border);
+  border-bottom-color: transparent;
   padding-top: var(--drawer-padding-vertical);
   padding-bottom: var(--drawer-padding-vertical);
   max-height: 420px;

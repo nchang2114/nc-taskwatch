@@ -1007,17 +1007,7 @@ function App() {
                 {theme === 'dark' ? '☾' : '☀︎'}
               </span>
             </button>
-            {isNavCollapsed ? (
-              <div className={drawerContainerClassName} aria-hidden={!isNavOpen}>
-                <div
-                  className={collapsedNavClassName}
-                  id="primary-navigation"
-                  aria-hidden={!isNavOpen}
-                >
-                  {navLinks}
-                </div>
-              </div>
-            ) : (
+            {isNavCollapsed ? null : (
               <div className="nav-links">
                 {navLinks}
               </div>
@@ -1037,6 +1027,17 @@ function App() {
             </div>
           </nav>
         </div>
+        {isNavCollapsed ? (
+          <div className={drawerContainerClassName} aria-hidden={!isNavOpen}>
+            <div
+              className={collapsedNavClassName}
+              id="primary-navigation"
+              aria-hidden={!isNavOpen}
+            >
+              {navLinks}
+            </div>
+          </div>
+        ) : null}
       </header>
 
       <main className="site-main">
