@@ -950,16 +950,21 @@ function App() {
   const primaryLabel = isRunning ? 'Pause' : elapsed > 0 ? 'Resume' : 'Start'
   const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
   const topBarClassName = useMemo(
-    () => ['top-bar', isNavCollapsed ? 'top-bar--collapsed' : ''].filter(Boolean).join(' '),
-    [isNavCollapsed]
-  )
-  const collapsedNavClassName = useMemo(
     () =>
-      ['nav-links', 'nav-links--drawer', isNavOpen ? 'open' : '']
+      ['top-bar', isNavCollapsed ? 'top-bar--collapsed' : '', isNavCollapsed && isNavOpen ? 'top-bar--drawer-open' : '']
         .filter(Boolean)
         .join(' '),
-    [isNavOpen]
+    [isNavCollapsed, isNavOpen]
   )
+  const headerClassName = useMemo(
+    () => ['navbar', isNavCollapsed && isNavOpen ? 'navbar--drawer-open' : ''].filter(Boolean).join(' '),
+    [isNavCollapsed, isNavOpen]
+  )
+  const drawerContainerClassName = useMemo(
+    () => ['top-bar__drawer', isNavCollapsed && isNavOpen ? 'top-bar__drawer--open' : ''].filter(Boolean).join(' '),
+    [isNavCollapsed, isNavOpen]
+  )
+  const collapsedNavClassName = useMemo(() => ['nav-links', 'nav-links--drawer'].join(' '), [])
   const navLinks = (
     <>
       <a
@@ -988,7 +993,7 @@ function App() {
   )
   return (
     <div className="page">
-      <header className="navbar">
+      <header className={headerClassName}>
         <div className="navbar__inner">
           <nav className={topBarClassName} aria-label="Primary navigation">
             <button
@@ -1003,12 +1008,14 @@ function App() {
               </span>
             </button>
             {isNavCollapsed ? (
-              <div
-                className={collapsedNavClassName}
-                id="primary-navigation"
-                aria-hidden={!isNavOpen}
-              >
-                {navLinks}
+              <div className={drawerContainerClassName} aria-hidden={!isNavOpen}>
+                <div
+                  className={collapsedNavClassName}
+                  id="primary-navigation"
+                  aria-hidden={!isNavOpen}
+                >
+                  {navLinks}
+                </div>
               </div>
             ) : (
               <div className="nav-links">
