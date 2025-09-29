@@ -15,3 +15,22 @@
 .site-main--goals .goals-layer {
   min-height: 100vh;
 }
+
+/* Respect notches on iOS Safari */
+.safe-px {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+/* Prevent horizontal scroll caused by gradient blobs on tiny screens */
+.goals-layer {
+  overflow-x: hidden;
+}
+
+/* Prefer reduced motion: tone down hover transitions */
+@media (prefers-reduced-motion: reduce) {
+  .goals-layer * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
