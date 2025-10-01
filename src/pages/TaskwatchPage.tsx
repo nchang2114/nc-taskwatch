@@ -312,6 +312,7 @@ export function TaskwatchPage({ viewportWidth }: TaskwatchPageProps) {
   const [isTaskExpanded, setIsTaskExpanded] = useState(false)
   const [isToggleVisible, setIsToggleVisible] = useState(false)
   const [isTaskEditing, setIsTaskEditing] = useState(false)
+  const [isTaskFocused, setIsTaskFocused] = useState(false)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
   const taskContentRef = useRef<HTMLSpanElement | null>(null)
   const taskHeadingRef = useRef<HTMLDivElement | null>(null)
@@ -422,12 +423,14 @@ export function TaskwatchPage({ viewportWidth }: TaskwatchPageProps) {
   }, [])
 
   const toggleTaskExpansion = () => {
-    setIsTaskExpanded((current) => !current)
-  }
-
-  const toggleTaskEditing = () => {
-    setIsTaskEditing(true)
-    setIsToggleVisible(true)
+    if (!hasTaskOverflow || isTaskEditing) {
+      return
+    }
+    setIsTaskExpanded((current) => {
+      const next = !current
+      setIsToggleVisible(next)
+      return next
+    })
   }
 
   const handleStartStop = () => {
@@ -455,42 +458,53 @@ export function TaskwatchPage({ viewportWidth }: TaskwatchPageProps) {
   }
 
   const handleTaskHeadingClick = () => {
-    if (singleClickTimerRef.current !== null && typeof window !== 'undefined') {
-      window.clearTimeout(singleClickTimerRef.current)
-      singleClickTimerRef.current = null
-    }
-
-    if (isTaskEditing) {
+    if (!hasTaskOverflow || isTaskEditing) {
       return
     }
-
-    if (!isTaskExpanded) {
-      singleClickTimerRef.current = window.setTimeout(() => {
-        toggleTaskExpansion()
-        singleClickTimerRef.current = null
-      }, SINGLE_CLICK_DELAY_MS)
-    } else {
-      toggleTaskExpansion()
+    if (shouldShowFullTask) {
+      setIsToggleVisible(true)
+      return
     }
+    if (singleClickTimerRef.current !== null) {
+      return
+    }
+    if (typeof window === 'undefined') {
+      toggleTaskExpansion()
+      return
+    }
+    singleClickTimerRef.current = window.setTimeout(() => {
+      singleClickTimerRef.current = null
+      toggleTaskExpansion()
+    }, SINGLE_CLICK_DELAY_MS)
   }
 
   const handleTaskHeadingDoubleClick = () => {
+    if (isTaskEditing) {
+      return
+    }
     if (singleClickTimerRef.current !== null && typeof window !== 'undefined') {
       window.clearTimeout(singleClickTimerRef.current)
       singleClickTimerRef.current = null
     }
-    toggleTaskEditing()
+    setIsTaskExpanded(true)
+    setIsToggleVisible(false)
+    setIsTaskEditing(true)
   }
 
   const handleTaskHeadingKeyDown = (event: KeyboardEvent<HTMLSpanElement>) => {
+    if (isTaskEditing) {
+      return
+    }
+    if (!hasTaskOverflow) {
+      return
+    }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      toggleTaskExpansion()
-    } else if (event.key === 'Escape') {
-      event.preventDefault()
-      setIsToggleVisible(false)
-      setIsTaskEditing(false)
-      setIsTaskExpanded(false)
+      if (!shouldShowFullTask) {
+        toggleTaskExpansion()
+      } else {
+        setIsToggleVisible(true)
+      }
     }
   }
 
@@ -504,14 +518,22 @@ export function TaskwatchPage({ viewportWidth }: TaskwatchPageProps) {
     }
   }
 
-  const safeTaskName = currentTaskName.length > 0 ? currentTaskName : 'New Task'
+  const safeTaskName = useMemo(() => {
+    if (isTaskEditing || isTaskFocused) {
+      return currentTaskName
+    }
+    const trimmed = currentTaskName.trim()
+    return trimmed.length > 0 ? trimmed : 'New Task'
+  }, [currentTaskName, isTaskEditing, isTaskFocused])
   const hasTaskOverflow = safeTaskName.length > TASK_DISPLAY_LIMIT
-  const shouldShowFullTask = isTaskExpanded || !hasTaskOverflow
+  const shouldShowFullTask = isTaskExpanded || isTaskFocused || isTaskEditing
   const displayTaskName = useMemo(
-    () => (shouldShowFullTask ? safeTaskName : `${safeTaskName.slice(0, TASK_DISPLAY_LIMIT)}…`),
+    () => (shouldShowFullTask ? safeTaskName : safeTaskName.slice(0, TASK_DISPLAY_LIMIT)),
     [safeTaskName, shouldShowFullTask],
   )
-  const taskHeadingTitle = hasTaskOverflow ? safeTaskName : undefined
+  const taskHeadingTitle = hasTaskOverflow
+    ? 'Click to toggle the full task name or double-click to edit.'
+    : 'Double-click to edit the task name.'
 
   const handleTaskNameInput = (event: FormEvent<HTMLSpanElement>) => {
     const node = taskContentRef.current
@@ -525,26 +547,15 @@ export function TaskwatchPage({ viewportWidth }: TaskwatchPageProps) {
   }
 
   const handleTaskNameFocus = () => {
-    setIsToggleVisible(true)
+    setIsTaskFocused(true)
+    if (hasTaskOverflow) {
+      setIsTaskExpanded(true)
+      setIsToggleVisible(true)
+    }
   }
 
-  const toggleButtonLabels = useMemo(() => {
-    if (!shouldShowFullTask) {
-      return {
-        indicator: 'More',
-        ariaLabel: 'Show full task name',
-      }
-    }
-
-    return {
-      indicator: 'Less',
-      ariaLabel: 'Collapse task name',
-    }
-  }, [shouldShowFullTask])
-  const toggleIndicatorLabel = toggleButtonLabels.indicator
-  const toggleIndicatorAriaLabel = toggleButtonLabels.ariaLabel
-
-  const handleToggleButtonClick = () => {
+  const handleToggleButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
     toggleTaskExpansion()
   }
 
@@ -562,6 +573,7 @@ export function TaskwatchPage({ viewportWidth }: TaskwatchPageProps) {
     if (!isMovingToToggle) {
       setIsToggleVisible(false)
     }
+    setIsTaskFocused(false)
     setIsTaskEditing(false)
   }
 
@@ -752,6 +764,8 @@ export function TaskwatchPage({ viewportWidth }: TaskwatchPageProps) {
     [isTaskEditing, hasTaskOverflow],
   )
   const shouldShowToggle = hasTaskOverflow && !isTaskEditing && (!shouldShowFullTask || isToggleVisible)
+  const toggleIndicatorLabel = shouldShowFullTask ? 'show less' : '...'
+  const toggleIndicatorAriaLabel = shouldShowFullTask ? 'Collapse full task name' : 'Expand full task name'
   const baseTimeClass = elapsed >= 3600000 ? 'time-value--long' : ''
   const charCount = formattedTime.length
   let lengthClass = ''
@@ -766,6 +780,55 @@ export function TaskwatchPage({ viewportWidth }: TaskwatchPageProps) {
   const timeValueClassName = ['time-value', baseTimeClass, lengthClass].filter(Boolean).join(' ')
   const statusText = isRunning ? 'running' : elapsed > 0 ? 'paused' : 'idle'
   const primaryLabel = isRunning ? 'Pause' : elapsed > 0 ? 'Resume' : 'Start'
+
+  useEffect(() => {
+    if (!isTaskEditing || typeof window === 'undefined') {
+      return
+    }
+    const node = taskContentRef.current
+    if (!node) {
+      return
+    }
+
+    const focusTask = () => {
+      node.focus()
+      const selection = window.getSelection()
+      if (!selection) {
+        return
+      }
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      range.collapse(false)
+      selection.removeAllRanges()
+      selection.addRange(range)
+    }
+
+    const rafId = window.requestAnimationFrame(focusTask)
+    return () => {
+      window.cancelAnimationFrame(rafId)
+    }
+  }, [isTaskEditing])
+
+  useEffect(() => {
+    if (!shouldShowFullTask || !isToggleVisible || typeof window === 'undefined') {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const container = taskHeadingRef.current
+      if (!container) {
+        return
+      }
+      if (!container.contains(event.target as Node)) {
+        setIsToggleVisible(false)
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [shouldShowFullTask, isToggleVisible])
 
   useEffect(() => {
     const node = taskContentRef.current
