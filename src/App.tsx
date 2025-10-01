@@ -22,6 +22,10 @@ const getInitialTheme = (): Theme => {
   return prefersLight ? 'light' : 'dark'
 }
 
+const COMPACT_BRAND_BREAKPOINT = 640
+const DEFAULT_NAV_BUFFER = 56
+const COMPACT_NAV_BUFFER = 24
+
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
   const [activeTab, setActiveTab] = useState<TabKey>('taskwatch')
@@ -36,6 +40,8 @@ function App() {
   const navControlsRef = useRef<HTMLDivElement | null>(null)
   const navMeasureRef = useRef<HTMLDivElement | null>(null)
 
+  const isCompactBrand = viewportWidth <= COMPACT_BRAND_BREAKPOINT
+
   const evaluateNavCollapse = useCallback(() => {
     const container = navContainerRef.current
     const measure = navMeasureRef.current
@@ -49,12 +55,12 @@ function App() {
     const controlsWidth = navControlsRef.current?.offsetWidth ?? 0
     const navWidth = container.clientWidth
     const linksWidth = measure.scrollWidth
-    const buffer = 56
+    const buffer = isCompactBrand ? COMPACT_NAV_BUFFER : DEFAULT_NAV_BUFFER
     const available = Math.max(0, navWidth - brandWidth - controlsWidth - buffer)
     const shouldCollapse = linksWidth > available
 
     setIsNavCollapsed((current) => (current !== shouldCollapse ? shouldCollapse : current))
-  }, [])
+  }, [isCompactBrand])
 
   const applyTheme = useCallback(
     (value: Theme) => {
@@ -174,6 +180,10 @@ function App() {
   }
 
   const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
+  const brandButtonClassName = useMemo(
+    () => ['brand', 'brand--toggle', isCompactBrand ? 'brand--compact' : ''].filter(Boolean).join(' '),
+    [isCompactBrand],
+  )
   const navItems: Array<{ key: TabKey; label: string }> = [
     { key: 'goals', label: 'Goals' },
     { key: 'taskwatch', label: 'Taskwatch' },
@@ -242,13 +252,13 @@ function App() {
               ref={navContainerRef}
             >
               <button
-                className="brand brand--toggle"
+                className={brandButtonClassName}
                 type="button"
                 onClick={toggleTheme}
                 aria-label={`Switch to ${nextThemeLabel} mode`}
                 ref={navBrandRef}
               >
-                <span className="brand-text">NC-TASKWATCH</span>
+                <span className={`brand-text${isCompactBrand ? ' sr-only' : ''}`}>NC-TASKWATCH</span>
                 <span className="brand-indicator" aria-hidden="true">
                   {theme === 'dark' ? '☾' : '☀︎'}
                 </span>
@@ -264,15 +274,15 @@ function App() {
                   className="nav-toggle"
                   type="button"
                   aria-label="Toggle navigation"
-                aria-expanded={isNavCollapsed ? isNavOpen : undefined}
-                aria-controls={isNavCollapsed ? 'primary-navigation' : undefined}
-                onClick={toggleNav}
-                hidden={!isNavCollapsed}
-              >
-                <span className={`hamburger${isNavOpen ? ' open' : ''}`} />
-              </button>
-            </div>
-          </nav>
+                  aria-expanded={isNavCollapsed ? isNavOpen : undefined}
+                  aria-controls={isNavCollapsed ? 'primary-navigation' : undefined}
+                  onClick={toggleNav}
+                  hidden={!isNavCollapsed}
+                >
+                  <span className={`hamburger${isNavOpen ? ' open' : ''}`} />
+                </button>
+              </div>
+            </nav>
         </div>
         {isNavCollapsed ? (
           <div className={drawerContainerClassName} aria-hidden={!isNavOpen}>
