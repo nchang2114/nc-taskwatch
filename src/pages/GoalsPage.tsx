@@ -1,9 +1,5 @@
-import React, { useMemo, useState, useEffect, type ReactElement } from 'react'
+import React, { useState, useEffect, type ReactElement } from 'react'
 import './GoalsPage.css'
-
-type GoalsPageProps = {
-  onNavigate: (tab: 'goals' | 'taskwatch' | 'reflection') => void
-}
 
 // Helper function for class names
 function classNames(...xs: (string | boolean | undefined)[]): string {
@@ -68,35 +64,12 @@ const DEFAULT_GOALS: Goal[] = [
 ]
 
 // Components
-const Tab: React.FC<{ label: string; active: boolean }> = ({ label, active }) => (
-  <button
-    className={classNames(
-      'px-3 py-2 text-sm font-medium transition relative',
-      active
-        ? 'text-white after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-0.5 after:bg-white'
-        : 'text-white/70 hover:text-white'
-    )}
-  >
-    {label}
-  </button>
-)
-
 const ThinProgress: React.FC<{ value: number; gradient: string }> = ({ value, gradient }) => (
   <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
     <div
       className={classNames('h-full rounded-full bg-gradient-to-r', gradient)}
       style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
     />
-  </div>
-)
-
-const EmptyState: React.FC<{ onCreate: () => void }> = ({ onCreate }) => (
-  <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
-    <h3 className="text-lg font-semibold">No goals yet</h3>
-    <p className="text-white/70 mt-1">Create your first goal to get started.</p>
-    <button onClick={onCreate} className="mt-4 px-4 py-2 rounded-xl bg-white text-gray-900 text-sm font-semibold">
-      + New Goal
-    </button>
   </div>
 )
 
@@ -218,35 +191,35 @@ const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, 
   )
 }
 
-export default function GoalsPage({ onNavigate }: GoalsPageProps): ReactElement {
+export default function GoalsPage(): ReactElement {
   const [goals, setGoals] = useState(DEFAULT_GOALS)
-  const [query, setQuery] = useState('')
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const [showNew, setShowNew] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [newHours, setNewHours] = useState(5)
-
-  // derived
-  const filtered = useMemo(
-    () =>
-      goals.filter((g) => {
-        const q = query.trim().toLowerCase()
-        if (!q) return true
-        if (g.name.toLowerCase().includes(q)) return true
-        return g.buckets.some((b) => b.name.toLowerCase().includes(q) || b.suggestions.some((s) => s.toLowerCase().includes(q)))
-      }),
-    [goals, query]
-  )
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+    const firstGoalId = DEFAULT_GOALS[0]?.id
+    return firstGoalId ? { [firstGoalId]: true } : {}
+  })
+  const [hasAutoOpenedFirst, setHasAutoOpenedFirst] = useState(() => Boolean(DEFAULT_GOALS[0]))
 
   useEffect(() => {
-    // Ensure at most one expanded item after filtering (optional)
-    if (filtered.length === 0) return
-    const anyOpen = Object.values(expanded).some(Boolean)
-    if (!anyOpen) {
-      setExpanded((e) => ({ ...e, [filtered[0].id]: true }))
+    if (hasAutoOpenedFirst) {
+      return
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered.length])
+    if (goals.length === 0) {
+      return
+    }
+
+    const firstGoalId = goals[0]?.id
+    if (!firstGoalId) {
+      return
+    }
+
+    setExpanded((current) => {
+      if (current[firstGoalId]) {
+        return current
+      }
+      return { ...current, [firstGoalId]: true }
+    })
+    setHasAutoOpenedFirst(true)
+  }, [goals, hasAutoOpenedFirst])
 
   const toggleExpand = (goalId: string) => {
     setExpanded((e) => ({ ...e, [goalId]: !e[goalId] }))
@@ -286,142 +259,37 @@ export default function GoalsPage({ onNavigate }: GoalsPageProps): ReactElement 
     )
   }
 
-  const createGoal = () => {
-    if (!newName.trim()) return
-    const mins = Math.max(60, Math.round(newHours * 60))
-    const palette = [
-      'from-fuchsia-500 to-purple-500',
-      'from-emerald-500 to-cyan-500',
-      'from-lime-400 to-emerald-500',
-      'from-sky-500 to-indigo-500',
-      'from-rose-500 to-orange-500',
-    ]
-    const color = palette[Math.floor(Math.random() * palette.length)]
-    const id = `g_${Date.now()}`
-    const g: Goal = { id, name: newName.trim(), color, minutes: 0, weeklyTarget: mins, buckets: [] }
-    setGoals((xs) => [g, ...xs])
-    setShowNew(false)
-    setNewName('')
-    setNewHours(5)
-    setExpanded((e) => ({ ...e, [id]: true }))
-  }
-
   return (
     <div className="goals-layer text-white">
-      {/* Header */}
-      <header className="sticky top-0 z-20 backdrop-blur-md supports-[backdrop-filter]:bg-white/5 bg-white/5 border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-white/60 to-white/20 shadow" />
-            <span className="font-semibold tracking-tight">Taskwatch</span>
-          </div>
-          <nav className="flex items-center gap-2">
-            <Tab label="Goals" active />
-            <button onClick={() => onNavigate('taskwatch')} className="px-3 py-2 text-sm font-medium transition text-white/70 hover:text-white">
-              Stopwatch
-            </button>
-            <button onClick={() => onNavigate('reflection')} className="px-3 py-2 text-sm font-medium transition text-white/70 hover:text-white">
-              Reflection
-            </button>
-          </nav>
-          <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white/70">
-                <path fillRule="evenodd" d="M10.5 3.75a6.75 6.75 0 015.364 10.83l4.278 4.278a.75.75 0 11-1.06 1.06l-4.279-4.277A6.75 6.75 0 1110.5 3.75zm0 1.5a5.25 5.25 0 100 10.5 5.25 5.25 0 000-10.5z" clipRule="evenodd" />
-              </svg>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search goals…"
-                className="bg-transparent outline-none text-sm placeholder-white/50 w-44"
-              />
-            </div>
-            <button onClick={() => setShowNew(true)} className="px-3 py-1.5 rounded-xl bg-white text-gray-900 text-sm font-semibold">
-              + New Goal
-            </button>
-          </div>
-        </div>
-      </header>
+      <div className="goals-content site-main__inner">
+        <div className="goals-main">
+          <section className="goals-intro">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Goals</h1>
+            <p className="text-white/70 mt-1">
+              Sleek rows with thin progress bars. Expand a goal to see Task Bank. Add buckets and quick suggestions inside.
+            </p>
+          </section>
 
-      {/* Content */}
-      <main className="max-w-3xl mx-auto px-4 py-8">
-        {/* Mobile search bar */}
-        <div className="md:hidden -mt-2 mb-4">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white/70 shrink-0">
-              <path fillRule="evenodd" d="M10.5 3.75a6.75 6.75 0 015.364 10.83l4.278 4.278a.75.75 0 11-1.06 1.06l-4.279-4.277A6.75 6.75 0 1110.5 3.75zm0 1.5a5.25 5.25 0 100 10.5 5.25 5.25 0 000-10.5z" clipRule="evenodd" />
-            </svg>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search goals…"
-              className="bg-transparent outline-none text-sm placeholder-white/50 w-full"
-            />
-          </div>
-        </div>
-
-        <section className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Goals</h1>
-          <p className="text-white/70 mt-1">Sleek rows with thin progress bars. Expand a goal to see Task Bank. Add buckets and quick suggestions inside.</p>
-        </section>
-
-        {goals.length === 0 ? (
-          <EmptyState onCreate={() => setShowNew(true)} />
-        ) : (
-          <div className="space-y-3 md:space-y-4">
-            {filtered.map((g) => (
-              <GoalRow
-                key={g.id}
-                goal={g}
-                isOpen={expanded[g.id] ?? false}
-                onToggle={() => toggleExpand(g.id)}
-                onAddBucket={() => addBucket(g.id)}
-                onAddSuggestion={(bucketId) => addSuggestion(g.id, bucketId)}
-                onToggleBucketFavorite={(bucketId) => toggleBucketFavorite(g.id, bucketId)}
-              />
-            ))}
-          </div>
-        )}
-      </main>
-
-      {/* New Goal Modal */}
-      {showNew && (
-        <div className="fixed inset-0 z-30 grid place-items-center bg-black/60 p-6">
-          <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-white/10 p-6 shadow-2xl">
-            <h3 className="text-xl font-semibold mb-1">Create Goal</h3>
-            <p className="text-white/60 mb-6 text-sm">Give it a short, motivating name. You can link buckets after creating.</p>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm text-white/70">Name</label>
-                <input
-                  className="mt-1 w-full px-3 py-2 rounded-xl bg-white/10 outline-none focus:ring-2 ring-white/30"
-                  placeholder="e.g., Finish PopDot Beta"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+          {goals.length === 0 ? (
+            <p className="text-white/70 text-sm">No goals yet.</p>
+          ) : (
+            <div className="space-y-3 md:space-y-4">
+              {goals.map((g) => (
+                <GoalRow
+                  key={g.id}
+                  goal={g}
+                  isOpen={expanded[g.id] ?? false}
+                  onToggle={() => toggleExpand(g.id)}
+                  onAddBucket={() => addBucket(g.id)}
+                  onAddSuggestion={(bucketId) => addSuggestion(g.id, bucketId)}
+                  onToggleBucketFavorite={(bucketId) => toggleBucketFavorite(g.id, bucketId)}
                 />
-              </div>
-              <div>
-                <label className="text-sm text-white/70">Weekly target (hours)</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  step={0.5}
-                  className="mt-1 w-32 px-3 py-2 rounded-xl bg-white/10 outline-none focus:ring-2 ring-white/30"
-                  value={newHours}
-                  onChange={(e) => setNewHours(Number(e.target.value))}
-                />
-              </div>
-              <div className="flex items-center gap-2 justify-end">
-                <button className="px-3 py-1.5 rounded-lg bg-white/10" onClick={() => setShowNew(false)}>Cancel</button>
-                <button className="px-3 py-1.5 rounded-lg bg-white text-gray-900 font-semibold" onClick={createGoal}>Create</button>
-              </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Decorative gradient blobs */}
       <div className="pointer-events-none fixed -z-10 inset-0 opacity-30">
         <div className="absolute -top-24 -left-24 h-72 w-72 bg-fuchsia-500 blur-3xl rounded-full mix-blend-screen" />
         <div className="absolute -bottom-28 -right-24 h-80 w-80 bg-indigo-500 blur-3xl rounded-full mix-blend-screen" />
