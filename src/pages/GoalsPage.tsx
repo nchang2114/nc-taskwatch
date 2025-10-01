@@ -11,7 +11,7 @@ interface Bucket {
   id: string
   name: string
   favorite: boolean
-  suggestions: string[]
+  tasks: string[]
 }
 
 interface Goal {
@@ -30,9 +30,9 @@ const DEFAULT_GOALS: Goal[] = [
     name: 'Finish PopDot Beta',
     color: 'from-fuchsia-500 to-purple-500',
     buckets: [
-      { id: 'b1', name: 'Coding', favorite: true, suggestions: ['Chest spawn logic', 'XP scaling', 'Reward tuning'] },
-      { id: 'b2', name: 'Testing', favorite: true, suggestions: ['Challenge balance', 'FPS hitches'] },
-      { id: 'b3', name: 'Art/Polish', favorite: false, suggestions: ['Shop UI polish', 'Icon pass'] },
+      { id: 'b1', name: 'Coding', favorite: true, tasks: ['Chest spawn logic', 'XP scaling', 'Reward tuning'] },
+      { id: 'b2', name: 'Testing', favorite: true, tasks: ['Challenge balance', 'FPS hitches'] },
+      { id: 'b3', name: 'Art/Polish', favorite: false, tasks: ['Shop UI polish', 'Icon pass'] },
     ],
     minutes: 420, // 7h
     weeklyTarget: 720, // 12h
@@ -42,9 +42,9 @@ const DEFAULT_GOALS: Goal[] = [
     name: 'Learn Japanese',
     color: 'from-emerald-500 to-cyan-500',
     buckets: [
-      { id: 'b4', name: 'Flashcards', favorite: true, suggestions: ['N5 verbs', 'Kana speed run'] },
-      { id: 'b5', name: 'Listening', favorite: true, suggestions: ['NHK Easy', 'Anime w/ JP subs'] },
-      { id: 'b6', name: 'Speaking', favorite: false, suggestions: ['HelloTalk 10m', 'Shadowing'] },
+      { id: 'b4', name: 'Flashcards', favorite: true, tasks: ['N5 verbs', 'Kana speed run'] },
+      { id: 'b5', name: 'Listening', favorite: true, tasks: ['NHK Easy', 'Anime w/ JP subs'] },
+      { id: 'b6', name: 'Speaking', favorite: false, tasks: ['HelloTalk 10m', 'Shadowing'] },
     ],
     minutes: 180, // 3h
     weeklyTarget: 300, // 5h
@@ -54,9 +54,9 @@ const DEFAULT_GOALS: Goal[] = [
     name: 'Stay Fit',
     color: 'from-lime-400 to-emerald-500',
     buckets: [
-      { id: 'b7', name: 'Gym', favorite: true, suggestions: ['Push day', 'Stretch 5m'] },
-      { id: 'b8', name: 'Cooking', favorite: true, suggestions: ['Prep lunches', 'Protein bowl'] },
-      { id: 'b9', name: 'Sleep', favorite: true, suggestions: ['Lights out 11pm'] },
+      { id: 'b7', name: 'Gym', favorite: true, tasks: ['Push day', 'Stretch 5m'] },
+      { id: 'b8', name: 'Cooking', favorite: true, tasks: ['Prep lunches', 'Protein bowl'] },
+      { id: 'b9', name: 'Sleep', favorite: true, tasks: ['Lights out 11pm'] },
     ],
     minutes: 210, // 3.5h
     weeklyTarget: 360, // 6h
@@ -84,11 +84,12 @@ interface GoalRowProps {
   isOpen: boolean
   onToggle: () => void
   onAddBucket: () => void
-  onAddSuggestion: (bucketId: string) => void
   onToggleBucketFavorite: (bucketId: string) => void
+  bucketExpanded: Record<string, boolean>
+  onToggleBucketExpanded: (bucketId: string) => void
 }
 
-const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, onAddSuggestion, onToggleBucketFavorite }) => {
+const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, onToggleBucketFavorite, bucketExpanded, onToggleBucketExpanded }) => {
   const pct = Math.min(100, Math.round((goal.minutes / Math.max(1, goal.weeklyTarget)) * 100))
   const right = `${formatHours(goal.minutes)} / ${formatHours(goal.weeklyTarget)} h`
   
@@ -116,7 +117,7 @@ const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, 
               <h4 className="text-sm font-medium text-white/90">Task Bank</h4>
               <div className="flex items-center gap-2">
                 <span className="text-xs px-2 py-1 rounded-full bg-white/10">♥ {goal.buckets.filter(b => b.favorite).length} fav</span>
-                <span className="text-xs px-2 py-1 rounded-full bg-white/10">💡 {goal.buckets.reduce((a, b) => a + b.suggestions.length, 0)}</span>
+                <span className="text-xs px-2 py-1 rounded-full bg-white/10">🗒 {goal.buckets.reduce((a, b) => a + b.tasks.length, 0)} tasks</span>
               </div>
             </div>
 
@@ -126,13 +127,30 @@ const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, 
             </div>
 
             <ul className="mt-3 md:mt-4 space-y-2">
-              {goal.buckets.map((b) => (
-                <li key={b.id} className="rounded-xl border border-white/10 bg-white/5">
-                  <div className="p-3 md:p-4 flex flex-col md:flex-row md:items-start justify-between gap-3 md:gap-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+              {goal.buckets.map((b) => {
+                const isBucketOpen = bucketExpanded[b.id] ?? true
+                const taskCount = b.tasks.length
+                return (
+                  <li key={b.id} className="rounded-xl border border-white/10 bg-white/5">
+                    <div
+                      className="goal-bucket-toggle p-3 md:p-4 flex items-center justify-between gap-3 md:gap-4"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => onToggleBucketExpanded(b.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          onToggleBucketExpanded(b.id)
+                        }
+                      }}
+                      aria-expanded={isBucketOpen}
+                    >
+                      <div className="goal-bucket-header-info">
                         <button
-                          onClick={() => onToggleBucketFavorite(b.id)}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onToggleBucketFavorite(b.id)
+                          }}
                           className="inline-flex items-center justify-center h-6 w-6 rounded-md hover:bg-white/10 transition"
                           aria-label={b.favorite ? 'Unfavourite' : 'Favourite'}
                           title={b.favorite ? 'Unfavourite' : 'Favourite'}
@@ -153,36 +171,36 @@ const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, 
                             </svg>
                           )}
                         </button>
-                        <span className="font-medium truncate">{b.name}</span>
+                        <span className="goal-bucket-title font-medium truncate">{b.name}</span>
+                        {taskCount > 0 && (
+                          <span className="text-xs text-white/60">({taskCount})</span>
+                        )}
                       </div>
-                      {b.suggestions.length > 0 && (
-                        <div className="mt-2">
-                          <p className="text-xs uppercase tracking-wide text-white/50">Suggestions</p>
-                          <div className="mt-1 flex flex-wrap gap-2">
-                            {b.suggestions.map((s, i) => (
-                              <span key={i} className="text-xs px-2 py-1 rounded-full bg-white/10 text-white/90 border border-white/10">
-                                {s}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 md:shrink-0">
-                      <button onClick={() => onAddSuggestion(b.id)} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">
-                        + Suggestion
-                      </button>
-                      <button
-                        onClick={() => onToggleBucketFavorite(b.id)}
-                        className={classNames('text-xs px-3 py-1.5 rounded-lg', b.favorite ? 'bg-white text-gray-900' : 'bg-white/10 hover:bg-white/20')}
-                        title="Toggle favourite (shown in Stopwatch)"
+                      <svg
+                        className={classNames('w-3.5 h-3.5 text-white/80 transition-transform', isBucketOpen && 'rotate-90')}
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        aria-hidden="true"
                       >
-                        {b.favorite ? 'Unfavourite' : 'Favourite'}
-                      </button>
+                        <path fillRule="evenodd" d="M8.47 4.97a.75.75 0 011.06 0l6 6a.75.75 0 010 1.06l-6 6a.75.75 0 11-1.06-1.06L13.94 12 8.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" />
+                      </svg>
                     </div>
-                  </div>
-                </li>
-              ))}
+                    {taskCount > 0 && isBucketOpen && (
+                      <div className="goal-bucket-body px-3 md:px-4 pb-3 md:pb-4">
+                        <p className="text-xs uppercase tracking-wide text-white/50">Tasks</p>
+                        <ul className="mt-2 space-y-2">
+                          {b.tasks.map((task, index) => (
+                            <li key={index} className="goal-task-row">
+                              <span className="goal-task-marker" aria-hidden="true" />
+                              <span className="goal-task-text">{task}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           </div>
         </div>
@@ -198,6 +216,15 @@ export default function GoalsPage(): ReactElement {
     return firstGoalId ? { [firstGoalId]: true } : {}
   })
   const [hasAutoOpenedFirst, setHasAutoOpenedFirst] = useState(() => Boolean(DEFAULT_GOALS[0]))
+  const [bucketExpanded, setBucketExpanded] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {}
+    DEFAULT_GOALS.forEach((goal) => {
+      goal.buckets.forEach((bucket) => {
+        initial[bucket.id] = true
+      })
+    })
+    return initial
+  })
 
   useEffect(() => {
     if (hasAutoOpenedFirst) {
@@ -228,25 +255,22 @@ export default function GoalsPage(): ReactElement {
   const addBucket = (goalId: string) => {
     const name = prompt('New bucket name (e.g., “Testing”, “Gym”)?')
     if (!name) return
+    const newId = `b_${Date.now()}`
     setGoals((gs) =>
       gs.map((g) =>
         g.id === goalId
-          ? { ...g, buckets: [...g.buckets, { id: `b_${Date.now()}`, name, favorite: true, suggestions: [] }] }
+          ? { ...g, buckets: [...g.buckets, { id: newId, name, favorite: true, tasks: [] }] }
           : g
       )
     )
+    setBucketExpanded((current) => ({ ...current, [newId]: true }))
   }
 
-  const addSuggestion = (goalId: string, bucketId: string) => {
-    const text = prompt('Quick suggestion (15–60 min action)')
-    if (!text) return
-    setGoals((gs) =>
-      gs.map((g) =>
-        g.id === goalId
-          ? { ...g, buckets: g.buckets.map((b) => (b.id === bucketId ? { ...b, suggestions: [...b.suggestions, text] } : b)) }
-          : g
-      )
-    )
+  const toggleBucketExpanded = (bucketId: string) => {
+    setBucketExpanded((current) => ({
+      ...current,
+      [bucketId]: !(current[bucketId] ?? true),
+    }))
   }
 
   const toggleBucketFavorite = (goalId: string, bucketId: string) => {
@@ -264,9 +288,9 @@ export default function GoalsPage(): ReactElement {
       <div className="goals-content site-main__inner">
         <div className="goals-main">
           <section className="goals-intro">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Goals</h1>
+            <h1 className="goals-heading">Goals</h1>
             <p className="text-white/70 mt-1">
-              Sleek rows with thin progress bars. Expand a goal to see Task Bank. Add buckets and quick suggestions inside.
+              Sleek rows with thin progress bars. Expand a goal to see Task Bank. Add buckets and capture tasks inside.
             </p>
           </section>
 
@@ -281,8 +305,9 @@ export default function GoalsPage(): ReactElement {
                   isOpen={expanded[g.id] ?? false}
                   onToggle={() => toggleExpand(g.id)}
                   onAddBucket={() => addBucket(g.id)}
-                  onAddSuggestion={(bucketId) => addSuggestion(g.id, bucketId)}
                   onToggleBucketFavorite={(bucketId) => toggleBucketFavorite(g.id, bucketId)}
+                  bucketExpanded={bucketExpanded}
+                  onToggleBucketExpanded={toggleBucketExpanded}
                 />
               ))}
             </div>

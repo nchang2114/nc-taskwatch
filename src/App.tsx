@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import GoalsPage from './pages/GoalsPage'
 import ReflectionPage from './pages/ReflectionPage'
@@ -25,6 +25,12 @@ const getInitialTheme = (): Theme => {
 const COMPACT_BRAND_BREAKPOINT = 640
 const DEFAULT_NAV_BUFFER = 56
 const COMPACT_NAV_BUFFER = 24
+
+const TAB_PANEL_IDS: Record<TabKey, string> = {
+  goals: 'tab-panel-goals',
+  taskwatch: 'tab-panel-taskwatch',
+  reflection: 'tab-panel-reflection',
+}
 
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
@@ -219,6 +225,7 @@ function App() {
         className={`nav-link${isActive ? ' nav-link--active' : ''}`}
         aria-current={isActive ? 'page' : undefined}
         onClick={() => selectTab(item.key)}
+        aria-controls={TAB_PANEL_IDS[item.key]}
       >
         {item.label}
       </button>
@@ -230,15 +237,6 @@ function App() {
       {item.label}
     </span>
   ))
-
-  let page: ReactNode
-  if (activeTab === 'goals') {
-    page = <GoalsPage />
-  } else if (activeTab === 'reflection') {
-    page = <ReflectionPage />
-  } else {
-    page = <TaskwatchPage viewportWidth={viewportWidth} />
-  }
 
   const mainClassName = 'site-main'
 
@@ -295,6 +293,7 @@ function App() {
                     type="button"
                     className={`nav-link nav-link--drawer${isActive ? ' nav-link--active' : ''}`}
                     aria-current={isActive ? 'page' : undefined}
+                    aria-controls={TAB_PANEL_IDS[item.key]}
                     onClick={() => selectTab(item.key)}
                   >
                     {item.label}
@@ -306,7 +305,37 @@ function App() {
         ) : null}
       </header>
 
-      <main className={mainClassName}>{page}</main>
+      <main className={mainClassName}>
+        <section
+          id={TAB_PANEL_IDS.goals}
+          role="tabpanel"
+          aria-hidden={activeTab !== 'goals'}
+          className="tab-panel"
+          hidden={activeTab !== 'goals'}
+        >
+          <GoalsPage />
+        </section>
+
+        <section
+          id={TAB_PANEL_IDS.taskwatch}
+          role="tabpanel"
+          aria-hidden={activeTab !== 'taskwatch'}
+          className="tab-panel"
+          hidden={activeTab !== 'taskwatch'}
+        >
+          <TaskwatchPage viewportWidth={viewportWidth} />
+        </section>
+
+        <section
+          id={TAB_PANEL_IDS.reflection}
+          role="tabpanel"
+          aria-hidden={activeTab !== 'reflection'}
+          className="tab-panel"
+          hidden={activeTab !== 'reflection'}
+        >
+          <ReflectionPage />
+        </section>
+      </main>
     </div>
   )
 }

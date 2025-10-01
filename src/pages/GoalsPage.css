@@ -44,6 +44,18 @@
   max-width: 36rem;
 }
 
+.goals-heading {
+  font-size: clamp(2.35rem, 4vw, 3.1rem);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin: 0 0 clamp(0.5rem, 2.2vw, 0.85rem);
+  color: rgba(255, 255, 255, 0.94);
+}
+
+html[data-theme='light'] .goals-heading {
+  color: rgba(32, 42, 76, 0.94);
+}
+
 /* Light theme adjustments */
 html[data-theme='light'] .goals-layer {
   color: rgba(28, 36, 62, 0.96);
@@ -112,4 +124,93 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
     transition: none !important;
     animation: none !important;
   }
+}
+
+.goal-task-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.goal-task-marker {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 0.35rem;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+
+.goal-task-text {
+  font-size: 0.85rem;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.92);
+  flex: 1;
+}
+
+html[data-theme='light'] .goal-task-row {
+  background: rgba(232, 238, 255, 0.75);
+  border-color: rgba(160, 176, 220, 0.45);
+}
+
+html[data-theme='light'] .goal-task-marker {
+  border-color: rgba(108, 128, 182, 0.7);
+}
+
+html[data-theme='light'] .goal-task-text {
+  color: rgba(32, 42, 76, 0.9);
+}
+
+.goal-bucket-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 0.75rem;
+  transition: background 0.18s ease;
+  width: 100%;
+}
+
+.goal-bucket-toggle:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
+}
+
+.goal-bucket-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.goal-bucket-header-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.goal-bucket-title {
+  flex: 1;
+  min-width: 0;
+}
+
+html[data-theme='light'] .goal-bucket-toggle:hover {
+  background: rgba(214, 222, 246, 0.62);
+}
+
+html[data-theme='light'] .goal-bucket-toggle:focus-visible {
+  outline-color: rgba(88, 110, 168, 0.6);
+}
+
+.goal-bucket-body {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.75rem;
+}
+
+html[data-theme='light'] .goal-bucket-body {
+  border-color: rgba(160, 176, 220, 0.3);
 }
