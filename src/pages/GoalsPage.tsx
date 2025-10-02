@@ -278,7 +278,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
         <div className="px-4 md:px-5 pb-4 md:pb-5">
           <div className="mt-3 md:mt-4">
             <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-              <h4 className="text-sm font-medium text-white/90">Task Bank</h4>
+              <h4 className="goal-subheading">Task Bank</h4>
               <button onClick={() => onStartBucketDraft(goal.id)} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 whitespace-nowrap">+ Add Bucket</button>
             </div>
 
@@ -370,7 +370,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
                     {isBucketOpen && (
                       <div className="goal-bucket-body px-3 md:px-4 pb-3 md:pb-4">
                         <div className="goal-bucket-body-header">
-                          <p className="text-xs uppercase tracking-wide text-white/50">Tasks</p>
+                          <div className="goal-section-header">
+                            <p className="goal-section-title">Tasks ({activeTasks.length})</p>
+                          </div>
                           <button
                             type="button"
                             className="goal-task-add"

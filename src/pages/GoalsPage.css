@@ -611,11 +611,11 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 .goal-completed__title {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  letter-spacing: 0.12em;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.5);
   background: transparent;
   border: none;
   padding: 0;
@@ -627,8 +627,8 @@ html[data-theme='light'] .goal-completed__title {
 }
 
 .goal-completed__chevron {
-  width: 1rem;
-  height: 1rem;
+  width: 1.15rem;
+  height: 1.15rem;
   transition: transform 0.18s ease;
 }
 
@@ -676,6 +676,20 @@ html[data-theme='light'] .goal-task-text {
   margin-bottom: 0.75rem;
 }
 
+
+.goal-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+html[data-theme='light'] .goal-section-title {
+  color: rgba(60, 72, 110, 0.62);
+}
 .goal-task-add {
   font-size: 0.75rem;
   letter-spacing: 0.08em;
@@ -779,14 +793,14 @@ html[data-theme='light'] .goal-task-input::placeholder {
 
 .goal-task-empty {
   margin-top: 0.75rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.58);
 }
 
 html[data-theme='light'] .goal-task-empty {
-  color: rgba(46, 58, 98, 0.55);
+  color: rgba(60, 74, 120, 0.58);
 }
 
 .goal-bucket-draft {
@@ -887,4 +901,7 @@ html[data-theme='light'] .goal-gradient-custom-editor {
 
 html[data-theme='light'] .goal-gradient-custom-field label {
   color: rgba(44, 56, 96, 0.7);
+}
+.goal-tasks-body, .goal-tasks-body ul, .goal-task-empty {
+  margin-left: 0.5rem;
 }
