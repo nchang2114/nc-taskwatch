@@ -32,11 +32,17 @@ function highlightText(text: string, term: string): React.ReactNode {
 }
 
 // Type definitions
+interface TaskItem {
+  id: string
+  text: string
+  completed: boolean
+}
+
 interface Bucket {
   id: string
   name: string
   favorite: boolean
-  tasks: string[]
+  tasks: TaskItem[]
 }
 
 interface Goal {
@@ -55,9 +61,34 @@ const DEFAULT_GOALS: Goal[] = [
     name: 'Finish PopDot Beta',
     color: 'from-fuchsia-500 to-purple-500',
     buckets: [
-      { id: 'b1', name: 'Coding', favorite: true, tasks: ['Chest spawn logic', 'XP scaling', 'Reward tuning'] },
-      { id: 'b2', name: 'Testing', favorite: true, tasks: ['Challenge balance', 'FPS hitches'] },
-      { id: 'b3', name: 'Art/Polish', favorite: false, tasks: ['Shop UI polish', 'Icon pass'] },
+      {
+        id: 'b1',
+        name: 'Coding',
+        favorite: true,
+        tasks: [
+          { id: 't1', text: 'Chest spawn logic', completed: false },
+          { id: 't2', text: 'XP scaling', completed: false },
+          { id: 't3', text: 'Reward tuning', completed: false },
+        ],
+      },
+      {
+        id: 'b2',
+        name: 'Testing',
+        favorite: true,
+        tasks: [
+          { id: 't4', text: 'Challenge balance', completed: false },
+          { id: 't5', text: 'FPS hitches', completed: false },
+        ],
+      },
+      {
+        id: 'b3',
+        name: 'Art/Polish',
+        favorite: false,
+        tasks: [
+          { id: 't6', text: 'Shop UI polish', completed: false },
+          { id: 't7', text: 'Icon pass', completed: false },
+        ],
+      },
     ],
     minutes: 420, // 7h
     weeklyTarget: 720, // 12h
@@ -67,9 +98,33 @@ const DEFAULT_GOALS: Goal[] = [
     name: 'Learn Japanese',
     color: 'from-emerald-500 to-cyan-500',
     buckets: [
-      { id: 'b4', name: 'Flashcards', favorite: true, tasks: ['N5 verbs', 'Kana speed run'] },
-      { id: 'b5', name: 'Listening', favorite: true, tasks: ['NHK Easy', 'Anime w/ JP subs'] },
-      { id: 'b6', name: 'Speaking', favorite: false, tasks: ['HelloTalk 10m', 'Shadowing'] },
+      {
+        id: 'b4',
+        name: 'Flashcards',
+        favorite: true,
+        tasks: [
+          { id: 't8', text: 'N5 verbs', completed: false },
+          { id: 't9', text: 'Kana speed run', completed: false },
+        ],
+      },
+      {
+        id: 'b5',
+        name: 'Listening',
+        favorite: true,
+        tasks: [
+          { id: 't10', text: 'NHK Easy', completed: false },
+          { id: 't11', text: 'Anime w/ JP subs', completed: false },
+        ],
+      },
+      {
+        id: 'b6',
+        name: 'Speaking',
+        favorite: false,
+        tasks: [
+          { id: 't12', text: 'HelloTalk 10m', completed: false },
+          { id: 't13', text: 'Shadowing', completed: false },
+        ],
+      },
     ],
     minutes: 180, // 3h
     weeklyTarget: 300, // 5h
@@ -79,9 +134,32 @@ const DEFAULT_GOALS: Goal[] = [
     name: 'Stay Fit',
     color: 'from-lime-400 to-emerald-500',
     buckets: [
-      { id: 'b7', name: 'Gym', favorite: true, tasks: ['Push day', 'Stretch 5m'] },
-      { id: 'b8', name: 'Cooking', favorite: true, tasks: ['Prep lunches', 'Protein bowl'] },
-      { id: 'b9', name: 'Sleep', favorite: true, tasks: ['Lights out 11pm'] },
+      {
+        id: 'b7',
+        name: 'Gym',
+        favorite: true,
+        tasks: [
+          { id: 't14', text: 'Push day', completed: false },
+          { id: 't15', text: 'Stretch 5m', completed: false },
+        ],
+      },
+      {
+        id: 'b8',
+        name: 'Cooking',
+        favorite: true,
+        tasks: [
+          { id: 't16', text: 'Prep lunches', completed: false },
+          { id: 't17', text: 'Protein bowl', completed: false },
+        ],
+      },
+      {
+        id: 'b9',
+        name: 'Sleep',
+        favorite: true,
+        tasks: [
+          { id: 't18', text: 'Lights out 11pm', completed: false },
+        ],
+      },
     ],
     minutes: 210, // 3.5h
     weeklyTarget: 360, // 6h
@@ -127,6 +205,8 @@ interface GoalRowProps {
   onToggleBucketFavorite: (bucketId: string) => void
   bucketExpanded: Record<string, boolean>
   onToggleBucketExpanded: (bucketId: string) => void
+  completedCollapsed: Record<string, boolean>
+  onToggleCompletedCollapsed: (bucketId: string) => void
   taskDrafts: Record<string, string>
   onStartTaskDraft: (goalId: string, bucketId: string) => void
   onTaskDraftChange: (goalId: string, bucketId: string, value: string) => void
@@ -142,6 +222,7 @@ interface GoalRowProps {
   onBucketDraftCancel: (goalId: string) => void
   registerBucketDraftRef: (goalId: string, element: HTMLInputElement | null) => void
   highlightTerm: string
+  onToggleTaskComplete: (bucketId: string, taskId: string) => void
 }
 
 const GoalRow: React.FC<GoalRowProps> = ({
@@ -151,6 +232,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onToggleBucketFavorite,
   bucketExpanded,
   onToggleBucketExpanded,
+  completedCollapsed,
+  onToggleCompletedCollapsed,
   taskDrafts,
   onStartTaskDraft,
   onTaskDraftChange,
@@ -166,10 +249,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onBucketDraftCancel,
   registerBucketDraftRef,
   highlightTerm,
+  onToggleTaskComplete,
 }) => {
   const pct = Math.min(100, Math.round((goal.minutes / Math.max(1, goal.weeklyTarget)) * 100))
   const right = `${formatHours(goal.minutes)} / ${formatHours(goal.weeklyTarget)} h`
-  
   return (
     <div className="rounded-2xl bg-white/5 hover:bg-white/10 transition border border-white/5">
       <button onClick={onToggle} className="w-full text-left p-4 md:p-5">
@@ -226,7 +309,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
               )}
               {goal.buckets.map((b) => {
                 const isBucketOpen = bucketExpanded[b.id] ?? false
-                const taskCount = b.tasks.length
+                const activeTasks = b.tasks.filter((task) => !task.completed)
+                const completedTasks = b.tasks.filter((task) => task.completed)
+                const isCompletedCollapsed = completedCollapsed[b.id] ?? true
                 const draftValue = taskDrafts[b.id]
                 return (
                   <li key={b.id} className="rounded-xl border border-white/10 bg-white/5">
@@ -270,9 +355,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
                           )}
                         </button>
                         <span className="goal-bucket-title font-medium truncate">{highlightText(b.name, highlightTerm)}</span>
-                        {taskCount > 0 && (
-                          <span className="text-xs text-white/60">({taskCount})</span>
-                        )}
                       </div>
                       <svg
                         className={classNames('w-3.5 h-3.5 text-white/80 transition-transform', isBucketOpen && 'rotate-90')}
@@ -323,17 +405,61 @@ const GoalRow: React.FC<GoalRowProps> = ({
                           </div>
                         )}
 
-                        {taskCount === 0 && draftValue === undefined ? (
+                        {activeTasks.length === 0 && draftValue === undefined ? (
                           <p className="goal-task-empty">No tasks yet.</p>
                         ) : (
                           <ul className="mt-2 space-y-2">
-                            {b.tasks.map((task, index) => (
-                              <li key={index} className="goal-task-row">
-                                <span className="goal-task-marker" aria-hidden="true" />
-                                <span className="goal-task-text">{highlightText(task, highlightTerm)}</span>
+                            {activeTasks.map((task) => (
+                              <li key={task.id} className="goal-task-row">
+                                <button
+                                  type="button"
+                                  className="goal-task-marker goal-task-marker--action"
+                                  onClick={() => onToggleTaskComplete(b.id, task.id)}
+                                  aria-label="Mark task complete"
+                                />
+                                <span className="goal-task-text">{highlightText(task.text, highlightTerm)}</span>
                               </li>
                             ))}
                           </ul>
+                        )}
+
+                        {completedTasks.length > 0 && (
+                          <div className="goal-completed">
+                            <button
+                              type="button"
+                              className="goal-completed__title"
+                              onClick={() => onToggleCompletedCollapsed(b.id)}
+                              aria-expanded={!isCompletedCollapsed}
+                            >
+                              <span>Completed ({completedTasks.length})</span>
+                              <svg
+                                className={classNames('goal-completed__chevron', !isCompletedCollapsed && 'goal-completed__chevron--open')}
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path d="M8.12 9.29a1 1 0 011.41-.17L12 11.18l2.47-2.06a1 1 0 111.24 1.58l-3.07 2.56a1 1 0 01-1.24 0l-3.07-2.56a1 1 0 01-.17-1.41z" fill="currentColor" />
+                              </svg>
+                            </button>
+                            {!isCompletedCollapsed && (
+                              <ul className="goal-completed__list">
+                                {completedTasks.map((task) => (
+                                  <li key={task.id} className="goal-task-row goal-task-row--completed">
+                                    <button
+                                      type="button"
+                                      className="goal-task-marker goal-task-marker--completed"
+                                      onClick={() => onToggleTaskComplete(b.id, task.id)}
+                                      aria-label="Mark task incomplete"
+                                    >
+                                      <svg viewBox="0 0 24 24" className="goal-task-check" aria-hidden="true">
+                                        <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                    </button>
+                                    <span className="goal-task-text">{highlightText(task.text, highlightTerm)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
@@ -360,6 +486,15 @@ export default function GoalsPage(): ReactElement {
     })
     return initial
   })
+  const [completedCollapsed, setCompletedCollapsed] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {}
+    DEFAULT_GOALS.forEach((goal) => {
+      goal.buckets.forEach((bucket) => {
+        initial[bucket.id] = true
+      })
+    })
+    return initial
+  })
   const [bucketDrafts, setBucketDrafts] = useState<Record<string, string>>({})
   const bucketDraftRefs = useRef(new Map<string, HTMLInputElement>())
   const submittingBucketDrafts = useRef(new Set<string>())
@@ -374,8 +509,10 @@ export default function GoalsPage(): ReactElement {
   const [nextGoalGradientIndex, setNextGoalGradientIndex] = useState(() => DEFAULT_GOALS.length % GOAL_GRADIENTS.length)
   const previousExpandedRef = useRef<Record<string, boolean> | null>(null)
   const previousBucketExpandedRef = useRef<Record<string, boolean> | null>(null)
+  const previousCompletedCollapsedRef = useRef<Record<string, boolean> | null>(null)
   const expandedRef = useRef(expanded)
   const bucketExpandedRef = useRef(bucketExpanded)
+  const completedCollapsedRef = useRef(completedCollapsed)
 
   useEffect(() => {
     expandedRef.current = expanded
@@ -384,6 +521,10 @@ export default function GoalsPage(): ReactElement {
   useEffect(() => {
     bucketExpandedRef.current = bucketExpanded
   }, [bucketExpanded])
+
+  useEffect(() => {
+    completedCollapsedRef.current = completedCollapsed
+  }, [completedCollapsed])
 
   const toggleExpand = (goalId: string) => {
     setExpanded((e) => ({ ...e, [goalId]: !e[goalId] }))
@@ -483,6 +624,7 @@ export default function GoalsPage(): ReactElement {
     )
 
     setBucketExpanded((current) => ({ ...current, [newBucketId]: false }))
+    setCompletedCollapsed((current) => ({ ...current, [newBucketId]: true }))
 
     if (options?.keepDraft) {
       setBucketDrafts((current) => ({ ...current, [goalId]: '' }))
@@ -605,7 +747,7 @@ export default function GoalsPage(): ReactElement {
           if (bucket.name.toLowerCase().includes(normalizedSearch)) {
             return true
           }
-          return bucket.tasks.some((task) => task.toLowerCase().includes(normalizedSearch))
+          return bucket.tasks.some((task) => task.text.toLowerCase().includes(normalizedSearch))
         })
       })
     : goals
@@ -620,8 +762,12 @@ export default function GoalsPage(): ReactElement {
       if (previousBucketExpandedRef.current) {
         setBucketExpanded({ ...previousBucketExpandedRef.current })
       }
+      if (previousCompletedCollapsedRef.current) {
+        setCompletedCollapsed({ ...previousCompletedCollapsedRef.current })
+      }
       previousExpandedRef.current = null
       previousBucketExpandedRef.current = null
+      previousCompletedCollapsedRef.current = null
       return
     }
 
@@ -631,28 +777,38 @@ export default function GoalsPage(): ReactElement {
     if (!previousBucketExpandedRef.current) {
       previousBucketExpandedRef.current = { ...bucketExpandedRef.current }
     }
+    if (!previousCompletedCollapsedRef.current) {
+      previousCompletedCollapsedRef.current = { ...completedCollapsedRef.current }
+    }
 
-    const nextExpanded: Record<string, boolean> = { ...expandedRef.current }
-    const nextBucketExpanded: Record<string, boolean> = { ...bucketExpandedRef.current }
+    const nextExpanded: Record<string, boolean> = {}
+    const nextBucketExpanded: Record<string, boolean> = {}
+    const nextCompletedCollapsed: Record<string, boolean> = {}
 
     goals.forEach((goal) => {
-      let goalHasMatch = goal.name.toLowerCase().includes(normalizedSearch)
+      const goalNameMatch = goal.name.toLowerCase().includes(normalizedSearch)
+      let goalHasMatch = goalNameMatch
+
       goal.buckets.forEach((bucket) => {
         const bucketNameMatch = bucket.name.toLowerCase().includes(normalizedSearch)
-        const taskMatch = bucket.tasks.some((task) => task.toLowerCase().includes(normalizedSearch))
-        const bucketHasMatch = bucketNameMatch || taskMatch
+        const activeMatch = bucket.tasks.some((task) => !task.completed && task.text.toLowerCase().includes(normalizedSearch))
+        const completedMatch = bucket.tasks.some((task) => task.completed && task.text.toLowerCase().includes(normalizedSearch))
+        const bucketHasMatch = bucketNameMatch || activeMatch || completedMatch
+
+        nextBucketExpanded[bucket.id] = bucketHasMatch
+        nextCompletedCollapsed[bucket.id] = completedMatch ? false : true
+
         if (bucketHasMatch) {
-          nextBucketExpanded[bucket.id] = true
+          goalHasMatch = true
         }
-        goalHasMatch = goalHasMatch || bucketHasMatch
       })
-      if (goalHasMatch) {
-        nextExpanded[goal.id] = true
-      }
+
+      nextExpanded[goal.id] = goalHasMatch
     })
 
     setExpanded(nextExpanded)
     setBucketExpanded(nextBucketExpanded)
+    setCompletedCollapsed(nextCompletedCollapsed)
   }, [normalizedSearch, goals])
 
   const focusTaskDraftInput = (bucketId: string) => {
@@ -727,13 +883,15 @@ export default function GoalsPage(): ReactElement {
       return
     }
 
+    const newTask: TaskItem = { id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, text: trimmed, completed: false }
+
     setGoals((gs) =>
       gs.map((g) =>
         g.id === goalId
           ? {
               ...g,
               buckets: g.buckets.map((bucket) =>
-                bucket.id === bucketId ? { ...bucket, tasks: [trimmed, ...bucket.tasks] } : bucket,
+                bucket.id === bucketId ? { ...bucket, tasks: [newTask, ...bucket.tasks] } : bucket,
               ),
             }
           : g,
@@ -778,6 +936,46 @@ export default function GoalsPage(): ReactElement {
       return
     }
     taskDraftRefs.current.delete(bucketId)
+  }
+
+  const toggleTaskCompletion = (goalId: string, bucketId: string, taskId: string) => {
+    let updated = false
+    let completedCountAfter = 0
+    setGoals((gs) =>
+      gs.map((goal) =>
+        goal.id === goalId
+          ? {
+              ...goal,
+              buckets: goal.buckets.map((bucket) =>
+                bucket.id === bucketId
+                  ? (() => {
+                      updated = true
+                      const updatedTasks = bucket.tasks.map((task) =>
+                        task.id === taskId ? { ...task, completed: !task.completed } : task,
+                      )
+                      completedCountAfter = updatedTasks.filter((task) => task.completed).length
+                      return { ...bucket, tasks: updatedTasks }
+                    })()
+                  : bucket,
+              ),
+            }
+          : goal,
+      ),
+    )
+
+    if (updated) {
+      setCompletedCollapsed((current) => ({
+        ...current,
+        [bucketId]: completedCountAfter > 0 ? false : true,
+      }))
+    }
+  }
+
+  const toggleCompletedSection = (bucketId: string) => {
+    setCompletedCollapsed((current) => ({
+      ...current,
+      [bucketId]: !(current[bucketId] ?? true),
+    }))
   }
 
   const toggleBucketFavorite = (goalId: string, bucketId: string) => {
@@ -837,6 +1035,8 @@ export default function GoalsPage(): ReactElement {
                   onToggleBucketFavorite={(bucketId) => toggleBucketFavorite(g.id, bucketId)}
                   bucketExpanded={bucketExpanded}
                   onToggleBucketExpanded={toggleBucketExpanded}
+                  completedCollapsed={completedCollapsed}
+                  onToggleCompletedCollapsed={toggleCompletedSection}
                   taskDrafts={taskDrafts}
                   onStartTaskDraft={startTaskDraft}
                   onTaskDraftChange={handleTaskDraftChange}
@@ -852,6 +1052,7 @@ export default function GoalsPage(): ReactElement {
                   onBucketDraftCancel={handleBucketDraftCancel}
                   registerBucketDraftRef={registerBucketDraftRef}
                   highlightTerm={normalizedSearch}
+                  onToggleTaskComplete={(bucketId, taskId) => toggleTaskCompletion(g.id, bucketId, taskId)}
                 />
               ))}
             </div>

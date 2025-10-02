@@ -468,11 +468,56 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 }
 
 .goal-task-marker {
-  width: 0.95rem;
-  height: 0.95rem;
+  width: 1.1rem;
+  height: 1.1rem;
   border-radius: 0.35rem;
-  border: 2px solid rgba(255, 255, 255, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.28);
   flex-shrink: 0;
+}
+
+.goal-task-marker--action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 0.35rem;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.goal-task-marker--action:hover,
+.goal-task-marker--action:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.8);
+  transform: translateY(-1px);
+}
+
+.goal-task-marker--completed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 0.35rem;
+  border: 2px solid rgba(92, 225, 147, 0.75);
+  background: rgba(34, 197, 94, 0.18);
+  color: rgba(134, 239, 172, 0.95);
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.goal-task-marker--completed:hover,
+.goal-task-marker--completed:focus-visible {
+  border-color: rgba(134, 239, 172, 1);
+  transform: translateY(-1px);
+}
+
+.goal-task-check {
+  width: 0.75rem;
+  height: 0.75rem;
 }
 
 .goal-task-text {
@@ -482,13 +527,76 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   flex: 1;
 }
 
+.goal-task-row--completed {
+  background: rgba(24, 30, 48, 0.55);
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(148, 163, 184, 0.8);
+}
+
+.goal-task-row--completed .goal-task-text {
+  color: inherit;
+  text-decoration: line-through;
+}
+
+.goal-completed {
+  margin-top: 1rem;
+}
+
+.goal-completed__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+html[data-theme='light'] .goal-completed__title {
+  color: rgba(60, 72, 110, 0.6);
+}
+
+.goal-completed__chevron {
+  width: 1rem;
+  height: 1rem;
+  transition: transform 0.18s ease;
+}
+
+.goal-completed__chevron--open {
+  transform: rotate(180deg);
+}
+
+.goal-completed__list {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
 html[data-theme='light'] .goal-task-row {
   background: rgba(232, 238, 255, 0.75);
   border-color: rgba(160, 176, 220, 0.45);
 }
 
-html[data-theme='light'] .goal-task-marker {
-  border-color: rgba(108, 128, 182, 0.7);
+html[data-theme='light'] .goal-task-marker,
+html[data-theme='light'] .goal-task-marker--action {
+  border-color: rgba(108, 128, 182, 0.65);
+}
+
+html[data-theme='light'] .goal-task-marker--completed {
+  border-color: rgba(60, 144, 110, 0.7);
+  background: rgba(134, 239, 172, 0.2);
+  color: rgba(34, 124, 84, 0.85);
+}
+
+html[data-theme='light'] .goal-task-row--completed {
+  background: rgba(220, 226, 248, 0.9);
+  color: rgba(88, 102, 142, 0.78);
 }
 
 html[data-theme='light'] .goal-task-text {
