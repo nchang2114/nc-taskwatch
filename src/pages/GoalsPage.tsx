@@ -67,7 +67,7 @@ const DEFAULT_GOALS: Goal[] = [
 const ThinProgress: React.FC<{ value: number; gradient: string }> = ({ value, gradient }) => (
   <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
     <div
-      className={classNames('h-full rounded-full bg-gradient-to-r', gradient)}
+      className={classNames('h-full rounded-full bg-gradient-to-r goal-progress-fill', gradient)}
       style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
     />
   </div>
