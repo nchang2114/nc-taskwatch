@@ -164,6 +164,128 @@ html[data-theme='light'] .goal-task-text {
   color: rgba(32, 42, 76, 0.9);
 }
 
+.goal-bucket-body-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.goal-task-add {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.goal-task-add:hover,
+.goal-task-add:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: rgba(255, 255, 255, 0.97);
+}
+
+.goal-task-add:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.42);
+  outline-offset: 2px;
+}
+
+html[data-theme='light'] .goal-task-add {
+  background: rgba(220, 228, 255, 0.62);
+  border-color: rgba(168, 182, 226, 0.6);
+  color: rgba(36, 46, 88, 0.86);
+}
+
+html[data-theme='light'] .goal-task-add:hover,
+html[data-theme='light'] .goal-task-add:focus-visible {
+  background: rgba(196, 210, 250, 0.86);
+  color: rgba(28, 38, 74, 0.96);
+}
+
+.goal-task-row--draft {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border-style: dashed;
+}
+
+.goal-task-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font: inherit;
+  color: rgba(255, 255, 255, 0.95);
+  outline: none;
+}
+
+.goal-task-input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+html[data-theme='light'] .goal-task-input {
+  color: rgba(34, 44, 82, 0.94);
+}
+
+html[data-theme='light'] .goal-task-input::placeholder {
+  color: rgba(32, 42, 80, 0.45);
+}
+
+.goal-task-empty {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+html[data-theme='light'] .goal-task-empty {
+  color: rgba(46, 58, 98, 0.55);
+}
+
+.goal-bucket-draft {
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.75rem 0.9rem;
+}
+
+.goal-bucket-draft-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.goal-bucket-draft-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font: inherit;
+  color: rgba(255, 255, 255, 0.95);
+  outline: none;
+}
+
+.goal-bucket-draft-input::placeholder {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+html[data-theme='light'] .goal-bucket-draft {
+  border-color: rgba(150, 168, 220, 0.45);
+  background: rgba(226, 234, 255, 0.72);
+}
+
+html[data-theme='light'] .goal-bucket-draft-input {
+  color: rgba(28, 36, 70, 0.94);
+}
+
+html[data-theme='light'] .goal-bucket-draft-input::placeholder {
+  color: rgba(32, 40, 72, 0.48);
+}
+
 .goal-bucket-toggle {
   display: flex;
   align-items: center;

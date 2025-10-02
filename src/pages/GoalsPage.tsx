@@ -1,4 +1,4 @@
-import React, { useState, useEffect, type ReactElement } from 'react'
+import React, { useState, useEffect, useRef, type ReactElement } from 'react'
 import './GoalsPage.css'
 
 // Helper function for class names
@@ -83,13 +83,47 @@ interface GoalRowProps {
   goal: Goal
   isOpen: boolean
   onToggle: () => void
-  onAddBucket: () => void
   onToggleBucketFavorite: (bucketId: string) => void
   bucketExpanded: Record<string, boolean>
   onToggleBucketExpanded: (bucketId: string) => void
+  taskDrafts: Record<string, string>
+  onStartTaskDraft: (goalId: string, bucketId: string) => void
+  onTaskDraftChange: (goalId: string, bucketId: string, value: string) => void
+  onTaskDraftSubmit: (goalId: string, bucketId: string, options?: { keepDraft?: boolean }) => void
+  onTaskDraftBlur: (goalId: string, bucketId: string) => void
+  onTaskDraftCancel: (bucketId: string) => void
+  registerTaskDraftRef: (bucketId: string, element: HTMLInputElement | null) => void
+  bucketDraftValue?: string
+  onStartBucketDraft: (goalId: string) => void
+  onBucketDraftChange: (goalId: string, value: string) => void
+  onBucketDraftSubmit: (goalId: string, options?: { keepDraft?: boolean }) => void
+  onBucketDraftBlur: (goalId: string) => void
+  onBucketDraftCancel: (goalId: string) => void
+  registerBucketDraftRef: (goalId: string, element: HTMLInputElement | null) => void
 }
 
-const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, onToggleBucketFavorite, bucketExpanded, onToggleBucketExpanded }) => {
+const GoalRow: React.FC<GoalRowProps> = ({
+  goal,
+  isOpen,
+  onToggle,
+  onToggleBucketFavorite,
+  bucketExpanded,
+  onToggleBucketExpanded,
+  taskDrafts,
+  onStartTaskDraft,
+  onTaskDraftChange,
+  onTaskDraftSubmit,
+  onTaskDraftBlur,
+  onTaskDraftCancel,
+  registerTaskDraftRef,
+  bucketDraftValue,
+  onStartBucketDraft,
+  onBucketDraftChange,
+  onBucketDraftSubmit,
+  onBucketDraftBlur,
+  onBucketDraftCancel,
+  registerBucketDraftRef,
+}) => {
   const pct = Math.min(100, Math.round((goal.minutes / Math.max(1, goal.weeklyTarget)) * 100))
   const right = `${formatHours(goal.minutes)} / ${formatHours(goal.weeklyTarget)} h`
   
@@ -123,13 +157,38 @@ const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, 
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-white/60">Buckets surface in Stopwatch when <span className="text-white">Favourited</span>.</p>
-              <button onClick={onAddBucket} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">+ Add Bucket</button>
+              <button onClick={() => onStartBucketDraft(goal.id)} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">+ Add Bucket</button>
             </div>
 
             <ul className="mt-3 md:mt-4 space-y-2">
+              {bucketDraftValue !== undefined && (
+                <li className="goal-bucket-draft" key="bucket-draft">
+                  <div className="goal-bucket-draft-inner">
+                    <input
+                      ref={(element) => registerBucketDraftRef(goal.id, element)}
+                      value={bucketDraftValue}
+                      onChange={(event) => onBucketDraftChange(goal.id, event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          onBucketDraftSubmit(goal.id, { keepDraft: true })
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault()
+                          onBucketDraftCancel(goal.id)
+                        }
+                      }}
+                      onBlur={() => onBucketDraftBlur(goal.id)}
+                      placeholder="New bucket"
+                      className="goal-bucket-draft-input"
+                    />
+                  </div>
+                </li>
+              )}
               {goal.buckets.map((b) => {
                 const isBucketOpen = bucketExpanded[b.id] ?? true
                 const taskCount = b.tasks.length
+                const draftValue = taskDrafts[b.id]
                 return (
                   <li key={b.id} className="rounded-xl border border-white/10 bg-white/5">
                     <div
@@ -185,17 +244,58 @@ const GoalRow: React.FC<GoalRowProps> = ({ goal, isOpen, onToggle, onAddBucket, 
                         <path fillRule="evenodd" d="M8.47 4.97a.75.75 0 011.06 0l6 6a.75.75 0 010 1.06l-6 6a.75.75 0 11-1.06-1.06L13.94 12 8.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" />
                       </svg>
                     </div>
-                    {taskCount > 0 && isBucketOpen && (
+                    {isBucketOpen && (
                       <div className="goal-bucket-body px-3 md:px-4 pb-3 md:pb-4">
-                        <p className="text-xs uppercase tracking-wide text-white/50">Tasks</p>
-                        <ul className="mt-2 space-y-2">
-                          {b.tasks.map((task, index) => (
-                            <li key={index} className="goal-task-row">
-                              <span className="goal-task-marker" aria-hidden="true" />
-                              <span className="goal-task-text">{task}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="goal-bucket-body-header">
+                          <p className="text-xs uppercase tracking-wide text-white/50">Tasks</p>
+                          <button
+                            type="button"
+                            className="goal-task-add"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onStartTaskDraft(goal.id, b.id)
+                            }}
+                          >
+                            + Task
+                          </button>
+                        </div>
+
+                        {draftValue !== undefined && (
+                          <div className="goal-task-row goal-task-row--draft">
+                            <span className="goal-task-marker" aria-hidden="true" />
+                            <input
+                              ref={(element) => registerTaskDraftRef(b.id, element)}
+                              value={draftValue}
+                              onChange={(event) => onTaskDraftChange(goal.id, b.id, event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  onTaskDraftSubmit(goal.id, b.id, { keepDraft: true })
+                                }
+                                if (event.key === 'Escape') {
+                                  event.preventDefault()
+                                  onTaskDraftCancel(b.id)
+                                }
+                              }}
+                              onBlur={() => onTaskDraftBlur(goal.id, b.id)}
+                              placeholder="New task"
+                              className="goal-task-input"
+                            />
+                          </div>
+                        )}
+
+                        {taskCount === 0 && draftValue === undefined ? (
+                          <p className="goal-task-empty">No tasks yet.</p>
+                        ) : (
+                          <ul className="mt-2 space-y-2">
+                            {b.tasks.map((task, index) => (
+                              <li key={index} className="goal-task-row">
+                                <span className="goal-task-marker" aria-hidden="true" />
+                                <span className="goal-task-text">{task}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     )}
                   </li>
@@ -225,6 +325,12 @@ export default function GoalsPage(): ReactElement {
     })
     return initial
   })
+  const [bucketDrafts, setBucketDrafts] = useState<Record<string, string>>({})
+  const bucketDraftRefs = useRef(new Map<string, HTMLInputElement>())
+  const submittingBucketDrafts = useRef(new Set<string>())
+  const [taskDrafts, setTaskDrafts] = useState<Record<string, string>>({})
+  const taskDraftRefs = useRef(new Map<string, HTMLInputElement>())
+  const submittingDrafts = useRef(new Set<string>())
 
   useEffect(() => {
     if (hasAutoOpenedFirst) {
@@ -252,25 +358,264 @@ export default function GoalsPage(): ReactElement {
     setExpanded((e) => ({ ...e, [goalId]: !e[goalId] }))
   }
 
-  const addBucket = (goalId: string) => {
-    const name = prompt('New bucket name (e.g., “Testing”, “Gym”)?')
-    if (!name) return
-    const newId = `b_${Date.now()}`
-    setGoals((gs) =>
-      gs.map((g) =>
-        g.id === goalId
-          ? { ...g, buckets: [...g.buckets, { id: newId, name, favorite: true, tasks: [] }] }
-          : g
-      )
-    )
-    setBucketExpanded((current) => ({ ...current, [newId]: true }))
-  }
-
   const toggleBucketExpanded = (bucketId: string) => {
     setBucketExpanded((current) => ({
       ...current,
       [bucketId]: !(current[bucketId] ?? true),
     }))
+  }
+
+  const focusBucketDraftInput = (goalId: string) => {
+    const node = bucketDraftRefs.current.get(goalId)
+    if (!node) {
+      return
+    }
+    const length = node.value.length
+    node.focus()
+    node.setSelectionRange(length, length)
+  }
+
+  const startBucketDraft = (goalId: string) => {
+    setExpanded((current) => ({ ...current, [goalId]: true }))
+    setBucketDrafts((current) => {
+      if (goalId in current) {
+        return current
+      }
+      return { ...current, [goalId]: '' }
+    })
+
+    if (typeof window !== 'undefined') {
+      const scheduleFocus = () => focusBucketDraftInput(goalId)
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(() => window.requestAnimationFrame(scheduleFocus))
+      } else {
+        window.setTimeout(scheduleFocus, 0)
+      }
+    }
+  }
+
+  const handleBucketDraftChange = (goalId: string, value: string) => {
+    setBucketDrafts((current) => ({ ...current, [goalId]: value }))
+  }
+
+  const removeBucketDraft = (goalId: string) => {
+    setBucketDrafts((current) => {
+      if (current[goalId] === undefined) {
+        return current
+      }
+      const { [goalId]: _removed, ...rest } = current
+      return rest
+    })
+  }
+
+  const releaseBucketSubmittingFlag = (goalId: string) => {
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(() => submittingBucketDrafts.current.delete(goalId))
+    } else if (typeof window !== 'undefined') {
+      window.setTimeout(() => submittingBucketDrafts.current.delete(goalId), 0)
+    } else {
+      submittingBucketDrafts.current.delete(goalId)
+    }
+  }
+
+  const handleBucketDraftSubmit = (goalId: string, options?: { keepDraft?: boolean }) => {
+    if (submittingBucketDrafts.current.has(goalId)) {
+      return
+    }
+    submittingBucketDrafts.current.add(goalId)
+
+    const currentValue = bucketDrafts[goalId]
+    if (currentValue === undefined) {
+      releaseBucketSubmittingFlag(goalId)
+      return
+    }
+
+    const trimmed = currentValue.trim()
+    if (trimmed.length === 0) {
+      removeBucketDraft(goalId)
+      releaseBucketSubmittingFlag(goalId)
+      return
+    }
+
+    const newBucketId = `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, tasks: [] }
+
+    setGoals((gs) =>
+      gs.map((g) =>
+        g.id === goalId
+          ? {
+              ...g,
+              buckets: [newBucket, ...g.buckets],
+            }
+          : g,
+      ),
+    )
+
+    setBucketExpanded((current) => ({ ...current, [newBucketId]: true }))
+
+    if (options?.keepDraft) {
+      setBucketDrafts((current) => ({ ...current, [goalId]: '' }))
+    } else {
+      removeBucketDraft(goalId)
+    }
+
+    releaseBucketSubmittingFlag(goalId)
+
+    if (options?.keepDraft) {
+      if (typeof window !== 'undefined') {
+        const scheduleFocus = () => focusBucketDraftInput(goalId)
+        if (typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(() => window.requestAnimationFrame(scheduleFocus))
+        } else {
+          window.setTimeout(scheduleFocus, 0)
+        }
+      }
+    }
+  }
+
+  const handleBucketDraftCancel = (goalId: string) => {
+    submittingBucketDrafts.current.delete(goalId)
+    removeBucketDraft(goalId)
+  }
+
+  const handleBucketDraftBlur = (goalId: string) => {
+    if (submittingBucketDrafts.current.has(goalId)) {
+      return
+    }
+    handleBucketDraftSubmit(goalId)
+  }
+
+  const registerBucketDraftRef = (goalId: string, element: HTMLInputElement | null) => {
+    if (element) {
+      bucketDraftRefs.current.set(goalId, element)
+      return
+    }
+    bucketDraftRefs.current.delete(goalId)
+  }
+
+  const focusTaskDraftInput = (bucketId: string) => {
+    const node = taskDraftRefs.current.get(bucketId)
+    if (!node) {
+      return
+    }
+    const length = node.value.length
+    node.focus()
+    node.setSelectionRange(length, length)
+  }
+
+  const startTaskDraft = (_goalId: string, bucketId: string) => {
+    setBucketExpanded((current) => ({ ...current, [bucketId]: true }))
+    setTaskDrafts((current) => {
+      if (bucketId in current) {
+        return current
+      }
+      return { ...current, [bucketId]: '' }
+    })
+
+    if (typeof window !== 'undefined') {
+      const scheduleFocus = () => focusTaskDraftInput(bucketId)
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(() => window.requestAnimationFrame(scheduleFocus))
+      } else {
+        window.setTimeout(scheduleFocus, 0)
+      }
+    }
+  }
+
+  const handleTaskDraftChange = (_goalId: string, bucketId: string, value: string) => {
+    setTaskDrafts((current) => ({ ...current, [bucketId]: value }))
+  }
+
+  const releaseSubmittingFlag = (bucketId: string) => {
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(() => submittingDrafts.current.delete(bucketId))
+    } else if (typeof window !== 'undefined') {
+      window.setTimeout(() => submittingDrafts.current.delete(bucketId), 0)
+    } else {
+      submittingDrafts.current.delete(bucketId)
+    }
+  }
+
+  const removeTaskDraft = (bucketId: string) => {
+    setTaskDrafts((current) => {
+      if (current[bucketId] === undefined) {
+        return current
+      }
+      const { [bucketId]: _removed, ...rest } = current
+      return rest
+    })
+  }
+
+  const handleTaskDraftSubmit = (goalId: string, bucketId: string, options?: { keepDraft?: boolean }) => {
+    if (submittingDrafts.current.has(bucketId)) {
+      return
+    }
+    submittingDrafts.current.add(bucketId)
+
+    const currentValue = taskDrafts[bucketId]
+    if (currentValue === undefined) {
+      releaseSubmittingFlag(bucketId)
+      return
+    }
+
+    const trimmed = currentValue.trim()
+    if (trimmed.length === 0) {
+      removeTaskDraft(bucketId)
+      releaseSubmittingFlag(bucketId)
+      return
+    }
+
+    setGoals((gs) =>
+      gs.map((g) =>
+        g.id === goalId
+          ? {
+              ...g,
+              buckets: g.buckets.map((bucket) =>
+                bucket.id === bucketId ? { ...bucket, tasks: [trimmed, ...bucket.tasks] } : bucket,
+              ),
+            }
+          : g,
+      ),
+    )
+
+    if (options?.keepDraft) {
+      setTaskDrafts((current) => ({ ...current, [bucketId]: '' }))
+    } else {
+      removeTaskDraft(bucketId)
+    }
+
+    releaseSubmittingFlag(bucketId)
+
+    if (options?.keepDraft) {
+      if (typeof window !== 'undefined') {
+        const scheduleFocus = () => focusTaskDraftInput(bucketId)
+        if (typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(() => window.requestAnimationFrame(scheduleFocus))
+        } else {
+          window.setTimeout(scheduleFocus, 0)
+        }
+      }
+    }
+  }
+
+  const handleTaskDraftCancel = (bucketId: string) => {
+    submittingDrafts.current.delete(bucketId)
+    removeTaskDraft(bucketId)
+  }
+
+  const handleTaskDraftBlur = (goalId: string, bucketId: string) => {
+    if (submittingDrafts.current.has(bucketId)) {
+      return
+    }
+    handleTaskDraftSubmit(goalId, bucketId)
+  }
+
+  const registerTaskDraftRef = (bucketId: string, element: HTMLInputElement | null) => {
+    if (element) {
+      taskDraftRefs.current.set(bucketId, element)
+      return
+    }
+    taskDraftRefs.current.delete(bucketId)
   }
 
   const toggleBucketFavorite = (goalId: string, bucketId: string) => {
@@ -304,10 +649,23 @@ export default function GoalsPage(): ReactElement {
                   goal={g}
                   isOpen={expanded[g.id] ?? false}
                   onToggle={() => toggleExpand(g.id)}
-                  onAddBucket={() => addBucket(g.id)}
                   onToggleBucketFavorite={(bucketId) => toggleBucketFavorite(g.id, bucketId)}
                   bucketExpanded={bucketExpanded}
                   onToggleBucketExpanded={toggleBucketExpanded}
+                  taskDrafts={taskDrafts}
+                  onStartTaskDraft={startTaskDraft}
+                  onTaskDraftChange={handleTaskDraftChange}
+                  onTaskDraftSubmit={handleTaskDraftSubmit}
+                  onTaskDraftBlur={handleTaskDraftBlur}
+                  onTaskDraftCancel={handleTaskDraftCancel}
+                  registerTaskDraftRef={registerTaskDraftRef}
+                  bucketDraftValue={bucketDrafts[g.id]}
+                  onStartBucketDraft={startBucketDraft}
+                  onBucketDraftChange={handleBucketDraftChange}
+                  onBucketDraftSubmit={handleBucketDraftSubmit}
+                  onBucketDraftBlur={handleBucketDraftBlur}
+                  onBucketDraftCancel={handleBucketDraftCancel}
+                  registerBucketDraftRef={registerBucketDraftRef}
                 />
               ))}
             </div>
