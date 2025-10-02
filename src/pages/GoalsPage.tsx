@@ -163,18 +163,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
       {isOpen && (
         <div className="px-4 md:px-5 pb-4 md:pb-5">
           <div className="mt-3 md:mt-4">
-            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
               <h4 className="text-sm font-medium text-white/90">Task Bank</h4>
-              <div className="flex items-center gap-2">
-                <span className="text-xs px-2 py-1 rounded-full bg-white/10">♥ {goal.buckets.filter(b => b.favorite).length} fav</span>
-                <span className="text-xs px-2 py-1 rounded-full bg-white/10">🗒 {goal.buckets.reduce((a, b) => a + b.tasks.length, 0)} tasks</span>
-              </div>
+              <button onClick={() => onStartBucketDraft(goal.id)} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 whitespace-nowrap">+ Add Bucket</button>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-white/60">Buckets surface in Stopwatch when <span className="text-white">Favourited</span>.</p>
-              <button onClick={() => onStartBucketDraft(goal.id)} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">+ Add Bucket</button>
-            </div>
+            <p className="mt-2 text-xs text-white/60">Buckets surface in Stopwatch when <span className="text-white">Favourited</span>.</p>
 
             <ul className="mt-3 md:mt-4 space-y-2">
               {bucketDraftValue !== undefined && (
@@ -725,6 +719,13 @@ export default function GoalsPage(): ReactElement {
 
           <div className="goals-toolbar">
             <div className="goal-search">
+              <svg className="goal-search__icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-.71.71l.27.28v.79l4.75 4.75a1 1 0 101.41-1.41L15.5 14zM10 14a4 4 0 110-8 4 4 0 010 8z"
+                  fill="currentColor"
+                  fillOpacity="0.8"
+                />
+              </svg>
               <input
                 type="search"
                 placeholder="Search goals"

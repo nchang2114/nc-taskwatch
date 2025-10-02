@@ -66,6 +66,10 @@ html[data-theme='light'] .goal-search input::placeholder {
   color: rgba(38, 48, 84, 0.58);
 }
 
+html[data-theme='light'] .goal-search__icon {
+  color: rgba(46, 60, 102, 0.58);
+}
+
 html[data-theme='light'] .goal-new-button {
   background: rgba(210, 224, 255, 0.65);
   border-color: rgba(164, 182, 230, 0.6);
@@ -106,9 +110,20 @@ html[data-theme='light'] .goal-draft-input::placeholder {
   position: relative;
 }
 
+.goal-search__icon {
+  position: absolute;
+  top: 50%;
+  left: 0.8rem;
+  transform: translateY(-50%);
+  width: 1.05rem;
+  height: 1.05rem;
+  color: rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}
+
 .goal-search input {
   width: 100%;
-  padding: 0.55rem 0.9rem;
+  padding: 0.55rem 0.9rem 0.55rem 2.35rem;
   border-radius: 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.08);
