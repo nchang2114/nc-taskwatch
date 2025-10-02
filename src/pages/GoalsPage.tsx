@@ -56,6 +56,49 @@ interface Goal {
 // Default data
 const DEFAULT_GOALS: Goal[] = [
   {
+    id: 'g_demo',
+    name: 'Project X – End-to-end Demo',
+    color: 'from-sky-500 to-indigo-500',
+    buckets: [
+      {
+        id: 'b_demo_1',
+        name: 'Planning',
+        favorite: true,
+        tasks: [
+          { id: 't_demo_1', text: 'Scope v1 features', completed: false, difficulty: 'green' },
+          { id: 't_demo_2', text: 'Draft milestones', completed: false, difficulty: 'yellow' },
+          { id: 't_demo_3', text: 'Risk matrix', completed: true, difficulty: 'green' },
+        ],
+      },
+      {
+        id: 'b_demo_2',
+        name: 'Build',
+        favorite: true,
+        tasks: [
+          { id: 't_demo_4', text: 'Auth flow', completed: false, difficulty: 'yellow' },
+          { id: 't_demo_5', text: 'Payments – stripe webhooks', completed: false, difficulty: 'red' },
+          { id: 't_demo_6', text: 'Health checks', completed: true, difficulty: 'green' },
+        ],
+      },
+      {
+        id: 'b_demo_3',
+        name: 'Polish',
+        favorite: false,
+        tasks: [
+          { id: 't_demo_7', text: 'Empty states', completed: false, difficulty: 'green' },
+          { id: 't_demo_8', text: 'Dark mode contrast', completed: false, difficulty: 'yellow' },
+          { id: 't_demo_9', text: 'Animation timing', completed: true, difficulty: 'none' },
+        ],
+      },
+      {
+        id: 'b_demo_4',
+        name: 'QA',
+        favorite: false,
+        tasks: [],
+      },
+    ],
+  },
+  {
     id: 'g1',
     name: 'Finish PopDot Beta',
     color: 'from-fuchsia-500 to-purple-500',
