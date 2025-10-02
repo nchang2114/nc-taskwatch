@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, type ReactElement } from 'react'
+import React, { useState, useRef, type ReactElement } from 'react'
 import './GoalsPage.css'
 
 // Helper function for class names
@@ -311,16 +311,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
 
 export default function GoalsPage(): ReactElement {
   const [goals, setGoals] = useState(DEFAULT_GOALS)
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
-    const firstGoalId = DEFAULT_GOALS[0]?.id
-    return firstGoalId ? { [firstGoalId]: true } : {}
-  })
-  const [hasAutoOpenedFirst, setHasAutoOpenedFirst] = useState(() => Boolean(DEFAULT_GOALS[0]))
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [bucketExpanded, setBucketExpanded] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {}
     DEFAULT_GOALS.forEach((goal) => {
       goal.buckets.forEach((bucket) => {
-        initial[bucket.id] = true
+        initial[bucket.id] = false
       })
     })
     return initial
@@ -331,28 +327,6 @@ export default function GoalsPage(): ReactElement {
   const [taskDrafts, setTaskDrafts] = useState<Record<string, string>>({})
   const taskDraftRefs = useRef(new Map<string, HTMLInputElement>())
   const submittingDrafts = useRef(new Set<string>())
-
-  useEffect(() => {
-    if (hasAutoOpenedFirst) {
-      return
-    }
-    if (goals.length === 0) {
-      return
-    }
-
-    const firstGoalId = goals[0]?.id
-    if (!firstGoalId) {
-      return
-    }
-
-    setExpanded((current) => {
-      if (current[firstGoalId]) {
-        return current
-      }
-      return { ...current, [firstGoalId]: true }
-    })
-    setHasAutoOpenedFirst(true)
-  }, [goals, hasAutoOpenedFirst])
 
   const toggleExpand = (goalId: string) => {
     setExpanded((e) => ({ ...e, [goalId]: !e[goalId] }))
@@ -451,7 +425,7 @@ export default function GoalsPage(): ReactElement {
       ),
     )
 
-    setBucketExpanded((current) => ({ ...current, [newBucketId]: true }))
+    setBucketExpanded((current) => ({ ...current, [newBucketId]: false }))
 
     if (options?.keepDraft) {
       setBucketDrafts((current) => ({ ...current, [goalId]: '' }))
