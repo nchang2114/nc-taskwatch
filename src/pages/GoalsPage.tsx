@@ -36,6 +36,7 @@ interface TaskItem {
   id: string
   text: string
   completed: boolean
+  difficulty?: 'none' | 'green' | 'yellow' | 'red'
 }
 
 interface Bucket {
@@ -220,6 +221,7 @@ interface GoalRowProps {
   registerBucketDraftRef: (goalId: string, element: HTMLInputElement | null) => void
   highlightTerm: string
   onToggleTaskComplete: (bucketId: string, taskId: string) => void
+  onCycleTaskDifficulty: (bucketId: string, taskId: string) => void
   // Editing existing task text
   editingTasks: Record<string, string>
   onStartTaskEdit: (goalId: string, bucketId: string, taskId: string, initial: string) => void
@@ -255,6 +257,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   registerBucketDraftRef,
   highlightTerm,
   onToggleTaskComplete,
+  onCycleTaskDifficulty,
   editingTasks,
   onStartTaskEdit,
   onTaskEditChange,
@@ -430,8 +433,16 @@ const GoalRow: React.FC<GoalRowProps> = ({
                           <ul className="mt-2 space-y-2">
                             {activeTasks.map((task) => {
                               const isEditing = editingTasks[task.id] !== undefined
+                              const diffClass =
+                                task.difficulty === 'green'
+                                  ? 'goal-task-row--diff-green'
+                                  : task.difficulty === 'yellow'
+                                  ? 'goal-task-row--diff-yellow'
+                                  : task.difficulty === 'red'
+                                  ? 'goal-task-row--diff-red'
+                                  : ''
                               return (
-                                <li key={task.id} className={classNames('goal-task-row', isEditing && 'goal-task-row--draft')}>
+                                <li key={task.id} className={classNames('goal-task-row', diffClass, isEditing && 'goal-task-row--draft')}>
                                   <button
                                     type="button"
                                     className="goal-task-marker goal-task-marker--action"
@@ -469,6 +480,21 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       {highlightText(task.text, highlightTerm)}
                                     </button>
                                   )}
+                                  <button
+                                    type="button"
+                                    className={classNames(
+                                      'goal-task-diff',
+                                      task.difficulty === 'green' && 'goal-task-diff--green',
+                                      task.difficulty === 'yellow' && 'goal-task-diff--yellow',
+                                      task.difficulty === 'red' && 'goal-task-diff--red',
+                                    )}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      onCycleTaskDifficulty(b.id, task.id)
+                                    }}
+                                    aria-label="Set task difficulty"
+                                    title="Difficulty: none → green → yellow → red"
+                                  />
                                 </li>
                               )
                             })}
@@ -496,8 +522,16 @@ const GoalRow: React.FC<GoalRowProps> = ({
                               <ul className="goal-completed__list">
                                 {completedTasks.map((task) => {
                                   const isEditing = editingTasks[task.id] !== undefined
+                                  const diffClass =
+                                    task.difficulty === 'green'
+                                      ? 'goal-task-row--diff-green'
+                                      : task.difficulty === 'yellow'
+                                      ? 'goal-task-row--diff-yellow'
+                                      : task.difficulty === 'red'
+                                      ? 'goal-task-row--diff-red'
+                                      : ''
                                   return (
-                                    <li key={task.id} className={classNames('goal-task-row goal-task-row--completed', isEditing && 'goal-task-row--draft')}>
+                                    <li key={task.id} className={classNames('goal-task-row goal-task-row--completed', diffClass, isEditing && 'goal-task-row--draft')}>
                                       <button
                                         type="button"
                                         className="goal-task-marker goal-task-marker--completed"
@@ -539,6 +573,21 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           {highlightText(task.text, highlightTerm)}
                                         </button>
                                       )}
+                                      <button
+                                        type="button"
+                                        className={classNames(
+                                          'goal-task-diff',
+                                          task.difficulty === 'green' && 'goal-task-diff--green',
+                                          task.difficulty === 'yellow' && 'goal-task-diff--yellow',
+                                          task.difficulty === 'red' && 'goal-task-diff--red',
+                                        )}
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          onCycleTaskDifficulty(b.id, task.id)
+                                        }}
+                                        aria-label="Set task difficulty"
+                                        title="Difficulty: none → green → yellow → red"
+                                      />
                                     </li>
                                   )
                                 })}
@@ -984,7 +1033,7 @@ export default function GoalsPage(): ReactElement {
       return
     }
 
-    const newTask: TaskItem = { id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, text: trimmed, completed: false }
+    const newTask: TaskItem = { id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, text: trimmed, completed: false, difficulty: 'none' }
 
     setGoals((gs) =>
       gs.map((g) =>
@@ -1070,6 +1119,36 @@ export default function GoalsPage(): ReactElement {
         [bucketId]: completedCountAfter > 0 ? false : true,
       }))
     }
+  }
+
+  const cycleTaskDifficulty = (goalId: string, bucketId: string, taskId: string) => {
+    const nextOf = (d?: 'none' | 'green' | 'yellow' | 'red') => {
+      switch (d) {
+        case 'none':
+        case undefined:
+          return 'green' as const
+        case 'green':
+          return 'yellow' as const
+        case 'yellow':
+          return 'red' as const
+        case 'red':
+          return 'none' as const
+      }
+    }
+    setGoals((gs) =>
+      gs.map((g) =>
+        g.id === goalId
+          ? {
+              ...g,
+              buckets: g.buckets.map((b) =>
+                b.id === bucketId
+                  ? { ...b, tasks: b.tasks.map((t) => (t.id === taskId ? { ...t, difficulty: nextOf(t.difficulty) } : t)) }
+                  : b,
+              ),
+            }
+          : g,
+      ),
+    )
   }
 
   // Inline edit existing task text (Google Tasks-style)
@@ -1254,6 +1333,7 @@ export default function GoalsPage(): ReactElement {
                   registerBucketDraftRef={registerBucketDraftRef}
                   highlightTerm={normalizedSearch}
                   onToggleTaskComplete={(bucketId, taskId) => toggleTaskCompletion(g.id, bucketId, taskId)}
+                  onCycleTaskDifficulty={(bucketId, taskId) => cycleTaskDifficulty(g.id, bucketId, taskId)}
                   editingTasks={taskEdits}
                   onStartTaskEdit={(goalId, bucketId, taskId, initial) => startTaskEdit(goalId, bucketId, taskId, initial)}
                   onTaskEditChange={handleTaskEditChange}

@@ -530,6 +530,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   border-radius: 0.75rem;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
 }
 
 .goal-task-marker {
@@ -753,6 +754,74 @@ html[data-theme='light'] .goal-task-add:focus-visible {
   font: inherit;
   color: rgba(255, 255, 255, 0.95);
   outline: none;
+}
+
+/* Difficulty chip and row accents */
+.goal-task-diff {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  outline: none;
+}
+
+.goal-task-diff--green {
+  border-color: rgba(34, 197, 94, 0.9);
+  background: rgba(34, 197, 94, 0.3);
+}
+.goal-task-diff--yellow {
+  border-color: rgba(234, 179, 8, 0.95);
+  background: rgba(234, 179, 8, 0.35);
+}
+.goal-task-diff--red {
+  border-color: rgba(239, 68, 68, 0.95);
+  background: rgba(239, 68, 68, 0.35);
+}
+
+.goal-task-row--diff-green {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+.goal-task-row--diff-yellow {
+  background: rgba(234, 179, 8, 0.16);
+  border-color: rgba(234, 179, 8, 0.35);
+}
+.goal-task-row--diff-red {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+html[data-theme='light'] .goal-task-diff {
+  border-color: rgba(60, 72, 110, 0.5);
+}
+html[data-theme='light'] .goal-task-diff--green {
+  border-color: rgba(22, 163, 74, 0.95);
+  background: rgba(22, 163, 74, 0.28);
+}
+html[data-theme='light'] .goal-task-diff--yellow {
+  border-color: rgba(202, 138, 4, 0.95);
+  background: rgba(202, 138, 4, 0.28);
+}
+html[data-theme='light'] .goal-task-diff--red {
+  border-color: rgba(220, 38, 38, 0.95);
+  background: rgba(220, 38, 38, 0.28);
+}
+
+html[data-theme='light'] .goal-task-row--diff-green {
+  background: rgba(22, 163, 74, 0.18);
+  border-color: rgba(22, 163, 74, 0.38);
+}
+html[data-theme='light'] .goal-task-row--diff-yellow {
+  background: rgba(202, 138, 4, 0.18);
+  border-color: rgba(202, 138, 4, 0.38);
+}
+html[data-theme='light'] .goal-task-row--diff-red {
+  background: rgba(220, 38, 38, 0.18);
+  border-color: rgba(220, 38, 38, 0.38);
 }
 
 .goal-task-input::placeholder {
