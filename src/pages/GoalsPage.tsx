@@ -6,6 +6,31 @@ function classNames(...xs: (string | boolean | undefined)[]): string {
   return xs.filter(Boolean).join(' ')
 }
 
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function highlightText(text: string, term: string): React.ReactNode {
+  if (!term) {
+    return text
+  }
+  const regex = new RegExp(`(${escapeRegExp(term)})`, 'ig')
+  const parts = text.split(regex)
+  return parts.map((part, index) => {
+    if (!part) {
+      return null
+    }
+    if (part.toLowerCase() === term.toLowerCase()) {
+      return (
+        <mark key={`${part}-${index}`} className="goal-highlight">
+          {part}
+        </mark>
+      )
+    }
+    return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>
+  })
+}
+
 // Type definitions
 interface Bucket {
   id: string
@@ -116,6 +141,7 @@ interface GoalRowProps {
   onBucketDraftBlur: (goalId: string) => void
   onBucketDraftCancel: (goalId: string) => void
   registerBucketDraftRef: (goalId: string, element: HTMLInputElement | null) => void
+  highlightTerm: string
 }
 
 const GoalRow: React.FC<GoalRowProps> = ({
@@ -139,6 +165,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onBucketDraftBlur,
   onBucketDraftCancel,
   registerBucketDraftRef,
+  highlightTerm,
 }) => {
   const pct = Math.min(100, Math.round((goal.minutes / Math.max(1, goal.weeklyTarget)) * 100))
   const right = `${formatHours(goal.minutes)} / ${formatHours(goal.weeklyTarget)} h`
@@ -147,7 +174,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
     <div className="rounded-2xl bg-white/5 hover:bg-white/10 transition border border-white/5">
       <button onClick={onToggle} className="w-full text-left p-4 md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base md:text-lg font-semibold tracking-tight break-words">{goal.name}</h3>
+          <h3 className="text-base md:text-lg font-semibold tracking-tight break-words">
+            {highlightText(goal.name, highlightTerm)}
+          </h3>
           <div className="flex items-center gap-3">
             <span className="text-sm text-white/80">{right}</span>
             <svg className={classNames('w-4 h-4 text-white/70 transition-transform', isOpen && 'rotate-90')} viewBox="0 0 24 24" fill="currentColor">
@@ -240,7 +269,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                             </svg>
                           )}
                         </button>
-                        <span className="goal-bucket-title font-medium truncate">{b.name}</span>
+                        <span className="goal-bucket-title font-medium truncate">{highlightText(b.name, highlightTerm)}</span>
                         {taskCount > 0 && (
                           <span className="text-xs text-white/60">({taskCount})</span>
                         )}
@@ -301,7 +330,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                             {b.tasks.map((task, index) => (
                               <li key={index} className="goal-task-row">
                                 <span className="goal-task-marker" aria-hidden="true" />
-                                <span className="goal-task-text">{task}</span>
+                                <span className="goal-task-text">{highlightText(task, highlightTerm)}</span>
                               </li>
                             ))}
                           </ul>
@@ -343,6 +372,18 @@ export default function GoalsPage(): ReactElement {
   const goalModalInputRef = useRef<HTMLInputElement | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [nextGoalGradientIndex, setNextGoalGradientIndex] = useState(() => DEFAULT_GOALS.length % GOAL_GRADIENTS.length)
+  const previousExpandedRef = useRef<Record<string, boolean> | null>(null)
+  const previousBucketExpandedRef = useRef<Record<string, boolean> | null>(null)
+  const expandedRef = useRef(expanded)
+  const bucketExpandedRef = useRef(bucketExpanded)
+
+  useEffect(() => {
+    expandedRef.current = expanded
+  }, [expanded])
+
+  useEffect(() => {
+    bucketExpandedRef.current = bucketExpanded
+  }, [bucketExpanded])
 
   const toggleExpand = (goalId: string) => {
     setExpanded((e) => ({ ...e, [goalId]: !e[goalId] }))
@@ -571,6 +612,49 @@ export default function GoalsPage(): ReactElement {
 
   const hasNoGoals = goals.length === 0
 
+  useEffect(() => {
+    if (!normalizedSearch) {
+      if (previousExpandedRef.current) {
+        setExpanded({ ...previousExpandedRef.current })
+      }
+      if (previousBucketExpandedRef.current) {
+        setBucketExpanded({ ...previousBucketExpandedRef.current })
+      }
+      previousExpandedRef.current = null
+      previousBucketExpandedRef.current = null
+      return
+    }
+
+    if (!previousExpandedRef.current) {
+      previousExpandedRef.current = { ...expandedRef.current }
+    }
+    if (!previousBucketExpandedRef.current) {
+      previousBucketExpandedRef.current = { ...bucketExpandedRef.current }
+    }
+
+    const nextExpanded: Record<string, boolean> = { ...expandedRef.current }
+    const nextBucketExpanded: Record<string, boolean> = { ...bucketExpandedRef.current }
+
+    goals.forEach((goal) => {
+      let goalHasMatch = goal.name.toLowerCase().includes(normalizedSearch)
+      goal.buckets.forEach((bucket) => {
+        const bucketNameMatch = bucket.name.toLowerCase().includes(normalizedSearch)
+        const taskMatch = bucket.tasks.some((task) => task.toLowerCase().includes(normalizedSearch))
+        const bucketHasMatch = bucketNameMatch || taskMatch
+        if (bucketHasMatch) {
+          nextBucketExpanded[bucket.id] = true
+        }
+        goalHasMatch = goalHasMatch || bucketHasMatch
+      })
+      if (goalHasMatch) {
+        nextExpanded[goal.id] = true
+      }
+    })
+
+    setExpanded(nextExpanded)
+    setBucketExpanded(nextBucketExpanded)
+  }, [normalizedSearch, goals])
+
   const focusTaskDraftInput = (bucketId: string) => {
     const node = taskDraftRefs.current.get(bucketId)
     if (!node) {
@@ -720,11 +804,8 @@ export default function GoalsPage(): ReactElement {
           <div className="goals-toolbar">
             <div className="goal-search">
               <svg className="goal-search__icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-.71.71l.27.28v.79l4.75 4.75a1 1 0 101.41-1.41L15.5 14zM10 14a4 4 0 110-8 4 4 0 010 8z"
-                  fill="currentColor"
-                  fillOpacity="0.8"
-                />
+                <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6" fill="none" />
+                <line x1="15.35" y1="15.35" x2="21" y2="21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
               <input
                 type="search"
@@ -770,6 +851,7 @@ export default function GoalsPage(): ReactElement {
                   onBucketDraftBlur={handleBucketDraftBlur}
                   onBucketDraftCancel={handleBucketDraftCancel}
                   registerBucketDraftRef={registerBucketDraftRef}
+                  highlightTerm={normalizedSearch}
                 />
               ))}
             </div>

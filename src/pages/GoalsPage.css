@@ -97,7 +97,7 @@ html[data-theme='light'] .goal-draft-input::placeholder {
 
 .goals-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
@@ -105,8 +105,9 @@ html[data-theme='light'] .goal-draft-input::placeholder {
 }
 
 .goal-search {
-  flex: 1 1 220px;
-  max-width: 320px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
   position: relative;
 }
 
@@ -555,6 +556,17 @@ html[data-theme='light'] .goal-task-add:focus-visible {
 
 .goal-task-input::placeholder {
   color: rgba(255, 255, 255, 0.45);
+}
+
+.goal-highlight {
+  background: rgba(255, 255, 255, 0.28);
+  color: inherit;
+  padding: 0 0.15rem;
+  border-radius: 0.3rem;
+}
+
+html[data-theme='light'] .goal-highlight {
+  background: rgba(82, 98, 160, 0.2);
 }
 
 html[data-theme='light'] .goal-task-input {
