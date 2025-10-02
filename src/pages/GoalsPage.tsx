@@ -1,4 +1,4 @@
-import React, { useState, useRef, type ReactElement } from 'react'
+import React, { useState, useRef, useEffect, type ReactElement } from 'react'
 import './GoalsPage.css'
 
 // Helper function for class names
@@ -62,6 +62,22 @@ const DEFAULT_GOALS: Goal[] = [
     weeklyTarget: 360, // 6h
   },
 ]
+
+const GOAL_GRADIENTS = [
+  'from-fuchsia-500 to-purple-500',
+  'from-emerald-500 to-cyan-500',
+  'from-lime-400 to-emerald-500',
+  'from-sky-500 to-indigo-500',
+  'from-amber-400 to-orange-500',
+]
+
+const GOAL_GRADIENT_PREVIEW: Record<string, string> = {
+  'from-fuchsia-500 to-purple-500': 'linear-gradient(135deg, #f471b5 0%, #a855f7 50%, #6b21a8 100%)',
+  'from-emerald-500 to-cyan-500': 'linear-gradient(135deg, #34d399 0%, #10b981 45%, #0ea5e9 100%)',
+  'from-lime-400 to-emerald-500': 'linear-gradient(135deg, #bef264 0%, #4ade80 45%, #22c55e 100%)',
+  'from-sky-500 to-indigo-500': 'linear-gradient(135deg, #38bdf8 0%, #60a5fa 50%, #6366f1 100%)',
+  'from-amber-400 to-orange-500': 'linear-gradient(135deg, #fbbf24 0%, #fb923c 45%, #f97316 100%)',
+}
 
 // Components
 const ThinProgress: React.FC<{ value: number; gradient: string }> = ({ value, gradient }) => (
@@ -186,7 +202,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                 </li>
               )}
               {goal.buckets.map((b) => {
-                const isBucketOpen = bucketExpanded[b.id] ?? true
+                const isBucketOpen = bucketExpanded[b.id] ?? false
                 const taskCount = b.tasks.length
                 const draftValue = taskDrafts[b.id]
                 return (
@@ -327,6 +343,12 @@ export default function GoalsPage(): ReactElement {
   const [taskDrafts, setTaskDrafts] = useState<Record<string, string>>({})
   const taskDraftRefs = useRef(new Map<string, HTMLInputElement>())
   const submittingDrafts = useRef(new Set<string>())
+  const [isCreateGoalOpen, setIsCreateGoalOpen] = useState(false)
+  const [goalNameInput, setGoalNameInput] = useState('')
+  const [selectedGoalGradient, setSelectedGoalGradient] = useState(GOAL_GRADIENTS[0])
+  const goalModalInputRef = useRef<HTMLInputElement | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [nextGoalGradientIndex, setNextGoalGradientIndex] = useState(() => DEFAULT_GOALS.length % GOAL_GRADIENTS.length)
 
   const toggleExpand = (goalId: string) => {
     setExpanded((e) => ({ ...e, [goalId]: !e[goalId] }))
@@ -466,6 +488,94 @@ export default function GoalsPage(): ReactElement {
     }
     bucketDraftRefs.current.delete(goalId)
   }
+
+  const openCreateGoal = () => {
+    setGoalNameInput('')
+    setSelectedGoalGradient(GOAL_GRADIENTS[nextGoalGradientIndex])
+    setIsCreateGoalOpen(true)
+  }
+
+  const closeCreateGoal = () => {
+    setIsCreateGoalOpen(false)
+    setGoalNameInput('')
+  }
+
+  useEffect(() => {
+    if (!isCreateGoalOpen) {
+      return
+    }
+    const input = goalModalInputRef.current
+    if (!input) {
+      return
+    }
+    const focus = () => {
+      const length = input.value.length
+      input.focus()
+      input.setSelectionRange(length, length)
+    }
+    focus()
+  }, [isCreateGoalOpen])
+
+  useEffect(() => {
+    if (!isCreateGoalOpen) {
+      return
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeCreateGoal()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isCreateGoalOpen])
+
+  const handleCreateGoal = () => {
+    const trimmed = goalNameInput.trim()
+    if (trimmed.length === 0) {
+      const input = goalModalInputRef.current
+      if (input) {
+        input.focus()
+      }
+      return
+    }
+
+    const newGoalId = `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const newGoal: Goal = {
+      id: newGoalId,
+      name: trimmed,
+      color: selectedGoalGradient,
+      buckets: [],
+      minutes: 0,
+      weeklyTarget: 60,
+    }
+
+    setGoals((current) => [newGoal, ...current])
+    setExpanded((current) => ({ ...current, [newGoalId]: true }))
+
+    setNextGoalGradientIndex((index) => (index + 1) % GOAL_GRADIENTS.length)
+    closeCreateGoal()
+  }
+
+  const normalizedSearch = searchTerm.trim().toLowerCase()
+
+  const visibleGoals = normalizedSearch
+    ? goals.filter((goal) => {
+        if (goal.name.toLowerCase().includes(normalizedSearch)) {
+          return true
+        }
+        return goal.buckets.some((bucket) => {
+          if (bucket.name.toLowerCase().includes(normalizedSearch)) {
+            return true
+          }
+          return bucket.tasks.some((task) => task.toLowerCase().includes(normalizedSearch))
+        })
+      })
+    : goals
+
+  const hasNoGoals = goals.length === 0
 
   const focusTaskDraftInput = (bucketId: string) => {
     const node = taskDraftRefs.current.get(bucketId)
@@ -613,11 +723,30 @@ export default function GoalsPage(): ReactElement {
             </p>
           </section>
 
-          {goals.length === 0 ? (
+          <div className="goals-toolbar">
+            <div className="goal-search">
+              <input
+                type="search"
+                placeholder="Search goals"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                aria-label="Search goals"
+              />
+            </div>
+            <button type="button" className="goal-new-button" onClick={openCreateGoal}>
+              + New Goal
+            </button>
+          </div>
+
+          {hasNoGoals && visibleGoals.length === 0 ? (
             <p className="text-white/70 text-sm">No goals yet.</p>
+          ) : visibleGoals.length === 0 ? (
+            <p className="text-white/70 text-sm">
+              No goals match “{searchTerm.trim()}”.
+            </p>
           ) : (
             <div className="space-y-3 md:space-y-4">
-              {goals.map((g) => (
+              {visibleGoals.map((g) => (
                 <GoalRow
                   key={g.id}
                   goal={g}
@@ -651,6 +780,80 @@ export default function GoalsPage(): ReactElement {
         <div className="absolute -top-24 -left-24 h-72 w-72 bg-fuchsia-500 blur-3xl rounded-full mix-blend-screen" />
         <div className="absolute -bottom-28 -right-24 h-80 w-80 bg-indigo-500 blur-3xl rounded-full mix-blend-screen" />
       </div>
+
+      {isCreateGoalOpen && (
+        <div className="goal-modal-backdrop" role="presentation" onClick={closeCreateGoal}>
+          <div
+            className="goal-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-goal-title"
+            aria-describedby="create-goal-description"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="goal-modal__header">
+              <h2 id="create-goal-title">Create Goal</h2>
+              <p id="create-goal-description">Give it a short, motivating name. You can link buckets after creating.</p>
+            </header>
+
+            <div className="goal-modal__body">
+              <label className="goal-modal__label" htmlFor="goal-name-input">
+                Name
+              </label>
+              <input
+                id="goal-name-input"
+                ref={goalModalInputRef}
+                value={goalNameInput}
+                onChange={(event) => setGoalNameInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    handleCreateGoal()
+                  }
+                }}
+                placeholder="e.g., Finish PopDot Beta"
+                className="goal-modal__input"
+              />
+
+              <p className="goal-modal__label">Accent Gradient</p>
+              <div className="goal-gradient-grid">
+                {GOAL_GRADIENTS.map((gradient) => {
+                  const isActive = gradient === selectedGoalGradient
+                  return (
+                    <button
+                      key={gradient}
+                      type="button"
+                      className={classNames('goal-gradient-option', isActive && 'goal-gradient-option--active')}
+                      aria-pressed={isActive}
+                      onClick={() => setSelectedGoalGradient(gradient)}
+                      aria-label={`Select gradient ${gradient}`}
+                    >
+                      <span
+                        className="goal-gradient-swatch"
+                        style={{ background: GOAL_GRADIENT_PREVIEW[gradient] }}
+                      />
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <footer className="goal-modal__footer">
+              <button type="button" className="goal-modal__button goal-modal__button--muted" onClick={closeCreateGoal}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="goal-modal__button goal-modal__button--primary"
+                onClick={handleCreateGoal}
+                disabled={goalNameInput.trim().length === 0}
+              >
+                Create
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
