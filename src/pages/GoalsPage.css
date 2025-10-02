@@ -592,6 +592,20 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   flex: 1;
 }
 
+/* When rendered as a button for inline edit affordance */
+.goal-task-text--button {
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: text;
+}
+
 .goal-task-row--completed {
   background: rgba(24, 30, 48, 0.55);
   border-style: solid;

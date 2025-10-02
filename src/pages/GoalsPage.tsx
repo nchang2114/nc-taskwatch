@@ -220,6 +220,14 @@ interface GoalRowProps {
   registerBucketDraftRef: (goalId: string, element: HTMLInputElement | null) => void
   highlightTerm: string
   onToggleTaskComplete: (bucketId: string, taskId: string) => void
+  // Editing existing task text
+  editingTasks: Record<string, string>
+  onStartTaskEdit: (goalId: string, bucketId: string, taskId: string, initial: string) => void
+  onTaskEditChange: (taskId: string, value: string) => void
+  onTaskEditSubmit: (goalId: string, bucketId: string, taskId: string) => void
+  onTaskEditBlur: (goalId: string, bucketId: string, taskId: string) => void
+  onTaskEditCancel: (taskId: string) => void
+  registerTaskEditRef: (taskId: string, element: HTMLInputElement | null) => void
 }
 
 const GoalRow: React.FC<GoalRowProps> = ({
@@ -247,6 +255,13 @@ const GoalRow: React.FC<GoalRowProps> = ({
   registerBucketDraftRef,
   highlightTerm,
   onToggleTaskComplete,
+  editingTasks,
+  onStartTaskEdit,
+  onTaskEditChange,
+  onTaskEditSubmit,
+  onTaskEditBlur,
+  onTaskEditCancel,
+  registerTaskEditRef,
 }) => {
   const totalTasks = goal.buckets.reduce((acc, bucket) => acc + bucket.tasks.length, 0)
   const completedTasksCount = goal.buckets.reduce(
@@ -413,17 +428,50 @@ const GoalRow: React.FC<GoalRowProps> = ({
                           <p className="goal-task-empty">No tasks yet.</p>
                         ) : (
                           <ul className="mt-2 space-y-2">
-                            {activeTasks.map((task) => (
-                              <li key={task.id} className="goal-task-row">
-                                <button
-                                  type="button"
-                                  className="goal-task-marker goal-task-marker--action"
-                                  onClick={() => onToggleTaskComplete(b.id, task.id)}
-                                  aria-label="Mark task complete"
-                                />
-                                <span className="goal-task-text">{highlightText(task.text, highlightTerm)}</span>
-                              </li>
-                            ))}
+                            {activeTasks.map((task) => {
+                              const isEditing = editingTasks[task.id] !== undefined
+                              return (
+                                <li key={task.id} className={classNames('goal-task-row', isEditing && 'goal-task-row--draft')}>
+                                  <button
+                                    type="button"
+                                    className="goal-task-marker goal-task-marker--action"
+                                    onClick={() => onToggleTaskComplete(b.id, task.id)}
+                                    aria-label="Mark task complete"
+                                  />
+                                  {isEditing ? (
+                                    <input
+                                      ref={(el) => registerTaskEditRef(task.id, el)}
+                                      value={editingTasks[task.id]}
+                                      onChange={(e) => onTaskEditChange(task.id, e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault()
+                                          onTaskEditSubmit(goal.id, b.id, task.id)
+                                        }
+                                        if (e.key === 'Escape') {
+                                          e.preventDefault()
+                                          onTaskEditCancel(task.id)
+                                        }
+                                      }}
+                                      onBlur={() => onTaskEditBlur(goal.id, b.id, task.id)}
+                                      className="goal-task-input"
+                                    />
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="goal-task-text goal-task-text--button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        onStartTaskEdit(goal.id, b.id, task.id, task.text)
+                                      }}
+                                      aria-label="Edit task text"
+                                    >
+                                      {highlightText(task.text, highlightTerm)}
+                                    </button>
+                                  )}
+                                </li>
+                              )
+                            })}
                           </ul>
                         )}
 
@@ -446,21 +494,54 @@ const GoalRow: React.FC<GoalRowProps> = ({
                             </button>
                             {!isCompletedCollapsed && (
                               <ul className="goal-completed__list">
-                                {completedTasks.map((task) => (
-                                  <li key={task.id} className="goal-task-row goal-task-row--completed">
-                                    <button
-                                      type="button"
-                                      className="goal-task-marker goal-task-marker--completed"
-                                      onClick={() => onToggleTaskComplete(b.id, task.id)}
-                                      aria-label="Mark task incomplete"
-                                    >
-                                      <svg viewBox="0 0 24 24" className="goal-task-check" aria-hidden="true">
-                                        <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                      </svg>
-                                    </button>
-                                    <span className="goal-task-text">{highlightText(task.text, highlightTerm)}</span>
-                                  </li>
-                                ))}
+                                {completedTasks.map((task) => {
+                                  const isEditing = editingTasks[task.id] !== undefined
+                                  return (
+                                    <li key={task.id} className={classNames('goal-task-row goal-task-row--completed', isEditing && 'goal-task-row--draft')}>
+                                      <button
+                                        type="button"
+                                        className="goal-task-marker goal-task-marker--completed"
+                                        onClick={() => onToggleTaskComplete(b.id, task.id)}
+                                        aria-label="Mark task incomplete"
+                                      >
+                                        <svg viewBox="0 0 24 24" className="goal-task-check" aria-hidden="true">
+                                          <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                      </button>
+                                      {isEditing ? (
+                                        <input
+                                          ref={(el) => registerTaskEditRef(task.id, el)}
+                                          value={editingTasks[task.id]}
+                                          onChange={(e) => onTaskEditChange(task.id, e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault()
+                                              onTaskEditSubmit(goal.id, b.id, task.id)
+                                            }
+                                            if (e.key === 'Escape') {
+                                              e.preventDefault()
+                                              onTaskEditCancel(task.id)
+                                            }
+                                          }}
+                                          onBlur={() => onTaskEditBlur(goal.id, b.id, task.id)}
+                                          className="goal-task-input"
+                                        />
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="goal-task-text goal-task-text--button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            onStartTaskEdit(goal.id, b.id, task.id, task.text)
+                                          }}
+                                          aria-label="Edit task text"
+                                        >
+                                          {highlightText(task.text, highlightTerm)}
+                                        </button>
+                                      )}
+                                    </li>
+                                  )
+                                })}
                               </ul>
                             )}
                           </div>
@@ -505,6 +586,9 @@ export default function GoalsPage(): ReactElement {
   const [taskDrafts, setTaskDrafts] = useState<Record<string, string>>({})
   const taskDraftRefs = useRef(new Map<string, HTMLInputElement>())
   const submittingDrafts = useRef(new Set<string>())
+  const [taskEdits, setTaskEdits] = useState<Record<string, string>>({})
+  const taskEditRefs = useRef(new Map<string, HTMLInputElement>())
+  const submittingEdits = useRef(new Set<string>())
   const [isCreateGoalOpen, setIsCreateGoalOpen] = useState(false)
   const [goalNameInput, setGoalNameInput] = useState('')
   const [selectedGoalGradient, setSelectedGoalGradient] = useState(GOAL_GRADIENTS[0])
@@ -988,6 +1072,106 @@ export default function GoalsPage(): ReactElement {
     }
   }
 
+  // Inline edit existing task text (Google Tasks-style)
+  const registerTaskEditRef = (taskId: string, element: HTMLInputElement | null) => {
+    if (element) {
+      taskEditRefs.current.set(taskId, element)
+      return
+    }
+    taskEditRefs.current.delete(taskId)
+  }
+
+  const focusTaskEditInput = (taskId: string) => {
+    const node = taskEditRefs.current.get(taskId)
+    if (!node) return
+    const len = node.value.length
+    node.focus()
+    node.setSelectionRange(len, len)
+  }
+
+  const startTaskEdit = (_goalId: string, bucketId: string, taskId: string, initial: string) => {
+    setTaskEdits((current) => ({ ...current, [taskId]: initial }))
+    // Expand parent bucket to ensure visible
+    setBucketExpanded((current) => ({ ...current, [bucketId]: true }))
+    if (typeof window !== 'undefined') {
+      const scheduleFocus = () => focusTaskEditInput(taskId)
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(() => window.requestAnimationFrame(scheduleFocus))
+      } else {
+        window.setTimeout(scheduleFocus, 0)
+      }
+    }
+  }
+
+  const handleTaskEditChange = (taskId: string, value: string) => {
+    setTaskEdits((current) => ({ ...current, [taskId]: value }))
+  }
+
+  const releaseEditSubmittingFlag = (taskId: string) => {
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(() => submittingEdits.current.delete(taskId))
+    } else if (typeof window !== 'undefined') {
+      window.setTimeout(() => submittingEdits.current.delete(taskId), 0)
+    } else {
+      submittingEdits.current.delete(taskId)
+    }
+  }
+
+  const removeTaskEdit = (taskId: string) => {
+    setTaskEdits((current) => {
+      if (current[taskId] === undefined) return current
+      const { [taskId]: _removed, ...rest } = current
+      return rest
+    })
+  }
+
+  const handleTaskEditSubmit = (goalId: string, bucketId: string, taskId: string) => {
+    if (submittingEdits.current.has(taskId)) return
+    submittingEdits.current.add(taskId)
+
+    const currentValue = taskEdits[taskId]
+    if (currentValue === undefined) {
+      releaseEditSubmittingFlag(taskId)
+      return
+    }
+
+    const trimmed = currentValue.trim()
+    const nextText = trimmed.length === 0 ? '' : trimmed
+
+    setGoals((gs) =>
+      gs.map((g) =>
+        g.id === goalId
+          ? {
+              ...g,
+              buckets: g.buckets.map((b) =>
+                b.id === bucketId
+                  ? { ...b, tasks: b.tasks.map((t) => (t.id === taskId ? { ...t, text: nextText } : t)) }
+                  : b,
+              ),
+            }
+          : g,
+      ),
+    )
+
+    // Keep empty possible to allow user to type after blur; mimic Google Tasks keeps empty allowed
+    // but if you prefer fallback, uncomment next two lines:
+    // const fallback = nextText.length > 0 ? nextText : '(untitled)'
+    // setGoals(... with fallback ...)
+
+    removeTaskEdit(taskId)
+    releaseEditSubmittingFlag(taskId)
+  }
+
+  const handleTaskEditBlur = (goalId: string, bucketId: string, taskId: string) => {
+    if (submittingEdits.current.has(taskId)) return
+    handleTaskEditSubmit(goalId, bucketId, taskId)
+  }
+
+  const handleTaskEditCancel = (taskId: string) => {
+    submittingEdits.current.delete(taskId)
+    removeTaskEdit(taskId)
+  }
+
   const toggleCompletedSection = (bucketId: string) => {
     setCompletedCollapsed((current) => ({
       ...current,
@@ -1070,6 +1254,13 @@ export default function GoalsPage(): ReactElement {
                   registerBucketDraftRef={registerBucketDraftRef}
                   highlightTerm={normalizedSearch}
                   onToggleTaskComplete={(bucketId, taskId) => toggleTaskCompletion(g.id, bucketId, taskId)}
+                  editingTasks={taskEdits}
+                  onStartTaskEdit={(goalId, bucketId, taskId, initial) => startTaskEdit(goalId, bucketId, taskId, initial)}
+                  onTaskEditChange={handleTaskEditChange}
+                  onTaskEditSubmit={(goalId, bucketId, taskId) => handleTaskEditSubmit(goalId, bucketId, taskId)}
+                  onTaskEditBlur={(goalId, bucketId, taskId) => handleTaskEditBlur(goalId, bucketId, taskId)}
+                  onTaskEditCancel={(taskId) => handleTaskEditCancel(taskId)}
+                  registerTaskEditRef={registerTaskEditRef}
                 />
               ))}
             </div>
