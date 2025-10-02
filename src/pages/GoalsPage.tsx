@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, type ReactElement } from 'react'
+import React, { useState, useRef, useEffect, useMemo, type ReactElement } from 'react'
 import './GoalsPage.css'
 
 // Helper function for class names
@@ -50,8 +50,6 @@ interface Goal {
   name: string
   color: string
   buckets: Bucket[]
-  minutes: number
-  weeklyTarget: number
 }
 
 // Default data
@@ -90,8 +88,6 @@ const DEFAULT_GOALS: Goal[] = [
         ],
       },
     ],
-    minutes: 420, // 7h
-    weeklyTarget: 720, // 12h
   },
   {
     id: 'g2',
@@ -126,8 +122,6 @@ const DEFAULT_GOALS: Goal[] = [
         ],
       },
     ],
-    minutes: 180, // 3h
-    weeklyTarget: 300, // 5h
   },
   {
     id: 'g3',
@@ -161,8 +155,6 @@ const DEFAULT_GOALS: Goal[] = [
         ],
       },
     ],
-    minutes: 210, // 3.5h
-    weeklyTarget: 360, // 6h
   },
 ]
 
@@ -174,7 +166,7 @@ const GOAL_GRADIENTS = [
   'from-amber-400 to-orange-500',
 ]
 
-const GOAL_GRADIENT_PREVIEW: Record<string, string> = {
+const BASE_GRADIENT_PREVIEW: Record<string, string> = {
   'from-fuchsia-500 to-purple-500': 'linear-gradient(135deg, #f471b5 0%, #a855f7 50%, #6b21a8 100%)',
   'from-emerald-500 to-cyan-500': 'linear-gradient(135deg, #34d399 0%, #10b981 45%, #0ea5e9 100%)',
   'from-lime-400 to-emerald-500': 'linear-gradient(135deg, #bef264 0%, #4ade80 45%, #22c55e 100%)',
@@ -183,19 +175,24 @@ const GOAL_GRADIENT_PREVIEW: Record<string, string> = {
 }
 
 // Components
-const ThinProgress: React.FC<{ value: number; gradient: string }> = ({ value, gradient }) => (
-  <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
-    <div
-      className={classNames('h-full rounded-full bg-gradient-to-r goal-progress-fill', gradient)}
-      style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-    />
-  </div>
-)
-
-function formatHours(mins: number) {
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  return m ? `${h}.${String(Math.round((m / 60) * 10)).padStart(1, '0')}` : String(h)
+const ThinProgress: React.FC<{ value: number; gradient: string }> = ({ value, gradient }) => {
+  const isCustomGradient = gradient.startsWith('custom:')
+  const customGradientValue = isCustomGradient ? gradient.slice(7) : undefined
+  return (
+    <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+      <div
+        className={classNames(
+          'h-full rounded-full goal-progress-fill',
+          !isCustomGradient && 'bg-gradient-to-r',
+          !isCustomGradient && gradient,
+        )}
+        style={{
+          width: `${Math.max(0, Math.min(100, value))}%`,
+          backgroundImage: customGradientValue,
+        }}
+      />
+    </div>
+  )
 }
 
 interface GoalRowProps {
@@ -251,8 +248,13 @@ const GoalRow: React.FC<GoalRowProps> = ({
   highlightTerm,
   onToggleTaskComplete,
 }) => {
-  const pct = Math.min(100, Math.round((goal.minutes / Math.max(1, goal.weeklyTarget)) * 100))
-  const right = `${formatHours(goal.minutes)} / ${formatHours(goal.weeklyTarget)} h`
+  const totalTasks = goal.buckets.reduce((acc, bucket) => acc + bucket.tasks.length, 0)
+  const completedTasksCount = goal.buckets.reduce(
+    (acc, bucket) => acc + bucket.tasks.filter((task) => task.completed).length,
+    0,
+  )
+  const pct = totalTasks === 0 ? 0 : Math.round((completedTasksCount / totalTasks) * 100)
+  const progressLabel = totalTasks > 0 ? `${completedTasksCount} / ${totalTasks} tasks` : 'No tasks yet'
   return (
     <div className="rounded-2xl bg-white/5 hover:bg-white/10 transition border border-white/5">
       <button onClick={onToggle} className="w-full text-left p-4 md:p-5">
@@ -261,7 +263,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
             {highlightText(goal.name, highlightTerm)}
           </h3>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-white/80">{right}</span>
+            <span className="text-sm text-white/80">{progressLabel}</span>
             <svg className={classNames('w-4 h-4 text-white/70 transition-transform', isOpen && 'rotate-90')} viewBox="0 0 24 24" fill="currentColor">
               <path fillRule="evenodd" d="M8.47 4.97a.75.75 0 011.06 0l6 6a.75.75 0 010 1.06l-6 6a.75.75 0 11-1.06-1.06L13.94 12 8.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd"/>
             </svg>
@@ -504,9 +506,22 @@ export default function GoalsPage(): ReactElement {
   const [isCreateGoalOpen, setIsCreateGoalOpen] = useState(false)
   const [goalNameInput, setGoalNameInput] = useState('')
   const [selectedGoalGradient, setSelectedGoalGradient] = useState(GOAL_GRADIENTS[0])
+  const [customGradient, setCustomGradient] = useState({ start: '#6366f1', end: '#ec4899', angle: 135 })
   const goalModalInputRef = useRef<HTMLInputElement | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [nextGoalGradientIndex, setNextGoalGradientIndex] = useState(() => DEFAULT_GOALS.length % GOAL_GRADIENTS.length)
+  const customGradientPreview = useMemo(
+    () => `linear-gradient(${customGradient.angle}deg, ${customGradient.start} 0%, ${customGradient.end} 100%)`,
+    [customGradient],
+  )
+  const gradientOptions = useMemo<string[]>(() => [...GOAL_GRADIENTS, 'custom'], [])
+  const gradientPreview = useMemo<Record<string, string>>(
+    () => ({
+      ...BASE_GRADIENT_PREVIEW,
+      custom: customGradientPreview,
+    }),
+    [customGradientPreview],
+  )
   const previousExpandedRef = useRef<Record<string, boolean> | null>(null)
   const previousBucketExpandedRef = useRef<Record<string, boolean> | null>(null)
   const previousCompletedCollapsedRef = useRef<Record<string, boolean> | null>(null)
@@ -720,13 +735,13 @@ export default function GoalsPage(): ReactElement {
     }
 
     const newGoalId = `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const gradientForGoal = selectedGoalGradient === 'custom' ? `custom:${customGradientPreview}` : selectedGoalGradient
+
     const newGoal: Goal = {
       id: newGoalId,
       name: trimmed,
-      color: selectedGoalGradient,
+      color: gradientForGoal,
       buckets: [],
-      minutes: 0,
-      weeklyTarget: 60,
     }
 
     setGoals((current) => [newGoal, ...current])
@@ -1101,8 +1116,9 @@ export default function GoalsPage(): ReactElement {
 
               <p className="goal-modal__label">Accent Gradient</p>
               <div className="goal-gradient-grid">
-                {GOAL_GRADIENTS.map((gradient) => {
+                {gradientOptions.map((gradient) => {
                   const isActive = gradient === selectedGoalGradient
+                  const preview = gradientPreview[gradient]
                   return (
                     <button
                       key={gradient}
@@ -1110,16 +1126,52 @@ export default function GoalsPage(): ReactElement {
                       className={classNames('goal-gradient-option', isActive && 'goal-gradient-option--active')}
                       aria-pressed={isActive}
                       onClick={() => setSelectedGoalGradient(gradient)}
-                      aria-label={`Select gradient ${gradient}`}
+                      aria-label={gradient === 'custom' ? 'Select custom gradient' : `Select gradient ${gradient}`}
                     >
-                      <span
-                        className="goal-gradient-swatch"
-                        style={{ background: GOAL_GRADIENT_PREVIEW[gradient] }}
-                      />
+                      <span className="goal-gradient-swatch" style={{ background: preview }}>
+                        {gradient === 'custom' && !isActive && <span className="goal-gradient-plus" aria-hidden="true">+</span>}
+                      </span>
                     </button>
                   )
                 })}
               </div>
+
+              {selectedGoalGradient === 'custom' && (
+                <div className="goal-gradient-custom-editor">
+                  <div className="goal-gradient-custom-field">
+                    <label htmlFor="custom-gradient-start">Start</label>
+                    <input
+                      id="custom-gradient-start"
+                      type="color"
+                      value={customGradient.start}
+                      onChange={(event) => setCustomGradient((current) => ({ ...current, start: event.target.value }))}
+                    />
+                  </div>
+                  <div className="goal-gradient-custom-field">
+                    <label htmlFor="custom-gradient-end">End</label>
+                    <input
+                      id="custom-gradient-end"
+                      type="color"
+                      value={customGradient.end}
+                      onChange={(event) => setCustomGradient((current) => ({ ...current, end: event.target.value }))}
+                    />
+                  </div>
+                  <div className="goal-gradient-custom-field goal-gradient-custom-field--angle">
+                    <label htmlFor="custom-gradient-angle">Angle</label>
+                    <div className="goal-gradient-angle">
+                      <input
+                        id="custom-gradient-angle"
+                        type="range"
+                        min="0"
+                        max="360"
+                        value={customGradient.angle}
+                        onChange={(event) => setCustomGradient((current) => ({ ...current, angle: Number(event.target.value) }))}
+                      />
+                      <span className="goal-gradient-angle-value">{customGradient.angle}°</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <footer className="goal-modal__footer">

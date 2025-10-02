@@ -309,6 +309,71 @@ html[data-theme='light'] .goal-draft-input::placeholder {
   border-color: rgba(255, 255, 255, 0.75);
 }
 
+.goal-gradient-plus {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.goal-gradient-custom-editor {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: rgba(16, 22, 38, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.goal-gradient-custom-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 8rem;
+}
+
+.goal-gradient-custom-field label {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.goal-gradient-custom-field input[type='color'] {
+  width: 3rem;
+  height: 3rem;
+  border: none;
+  border-radius: 0.8rem;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.goal-gradient-custom-field--angle {
+  flex: 1 1 12rem;
+  min-width: 12rem;
+}
+
+.goal-gradient-angle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.goal-gradient-angle input[type='range'] {
+  flex: 1;
+}
+
+.goal-gradient-angle-value {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
 html[data-theme='light'] .goal-gradient-option--active .goal-gradient-swatch {
   border-color: rgba(60, 86, 150, 0.95);
   box-shadow: 0 12px 28px rgba(120, 138, 202, 0.35);
@@ -812,4 +877,14 @@ html[data-theme='light'] .goal-bucket-toggle:focus-visible {
 
 html[data-theme='light'] .goal-bucket-body {
   border-color: rgba(160, 176, 220, 0.3);
+}
+
+
+html[data-theme='light'] .goal-gradient-custom-editor {
+  background: rgba(236, 240, 255, 0.86);
+  border-color: rgba(184, 198, 238, 0.55);
+}
+
+html[data-theme='light'] .goal-gradient-custom-field label {
+  color: rgba(44, 56, 96, 0.7);
 }
