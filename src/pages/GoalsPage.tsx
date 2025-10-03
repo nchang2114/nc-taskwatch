@@ -381,9 +381,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   editingTasks,
   onStartTaskEdit,
   onTaskEditChange,
-  onTaskEditSubmit,
   onTaskEditBlur,
-  onTaskEditCancel,
   registerTaskEditRef,
   onReorderTasks,
 }) => {
@@ -396,12 +394,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
     | { bucketId: string; section: 'active' | 'completed'; top: number }
     | null
   >(null)
-
-  const truncateForDrag = (text: string, maxChars = 96) => {
-    const trimmed = text.trim()
-    if (trimmed.length <= maxChars) return trimmed
-    return trimmed.slice(0, Math.max(0, maxChars - 1)) + '…'
-  }
+  
 
   // Preserve original transparency — no conversion to opaque
 
@@ -479,10 +472,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
     const pageEl = document.body as HTMLElement
 
     const cardCS = cardEl ? window.getComputedStyle(cardEl) : null
-    const bucketCS = bucketEl ? window.getComputedStyle(bucketEl) : null
-    const goalsContentCS = goalsContentEl ? window.getComputedStyle(goalsContentEl) : null
-    const goalsLayerCS = goalsLayerEl ? window.getComputedStyle(goalsLayerEl) : null
-    const pageCS = window.getComputedStyle(pageEl)
 
     // Compose colors: page -> card -> bucket -> row
     // Helper to apply layer with its own opacity
@@ -497,15 +486,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
     const lightMid = parseColor('rgb(232, 236, 250)')
     const themeMid = document.documentElement.getAttribute('data-theme') === 'light' ? lightMid : darkMid
 
-    const applyLayer = (cs: CSSStyleDeclaration | null) => {
-      if (!cs) return
-      const c = parseColor(cs.backgroundColor)
-      const o = Math.max(0, Math.min(1, parseFloat(cs.opacity || '1')))
-      const layer = { r: c.r, g: c.g, b: c.b, a: (c.a ?? 1) * o }
-      // If fully transparent, blend a theme mid-tone to avoid see-through drag image
-      const effective = layer.a === 0 ? themeMid : layer
-      base = over(effective, base)
-    }
+    
 
     // Compose base strictly from theme base + goal entry (card) to avoid overly dark appearance in dark mode
     // Start at theme base only
@@ -782,11 +763,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                   : task.difficulty === 'red'
                                   ? 'goal-task-row--diff-red'
                                   : ''
-                              const showAbove =
-                                dragHover &&
-                                dragHover.bucketId === b.id &&
-                                dragHover.section === 'active' &&
-                                dragHover.index === index
+                              
                               return (
                                 <React.Fragment key={`${task.id}-wrap`}>
                                   {/* placeholder suppressed; line is rendered absolutely */}
@@ -1017,11 +994,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       : task.difficulty === 'red'
                                       ? 'goal-task-row--diff-red'
                                       : ''
-                                  const showAbove =
-                                    dragHover &&
-                                    dragHover.bucketId === b.id &&
-                                    dragHover.section === 'completed' &&
-                                    dragHover.index === cIndex
+                                  
                                   return (
                                     <React.Fragment key={`${task.id}-cwrap`}>
                                       {/* placeholder suppressed; line is rendered absolutely */}
@@ -1747,7 +1720,6 @@ export default function GoalsPage(): ReactElement {
   const focusTaskEditInput = (taskId: string) => {
     const node = taskEditRefs.current.get(taskId)
     if (!node) return
-    const len = (node.textContent ?? '').length
     node.focus()
     if (typeof window !== 'undefined') {
       const selection = window.getSelection()
