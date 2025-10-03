@@ -465,12 +465,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
       : parseColor('rgb(16, 20, 36)')
 
     const rowCS = window.getComputedStyle(src)
-    const bucketEl = src.closest('.goal-bucket-body') as HTMLElement | null
     const cardEl = src.closest('.rounded-2xl') as HTMLElement | null
-    const goalsContentEl = document.querySelector('.goals-content') as HTMLElement | null
-    const goalsLayerEl = document.querySelector('.goals-layer') as HTMLElement | null
-    const pageEl = document.body as HTMLElement
-
     const cardCS = cardEl ? window.getComputedStyle(cardEl) : null
 
     // Compose colors: page -> card -> bucket -> row
@@ -482,9 +477,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
     }
     let base = themeBase
     // Compose page and known containers (falling back to theme mid-tones if fully transparent)
-    const darkMid = parseColor('rgb(7, 10, 22)')
-    const lightMid = parseColor('rgb(232, 236, 250)')
-    const themeMid = document.documentElement.getAttribute('data-theme') === 'light' ? lightMid : darkMid
 
     
 
