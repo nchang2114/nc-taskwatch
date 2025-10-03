@@ -389,12 +389,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
   return (
     <div className="rounded-2xl bg-white/5 hover:bg-white/10 transition border border-white/5">
       <button onClick={onToggle} className="w-full text-left p-4 md:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base md:text-lg font-semibold tracking-tight break-words">
+        <div className="flex flex-nowrap items-center justify-between gap-2">
+          <h3 className="min-w-0 flex-1 whitespace-nowrap truncate text-sm sm:text-base md:text-lg font-semibold tracking-tight">
             {highlightText(goal.name, highlightTerm)}
           </h3>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-white/80">{progressLabel}</span>
+          <div className="flex items-center gap-3 flex-none whitespace-nowrap">
+            <span className="text-xs sm:text-sm text-white/80">{progressLabel}</span>
             <svg className={classNames('w-4 h-4 text-white/70 transition-transform', isOpen && 'rotate-90')} viewBox="0 0 24 24" fill="currentColor">
               <path fillRule="evenodd" d="M8.47 4.97a.75.75 0 011.06 0l6 6a.75.75 0 010 1.06l-6 6a.75.75 0 11-1.06-1.06L13.94 12 8.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd"/>
             </svg>
