@@ -343,6 +343,13 @@ interface GoalRowProps {
   onTaskEditBlur: (goalId: string, bucketId: string, taskId: string) => void
   onTaskEditCancel: (taskId: string) => void
   registerTaskEditRef: (taskId: string, element: HTMLSpanElement | null) => void
+  onReorderTasks: (
+    goalId: string,
+    bucketId: string,
+    section: 'active' | 'completed',
+    fromIndex: number,
+    toIndex: number,
+  ) => void
 }
 
 const GoalRow: React.FC<GoalRowProps> = ({
@@ -378,7 +385,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onTaskEditBlur,
   onTaskEditCancel,
   registerTaskEditRef,
+  onReorderTasks,
 }) => {
+  const [dragHover, setDragHover] = useState<
+    | { bucketId: string; section: 'active' | 'completed'; index: number }
+    | null
+  >(null)
   const totalTasks = goal.buckets.reduce((acc, bucket) => acc + bucket.tasks.length, 0)
   const completedTasksCount = goal.buckets.reduce(
     (acc, bucket) => acc + bucket.tasks.filter((task) => task.completed).length,
@@ -543,8 +555,50 @@ const GoalRow: React.FC<GoalRowProps> = ({
                         {activeTasks.length === 0 && draftValue === undefined ? (
                           <p className="goal-task-empty">No tasks yet.</p>
                         ) : (
-                          <ul className="mt-2 space-y-2">
-                            {activeTasks.map((task) => {
+                          <ul
+                            className="mt-2 space-y-2"
+                            onDragOver={(e) => {
+                              const info = (window as any).__dragTaskInfo as
+                                | { goalId: string; bucketId: string; section: 'active' | 'completed'; index: number }
+                                | null
+                              if (!info) return
+                              if (info.goalId !== goal.id || info.bucketId !== b.id || info.section !== 'active') return
+                              e.preventDefault()
+                              const list = e.currentTarget as HTMLElement
+                              const rows = Array.from(list.querySelectorAll('li.goal-task-row')) as HTMLElement[]
+                              const candidates = rows.filter((el) => !el.classList.contains('dragging') && !el.classList.contains('goal-task-row--placeholder'))
+                              const y = e.clientY
+                              let insertIndex = candidates.length
+                              for (let i = 0; i < candidates.length; i++) {
+                                const rect = candidates[i].getBoundingClientRect()
+                                const mid = rect.top + rect.height / 2
+                                if (y < mid) {
+                                  insertIndex = i
+                                  break
+                                }
+                              }
+                              setDragHover({ bucketId: b.id, section: 'active', index: insertIndex })
+                            }}
+                            onDrop={(e) => {
+                              const info = (window as any).__dragTaskInfo as
+                                | { goalId: string; bucketId: string; section: 'active' | 'completed'; index: number }
+                                | null
+                              if (!info) return
+                              if (info.goalId !== goal.id || info.bucketId !== b.id || info.section !== 'active') return
+                              e.preventDefault()
+                              const fromIndex = info.index
+                              const toIndex = dragHover && dragHover.bucketId === b.id && dragHover.section === 'active' ? dragHover.index : activeTasks.length
+                              if (fromIndex !== toIndex) {
+                                onReorderTasks(goal.id, b.id, 'active', fromIndex, toIndex)
+                              }
+                              setDragHover(null)
+                            }}
+                            onDragLeave={(e) => {
+                              if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                              setDragHover((cur) => (cur && cur.bucketId === b.id && cur.section === 'active' ? null : cur))
+                            }}
+                          >
+                            {activeTasks.map((task, index) => {
                               const isEditing = editingTasks[task.id] !== undefined
                               const diffClass =
                                 task.difficulty === 'green'
@@ -554,8 +608,44 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                   : task.difficulty === 'red'
                                   ? 'goal-task-row--diff-red'
                                   : ''
+                              const showAbove =
+                                dragHover &&
+                                dragHover.bucketId === b.id &&
+                                dragHover.section === 'active' &&
+                                dragHover.index === index
                               return (
-                                <li key={task.id} className={classNames('goal-task-row', diffClass, isEditing && 'goal-task-row--draft')}>
+                                <React.Fragment key={`${task.id}-wrap`}>
+                                  {showAbove ? (
+                                    <li className="goal-task-row goal-task-row--placeholder" aria-hidden="true" />
+                                  ) : null}
+                                  <li
+                                    key={task.id}
+                                    className={classNames('goal-task-row', diffClass, isEditing && 'goal-task-row--draft')}
+                                    draggable
+                                    onDragStart={(e) => {
+                                    e.dataTransfer.setData('text/plain', task.id)
+                                    e.dataTransfer.effectAllowed = 'move'
+                                    e.currentTarget.classList.add('dragging')
+                                    ;(e.currentTarget as HTMLElement).style.opacity = '0.6'
+                                    ;(window as any).__dragTaskInfo = { goalId: goal.id, bucketId: b.id, section: 'active', index }
+                                  }}
+                                  onDragEnd={(e) => {
+                                    e.currentTarget.classList.remove('dragging')
+                                    ;(e.currentTarget as HTMLElement).style.opacity = ''
+                                    ;(window as any).__dragTaskInfo = null
+                                    setDragHover(null)
+                                  }}
+                                    onDragOver={(e) => {
+                                      // Row-level allow move cursor but do not compute index here to avoid jitter
+                                      const info = (window as any).__dragTaskInfo as
+                                        | { goalId: string; bucketId: string; section: 'active' | 'completed'; index: number }
+                                        | null
+                                      if (!info) return
+                                      if (info.goalId !== goal.id || info.bucketId !== b.id || info.section !== 'active') return
+                                      e.preventDefault()
+                                      e.dataTransfer.dropEffect = 'move'
+                                    }}
+                                  >
                                   <button
                                     type="button"
                                     className="goal-task-marker goal-task-marker--action"
@@ -636,6 +726,14 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     title="Difficulty: none → green → yellow → red"
                                   />
                                 </li>
+                                  {dragHover &&
+                                  dragHover.bucketId === b.id &&
+                                  dragHover.section === 'active' &&
+                                  dragHover.index === activeTasks.length &&
+                                  index === activeTasks.length - 1 ? (
+                                    <li className="goal-task-row goal-task-row--placeholder" aria-hidden="true" />
+                                  ) : null}
+                                </React.Fragment>
                               )
                             })}
                           </ul>
@@ -659,8 +757,50 @@ const GoalRow: React.FC<GoalRowProps> = ({
                               </svg>
                             </button>
                             {!isCompletedCollapsed && (
-                              <ul className="goal-completed__list">
-                                {completedTasks.map((task) => {
+                              <ul
+                                className="goal-completed__list"
+                                onDragOver={(e) => {
+                                  const info = (window as any).__dragTaskInfo as
+                                    | { goalId: string; bucketId: string; section: 'active' | 'completed'; index: number }
+                                    | null
+                                  if (!info) return
+                                  if (info.goalId !== goal.id || info.bucketId !== b.id || info.section !== 'completed') return
+                                  e.preventDefault()
+                                  const list = e.currentTarget as HTMLElement
+                                  const rows = Array.from(list.querySelectorAll('li.goal-task-row')) as HTMLElement[]
+                                  const candidates = rows.filter((el) => !el.classList.contains('dragging') && !el.classList.contains('goal-task-row--placeholder'))
+                                  const y = e.clientY
+                                  let insertIndex = candidates.length
+                                  for (let i = 0; i < candidates.length; i++) {
+                                    const rect = candidates[i].getBoundingClientRect()
+                                    const mid = rect.top + rect.height / 2
+                                    if (y < mid) {
+                                      insertIndex = i
+                                      break
+                                    }
+                                  }
+                                  setDragHover({ bucketId: b.id, section: 'completed', index: insertIndex })
+                                }}
+                                onDrop={(e) => {
+                                  const info = (window as any).__dragTaskInfo as
+                                    | { goalId: string; bucketId: string; section: 'active' | 'completed'; index: number }
+                                    | null
+                                  if (!info) return
+                                  if (info.goalId !== goal.id || info.bucketId !== b.id || info.section !== 'completed') return
+                                  e.preventDefault()
+                                  const fromIndex = info.index
+                                  const toIndex = dragHover && dragHover.bucketId === b.id && dragHover.section === 'completed' ? dragHover.index : completedTasks.length
+                                  if (fromIndex !== toIndex) {
+                                    onReorderTasks(goal.id, b.id, 'completed', fromIndex, toIndex)
+                                  }
+                                  setDragHover(null)
+                                }}
+                                onDragLeave={(e) => {
+                                  if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                                  setDragHover((cur) => (cur && cur.bucketId === b.id && cur.section === 'completed' ? null : cur))
+                                }}
+                              >
+                                {completedTasks.map((task, cIndex) => {
                                   const isEditing = editingTasks[task.id] !== undefined
                                   const diffClass =
                                     task.difficulty === 'green'
@@ -670,8 +810,43 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       : task.difficulty === 'red'
                                       ? 'goal-task-row--diff-red'
                                       : ''
+                                  const showAbove =
+                                    dragHover &&
+                                    dragHover.bucketId === b.id &&
+                                    dragHover.section === 'completed' &&
+                                    dragHover.index === cIndex
                                   return (
-                                    <li key={task.id} className={classNames('goal-task-row goal-task-row--completed', diffClass, isEditing && 'goal-task-row--draft')}>
+                                    <React.Fragment key={`${task.id}-cwrap`}>
+                                      {showAbove ? (
+                                        <li className="goal-task-row goal-task-row--placeholder" aria-hidden="true" />
+                                      ) : null}
+                                      <li
+                                        key={task.id}
+                                        className={classNames('goal-task-row goal-task-row--completed', diffClass, isEditing && 'goal-task-row--draft')}
+                                        draggable
+                                        onDragStart={(e) => {
+                                        e.dataTransfer.setData('text/plain', task.id)
+                                        e.dataTransfer.effectAllowed = 'move'
+                                        e.currentTarget.classList.add('dragging')
+                                        ;(e.currentTarget as HTMLElement).style.opacity = '0.6'
+                                        ;(window as any).__dragTaskInfo = { goalId: goal.id, bucketId: b.id, section: 'completed', index: cIndex }
+                                      }}
+                                      onDragEnd={(e) => {
+                                        e.currentTarget.classList.remove('dragging')
+                                        ;(e.currentTarget as HTMLElement).style.opacity = ''
+                                        ;(window as any).__dragTaskInfo = null
+                                        setDragHover(null)
+                                      }}
+                                        onDragOver={(e) => {
+                                          const info = (window as any).__dragTaskInfo as
+                                            | { goalId: string; bucketId: string; section: 'active' | 'completed'; index: number }
+                                            | null
+                                          if (!info) return
+                                          if (info.goalId !== goal.id || info.bucketId !== b.id || info.section !== 'completed') return
+                                          e.preventDefault()
+                                          e.dataTransfer.dropEffect = 'move'
+                                        }}
+                                      >
                                       <button
                                         type="button"
                                         className="goal-task-marker goal-task-marker--completed"
@@ -755,7 +930,15 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         aria-label="Set task difficulty"
                                         title="Difficulty: none → green → yellow → red"
                                       />
-                                    </li>
+                                      </li>
+                                      {dragHover &&
+                                      dragHover.bucketId === b.id &&
+                                      dragHover.section === 'completed' &&
+                                      dragHover.index === completedTasks.length &&
+                                      cIndex === completedTasks.length - 1 ? (
+                                        <li className="goal-task-row goal-task-row--placeholder" aria-hidden="true" />
+                                      ) : null}
+                                    </React.Fragment>
                                   )
                                 })}
                               </ul>
@@ -1448,6 +1631,38 @@ export default function GoalsPage(): ReactElement {
     )
   }
 
+  // Reorder tasks within a bucket section (active or completed), similar to Google Tasks
+  const reorderTasks = (
+    goalId: string,
+    bucketId: string,
+    section: 'active' | 'completed',
+    fromIndex: number,
+    toIndex: number,
+  ) => {
+    setGoals((gs) =>
+      gs.map((g) => {
+        if (g.id !== goalId) return g
+        return {
+          ...g,
+          buckets: g.buckets.map((b) => {
+            if (b.id !== bucketId) return b
+            const active = b.tasks.filter((t) => !t.completed)
+            const completed = b.tasks.filter((t) => t.completed)
+            const list = section === 'active' ? active : completed
+            if (fromIndex < 0 || fromIndex >= list.length || toIndex < 0 || toIndex >= list.length) {
+              return b
+            }
+            const nextList = list.slice()
+            const [moved] = nextList.splice(fromIndex, 1)
+            nextList.splice(toIndex, 0, moved)
+            const newTasks = section === 'active' ? [...nextList, ...completed] : [...active, ...nextList]
+            return { ...b, tasks: newTasks }
+          }),
+        }
+      }),
+    )
+  }
+
   return (
     <div className="goals-layer text-white">
       <div className="goals-content site-main__inner">
@@ -1521,6 +1736,9 @@ export default function GoalsPage(): ReactElement {
                   onTaskEditBlur={(goalId, bucketId, taskId) => handleTaskEditBlur(goalId, bucketId, taskId)}
                   onTaskEditCancel={(taskId) => handleTaskEditCancel(taskId)}
                   registerTaskEditRef={registerTaskEditRef}
+                  onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
+                    reorderTasks(goalId, bucketId, section, fromIndex, toIndex)
+                  }
                 />
               ))}
             </div>
