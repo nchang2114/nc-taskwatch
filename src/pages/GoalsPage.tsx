@@ -440,27 +440,100 @@ const GoalRow: React.FC<GoalRowProps> = ({
     return best.index
   }
 
-  // Copy key visual styles so the drag clone matches the row appearance (colors, gradients, shadows)
+  // Copy key visual styles so the drag clone matches layered backgrounds and borders
   const copyVisualStyles = (src: HTMLElement, dst: HTMLElement) => {
-    const cs = window.getComputedStyle(src)
-    // Backgrounds
-    dst.style.backgroundColor = cs.backgroundColor
-    dst.style.backgroundImage = cs.backgroundImage
-    dst.style.backgroundSize = cs.backgroundSize
-    dst.style.backgroundPosition = cs.backgroundPosition
-    dst.style.backgroundRepeat = cs.backgroundRepeat
-    // Borders / radius
-    dst.style.borderColor = cs.borderColor
-    dst.style.borderWidth = cs.borderWidth
-    dst.style.borderStyle = cs.borderStyle
-    dst.style.borderRadius = cs.borderRadius
-    // Shadows / outline
-    dst.style.boxShadow = cs.boxShadow
-    dst.style.outline = cs.outline
-    // Typography color
-    dst.style.color = cs.color
-    // Ensure fully opaque rendering
-    // Keep original element opacity/filters so transparency is preserved
+    const parseColor = (value: string) => {
+      const s = (value || '').trim().toLowerCase()
+      let m = s.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)$/)
+      if (m) return { r: +m[1], g: +m[2], b: +m[3], a: Math.max(0, Math.min(1, +m[4])) }
+      m = s.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/)
+      if (m) return { r: +m[1], g: +m[2], b: +m[3], a: 1 }
+      m = s.match(/^#([0-9a-f]{6})$/)
+      if (m) {
+        const n = parseInt(m[1], 16)
+        return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, a: 1 }
+      }
+      return { r: 0, g: 0, b: 0, a: 0 }
+    }
+    const toCssRgb = (c: { r: number; g: number; b: number }) => `rgb(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)})`
+    const over = (top: { r: number; g: number; b: number; a: number }, under: { r: number; g: number; b: number; a: number }) => {
+      const a = top.a + under.a * (1 - top.a)
+      if (a === 0) return { r: under.r, g: under.g, b: under.b, a }
+      return {
+        r: (top.r * top.a + under.r * under.a * (1 - top.a)) / a,
+        g: (top.g * top.a + under.g * under.a * (1 - top.a)) / a,
+        b: (top.b * top.a + under.b * under.a * (1 - top.a)) / a,
+        a,
+      }
+    }
+    // Known layers: page base, goal card, bucket body, row surface
+    const themeBase = document.documentElement.getAttribute('data-theme') === 'light'
+      ? parseColor('rgb(248, 250, 255)')
+      : parseColor('rgb(16, 20, 36)')
+
+    const rowCS = window.getComputedStyle(src)
+    const bucketEl = src.closest('.goal-bucket-body') as HTMLElement | null
+    const cardEl = src.closest('.rounded-2xl') as HTMLElement | null
+    const goalsContentEl = document.querySelector('.goals-content') as HTMLElement | null
+    const goalsLayerEl = document.querySelector('.goals-layer') as HTMLElement | null
+    const pageEl = document.body as HTMLElement
+
+    const cardCS = cardEl ? window.getComputedStyle(cardEl) : null
+    const bucketCS = bucketEl ? window.getComputedStyle(bucketEl) : null
+    const goalsContentCS = goalsContentEl ? window.getComputedStyle(goalsContentEl) : null
+    const goalsLayerCS = goalsLayerEl ? window.getComputedStyle(goalsLayerEl) : null
+    const pageCS = window.getComputedStyle(pageEl)
+
+    // Compose colors: page -> card -> bucket -> row
+    // Helper to apply layer with its own opacity
+    const withOpacity = (colorStr: string, opacityStr: string) => {
+      const c = parseColor(colorStr)
+      const o = Math.max(0, Math.min(1, parseFloat(opacityStr || '1')))
+      return { r: c.r, g: c.g, b: c.b, a: (c.a ?? 1) * o }
+    }
+    let base = themeBase
+    // Compose page and known containers (falling back to theme mid-tones if fully transparent)
+    const darkMid = parseColor('rgb(7, 10, 22)')
+    const lightMid = parseColor('rgb(232, 236, 250)')
+    const themeMid = document.documentElement.getAttribute('data-theme') === 'light' ? lightMid : darkMid
+
+    const applyLayer = (cs: CSSStyleDeclaration | null) => {
+      if (!cs) return
+      const c = parseColor(cs.backgroundColor)
+      const o = Math.max(0, Math.min(1, parseFloat(cs.opacity || '1')))
+      const layer = { r: c.r, g: c.g, b: c.b, a: (c.a ?? 1) * o }
+      // If fully transparent, blend a theme mid-tone to avoid see-through drag image
+      const effective = layer.a === 0 ? themeMid : layer
+      base = over(effective, base)
+    }
+
+    // Compose base strictly from theme base + goal entry (card) to avoid overly dark appearance in dark mode
+    // Start at theme base only
+    base = themeBase
+    // Blend goal card (entry) over theme base if present
+    if (cardCS) {
+      base = over(withOpacity(cardCS.backgroundColor, cardCS.opacity), base)
+    }
+    // Finally, flatten the row surface over the entry so the clone looks like in-list
+    base = over(withOpacity(rowCS.backgroundColor, rowCS.opacity), base)
+
+    // Apply computed backgrounds
+    dst.style.backgroundImage = rowCS.backgroundImage && rowCS.backgroundImage !== 'none' ? rowCS.backgroundImage : 'none'
+    dst.style.backgroundSize = rowCS.backgroundSize
+    dst.style.backgroundPosition = rowCS.backgroundPosition
+    dst.style.backgroundRepeat = rowCS.backgroundRepeat
+    dst.style.backgroundColor = toCssRgb(base)
+    // Match overall element opacity
+    dst.style.opacity = rowCS.opacity
+
+    // Borders / radius / shadows / text
+    dst.style.borderColor = rowCS.borderColor
+    dst.style.borderWidth = rowCS.borderWidth
+    dst.style.borderStyle = rowCS.borderStyle
+    dst.style.borderRadius = rowCS.borderRadius
+    dst.style.boxShadow = rowCS.boxShadow
+    dst.style.outline = rowCS.outline
+    dst.style.color = rowCS.color
   }
 
   const computeInsertMetrics = (listEl: HTMLElement, y: number) => {
