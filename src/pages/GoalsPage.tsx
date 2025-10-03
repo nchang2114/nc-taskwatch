@@ -39,6 +39,76 @@ interface TaskItem {
   difficulty?: 'none' | 'green' | 'yellow' | 'red'
 }
 
+// Limit for inline task text editing (mirrors Taskwatch behavior)
+const MAX_TASK_TEXT_LENGTH = 256
+
+// Borrowed approach from Taskwatch: sanitize contentEditable text and preserve caret when possible
+const sanitizeEditableValue = (
+  element: HTMLSpanElement,
+  rawValue: string,
+  maxLength: number,
+) => {
+  const sanitized = rawValue.replace(/\n+/g, ' ')
+  const limited = sanitized.slice(0, maxLength)
+  const previous = element.textContent ?? ''
+  const changed = previous !== limited
+
+  let caretOffset: number | null = null
+  if (typeof window !== 'undefined') {
+    const selection = window.getSelection()
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0)
+      if (range && element.contains(range.endContainer)) {
+        const preRange = range.cloneRange()
+        preRange.selectNodeContents(element)
+        try {
+          preRange.setEnd(range.endContainer, range.endOffset)
+          caretOffset = preRange.toString().length
+        } catch {
+          caretOffset = null
+        }
+      }
+    }
+  }
+
+  if (changed) {
+    element.textContent = limited
+
+    if (caretOffset !== null && typeof window !== 'undefined') {
+      const selection = window.getSelection()
+      if (selection) {
+        const range = document.createRange()
+        const targetOffset = Math.min(caretOffset, element.textContent?.length ?? 0)
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+        let remaining = targetOffset
+        let node: Node | null = null
+        let positioned = false
+        while ((node = walker.nextNode())) {
+          const length = node.textContent?.length ?? 0
+          if (remaining <= length) {
+            range.setStart(node, Math.max(0, remaining))
+            positioned = true
+            break
+          }
+          remaining -= length
+        }
+
+        if (!positioned) {
+          range.selectNodeContents(element)
+          range.collapse(false)
+        } else {
+          range.collapse(true)
+        }
+
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+    }
+  }
+
+  return { value: limited, changed }
+}
+
 interface Bucket {
   id: string
   name: string
@@ -272,7 +342,7 @@ interface GoalRowProps {
   onTaskEditSubmit: (goalId: string, bucketId: string, taskId: string) => void
   onTaskEditBlur: (goalId: string, bucketId: string, taskId: string) => void
   onTaskEditCancel: (taskId: string) => void
-  registerTaskEditRef: (taskId: string, element: HTMLInputElement | null) => void
+  registerTaskEditRef: (taskId: string, element: HTMLSpanElement | null) => void
 }
 
 const GoalRow: React.FC<GoalRowProps> = ({
@@ -493,22 +563,49 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     aria-label="Mark task complete"
                                   />
                                   {isEditing ? (
-                                    <input
+                                    <span
+                                      className="goal-task-input"
+                                      contentEditable
+                                      suppressContentEditableWarning
                                       ref={(el) => registerTaskEditRef(task.id, el)}
-                                      value={editingTasks[task.id]}
-                                      onChange={(e) => onTaskEditChange(task.id, e.target.value)}
+                                      onInput={(event) => {
+                                        const node = (event.currentTarget as HTMLSpanElement)
+                                        const raw = node.textContent ?? ''
+                                        const { value } = sanitizeEditableValue(node, raw, MAX_TASK_TEXT_LENGTH)
+                                        onTaskEditChange(task.id, value)
+                                      }}
                                       onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
+                                        if (e.key === 'Enter' || e.key === 'Escape') {
                                           e.preventDefault()
-                                          onTaskEditSubmit(goal.id, b.id, task.id)
-                                        }
-                                        if (e.key === 'Escape') {
-                                          e.preventDefault()
-                                          onTaskEditCancel(task.id)
+                                          ;(e.currentTarget as HTMLSpanElement).blur()
                                         }
                                       }}
+                                      onPaste={(event) => {
+                                        event.preventDefault()
+                                        const node = event.currentTarget as HTMLSpanElement
+                                        const text = event.clipboardData?.getData('text/plain') ?? ''
+                                        const sanitized = text.replace(/\n+/g, ' ')
+                                        const current = node.textContent ?? ''
+                                        const selection = typeof window !== 'undefined' ? window.getSelection() : null
+                                        let next = current
+                                        if (selection && selection.rangeCount > 0) {
+                                          const range = selection.getRangeAt(0)
+                                          if (node.contains(range.endContainer)) {
+                                            const prefix = current.slice(0, range.startOffset)
+                                            const suffix = current.slice(range.endOffset)
+                                            next = `${prefix}${sanitized}${suffix}`
+                                          }
+                                        } else {
+                                          next = current + sanitized
+                                        }
+                                        const { value } = sanitizeEditableValue(node, next, MAX_TASK_TEXT_LENGTH)
+                                        onTaskEditChange(task.id, value)
+                                      }}
                                       onBlur={() => onTaskEditBlur(goal.id, b.id, task.id)}
-                                      className="goal-task-input"
+                                      role="textbox"
+                                      tabIndex={0}
+                                      aria-label="Edit task text"
+                                      spellCheck={false}
                                     />
                                   ) : (
                                     <button
@@ -586,22 +683,49 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         </svg>
                                       </button>
                                       {isEditing ? (
-                                        <input
+                                        <span
+                                          className="goal-task-input"
+                                          contentEditable
+                                          suppressContentEditableWarning
                                           ref={(el) => registerTaskEditRef(task.id, el)}
-                                          value={editingTasks[task.id]}
-                                          onChange={(e) => onTaskEditChange(task.id, e.target.value)}
+                                          onInput={(event) => {
+                                            const node = (event.currentTarget as HTMLSpanElement)
+                                            const raw = node.textContent ?? ''
+                                            const { value } = sanitizeEditableValue(node, raw, MAX_TASK_TEXT_LENGTH)
+                                            onTaskEditChange(task.id, value)
+                                          }}
                                           onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
+                                            if (e.key === 'Enter' || e.key === 'Escape') {
                                               e.preventDefault()
-                                              onTaskEditSubmit(goal.id, b.id, task.id)
-                                            }
-                                            if (e.key === 'Escape') {
-                                              e.preventDefault()
-                                              onTaskEditCancel(task.id)
+                                              ;(e.currentTarget as HTMLSpanElement).blur()
                                             }
                                           }}
+                                          onPaste={(event) => {
+                                            event.preventDefault()
+                                            const node = event.currentTarget as HTMLSpanElement
+                                            const text = event.clipboardData?.getData('text/plain') ?? ''
+                                            const sanitized = text.replace(/\n+/g, ' ')
+                                            const current = node.textContent ?? ''
+                                            const selection = typeof window !== 'undefined' ? window.getSelection() : null
+                                            let next = current
+                                            if (selection && selection.rangeCount > 0) {
+                                              const range = selection.getRangeAt(0)
+                                              if (node.contains(range.endContainer)) {
+                                                const prefix = current.slice(0, range.startOffset)
+                                                const suffix = current.slice(range.endOffset)
+                                                next = `${prefix}${sanitized}${suffix}`
+                                              }
+                                            } else {
+                                              next = current + sanitized
+                                            }
+                                            const { value } = sanitizeEditableValue(node, next, MAX_TASK_TEXT_LENGTH)
+                                            onTaskEditChange(task.id, value)
+                                          }}
                                           onBlur={() => onTaskEditBlur(goal.id, b.id, task.id)}
-                                          className="goal-task-input"
+                                          role="textbox"
+                                          tabIndex={0}
+                                          aria-label="Edit task text"
+                                          spellCheck={false}
                                         />
                                       ) : (
                                         <button
@@ -679,7 +803,7 @@ export default function GoalsPage(): ReactElement {
   const taskDraftRefs = useRef(new Map<string, HTMLInputElement>())
   const submittingDrafts = useRef(new Set<string>())
   const [taskEdits, setTaskEdits] = useState<Record<string, string>>({})
-  const taskEditRefs = useRef(new Map<string, HTMLInputElement>())
+  const taskEditRefs = useRef(new Map<string, HTMLSpanElement>())
   const submittingEdits = useRef(new Set<string>())
   const [isCreateGoalOpen, setIsCreateGoalOpen] = useState(false)
   const [goalNameInput, setGoalNameInput] = useState('')
@@ -1195,9 +1319,13 @@ export default function GoalsPage(): ReactElement {
   }
 
   // Inline edit existing task text (Google Tasks-style)
-  const registerTaskEditRef = (taskId: string, element: HTMLInputElement | null) => {
+  const registerTaskEditRef = (taskId: string, element: HTMLSpanElement | null) => {
     if (element) {
       taskEditRefs.current.set(taskId, element)
+      const text = taskEdits[taskId] ?? ''
+      if (element.textContent !== text) {
+        element.textContent = text
+      }
       return
     }
     taskEditRefs.current.delete(taskId)
@@ -1206,9 +1334,18 @@ export default function GoalsPage(): ReactElement {
   const focusTaskEditInput = (taskId: string) => {
     const node = taskEditRefs.current.get(taskId)
     if (!node) return
-    const len = node.value.length
+    const len = (node.textContent ?? '').length
     node.focus()
-    node.setSelectionRange(len, len)
+    if (typeof window !== 'undefined') {
+      const selection = window.getSelection()
+      if (selection) {
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        range.collapse(false)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+    }
   }
 
   const startTaskEdit = (_goalId: string, bucketId: string, taskId: string, initial: string) => {
