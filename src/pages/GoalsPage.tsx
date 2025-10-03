@@ -391,6 +391,123 @@ const GoalRow: React.FC<GoalRowProps> = ({
     | { bucketId: string; section: 'active' | 'completed'; index: number }
     | null
   >(null)
+  const dragCloneRef = useRef<HTMLElement | null>(null)
+  const [dragLine, setDragLine] = useState<
+    | { bucketId: string; section: 'active' | 'completed'; top: number }
+    | null
+  >(null)
+
+  const truncateForDrag = (text: string, maxChars = 96) => {
+    const trimmed = text.trim()
+    if (trimmed.length <= maxChars) return trimmed
+    return trimmed.slice(0, Math.max(0, maxChars - 1)) + '…'
+  }
+
+  const toOpaqueColor = (color: string, fallbackDark = '#1f2743', fallbackLight = '#e8eeff') => {
+    const c = color.trim().toLowerCase()
+    if (c === 'transparent' || c === 'initial' || c === 'inherit' || c === '') {
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light'
+      return isLight ? fallbackLight : fallbackDark
+    }
+    const rgbaMatch = c.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)$/)
+    const rgbMatch = c.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/)
+    if (rgbaMatch) {
+      const r = Number(rgbaMatch[1])
+      const g = Number(rgbaMatch[2])
+      const b = Number(rgbaMatch[3])
+      return `rgb(${r}, ${g}, ${b})`
+    }
+    if (rgbMatch) {
+      return color
+    }
+    // Fallback for hex or named colors: assume already opaque
+    return color
+  }
+
+  const computeInsertIndex = (listEl: HTMLElement, y: number) => {
+    const rows = Array.from(listEl.querySelectorAll('li.goal-task-row')) as HTMLElement[]
+    const candidates = rows.filter(
+      (el) =>
+        !el.classList.contains('dragging') &&
+        !el.classList.contains('goal-task-row--placeholder') &&
+        !el.classList.contains('goal-task-row--collapsed'),
+    )
+    if (candidates.length === 0) return 0
+
+    const rects = candidates.map((el) => el.getBoundingClientRect())
+    // Build gap anchors: before first, between rows (midpoints), after last
+    const anchors: Array<{ y: number; index: number }> = []
+    anchors.push({ y: rects[0].top, index: 0 })
+    for (let i = 0; i < rects.length - 1; i++) {
+      const a = rects[i]
+      const b = rects[i + 1]
+      const mid = a.bottom + (b.top - a.bottom) / 2
+      anchors.push({ y: mid, index: i + 1 })
+    }
+    anchors.push({ y: rects[rects.length - 1].bottom, index: rects.length })
+
+    // Pick the nearest anchor to the cursor Y
+    let best = anchors[0]
+    let bestDist = Math.abs(y - best.y)
+    for (let i = 1; i < anchors.length; i++) {
+      const d = Math.abs(y - anchors[i].y)
+      if (d < bestDist) {
+        best = anchors[i]
+        bestDist = d
+      }
+    }
+    return best.index
+  }
+
+  // Copy key visual styles so the drag clone matches the row appearance (colors, gradients, shadows)
+  const copyVisualStyles = (src: HTMLElement, dst: HTMLElement) => {
+    const cs = window.getComputedStyle(src)
+    // Backgrounds
+    dst.style.backgroundColor = toOpaqueColor(cs.backgroundColor)
+    dst.style.backgroundImage = cs.backgroundImage
+    dst.style.backgroundSize = cs.backgroundSize
+    dst.style.backgroundPosition = cs.backgroundPosition
+    dst.style.backgroundRepeat = cs.backgroundRepeat
+    // Borders / radius
+    dst.style.borderColor = cs.borderColor
+    dst.style.borderWidth = cs.borderWidth
+    dst.style.borderStyle = cs.borderStyle
+    dst.style.borderRadius = cs.borderRadius
+    // Shadows / outline
+    dst.style.boxShadow = cs.boxShadow
+    dst.style.outline = cs.outline
+    // Typography color
+    dst.style.color = cs.color
+    // Ensure fully opaque rendering
+    dst.style.opacity = '1'
+    dst.style.filter = 'none'
+  }
+
+  const computeInsertMetrics = (listEl: HTMLElement, y: number) => {
+    const index = computeInsertIndex(listEl, y)
+    const rows = Array.from(listEl.querySelectorAll('li.goal-task-row')) as HTMLElement[]
+    const candidates = rows.filter(
+      (el) =>
+        !el.classList.contains('dragging') &&
+        !el.classList.contains('goal-task-row--placeholder') &&
+        !el.classList.contains('goal-task-row--collapsed'),
+    )
+    const listRect = listEl.getBoundingClientRect()
+    let top = 0
+    if (candidates.length === 0 || index <= 0) {
+      top = candidates.length > 0 ? candidates[0].getBoundingClientRect().top - listRect.top : 0
+    } else if (index >= candidates.length) {
+      const last = candidates[candidates.length - 1]
+      top = last.getBoundingClientRect().bottom - listRect.top
+    } else {
+      const prev = candidates[index - 1]
+      const next = candidates[index]
+      const a = prev.getBoundingClientRect()
+      const b = next.getBoundingClientRect()
+      top = a.bottom + (b.top - a.bottom) / 2 - listRect.top
+    }
+    return { index, top }
+  }
   const totalTasks = goal.buckets.reduce((acc, bucket) => acc + bucket.tasks.length, 0)
   const completedTasksCount = goal.buckets.reduce(
     (acc, bucket) => acc + bucket.tasks.filter((task) => task.completed).length,
@@ -565,19 +682,14 @@ const GoalRow: React.FC<GoalRowProps> = ({
                               if (info.goalId !== goal.id || info.bucketId !== b.id || info.section !== 'active') return
                               e.preventDefault()
                               const list = e.currentTarget as HTMLElement
-                              const rows = Array.from(list.querySelectorAll('li.goal-task-row')) as HTMLElement[]
-                              const candidates = rows.filter((el) => !el.classList.contains('dragging') && !el.classList.contains('goal-task-row--placeholder'))
-                              const y = e.clientY
-                              let insertIndex = candidates.length
-                              for (let i = 0; i < candidates.length; i++) {
-                                const rect = candidates[i].getBoundingClientRect()
-                                const mid = rect.top + rect.height / 2
-                                if (y < mid) {
-                                  insertIndex = i
-                                  break
+                              const { index: insertIndex, top } = computeInsertMetrics(list, e.clientY)
+                              setDragHover((cur) => {
+                                if (cur && cur.bucketId === b.id && cur.section === 'active' && cur.index === insertIndex) {
+                                  return cur
                                 }
-                              }
-                              setDragHover({ bucketId: b.id, section: 'active', index: insertIndex })
+                                return { bucketId: b.id, section: 'active', index: insertIndex }
+                              })
+                              setDragLine({ bucketId: b.id, section: 'active', top })
                             }}
                             onDrop={(e) => {
                               const info = (window as any).__dragTaskInfo as
@@ -592,12 +704,21 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                 onReorderTasks(goal.id, b.id, 'active', fromIndex, toIndex)
                               }
                               setDragHover(null)
+                              setDragLine(null)
                             }}
                             onDragLeave={(e) => {
                               if (e.currentTarget.contains(e.relatedTarget as Node)) return
                               setDragHover((cur) => (cur && cur.bucketId === b.id && cur.section === 'active' ? null : cur))
+                              setDragLine((cur) => (cur && cur.bucketId === b.id && cur.section === 'active' ? null : cur))
                             }}
                           >
+                            {dragLine && dragLine.bucketId === b.id && dragLine.section === 'active' ? (
+                              <div
+                                className="goal-insert-line"
+                                style={{ top: `${dragLine.top}px` }}
+                                aria-hidden
+                              />
+                            ) : null}
                             {activeTasks.map((task, index) => {
                               const isEditing = editingTasks[task.id] !== undefined
                               const diffClass =
@@ -615,25 +736,61 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                 dragHover.index === index
                               return (
                                 <React.Fragment key={`${task.id}-wrap`}>
-                                  {showAbove ? (
-                                    <li className="goal-task-row goal-task-row--placeholder" aria-hidden="true" />
-                                  ) : null}
+                                  {/* placeholder suppressed; line is rendered absolutely */}
                                   <li
                                     key={task.id}
                                     className={classNames('goal-task-row', diffClass, isEditing && 'goal-task-row--draft')}
                                     draggable
-                                    onDragStart={(e) => {
+                                  onDragStart={(e) => {
                                     e.dataTransfer.setData('text/plain', task.id)
                                     e.dataTransfer.effectAllowed = 'move'
-                                    e.currentTarget.classList.add('dragging')
-                                    ;(e.currentTarget as HTMLElement).style.opacity = '0.6'
+                                    const row = e.currentTarget as HTMLElement
+                                    row.classList.add('dragging')
+                                    // Clone current row as drag image, keep it in DOM until drag ends
+                                    const clone = row.cloneNode(true) as HTMLElement
+                                    // Use dedicated clone class; we copy computed styles for colors/borders
+                                    clone.className = 'goal-drag-clone'
+                                    // Match row width to avoid layout surprises in the ghost
+                                    const rowRect = row.getBoundingClientRect()
+                                    clone.style.width = `${Math.floor(rowRect.width)}px`
+                                    // Copy visual styles from the source row so colors match (including gradients/shadows)
+                                    copyVisualStyles(row, clone)
+                                    // Force single-line text in clone even if original contains line breaks
+                                    const textNodes = clone.querySelectorAll('.goal-task-text, .goal-task-input, .goal-task-text--button')
+                                    textNodes.forEach((node) => {
+                                      const el = node as HTMLElement
+                                      // Remove explicit <br> or block children that would force new lines
+                                      el.querySelectorAll('br').forEach((br) => br.parentNode?.removeChild(br))
+                                      const oneLine = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim()
+                                      el.textContent = oneLine
+                                    })
+                                    // Width already matched above
+                                    document.body.appendChild(clone)
+                                    dragCloneRef.current = clone
+                                    try {
+                                      e.dataTransfer.setDragImage(clone, 16, 0)
+                                    } catch {}
+                                    // Collapse the original in the next frame(s) so the drag image has been captured
+                                    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                                      window.requestAnimationFrame(() => {
+                                        window.requestAnimationFrame(() => {
+                                          row.classList.add('goal-task-row--collapsed')
+                                        })
+                                      })
+                                    } else {
+                                      setTimeout(() => row.classList.add('goal-task-row--collapsed'), 0)
+                                    }
                                     ;(window as any).__dragTaskInfo = { goalId: goal.id, bucketId: b.id, section: 'active', index }
                                   }}
                                   onDragEnd={(e) => {
                                     e.currentTarget.classList.remove('dragging')
-                                    ;(e.currentTarget as HTMLElement).style.opacity = ''
                                     ;(window as any).__dragTaskInfo = null
                                     setDragHover(null)
+                                    const row = e.currentTarget as HTMLElement
+                                    row.classList.remove('goal-task-row--collapsed')
+                                    const ghost = dragCloneRef.current
+                                    if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost)
+                                    dragCloneRef.current = null
                                   }}
                                     onDragOver={(e) => {
                                       // Row-level allow move cursor but do not compute index here to avoid jitter
@@ -726,13 +883,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     title="Difficulty: none → green → yellow → red"
                                   />
                                 </li>
-                                  {dragHover &&
-                                  dragHover.bucketId === b.id &&
-                                  dragHover.section === 'active' &&
-                                  dragHover.index === activeTasks.length &&
-                                  index === activeTasks.length - 1 ? (
-                                    <li className="goal-task-row goal-task-row--placeholder" aria-hidden="true" />
-                                  ) : null}
                                 </React.Fragment>
                               )
                             })}
@@ -767,19 +917,14 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                   if (info.goalId !== goal.id || info.bucketId !== b.id || info.section !== 'completed') return
                                   e.preventDefault()
                                   const list = e.currentTarget as HTMLElement
-                                  const rows = Array.from(list.querySelectorAll('li.goal-task-row')) as HTMLElement[]
-                                  const candidates = rows.filter((el) => !el.classList.contains('dragging') && !el.classList.contains('goal-task-row--placeholder'))
-                                  const y = e.clientY
-                                  let insertIndex = candidates.length
-                                  for (let i = 0; i < candidates.length; i++) {
-                                    const rect = candidates[i].getBoundingClientRect()
-                                    const mid = rect.top + rect.height / 2
-                                    if (y < mid) {
-                                      insertIndex = i
-                                      break
+                                  const { index: insertIndex, top } = computeInsertMetrics(list, e.clientY)
+                                  setDragHover((cur) => {
+                                    if (cur && cur.bucketId === b.id && cur.section === 'completed' && cur.index === insertIndex) {
+                                      return cur
                                     }
-                                  }
-                                  setDragHover({ bucketId: b.id, section: 'completed', index: insertIndex })
+                                    return { bucketId: b.id, section: 'completed', index: insertIndex }
+                                  })
+                                  setDragLine({ bucketId: b.id, section: 'completed', top })
                                 }}
                                 onDrop={(e) => {
                                   const info = (window as any).__dragTaskInfo as
@@ -794,12 +939,21 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     onReorderTasks(goal.id, b.id, 'completed', fromIndex, toIndex)
                                   }
                                   setDragHover(null)
+                                  setDragLine(null)
                                 }}
                                 onDragLeave={(e) => {
                                   if (e.currentTarget.contains(e.relatedTarget as Node)) return
                                   setDragHover((cur) => (cur && cur.bucketId === b.id && cur.section === 'completed' ? null : cur))
+                                  setDragLine((cur) => (cur && cur.bucketId === b.id && cur.section === 'completed' ? null : cur))
                                 }}
                               >
+                                {dragLine && dragLine.bucketId === b.id && dragLine.section === 'completed' ? (
+                                  <div
+                                    className="goal-insert-line"
+                                    style={{ top: `${dragLine.top}px` }}
+                                    aria-hidden
+                                  />
+                                ) : null}
                                 {completedTasks.map((task, cIndex) => {
                                   const isEditing = editingTasks[task.id] !== undefined
                                   const diffClass =
@@ -817,25 +971,55 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     dragHover.index === cIndex
                                   return (
                                     <React.Fragment key={`${task.id}-cwrap`}>
-                                      {showAbove ? (
-                                        <li className="goal-task-row goal-task-row--placeholder" aria-hidden="true" />
-                                      ) : null}
+                                      {/* placeholder suppressed; line is rendered absolutely */}
                                       <li
                                         key={task.id}
                                         className={classNames('goal-task-row goal-task-row--completed', diffClass, isEditing && 'goal-task-row--draft')}
                                         draggable
                                         onDragStart={(e) => {
-                                        e.dataTransfer.setData('text/plain', task.id)
-                                        e.dataTransfer.effectAllowed = 'move'
-                                        e.currentTarget.classList.add('dragging')
-                                        ;(e.currentTarget as HTMLElement).style.opacity = '0.6'
-                                        ;(window as any).__dragTaskInfo = { goalId: goal.id, bucketId: b.id, section: 'completed', index: cIndex }
-                                      }}
+                                          e.dataTransfer.setData('text/plain', task.id)
+                                          e.dataTransfer.effectAllowed = 'move'
+                                          const row = e.currentTarget as HTMLElement
+                                          row.classList.add('dragging')
+                                          const clone = row.cloneNode(true) as HTMLElement
+                                          clone.className = 'goal-drag-clone'
+                                          const rowRect = row.getBoundingClientRect()
+                                          clone.style.width = `${Math.floor(rowRect.width)}px`
+                                          copyVisualStyles(row, clone)
+                                          // Force single-line text in clone even if original contains line breaks
+                                          const textNodes = clone.querySelectorAll('.goal-task-text, .goal-task-input, .goal-task-text--button')
+                                          textNodes.forEach((node) => {
+                                            const el = node as HTMLElement
+                                            el.querySelectorAll('br').forEach((br) => br.parentNode?.removeChild(br))
+                                            const oneLine = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim()
+                                            el.textContent = oneLine
+                                          })
+                                          // Width already matched above
+                                          document.body.appendChild(clone)
+                                          dragCloneRef.current = clone
+                                          try {
+                                            e.dataTransfer.setDragImage(clone, 16, 0)
+                                          } catch {}
+                                          if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                                            window.requestAnimationFrame(() => {
+                                              window.requestAnimationFrame(() => {
+                                                row.classList.add('goal-task-row--collapsed')
+                                              })
+                                            })
+                                          } else {
+                                            setTimeout(() => row.classList.add('goal-task-row--collapsed'), 0)
+                                          }
+                                          ;(window as any).__dragTaskInfo = { goalId: goal.id, bucketId: b.id, section: 'completed', index: cIndex }
+                                        }}
                                       onDragEnd={(e) => {
                                         e.currentTarget.classList.remove('dragging')
-                                        ;(e.currentTarget as HTMLElement).style.opacity = ''
                                         ;(window as any).__dragTaskInfo = null
                                         setDragHover(null)
+                                        const row = e.currentTarget as HTMLElement
+                                        row.classList.remove('goal-task-row--collapsed')
+                                        const ghost = dragCloneRef.current
+                                        if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost)
+                                        dragCloneRef.current = null
                                       }}
                                         onDragOver={(e) => {
                                           const info = (window as any).__dragTaskInfo as
@@ -931,13 +1115,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         title="Difficulty: none → green → yellow → red"
                                       />
                                       </li>
-                                      {dragHover &&
-                                      dragHover.bucketId === b.id &&
-                                      dragHover.section === 'completed' &&
-                                      dragHover.index === completedTasks.length &&
-                                      cIndex === completedTasks.length - 1 ? (
-                                        <li className="goal-task-row goal-task-row--placeholder" aria-hidden="true" />
-                                      ) : null}
                                     </React.Fragment>
                                   )
                                 })}
