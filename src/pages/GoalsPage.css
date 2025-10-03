@@ -786,7 +786,6 @@ html[data-theme='light'] .goal-task-add:focus-visible {
   overflow: hidden;
   width: max-content;
   max-width: 600px;
-  opacity: 1;
 }
 
 /* Force any multi-line text inside the drag clone to a single line with ellipsis */

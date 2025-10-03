@@ -403,26 +403,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
     return trimmed.slice(0, Math.max(0, maxChars - 1)) + '…'
   }
 
-  const toOpaqueColor = (color: string, fallbackDark = '#1f2743', fallbackLight = '#e8eeff') => {
-    const c = color.trim().toLowerCase()
-    if (c === 'transparent' || c === 'initial' || c === 'inherit' || c === '') {
-      const isLight = document.documentElement.getAttribute('data-theme') === 'light'
-      return isLight ? fallbackLight : fallbackDark
-    }
-    const rgbaMatch = c.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)$/)
-    const rgbMatch = c.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/)
-    if (rgbaMatch) {
-      const r = Number(rgbaMatch[1])
-      const g = Number(rgbaMatch[2])
-      const b = Number(rgbaMatch[3])
-      return `rgb(${r}, ${g}, ${b})`
-    }
-    if (rgbMatch) {
-      return color
-    }
-    // Fallback for hex or named colors: assume already opaque
-    return color
-  }
+  // Preserve original transparency — no conversion to opaque
 
   const computeInsertIndex = (listEl: HTMLElement, y: number) => {
     const rows = Array.from(listEl.querySelectorAll('li.goal-task-row')) as HTMLElement[]
@@ -463,7 +444,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   const copyVisualStyles = (src: HTMLElement, dst: HTMLElement) => {
     const cs = window.getComputedStyle(src)
     // Backgrounds
-    dst.style.backgroundColor = toOpaqueColor(cs.backgroundColor)
+    dst.style.backgroundColor = cs.backgroundColor
     dst.style.backgroundImage = cs.backgroundImage
     dst.style.backgroundSize = cs.backgroundSize
     dst.style.backgroundPosition = cs.backgroundPosition
@@ -479,8 +460,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
     // Typography color
     dst.style.color = cs.color
     // Ensure fully opaque rendering
-    dst.style.opacity = '1'
-    dst.style.filter = 'none'
+    // Keep original element opacity/filters so transparency is preserved
   }
 
   const computeInsertMetrics = (listEl: HTMLElement, y: number) => {
