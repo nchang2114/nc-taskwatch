@@ -554,16 +554,18 @@ const GoalRow: React.FC<GoalRowProps> = ({
       // Slightly above the first row so the line isn't obscured by its border/background
       if (candidates.length > 0) {
         const firstRect = candidates[0].getBoundingClientRect()
-        // Center a 1px line within a virtual 7px gap (3.5px on each side)
-        rawTop = firstRect.top - listRect.top - 3.5
+        // Center the 1px line within the actual gap between the list top and first row
+        const gapTop = firstRect.top - listRect.top
+        rawTop = (gapTop - 1) / 2
       } else {
         rawTop = 0
       }
     } else if (index >= candidates.length) {
-      // Slightly below the last row so the line is clearly visible
+      // Center the 1px line within the actual gap between the last row and list bottom
       const last = candidates[candidates.length - 1]
       const lastRect = last.getBoundingClientRect()
-      rawTop = lastRect.bottom - listRect.top + 3.5
+      const gapBottom = listRect.bottom - lastRect.bottom
+      rawTop = (lastRect.bottom - listRect.top) + (gapBottom - 1) / 2
     } else {
       const prev = candidates[index - 1]
       const next = candidates[index]
@@ -573,7 +575,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
       // Center a 1px line within the actual gap: (gap - 1) / 2 from the top edge
       rawTop = a.bottom - listRect.top + (gap - 1) / 2
     }
-    // Keep the line fully inside the list box to avoid clipping at extremes
+    // Keep the line within the list box now that the container has padding
     const clamped = Math.max(0.5, Math.min(rawTop, listRect.height - 0.5))
     // Snap to nearest 0.5px for crisp 1px rendering while preserving centering
     const top = Math.round(clamped * 2) / 2
