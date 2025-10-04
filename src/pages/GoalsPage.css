@@ -925,8 +925,8 @@ html[data-theme='light'] .goal-insert-line {
 
 /* Difficulty chip and row accents */
 .goal-task-diff {
-  width: 0.7rem;
-  height: 0.7rem;
+  width: 1rem;
+  height: 1rem;
   border-radius: 9999px;
   border: 2px solid rgba(255, 255, 255, 0.5);
   background: transparent;

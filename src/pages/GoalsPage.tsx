@@ -289,11 +289,11 @@ const BASE_GRADIENT_PREVIEW: Record<string, string> = {
 }
 
 // Components
-const ThinProgress: React.FC<{ value: number; gradient: string }> = ({ value, gradient }) => {
+const ThinProgress: React.FC<{ value: number; gradient: string; className?: string }> = ({ value, gradient, className }) => {
   const isCustomGradient = gradient.startsWith('custom:')
   const customGradientValue = isCustomGradient ? gradient.slice(7) : undefined
   return (
-    <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+    <div className={classNames('h-2 w-full rounded-full bg-white/10 overflow-hidden', className)}>
       <div
         className={classNames(
           'h-full rounded-full goal-progress-fill',
@@ -313,6 +313,22 @@ interface GoalRowProps {
   goal: Goal
   isOpen: boolean
   onToggle: () => void
+  // Goal rename
+  isRenaming: boolean
+  goalRenameValue?: string
+  onStartGoalRename: (goalId: string, initial: string) => void
+  onGoalRenameChange: (value: string) => void
+  onGoalRenameSubmit: () => void
+  onGoalRenameCancel: () => void
+  // Bucket rename
+  renamingBucketId: string | null
+  bucketRenameValue: string
+  onStartBucketRename: (goalId: string, bucketId: string, initial: string) => void
+  onBucketRenameChange: (value: string) => void
+  onBucketRenameSubmit: () => void
+  onBucketRenameCancel: () => void
+  onDeleteBucket: (bucketId: string) => void
+  onDeleteCompletedTasks: (bucketId: string) => void
   onToggleBucketFavorite: (bucketId: string) => void
   bucketExpanded: Record<string, boolean>
   onToggleBucketExpanded: (bucketId: string) => void
@@ -356,6 +372,20 @@ const GoalRow: React.FC<GoalRowProps> = ({
   goal,
   isOpen,
   onToggle,
+  isRenaming,
+  goalRenameValue,
+  onStartGoalRename,
+  onGoalRenameChange,
+  onGoalRenameSubmit,
+  onGoalRenameCancel,
+  renamingBucketId,
+  bucketRenameValue,
+  onStartBucketRename,
+  onBucketRenameChange,
+  onBucketRenameSubmit,
+  onBucketRenameCancel,
+  onDeleteBucket,
+  onDeleteCompletedTasks,
   onToggleBucketFavorite,
   bucketExpanded,
   onToggleBucketExpanded,
@@ -541,24 +571,144 @@ const GoalRow: React.FC<GoalRowProps> = ({
   )
   const pct = totalTasks === 0 ? 0 : Math.round((completedTasksCount / totalTasks) * 100)
   const progressLabel = totalTasks > 0 ? `${completedTasksCount} / ${totalTasks} tasks` : 'No tasks yet'
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [bucketMenuOpenId, setBucketMenuOpenId] = useState<string | null>(null)
+  const bucketMenuRef = useRef<HTMLDivElement | null>(null)
+  const renameInputRef = useRef<HTMLInputElement | null>(null)
+  const bucketRenameInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!menuRef.current) return
+      if (e.target instanceof Node && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!bucketMenuRef.current) {
+        setBucketMenuOpenId(null)
+        return
+      }
+      if (e.target instanceof Node && !bucketMenuRef.current.contains(e.target)) {
+        setBucketMenuOpenId(null)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      const el = renameInputRef.current
+      const len = el.value.length
+      el.focus()
+      el.setSelectionRange(len, len)
+    }
+  }, [isRenaming])
+
+  useEffect(() => {
+    if (renamingBucketId && bucketRenameInputRef.current) {
+      const el = bucketRenameInputRef.current
+      const len = el.value.length
+      el.focus()
+      el.setSelectionRange(len, len)
+    }
+  }, [renamingBucketId])
+
   return (
     <div className="rounded-2xl bg-white/5 hover:bg-white/10 transition border border-white/5">
-      <button onClick={onToggle} className="w-full text-left p-4 md:p-5">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          const target = e.target as HTMLElement
+          if (target && (target.closest('input, textarea, [contenteditable="true"]'))) {
+            return
+          }
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggle()
+          }
+        }}
+        className="w-full text-left p-4 md:p-5"
+      >
         <div className="flex flex-nowrap items-center justify-between gap-2">
-          <h3 className="min-w-0 flex-1 whitespace-nowrap truncate text-sm sm:text-base md:text-lg font-semibold tracking-tight">
-            {highlightText(goal.name, highlightTerm)}
-          </h3>
-          <div className="flex items-center gap-3 flex-none whitespace-nowrap">
-            <span className="text-xs sm:text-sm text-white/80">{progressLabel}</span>
+          <div className="min-w-0 flex-1">
+            {isRenaming ? (
+              <input
+                ref={renameInputRef}
+                value={goalRenameValue ?? ''}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => onGoalRenameChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    onGoalRenameSubmit()
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault()
+                    onGoalRenameCancel()
+                  }
+                }}
+                onBlur={() => onGoalRenameSubmit()}
+                placeholder="Rename goal"
+                className="w-full bg-transparent border border-white/15 focus:border-white/30 rounded-md px-2 py-1 text-sm sm:text-base md:text-lg font-semibold tracking-tight outline-none"
+              />
+            ) : (
+              <h3 className="min-w-0 whitespace-nowrap truncate text-sm sm:text-base md:text-lg font-semibold tracking-tight">
+                {highlightText(goal.name, highlightTerm)}
+              </h3>
+            )}
+          </div>
+          <div className="relative flex items-center gap-2 flex-none whitespace-nowrap">
             <svg className={classNames('w-4 h-4 text-white/70 transition-transform', isOpen && 'rotate-90')} viewBox="0 0 24 24" fill="currentColor">
               <path fillRule="evenodd" d="M8.47 4.97a.75.75 0 011.06 0l6 6a.75.75 0 010 1.06l-6 6a.75.75 0 11-1.06-1.06L13.94 12 8.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd"/>
             </svg>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
+              onClick={(e) => {
+                e.stopPropagation()
+                setMenuOpen((v) => !v)
+              }}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label="Goal actions"
+            >
+              <svg className="w-4.5 h-4.5 text-white/80" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="12" cy="6" r="1.6" />
+                <circle cx="12" cy="12" r="1.6" />
+                <circle cx="12" cy="18" r="1.6" />
+              </svg>
+            </button>
+            {menuOpen && (
+              <div ref={menuRef} className="absolute right-0 top-8 z-10 min-w-[140px] rounded-md border border-white/15 bg-[#0b1020]/95 backdrop-blur-sm shadow-lg p-1">
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-1.5 rounded hover:bg-white/10 text-sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setMenuOpen(false)
+                    onStartGoalRename(goal.id, goal.name)
+                  }}
+                >
+                  Rename
+                </button>
+              </div>
+            )}
           </div>
         </div>
-        <div className="mt-3">
-          <ThinProgress value={pct} gradient={goal.color} />
+        <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:gap-4 gap-2">
+          <ThinProgress value={pct} gradient={goal.color} className="h-1 flex-1" />
+          <span className="text-xs sm:text-sm text-white/80 whitespace-nowrap sm:mt-0 mt-1">{progressLabel}</span>
         </div>
-      </button>
+      </div>
 
       {isOpen && (
         <div className="px-4 md:px-5 pb-4 md:pb-5">
@@ -609,6 +759,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
                       tabIndex={0}
                       onClick={() => onToggleBucketExpanded(b.id)}
                       onKeyDown={(event) => {
+                        const tgt = event.target as HTMLElement
+                        if (tgt && (tgt.closest('input, textarea, [contenteditable="true"]'))) {
+                          return
+                        }
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault()
                           onToggleBucketExpanded(b.id)
@@ -642,16 +796,100 @@ const GoalRow: React.FC<GoalRowProps> = ({
                             </svg>
                           )}
                         </button>
-                        <span className="goal-bucket-title font-medium truncate">{highlightText(b.name, highlightTerm)}</span>
+                        {renamingBucketId === b.id ? (
+                          <input
+                            ref={bucketRenameInputRef}
+                            value={bucketRenameValue}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => onBucketRenameChange(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                onBucketRenameSubmit()
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault()
+                                onBucketRenameCancel()
+                              }
+                            }}
+                            onBlur={() => onBucketRenameSubmit()}
+                            className="ml-2 w-[14rem] max-w-[60vw] bg-transparent border border-white/15 focus:border-white/30 rounded px-2 py-1 text-sm font-medium outline-none"
+                            placeholder="Rename bucket"
+                          />
+                        ) : (
+                          <span className="goal-bucket-title font-medium truncate">{highlightText(b.name, highlightTerm)}</span>
+                        )}
                       </div>
-                      <svg
-                        className={classNames('w-3.5 h-3.5 text-white/80 transition-transform', isBucketOpen && 'rotate-90')}
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        aria-hidden="true"
-                      >
-                        <path fillRule="evenodd" d="M8.47 4.97a.75.75 0 011.06 0l6 6a.75.75 0 010 1.06l-6 6a.75.75 0 11-1.06-1.06L13.94 12 8.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" />
-                      </svg>
+                      <div className="relative flex items-center gap-2">
+                        <svg
+                          className={classNames('w-3.5 h-3.5 text-white/80 transition-transform', isBucketOpen && 'rotate-90')}
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path fillRule="evenodd" d="M8.47 4.97a.75.75 0 011.06 0l6 6a.75.75 0 010 1.06l-6 6a.75.75 0 11-1.06-1.06L13.94 12 8.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" />
+                        </svg>
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-white/10"
+                          aria-haspopup="menu"
+                          aria-label="Bucket actions"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setBucketMenuOpenId((cur) => (cur === b.id ? null : b.id))
+                          }}
+                          aria-expanded={bucketMenuOpenId === b.id}
+                        >
+                          <svg className="w-4.5 h-4.5 text-white/80" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <circle cx="12" cy="6" r="1.6" />
+                            <circle cx="12" cy="12" r="1.6" />
+                            <circle cx="12" cy="18" r="1.6" />
+                          </svg>
+                        </button>
+                        {bucketMenuOpenId === b.id && (
+                          <div ref={bucketMenuRef} className="absolute right-0 top-8 z-10 min-w-[180px] rounded-md border border-white/15 bg-[#0b1020]/95 backdrop-blur-sm shadow-lg p-1">
+                            <button
+                              type="button"
+                              className="w-full text-left px-3 py-1.5 rounded hover:bg-white/10 text-sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setBucketMenuOpenId(null)
+                                onStartBucketRename(goal.id, b.id, b.name)
+                              }}
+                            >
+                              Rename
+                            </button>
+                            <button
+                              type="button"
+                              disabled={completedTasks.length === 0}
+                              aria-disabled={completedTasks.length === 0}
+                              className={classNames(
+                                'w-full text-left px-3 py-1.5 rounded text-sm',
+                                completedTasks.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
+                              )}
+                              onClick={(e) => {
+                                if (completedTasks.length === 0) return
+                                e.stopPropagation()
+                                setBucketMenuOpenId(null)
+                                onDeleteCompletedTasks(b.id)
+                              }}
+                            >
+                              Delete all completed tasks
+                            </button>
+                            <div className="h-px my-1 bg-white/10" />
+                            <button
+                              type="button"
+                              className="w-full text-left px-3 py-1.5 rounded hover:bg-white/10 text-sm text-red-300"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setBucketMenuOpenId(null)
+                                onDeleteBucket(b.id)
+                              }}
+                            >
+                              Delete bucket
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     {isBucketOpen && (
                       <div className="goal-bucket-body px-3 md:px-4 pb-3 md:pb-4">
@@ -1155,6 +1393,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
 
 export default function GoalsPage(): ReactElement {
   const [goals, setGoals] = useState(DEFAULT_GOALS)
+  // Goal rename state
+  const [renamingGoalId, setRenamingGoalId] = useState<string | null>(null)
+  const [goalRenameDraft, setGoalRenameDraft] = useState<string>('')
+  // Bucket rename state
+  const [renamingBucketId, setRenamingBucketId] = useState<string | null>(null)
+  const [bucketRenameDraft, setBucketRenameDraft] = useState<string>('')
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [bucketExpanded, setBucketExpanded] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {}
@@ -1223,6 +1467,70 @@ export default function GoalsPage(): ReactElement {
 
   const toggleExpand = (goalId: string) => {
     setExpanded((e) => ({ ...e, [goalId]: !e[goalId] }))
+  }
+
+  const startGoalRename = (goalId: string, initial: string) => {
+    setRenamingGoalId(goalId)
+    setGoalRenameDraft(initial)
+  }
+  const handleGoalRenameChange = (value: string) => setGoalRenameDraft(value)
+  const submitGoalRename = () => {
+    if (!renamingGoalId) return
+    const next = goalRenameDraft.trim()
+    setGoals((gs) => gs.map((g) => (g.id === renamingGoalId ? { ...g, name: next || g.name } : g)))
+    setRenamingGoalId(null)
+    setGoalRenameDraft('')
+  }
+  const cancelGoalRename = () => {
+    setRenamingGoalId(null)
+    setGoalRenameDraft('')
+  }
+
+  const startBucketRename = (goalId: string, bucketId: string, initial: string) => {
+    // Ensure parent goal is open to reveal input
+    setExpanded((e) => ({ ...e, [goalId]: true }))
+    setRenamingBucketId(bucketId)
+    setBucketRenameDraft(initial)
+  }
+  const handleBucketRenameChange = (value: string) => setBucketRenameDraft(value)
+  const submitBucketRename = () => {
+    if (!renamingBucketId) return
+    const next = bucketRenameDraft.trim()
+    setGoals((gs) =>
+      gs.map((g) => ({
+        ...g,
+        buckets: g.buckets.map((b) => (b.id === renamingBucketId ? { ...b, name: next || b.name } : b)),
+      })),
+    )
+    setRenamingBucketId(null)
+    setBucketRenameDraft('')
+  }
+  const cancelBucketRename = () => {
+    setRenamingBucketId(null)
+    setBucketRenameDraft('')
+  }
+
+  const deleteBucket = (goalId: string, bucketId: string) => {
+    setGoals((gs) =>
+      gs.map((g) =>
+        g.id === goalId ? { ...g, buckets: g.buckets.filter((b) => b.id !== bucketId) } : g,
+      ),
+    )
+  }
+
+  const deleteCompletedTasks = (goalId: string, bucketId: string) => {
+    setGoals((gs) =>
+      gs.map((g) =>
+        g.id === goalId
+          ? {
+              ...g,
+              buckets: g.buckets.map((b) =>
+                b.id === bucketId ? { ...b, tasks: b.tasks.filter((t) => !t.completed) } : b,
+              ),
+            }
+          : g,
+      ),
+    )
   }
 
   const toggleBucketExpanded = (bucketId: string) => {
@@ -1901,6 +2209,20 @@ export default function GoalsPage(): ReactElement {
                   goal={g}
                   isOpen={expanded[g.id] ?? false}
                   onToggle={() => toggleExpand(g.id)}
+                  isRenaming={renamingGoalId === g.id}
+                  goalRenameValue={renamingGoalId === g.id ? goalRenameDraft : undefined}
+                  onStartGoalRename={(goalId, initial) => startGoalRename(goalId, initial)}
+                  onGoalRenameChange={(value) => handleGoalRenameChange(value)}
+                  onGoalRenameSubmit={() => submitGoalRename()}
+                  onGoalRenameCancel={() => cancelGoalRename()}
+                  renamingBucketId={renamingBucketId}
+                  bucketRenameValue={bucketRenameDraft}
+                  onStartBucketRename={(goalId, bucketId, initial) => startBucketRename(goalId, bucketId, initial)}
+                  onBucketRenameChange={(value) => handleBucketRenameChange(value)}
+                  onBucketRenameSubmit={() => submitBucketRename()}
+                  onBucketRenameCancel={() => cancelBucketRename()}
+                  onDeleteBucket={(bucketId) => deleteBucket(g.id, bucketId)}
+                  onDeleteCompletedTasks={(bucketId) => deleteCompletedTasks(g.id, bucketId)}
                   onToggleBucketFavorite={(bucketId) => toggleBucketFavorite(g.id, bucketId)}
                   bucketExpanded={bucketExpanded}
                   onToggleBucketExpanded={toggleBucketExpanded}
