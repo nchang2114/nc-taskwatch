@@ -920,6 +920,38 @@ html[data-theme='light'] .goal-task-row--placeholder::after {
   background: rgba(48, 58, 98, 0.95);
 }
 
+/* Goal-level DnD: list + entries + header drag affordance */
+.goal-list {
+  position: relative;
+  /* Allow crisp insert line at extremes */
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.goal-list .goal-insert-line {
+  /* Full width across goal cards */
+  left: 0;
+  right: 0;
+}
+
+.goal-header-toggle[draggable='true'] {
+  cursor: grab;
+}
+
+.goal-entry.dragging {
+  opacity: 1;
+}
+
+.goal-entry--collapsed {
+  height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  border-width: 0 !important;
+  overflow: hidden !important;
+}
+
 /* Absolutely positioned insert line that doesn't affect layout */
 .goal-insert-line {
   position: absolute;

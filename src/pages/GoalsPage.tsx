@@ -707,7 +707,54 @@ const GoalRow: React.FC<GoalRowProps> = ({
             onToggle()
           }
         }}
-        className="w-full text-left p-4 md:p-5"
+        className="goal-header-toggle w-full text-left p-4 md:p-5"
+        draggable
+        onDragStart={(e) => {
+          try { e.dataTransfer.setData('text/plain', goal.id) } catch {}
+          const headerEl = e.currentTarget as HTMLElement
+          const container = headerEl.closest('li.goal-entry') as HTMLElement | null
+          container?.classList.add('dragging')
+          // Clone visible header for ghost image; copy visuals from the card wrapper for accurate background/border
+          const srcCard = (container?.querySelector('.rounded-2xl') as HTMLElement | null) ?? headerEl
+          const rect = (srcCard ?? headerEl).getBoundingClientRect()
+          const clone = headerEl.cloneNode(true) as HTMLElement
+          clone.className = headerEl.className + ' goal-bucket-drag-clone'
+          clone.style.width = `${Math.floor(rect.width)}px`
+          copyVisualStyles(srcCard as HTMLElement, clone)
+          document.body.appendChild(clone)
+          ;(window as any).__goalDragCloneRef = clone
+          try { e.dataTransfer.setDragImage(clone, 16, 0) } catch {}
+          // Snapshot open state for this goal and collapse after drag image snapshot
+          ;(window as any).__dragGoalInfo = { goalId: goal.id, wasOpen: isOpen }
+          const scheduleCollapse = () => {
+            if (isOpen) {
+              onToggle()
+            }
+            container?.classList.add('goal-entry--collapsed')
+          }
+          if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(() => {
+              window.requestAnimationFrame(scheduleCollapse)
+            })
+          } else {
+            setTimeout(scheduleCollapse, 0)
+          }
+          try { e.dataTransfer.effectAllowed = 'move' } catch {}
+        }}
+        onDragEnd={(e) => {
+          const headerEl = e.currentTarget as HTMLElement
+          const container = headerEl.closest('li.goal-entry') as HTMLElement | null
+          container?.classList.remove('dragging')
+          container?.classList.remove('goal-entry--collapsed')
+          const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean } | null
+          if (info && info.goalId === goal.id && info.wasOpen) {
+            onToggle()
+          }
+          const ghost = (window as any).__goalDragCloneRef as HTMLElement | null
+          if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost)
+          ;(window as any).__goalDragCloneRef = null
+          ;(window as any).__dragGoalInfo = null
+        }}
       >
         <div className="flex flex-nowrap items-center justify-between gap-2">
           {(() => {
@@ -1650,6 +1697,10 @@ export default function GoalsPage(): ReactElement {
   const bucketExpandedRef = useRef(bucketExpanded)
   const completedCollapsedRef = useRef(completedCollapsed)
 
+  // Goal-level DnD hover state and ghost
+  const [goalHoverIndex, setGoalHoverIndex] = useState<number | null>(null)
+  const [goalLineTop, setGoalLineTop] = useState<number | null>(null)
+
   useEffect(() => {
     expandedRef.current = expanded
   }, [expanded])
@@ -2383,6 +2434,104 @@ export default function GoalsPage(): ReactElement {
     )
   }
 
+  // Compute insertion metrics for goal list, mirroring bucket logic
+  const computeGoalInsertMetrics = (listEl: HTMLElement, y: number) => {
+    const items = Array.from(listEl.querySelectorAll('li.goal-entry')) as HTMLElement[]
+    const candidates = items.filter(
+      (el) => !el.classList.contains('dragging') && !el.classList.contains('goal-entry--collapsed'),
+    )
+    const listRect = listEl.getBoundingClientRect()
+    const cs = window.getComputedStyle(listEl)
+    const padTop = parseFloat(cs.paddingTop || '0') || 0
+    const padBottom = parseFloat(cs.paddingBottom || '0') || 0
+    if (candidates.length === 0) {
+      const rawTop = (padTop - 1) / 2
+      const clamped = Math.max(0.5, Math.min(rawTop, listRect.height - 0.5))
+      const top = Math.round(clamped * 2) / 2
+      return { index: 0, top }
+    }
+    const rects = candidates.map((el) => el.getBoundingClientRect())
+    const anchors: Array<{ y: number; index: number }> = []
+    anchors.push({ y: rects[0].top, index: 0 })
+    for (let i = 0; i < rects.length - 1; i++) {
+      const a = rects[i]
+      const b = rects[i + 1]
+      const mid = a.bottom + (b.top - a.bottom) / 2
+      anchors.push({ y: mid, index: i + 1 })
+    }
+    anchors.push({ y: rects[rects.length - 1].bottom, index: rects.length })
+
+    let best = anchors[0]
+    let bestDist = Math.abs(y - best.y)
+    for (let i = 1; i < anchors.length; i++) {
+      const d = Math.abs(y - anchors[i].y)
+      if (d < bestDist) {
+        best = anchors[i]
+        bestDist = d
+      }
+    }
+    let rawTop = 0
+    if (best.index <= 0) {
+      rawTop = (padTop - 1) / 2
+    } else if (best.index >= candidates.length) {
+      const last = candidates[candidates.length - 1]
+      const a = last.getBoundingClientRect()
+      rawTop = a.bottom - listRect.top + (padBottom - 1) / 2
+    } else {
+      const prev = candidates[best.index - 1]
+      const next = candidates[best.index]
+      const a = prev.getBoundingClientRect()
+      const b = next.getBoundingClientRect()
+      const gap = Math.max(0, b.top - a.bottom)
+      rawTop = a.bottom - listRect.top + (gap - 1) / 2
+    }
+    const clamped = Math.max(0.5, Math.min(rawTop, listRect.height - 0.5))
+    const top = Math.round(clamped * 2) / 2
+    return { index: best.index, top }
+  }
+
+  // Reorder goals across the top-level list using a visible→global mapping
+  const reorderGoalsByVisibleInsert = (goalId: string, toVisibleIndex: number) => {
+    const fromGlobalIndex = goals.findIndex((g) => g.id === goalId)
+    if (fromGlobalIndex === -1) return
+    const visible = normalizedSearch
+      ? goals.filter((g) =>
+          g.name.toLowerCase().includes(normalizedSearch) ||
+          g.buckets.some((b) => b.name.toLowerCase().includes(normalizedSearch) || b.tasks.some((t) => t.text.toLowerCase().includes(normalizedSearch)))
+        )
+      : goals
+    const visibleIds = visible.map((g) => g.id)
+    // Clamp target visible index to [0, visibleIds.length]
+    const clampedVisibleIndex = Math.max(0, Math.min(toVisibleIndex, visibleIds.length))
+    let toGlobalIndex = 0
+    if (clampedVisibleIndex === 0) {
+      // Insert before first visible
+      const anchorId = visibleIds[0]
+      toGlobalIndex = goals.findIndex((g) => g.id === anchorId)
+    } else if (clampedVisibleIndex >= visibleIds.length) {
+      // Insert after last visible
+      const lastId = visibleIds[visibleIds.length - 1]
+      toGlobalIndex = goals.findIndex((g) => g.id === lastId) + 1
+    } else {
+      const anchorId = visibleIds[clampedVisibleIndex]
+      toGlobalIndex = goals.findIndex((g) => g.id === anchorId)
+    }
+    // Adjust target if removing the item shifts indices
+    let adjustedTo = toGlobalIndex
+    if (fromGlobalIndex < toGlobalIndex) {
+      adjustedTo = Math.max(0, toGlobalIndex - 1)
+    }
+    if (fromGlobalIndex === adjustedTo) {
+      return
+    }
+    setGoals((gs) => {
+      const next = gs.slice()
+      const [moved] = next.splice(fromGlobalIndex, 1)
+      next.splice(adjustedTo, 0, moved)
+      return next
+    })
+  }
+
   return (
     <div className="goals-layer text-white">
       <div className="goals-content site-main__inner">
@@ -2420,13 +2569,42 @@ export default function GoalsPage(): ReactElement {
               No goals match “{searchTerm.trim()}”.
             </p>
           ) : (
-            <div className="space-y-3 md:space-y-4">
+            <ul
+              className="goal-list space-y-3 md:space-y-4"
+              onDragOver={(e) => {
+                const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean } | null
+                if (!info) return
+                e.preventDefault()
+                try { e.dataTransfer.dropEffect = 'move' } catch {}
+                const list = e.currentTarget as HTMLElement
+                const { index, top } = computeGoalInsertMetrics(list, e.clientY)
+                setGoalHoverIndex((cur) => (cur === index ? cur : index))
+                setGoalLineTop(top)
+              }}
+              onDrop={(e) => {
+                const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean } | null
+                if (!info) return
+                e.preventDefault()
+                const toIndex = goalHoverIndex ?? visibleGoals.length
+                reorderGoalsByVisibleInsert(info.goalId, toIndex)
+                setGoalHoverIndex(null)
+                setGoalLineTop(null)
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                setGoalHoverIndex(null)
+                setGoalLineTop(null)
+              }}
+            >
+              {goalLineTop !== null ? (
+                <div className="goal-insert-line" style={{ top: `${goalLineTop}px` }} aria-hidden />
+              ) : null}
               {visibleGoals.map((g) => (
-                <GoalRow
-                  key={g.id}
-                  goal={g}
-                  isOpen={expanded[g.id] ?? false}
-                  onToggle={() => toggleExpand(g.id)}
+                <li key={g.id} className="goal-entry" data-goal-id={g.id}>
+                  <GoalRow
+                    goal={g}
+                    isOpen={expanded[g.id] ?? false}
+                    onToggle={() => toggleExpand(g.id)}
                   isRenaming={renamingGoalId === g.id}
                   goalRenameValue={renamingGoalId === g.id ? goalRenameDraft : undefined}
                   onStartGoalRename={(goalId, initial) => startGoalRename(goalId, initial)}
@@ -2470,13 +2648,14 @@ export default function GoalsPage(): ReactElement {
                   onTaskEditBlur={(goalId, bucketId, taskId) => handleTaskEditBlur(goalId, bucketId, taskId)}
                   onTaskEditCancel={(taskId) => handleTaskEditCancel(taskId)}
                   registerTaskEditRef={registerTaskEditRef}
-                  onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
-                    reorderTasks(goalId, bucketId, section, fromIndex, toIndex)
-                  }
-                  onReorderBuckets={reorderBuckets}
-                />
+                    onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
+                      reorderTasks(goalId, bucketId, section, fromIndex, toIndex)
+                    }
+                    onReorderBuckets={reorderBuckets}
+                  />
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </div>
       </div>
