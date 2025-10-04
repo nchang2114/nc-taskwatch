@@ -722,19 +722,14 @@ const GoalRow: React.FC<GoalRowProps> = ({
           // Clone visible header for ghost image; copy visuals from the card wrapper for accurate background/border
           const srcCard = (container?.querySelector('.rounded-2xl') as HTMLElement | null) ?? headerEl
           const srcRect = (srcCard ?? headerEl).getBoundingClientRect()
-          const headerRect = headerEl.getBoundingClientRect()
           const clone = headerEl.cloneNode(true) as HTMLElement
           clone.className = headerEl.className + ' goal-bucket-drag-clone'
           clone.style.width = `${Math.floor(srcRect.width)}px`
           copyVisualStyles(srcCard as HTMLElement, clone)
           document.body.appendChild(clone)
           ;(window as any).__goalDragCloneRef = clone
-          // Align drag hotspot to where the user grabbed the header
-          try {
-            const offsetX = Math.max(0, Math.min(headerRect.width - 1, e.clientX - headerRect.left))
-            const offsetY = Math.max(0, Math.min(headerRect.height - 1, e.clientY - headerRect.top))
-            e.dataTransfer.setDragImage(clone, offsetX, offsetY)
-          } catch {}
+          // Anchor drag hotspot to the top-left like bucket/task drags
+          try { e.dataTransfer.setDragImage(clone, 16, 0) } catch {}
           // Snapshot open state for this goal and collapse after drag image snapshot
           ;(window as any).__dragGoalInfo = { goalId: goal.id, wasOpen: isOpen } as {
             goalId: string
