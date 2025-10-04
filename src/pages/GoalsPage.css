@@ -793,6 +793,12 @@ html[data-theme='light'] .goal-task-add:focus-visible {
   z-index: 9999;
 }
 
+/* Prevent progress shimmer from affecting drag image bounds/offset */
+.goal-bucket-drag-clone .goal-progress-fill::after {
+  display: none !important;
+  animation: none !important;
+}
+
 /* Visual used as the drag ghost (cloned row) */
 /* Drag clone that keeps row look; colors come from inline copied styles */
 .goal-drag-clone {

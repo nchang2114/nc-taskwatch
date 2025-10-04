@@ -721,14 +721,20 @@ const GoalRow: React.FC<GoalRowProps> = ({
           container?.classList.add('dragging')
           // Clone visible header for ghost image; copy visuals from the card wrapper for accurate background/border
           const srcCard = (container?.querySelector('.rounded-2xl') as HTMLElement | null) ?? headerEl
-          const rect = (srcCard ?? headerEl).getBoundingClientRect()
+          const srcRect = (srcCard ?? headerEl).getBoundingClientRect()
+          const headerRect = headerEl.getBoundingClientRect()
           const clone = headerEl.cloneNode(true) as HTMLElement
           clone.className = headerEl.className + ' goal-bucket-drag-clone'
-          clone.style.width = `${Math.floor(rect.width)}px`
+          clone.style.width = `${Math.floor(srcRect.width)}px`
           copyVisualStyles(srcCard as HTMLElement, clone)
           document.body.appendChild(clone)
           ;(window as any).__goalDragCloneRef = clone
-          try { e.dataTransfer.setDragImage(clone, 16, 0) } catch {}
+          // Align drag hotspot to where the user grabbed the header
+          try {
+            const offsetX = Math.max(0, Math.min(headerRect.width - 1, e.clientX - headerRect.left))
+            const offsetY = Math.max(0, Math.min(headerRect.height - 1, e.clientY - headerRect.top))
+            e.dataTransfer.setDragImage(clone, offsetX, offsetY)
+          } catch {}
           // Snapshot open state for this goal and collapse after drag image snapshot
           ;(window as any).__dragGoalInfo = { goalId: goal.id, wasOpen: isOpen } as {
             goalId: string
@@ -2535,17 +2541,25 @@ export default function GoalsPage(): ReactElement {
   const reorderGoalsByVisibleInsert = (goalId: string, toVisibleIndex: number) => {
     const fromGlobalIndex = goals.findIndex((g) => g.id === goalId)
     if (fromGlobalIndex === -1) return
+    // Build the visible list exactly like the DOM candidates used for insert metrics,
+    // but exclude the dragged goal so indices match the hover line positions.
     const visible = normalizedSearch
       ? goals.filter((g) =>
-          g.name.toLowerCase().includes(normalizedSearch) ||
-          g.buckets.some((b) => b.name.toLowerCase().includes(normalizedSearch) || b.tasks.some((t) => t.text.toLowerCase().includes(normalizedSearch)))
+          (g.id !== goalId) && (
+            g.name.toLowerCase().includes(normalizedSearch) ||
+            g.buckets.some((b) => b.name.toLowerCase().includes(normalizedSearch) || b.tasks.some((t) => t.text.toLowerCase().includes(normalizedSearch)))
+          )
         )
-      : goals
+      : goals.filter((g) => g.id !== goalId)
     const visibleIds = visible.map((g) => g.id)
     // Clamp target visible index to [0, visibleIds.length]
     const clampedVisibleIndex = Math.max(0, Math.min(toVisibleIndex, visibleIds.length))
-    let toGlobalIndex = 0
-    if (clampedVisibleIndex === 0) {
+    // Resolve the global insertion index relative to the nearest visible anchor
+    let toGlobalIndex: number
+    if (visibleIds.length === 0) {
+      // Only the dragged item is visible; place at start
+      toGlobalIndex = 0
+    } else if (clampedVisibleIndex === 0) {
       // Insert before first visible
       const anchorId = visibleIds[0]
       toGlobalIndex = goals.findIndex((g) => g.id === anchorId)
