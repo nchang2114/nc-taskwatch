@@ -549,19 +549,34 @@ const GoalRow: React.FC<GoalRowProps> = ({
         !el.classList.contains('goal-task-row--collapsed'),
     )
     const listRect = listEl.getBoundingClientRect()
-    let top = 0
+    let rawTop = 0
     if (candidates.length === 0 || index <= 0) {
-      top = candidates.length > 0 ? candidates[0].getBoundingClientRect().top - listRect.top : 0
+      // Slightly above the first row so the line isn't obscured by its border/background
+      if (candidates.length > 0) {
+        const firstRect = candidates[0].getBoundingClientRect()
+        // Center a 1px line within a virtual 7px gap (3.5px on each side)
+        rawTop = firstRect.top - listRect.top - 3.5
+      } else {
+        rawTop = 0
+      }
     } else if (index >= candidates.length) {
+      // Slightly below the last row so the line is clearly visible
       const last = candidates[candidates.length - 1]
-      top = last.getBoundingClientRect().bottom - listRect.top
+      const lastRect = last.getBoundingClientRect()
+      rawTop = lastRect.bottom - listRect.top + 3.5
     } else {
       const prev = candidates[index - 1]
       const next = candidates[index]
       const a = prev.getBoundingClientRect()
       const b = next.getBoundingClientRect()
-      top = a.bottom + (b.top - a.bottom) / 2 - listRect.top
+      const gap = Math.max(0, b.top - a.bottom)
+      // Center a 1px line within the actual gap: (gap - 1) / 2 from the top edge
+      rawTop = a.bottom - listRect.top + (gap - 1) / 2
     }
+    // Keep the line fully inside the list box to avoid clipping at extremes
+    const clamped = Math.max(0.5, Math.min(rawTop, listRect.height - 0.5))
+    // Snap to nearest 0.5px for crisp 1px rendering while preserving centering
+    const top = Math.round(clamped * 2) / 2
     return { index, top }
   }
   const totalTasks = goal.buckets.reduce((acc, bucket) => acc + bucket.tasks.length, 0)
@@ -573,6 +588,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   const progressLabel = totalTasks > 0 ? `${completedTasksCount} / ${totalTasks} tasks` : 'No tasks yet'
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const menuWrapRef = useRef<HTMLDivElement | null>(null)
   const [bucketMenuOpenId, setBucketMenuOpenId] = useState<string | null>(null)
   const bucketMenuRef = useRef<HTMLDivElement | null>(null)
   const renameInputRef = useRef<HTMLInputElement | null>(null)
@@ -580,10 +596,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
-      if (!menuRef.current) return
-      if (e.target instanceof Node && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false)
-      }
+      const target = e.target as Node
+      const withinWrap = menuWrapRef.current && target instanceof Node && menuWrapRef.current.contains(target)
+      if (withinWrap) return
+      setMenuOpen(false)
     }
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
@@ -591,13 +607,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
-      if (!bucketMenuRef.current) {
-        setBucketMenuOpenId(null)
-        return
-      }
-      if (e.target instanceof Node && !bucketMenuRef.current.contains(e.target)) {
-        setBucketMenuOpenId(null)
-      }
+      const target = e.target as HTMLElement
+      // Do not close if clicking inside any bucket menu/button wrapper
+      if (target && target.closest('[data-bucket-menu="true"]')) return
+      setBucketMenuOpenId(null)
     }
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
@@ -640,34 +653,46 @@ const GoalRow: React.FC<GoalRowProps> = ({
         className="w-full text-left p-4 md:p-5"
       >
         <div className="flex flex-nowrap items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            {isRenaming ? (
-              <input
-                ref={renameInputRef}
-                value={goalRenameValue ?? ''}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => onGoalRenameChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    onGoalRenameSubmit()
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault()
-                    onGoalRenameCancel()
-                  }
-                }}
-                onBlur={() => onGoalRenameSubmit()}
-                placeholder="Rename goal"
-                className="w-full bg-transparent border border-white/15 focus:border-white/30 rounded-md px-2 py-1 text-sm sm:text-base md:text-lg font-semibold tracking-tight outline-none"
-              />
-            ) : (
-              <h3 className="min-w-0 whitespace-nowrap truncate text-sm sm:text-base md:text-lg font-semibold tracking-tight">
-                {highlightText(goal.name, highlightTerm)}
-              </h3>
-            )}
-          </div>
-          <div className="relative flex items-center gap-2 flex-none whitespace-nowrap">
-            <svg className={classNames('w-4 h-4 text-white/70 transition-transform', isOpen && 'rotate-90')} viewBox="0 0 24 24" fill="currentColor">
+          {(() => {
+            const name = goal.name || ''
+            const words = name.trim().split(/\s+/).filter(Boolean)
+            const isLong = name.length > 28 || words.length > 6
+            const titleSize = isLong ? 'text-sm sm:text-base md:text-lg' : 'text-base sm:text-lg md:text-xl'
+            const inputSize = isLong ? 'text-sm sm:text-base md:text-lg' : 'text-base sm:text-lg md:text-xl'
+            return (
+              <div className="min-w-0 flex-1">
+                {isRenaming ? (
+                  <input
+                    ref={renameInputRef}
+                    value={goalRenameValue ?? ''}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => onGoalRenameChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        onGoalRenameSubmit()
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault()
+                        onGoalRenameCancel()
+                      }
+                    }}
+                    onBlur={() => onGoalRenameSubmit()}
+                    placeholder="Rename goal"
+                    className={classNames(
+                      'w-full bg-transparent border border-white/15 focus:border-white/30 rounded-md px-2 py-1 font-semibold tracking-tight outline-none',
+                      inputSize,
+                    )}
+                  />
+                ) : (
+                  <h3 className={classNames('min-w-0 whitespace-nowrap truncate font-semibold tracking-tight', titleSize)}>
+                    {highlightText(goal.name, highlightTerm)}
+                  </h3>
+                )}
+              </div>
+            )
+          })()}
+          <div ref={menuWrapRef} className="relative flex items-center gap-2 flex-none whitespace-nowrap" data-goal-menu="true">
+            <svg className={classNames('w-4 h-4 goal-chevron-icon transition-transform', isOpen && 'rotate-90')} viewBox="0 0 24 24" fill="currentColor">
               <path fillRule="evenodd" d="M8.47 4.97a.75.75 0 011.06 0l6 6a.75.75 0 010 1.06l-6 6a.75.75 0 11-1.06-1.06L13.94 12 8.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd"/>
             </svg>
             <button
@@ -681,17 +706,17 @@ const GoalRow: React.FC<GoalRowProps> = ({
               aria-expanded={menuOpen}
               aria-label="Goal actions"
             >
-              <svg className="w-4.5 h-4.5 text-white/80" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <svg className="w-4.5 h-4.5 goal-kebab-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <circle cx="12" cy="6" r="1.6" />
                 <circle cx="12" cy="12" r="1.6" />
                 <circle cx="12" cy="18" r="1.6" />
               </svg>
             </button>
             {menuOpen && (
-              <div ref={menuRef} className="absolute right-0 top-8 z-10 min-w-[140px] rounded-md border border-white/15 bg-[#0b1020]/95 backdrop-blur-sm shadow-lg p-1">
+              <div ref={menuRef} className="goal-menu absolute right-0 top-8 z-10 min-w-[140px] rounded-md border p-1 shadow-lg">
                 <button
                   type="button"
-                  className="w-full text-left px-3 py-1.5 rounded hover:bg-white/10 text-sm"
+                  className="goal-menu__item"
                   onClick={(e) => {
                     e.stopPropagation()
                     setMenuOpen(false)
@@ -704,9 +729,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
             )}
           </div>
         </div>
-        <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:gap-4 gap-2">
-          <ThinProgress value={pct} gradient={goal.color} className="h-1 flex-1" />
-          <span className="text-xs sm:text-sm text-white/80 whitespace-nowrap sm:mt-0 mt-1">{progressLabel}</span>
+        <div className="mt-3 flex items-center gap-3 flex-nowrap">
+          <ThinProgress value={pct} gradient={goal.color} className="h-1 flex-1 min-w-0" />
+          <span className="text-xs sm:text-sm text-white/80 whitespace-nowrap flex-none">{progressLabel}</span>
         </div>
       </div>
 
@@ -819,9 +844,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
                           <span className="goal-bucket-title font-medium truncate">{highlightText(b.name, highlightTerm)}</span>
                         )}
                       </div>
-                      <div className="relative flex items-center gap-2">
+                      <div className="relative flex items-center gap-2" data-bucket-menu="true">
                         <svg
-                          className={classNames('w-3.5 h-3.5 text-white/80 transition-transform', isBucketOpen && 'rotate-90')}
+                          className={classNames('w-3.5 h-3.5 goal-chevron-icon transition-transform', isBucketOpen && 'rotate-90')}
                           viewBox="0 0 24 24"
                           fill="currentColor"
                           aria-hidden="true"
@@ -839,17 +864,17 @@ const GoalRow: React.FC<GoalRowProps> = ({
                           }}
                           aria-expanded={bucketMenuOpenId === b.id}
                         >
-                          <svg className="w-4.5 h-4.5 text-white/80" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                          <svg className="w-4.5 h-4.5 goal-kebab-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                             <circle cx="12" cy="6" r="1.6" />
                             <circle cx="12" cy="12" r="1.6" />
                             <circle cx="12" cy="18" r="1.6" />
                           </svg>
                         </button>
                         {bucketMenuOpenId === b.id && (
-                          <div ref={bucketMenuRef} className="absolute right-0 top-8 z-10 min-w-[180px] rounded-md border border-white/15 bg-[#0b1020]/95 backdrop-blur-sm shadow-lg p-1">
+                          <div ref={bucketMenuRef} className="goal-menu absolute right-0 top-8 z-10 min-w-[180px] rounded-md border p-1 shadow-lg">
                             <button
                               type="button"
-                              className="w-full text-left px-3 py-1.5 rounded hover:bg-white/10 text-sm"
+                              className="goal-menu__item"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 setBucketMenuOpenId(null)
@@ -862,10 +887,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                               type="button"
                               disabled={completedTasks.length === 0}
                               aria-disabled={completedTasks.length === 0}
-                              className={classNames(
-                                'w-full text-left px-3 py-1.5 rounded text-sm',
-                                completedTasks.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
-                              )}
+                              className={classNames('goal-menu__item', completedTasks.length === 0 && 'opacity-50 cursor-not-allowed')}
                               onClick={(e) => {
                                 if (completedTasks.length === 0) return
                                 e.stopPropagation()
@@ -875,10 +897,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
                             >
                               Delete all completed tasks
                             </button>
-                            <div className="h-px my-1 bg-white/10" />
+                            <div className="goal-menu__divider" />
                             <button
                               type="button"
-                              className="w-full text-left px-3 py-1.5 rounded hover:bg-white/10 text-sm text-red-300"
+                              className="goal-menu__item goal-menu__item--danger"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 setBucketMenuOpenId(null)
@@ -1042,16 +1064,17 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     }
                                     ;(window as any).__dragTaskInfo = { goalId: goal.id, bucketId: b.id, section: 'active', index }
                                   }}
-                                  onDragEnd={(e) => {
-                                    e.currentTarget.classList.remove('dragging')
-                                    ;(window as any).__dragTaskInfo = null
-                                    setDragHover(null)
-                                    const row = e.currentTarget as HTMLElement
-                                    row.classList.remove('goal-task-row--collapsed')
-                                    const ghost = dragCloneRef.current
-                                    if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost)
-                                    dragCloneRef.current = null
-                                  }}
+  onDragEnd={(e) => {
+    e.currentTarget.classList.remove('dragging')
+    ;(window as any).__dragTaskInfo = null
+    setDragHover(null)
+    setDragLine(null)
+    const row = e.currentTarget as HTMLElement
+    row.classList.remove('goal-task-row--collapsed')
+    const ghost = dragCloneRef.current
+    if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost)
+    dragCloneRef.current = null
+  }}
                                     onDragOver={(e) => {
                                       // Row-level allow move cursor but do not compute index here to avoid jitter
                                       const info = (window as any).__dragTaskInfo as
@@ -1267,16 +1290,17 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           }
                                           ;(window as any).__dragTaskInfo = { goalId: goal.id, bucketId: b.id, section: 'completed', index: cIndex }
                                         }}
-                                      onDragEnd={(e) => {
-                                        e.currentTarget.classList.remove('dragging')
-                                        ;(window as any).__dragTaskInfo = null
-                                        setDragHover(null)
-                                        const row = e.currentTarget as HTMLElement
-                                        row.classList.remove('goal-task-row--collapsed')
-                                        const ghost = dragCloneRef.current
-                                        if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost)
-                                        dragCloneRef.current = null
-                                      }}
+  onDragEnd={(e) => {
+    e.currentTarget.classList.remove('dragging')
+    ;(window as any).__dragTaskInfo = null
+    setDragHover(null)
+    setDragLine(null)
+    const row = e.currentTarget as HTMLElement
+    row.classList.remove('goal-task-row--collapsed')
+    const ghost = dragCloneRef.current
+    if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost)
+    dragCloneRef.current = null
+  }}
                                         onDragOver={(e) => {
                                           const info = (window as any).__dragTaskInfo as
                                             | { goalId: string; bucketId: string; section: 'active' | 'completed'; index: number }
