@@ -438,6 +438,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
   const [bucketHoverIndex, setBucketHoverIndex] = useState<number | null>(null)
   const [bucketLineTop, setBucketLineTop] = useState<number | null>(null)
   const bucketDragCloneRef = useRef<HTMLElement | null>(null)
+  // Transient animation state for task completion (active → completed)
+  const [completingMap, setCompletingMap] = useState<Record<string, boolean>>({})
+  const completingKey = (bucketId: string, taskId: string) => `${bucketId}:${taskId}`
   
 
   // Preserve original transparency — no conversion to opaque
@@ -1260,7 +1263,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                   {/* placeholder suppressed; line is rendered absolutely */}
                                   <li
                                     key={task.id}
-                                    className={classNames('goal-task-row', diffClass, isEditing && 'goal-task-row--draft')}
+                                    className={classNames(
+                                      'goal-task-row',
+                                      diffClass,
+                                      isEditing && 'goal-task-row--draft',
+                                      completingMap[completingKey(b.id, task.id)] && 'goal-task-row--completing',
+                                    )}
                                     draggable
                                   onDragStart={(e) => {
                                     e.dataTransfer.setData('text/plain', task.id)
@@ -1328,9 +1336,27 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                   <button
                                     type="button"
                                     className="goal-task-marker goal-task-marker--action"
-                                    onClick={() => onToggleTaskComplete(b.id, task.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      const key = completingKey(b.id, task.id)
+                                      if (completingMap[key]) return
+                                      setCompletingMap((prev) => ({ ...prev, [key]: true }))
+                                      // Play animation, then commit completion toggle
+                                      window.setTimeout(() => {
+                                        onToggleTaskComplete(b.id, task.id)
+                                        setCompletingMap((prev) => {
+                                          const next = { ...prev }
+                                          delete next[key]
+                                          return next
+                                        })
+                                      }, 1200)
+                                    }}
                                     aria-label="Mark task complete"
-                                  />
+                                  >
+                                    <svg viewBox="0 0 24 24" className="goal-task-check" aria-hidden="true">
+                                      <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  </button>
                                   {isEditing ? (
                                     <span
                                       className="goal-task-input"
@@ -1386,7 +1412,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       }}
                                       aria-label="Edit task text"
                                     >
-                                      {highlightText(task.text, highlightTerm)}
+                                      <span className="goal-task-text__inner">{highlightText(task.text, highlightTerm)}</span>
                                     </button>
                                   )}
                                   <button

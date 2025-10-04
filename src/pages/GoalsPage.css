@@ -553,6 +553,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   background: transparent;
   cursor: pointer;
   transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  position: relative;
 }
 
 .goal-task-marker--action:hover,
@@ -585,6 +586,110 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 .goal-task-check {
   width: 0.75rem;
   height: 0.75rem;
+}
+
+/* Default hidden check for action marker; drawn during completion */
+.goal-task-marker--action .goal-task-check { opacity: 0; transition: opacity 140ms ease; }
+.goal-task-marker--action .goal-task-check path {
+  /* Crisp, opaque green tick */
+  stroke: rgb(134, 239, 172);
+  stroke-width: 2.2;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 22;
+  stroke-dashoffset: 22;
+  transition: stroke-dashoffset 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Hover preview of tick (animate in/out) */
+.goal-task-marker--action:hover .goal-task-check,
+.goal-task-marker--action:focus-visible .goal-task-check { opacity: 1; }
+.goal-task-marker--action:hover .goal-task-check path,
+.goal-task-marker--action:focus-visible .goal-task-check path { stroke-dashoffset: 0; }
+
+/* Completion animation: row pulse/slide, marker fills + check draws, subtle burst */
+.goal-task-row--completing {
+  animation: goal-row-complete 1200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+.goal-task-row--completing .goal-task-marker--action {
+  animation: goal-marker-pop 300ms cubic-bezier(0.18, 0.9, 0.24, 1.15) forwards;
+}
+.goal-task-row--completing .goal-task-marker--action .goal-task-check { opacity: 1; }
+.goal-task-row--completing .goal-task-marker--action .goal-task-check path {
+  animation: goal-check-draw 380ms cubic-bezier(0.22, 1, 0.36, 1) 100ms forwards;
+}
+.goal-task-row--completing .goal-task-marker--action::after { display: none; }
+
+/* Sparkle dots around marker */
+/* Confetti only on click (during completing state) */
+.goal-task-row--completing .goal-task-marker--action::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  transform: translate(-50%, -50%) scale(0.6);
+  opacity: 0;
+  pointer-events: none;
+  /* Multi-colored, tasteful squares */
+  box-shadow:
+    -16px -4px 0 0 #22d3ee,
+     14px -6px 0 0 #a78bfa,
+     -6px -16px 0 0 #f59e0b,
+      8px  16px 0 0 #10b981,
+     12px  10px 0 0 #60a5fa,
+    -14px  10px 0 0 #ef4444;
+  animation: goal-confetti-pop 680ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes goal-check-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes goal-row-complete {
+  /* Hold steady while the strike animates */
+  0% { transform: translateX(0); opacity: 1; }
+  70% { transform: translateX(0); opacity: 1; }
+  /* Subtle anticipation */
+  74% { transform: translateX(-2px); opacity: 1; }
+  /* Smooth full slide out, contained by list overflow */
+  96% { transform: translateX(110%); opacity: 1; }
+  100% { transform: translateX(112%); opacity: 0; }
+}
+
+@keyframes goal-marker-pop {
+  0% { transform: scale(0.94); }
+  50% { transform: scale(1.18); }
+  100% { transform: scale(1.02); }
+}
+
+@keyframes goal-confetti-pop {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.6) rotate(-6deg); }
+  65% { opacity: 0.28; transform: translate(-50%, -50%) scale(1.25) rotate(6deg); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.4) rotate(10deg); }
+}
+
+/* Strike-through animation before fade */
+.goal-task-text__inner { position: relative; display: inline-block; }
+.goal-task-row--completing .goal-task-text {
+  color: rgba(148, 163, 184, 0.9);
+}
+.goal-task-row--completing .goal-task-text__inner::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1.2px;
+  background: currentColor;
+  transform-origin: left center;
+  transform: scaleX(0);
+  opacity: 0.95;
+  animation: goal-strike 220ms ease-out 120ms forwards;
+}
+@keyframes goal-strike {
+  to { transform: scaleX(1); }
 }
 
 .goal-task-text {
@@ -996,6 +1101,8 @@ html[data-theme='light'] .goal-insert-line {
   /* Add padding so the insert line at extremes can have 3.5px above/below */
   padding-top: 8px;
   padding-bottom: 8px;
+  /* Clip slide-out animation within the list section */
+  overflow: hidden;
 }
 
 /* Ensure bucket list can host absolute insert line */
