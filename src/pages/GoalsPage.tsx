@@ -889,18 +889,19 @@ const GoalRow: React.FC<GoalRowProps> = ({
                       draggable
                       onDragStart={(e) => {
                         try { e.dataTransfer.setData('text/plain', b.id) } catch {}
-                        const container = (e.currentTarget as HTMLElement).closest('li') as HTMLElement | null
+                        const headerEl = e.currentTarget as HTMLElement
+                        const container = headerEl.closest('li') as HTMLElement | null
                         container?.classList.add('dragging')
-                        // Create a lightweight drag image to avoid blank ghost
-                        const ghost = document.createElement('div')
-                        ghost.className = 'goal-drag-image'
-                        const text = document.createElement('span')
-                        text.className = 'goal-drag-image__text'
-                        text.textContent = b.name
-                        ghost.appendChild(text)
-                        document.body.appendChild(ghost)
-                        bucketDragCloneRef.current = ghost
-                        try { e.dataTransfer.setDragImage(ghost, 16, 0) } catch {}
+                        // Clone the visible header so the ghost matches the bucket element
+                        const srcEl = (container ?? headerEl) as HTMLElement
+                        const rect = srcEl.getBoundingClientRect()
+                        const clone = headerEl.cloneNode(true) as HTMLElement
+                        clone.className = headerEl.className + ' goal-bucket-drag-clone'
+                        clone.style.width = `${Math.floor(rect.width)}px`
+                        copyVisualStyles(srcEl, clone)
+                        document.body.appendChild(clone)
+                        bucketDragCloneRef.current = clone
+                        try { e.dataTransfer.setDragImage(clone, 16, 0) } catch {}
                         // Snapshot which buckets in this goal were open BEFORE any state changes
                         const openIds = goal.buckets.filter((bx) => bucketExpanded[bx.id]).map((bx) => bx.id)
                         ;(window as any).__dragBucketInfo = { goalId: goal.id, index, bucketId: b.id, wasOpen: isBucketOpen, openIds }

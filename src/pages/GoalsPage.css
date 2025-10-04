@@ -784,6 +784,15 @@ html[data-theme='light'] .goal-task-add:focus-visible {
   overflow: hidden !important;
 }
 
+/* Bucket drag ghost that mirrors the header look */
+.goal-bucket-drag-clone {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  pointer-events: none;
+  z-index: 9999;
+}
+
 /* Visual used as the drag ghost (cloned row) */
 /* Drag clone that keeps row look; colors come from inline copied styles */
 .goal-drag-clone {
