@@ -916,9 +916,9 @@ html[data-theme='light'] .goal-insert-line {
 .goal-completed__list,
 .mt-2.space-y-2 {
   position: relative;
-  /* Add small padding so the insert line at extremes isn't clipped and remains centered */
-  padding-top: 3.5px;
-  padding-bottom: 3.5px;
+  /* Add padding so the insert line at extremes can have 3.5px above/below */
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 /* (removed drag-specific inter-row gap) */

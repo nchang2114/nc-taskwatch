@@ -551,21 +551,11 @@ const GoalRow: React.FC<GoalRowProps> = ({
     const listRect = listEl.getBoundingClientRect()
     let rawTop = 0
     if (candidates.length === 0 || index <= 0) {
-      // Slightly above the first row so the line isn't obscured by its border/background
-      if (candidates.length > 0) {
-        const firstRect = candidates[0].getBoundingClientRect()
-        // Center the 1px line within the actual gap between the list top and first row
-        const gapTop = firstRect.top - listRect.top
-        rawTop = (gapTop - 1) / 2
-      } else {
-        rawTop = 0
-      }
+      // With 8px container padding, place line 3.5px from the top edge
+      rawTop = 3.5
     } else if (index >= candidates.length) {
-      // Center the 1px line within the actual gap between the last row and list bottom
-      const last = candidates[candidates.length - 1]
-      const lastRect = last.getBoundingClientRect()
-      const gapBottom = listRect.bottom - lastRect.bottom
-      rawTop = (lastRect.bottom - listRect.top) + (gapBottom - 1) / 2
+      // With 8px container padding, place line 3.5px from the bottom edge
+      rawTop = listRect.height - 4.5 // (3.5px space + 1px line)
     } else {
       const prev = candidates[index - 1]
       const next = candidates[index]
