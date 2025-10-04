@@ -366,6 +366,11 @@ interface GoalRowProps {
     fromIndex: number,
     toIndex: number,
   ) => void
+  onReorderBuckets: (
+    goalId: string,
+    fromIndex: number,
+    toIndex: number,
+  ) => void
 }
 
 const GoalRow: React.FC<GoalRowProps> = ({
@@ -414,6 +419,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onTaskEditBlur,
   registerTaskEditRef,
   onReorderTasks,
+  onReorderBuckets,
 }) => {
   const [dragHover, setDragHover] = useState<
     | { bucketId: string; section: 'active' | 'completed'; index: number }
@@ -424,6 +430,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
     | { bucketId: string; section: 'active' | 'completed'; top: number }
     | null
   >(null)
+  const [bucketHoverIndex, setBucketHoverIndex] = useState<number | null>(null)
+  const [bucketLineTop, setBucketLineTop] = useState<number | null>(null)
+  const bucketDragCloneRef = useRef<HTMLElement | null>(null)
   
 
   // Preserve original transparency — no conversion to opaque
@@ -570,6 +579,62 @@ const GoalRow: React.FC<GoalRowProps> = ({
     // Snap to nearest 0.5px for crisp 1px rendering while preserving centering
     const top = Math.round(clamped * 2) / 2
     return { index, top }
+  }
+  const computeBucketInsertMetrics = (listEl: HTMLElement, y: number) => {
+    const items = Array.from(listEl.querySelectorAll('li.goal-bucket-item')) as HTMLElement[]
+    const candidates = items.filter(
+      (el) => !el.classList.contains('dragging') && !el.classList.contains('goal-bucket-item--collapsed'),
+    )
+    const listRect = listEl.getBoundingClientRect()
+    const cs = window.getComputedStyle(listEl)
+    const padTop = parseFloat(cs.paddingTop || '0') || 0
+    const padBottom = parseFloat(cs.paddingBottom || '0') || 0
+    if (candidates.length === 0) {
+      const rawTop = (padTop - 1) / 2
+      const clamped = Math.max(0.5, Math.min(rawTop, listRect.height - 0.5))
+      const top = Math.round(clamped * 2) / 2
+      return { index: 0, top }
+    }
+    const rects = candidates.map((el) => el.getBoundingClientRect())
+    const anchors: Array<{ y: number; index: number }> = []
+    anchors.push({ y: rects[0].top, index: 0 })
+    for (let i = 0; i < rects.length - 1; i++) {
+      const a = rects[i]
+      const b = rects[i + 1]
+      const mid = a.bottom + (b.top - a.bottom) / 2
+      anchors.push({ y: mid, index: i + 1 })
+    }
+    anchors.push({ y: rects[rects.length - 1].bottom, index: rects.length })
+
+    let best = anchors[0]
+    let bestDist = Math.abs(y - best.y)
+    for (let i = 1; i < anchors.length; i++) {
+      const d = Math.abs(y - anchors[i].y)
+      if (d < bestDist) {
+        best = anchors[i]
+        bestDist = d
+      }
+    }
+    let rawTop = 0
+    if (best.index <= 0) {
+      // Center within top padding
+      rawTop = (padTop - 1) / 2
+    } else if (best.index >= candidates.length) {
+      // Center within bottom padding relative to last visible item
+      const last = candidates[candidates.length - 1]
+      const a = last.getBoundingClientRect()
+      rawTop = a.bottom - listRect.top + (padBottom - 1) / 2
+    } else {
+      const prev = candidates[best.index - 1]
+      const next = candidates[best.index]
+      const a = prev.getBoundingClientRect()
+      const b = next.getBoundingClientRect()
+      const gap = Math.max(0, b.top - a.bottom)
+      rawTop = a.bottom - listRect.top + (gap - 1) / 2
+    }
+    const clamped = Math.max(0.5, Math.min(rawTop, listRect.height - 0.5))
+    const top = Math.round(clamped * 2) / 2
+    return { index: best.index, top }
   }
   const totalTasks = goal.buckets.reduce((acc, bucket) => acc + bucket.tasks.length, 0)
   const completedTasksCount = goal.buckets.reduce(
@@ -737,7 +802,54 @@ const GoalRow: React.FC<GoalRowProps> = ({
 
             <p className="mt-2 text-xs text-white/60">Buckets surface in Stopwatch when <span className="text-white">Favourited</span>.</p>
 
-            <ul className="mt-3 md:mt-4 space-y-2">
+            <ul
+              className="goal-bucket-list mt-3 md:mt-4 space-y-2"
+              onDragOver={(e) => {
+                const info = (window as any).__dragBucketInfo as
+                  | { goalId: string; index: number; bucketId: string; wasOpen?: boolean }
+                  | null
+                if (!info) return
+                if (info.goalId !== goal.id) return
+                e.preventDefault()
+                try { e.dataTransfer.dropEffect = 'move' } catch {}
+                const list = e.currentTarget as HTMLElement
+                const { index, top } = computeBucketInsertMetrics(list, e.clientY)
+                setBucketHoverIndex((cur) => (cur === index ? cur : index))
+                setBucketLineTop(top)
+              }}
+              onDrop={(e) => {
+                const info = (window as any).__dragBucketInfo as
+                  | { goalId: string; index: number; bucketId: string; wasOpen?: boolean; openIds?: string[] }
+                  | null
+                if (!info) return
+                if (info.goalId !== goal.id) return
+                e.preventDefault()
+                const fromIndex = info.index
+                const toIndex = bucketHoverIndex ?? fromIndex
+                if (fromIndex !== toIndex) {
+                  onReorderBuckets(goal.id, fromIndex, toIndex)
+                }
+                // Restore all buckets that were originally open at drag start
+                if (info.openIds && info.openIds.length > 0) {
+                  for (const id of info.openIds) {
+                    if (!(bucketExpanded[id] ?? false)) {
+                      onToggleBucketExpanded(id)
+                    }
+                  }
+                }
+                setBucketHoverIndex(null)
+                setBucketLineTop(null)
+                ;(window as any).__dragBucketInfo = null
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                setBucketHoverIndex(null)
+                setBucketLineTop(null)
+              }}
+            >
+              {bucketLineTop !== null ? (
+                <div className="goal-insert-line" style={{ top: `${bucketLineTop}px` }} aria-hidden />
+              ) : null}
               {bucketDraftValue !== undefined && (
                 <li className="goal-bucket-draft" key="bucket-draft">
                   <div className="goal-bucket-draft-inner">
@@ -762,18 +874,86 @@ const GoalRow: React.FC<GoalRowProps> = ({
                   </div>
                 </li>
               )}
-              {goal.buckets.map((b) => {
+              {goal.buckets.map((b, index) => {
                 const isBucketOpen = bucketExpanded[b.id] ?? false
                 const activeTasks = b.tasks.filter((task) => !task.completed)
                 const completedTasks = b.tasks.filter((task) => task.completed)
                 const isCompletedCollapsed = completedCollapsed[b.id] ?? true
                 const draftValue = taskDrafts[b.id]
                 return (
-                  <li key={b.id} className="rounded-xl border border-white/10 bg-white/5">
+                  <li key={b.id} className="goal-bucket-item rounded-xl border border-white/10 bg-white/5">
                     <div
                       className="goal-bucket-toggle p-3 md:p-4 flex items-center justify-between gap-3 md:gap-4"
                       role="button"
                       tabIndex={0}
+                      draggable
+                      onDragStart={(e) => {
+                        try { e.dataTransfer.setData('text/plain', b.id) } catch {}
+                        const container = (e.currentTarget as HTMLElement).closest('li') as HTMLElement | null
+                        container?.classList.add('dragging')
+                        // Create a lightweight drag image to avoid blank ghost
+                        const ghost = document.createElement('div')
+                        ghost.className = 'goal-drag-image'
+                        const text = document.createElement('span')
+                        text.className = 'goal-drag-image__text'
+                        text.textContent = b.name
+                        ghost.appendChild(text)
+                        document.body.appendChild(ghost)
+                        bucketDragCloneRef.current = ghost
+                        try { e.dataTransfer.setDragImage(ghost, 16, 0) } catch {}
+                        // Snapshot which buckets in this goal were open BEFORE any state changes
+                        const openIds = goal.buckets.filter((bx) => bucketExpanded[bx.id]).map((bx) => bx.id)
+                        ;(window as any).__dragBucketInfo = { goalId: goal.id, index, bucketId: b.id, wasOpen: isBucketOpen, openIds }
+                        // Defer state changes (collapse buckets + source) until next frames so the browser captures drag image
+                        const scheduleCollapse = () => {
+                          // Close original if it was open
+                          if (isBucketOpen) {
+                            onToggleBucketExpanded(b.id)
+                          }
+                          // Close all other open buckets during drag for consistent view
+                          for (const id of openIds) {
+                            if (id !== b.id) {
+                              onToggleBucketExpanded(id)
+                            }
+                          }
+                          // Collapse original item so it visually leaves the list
+                          container?.classList.add('goal-bucket-item--collapsed')
+                        }
+                        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                          window.requestAnimationFrame(() => {
+                            window.requestAnimationFrame(scheduleCollapse)
+                          })
+                        } else {
+                          setTimeout(scheduleCollapse, 0)
+                        }
+                        try {
+                          e.dataTransfer.effectAllowed = 'move'
+                        } catch {}
+                      }}
+                      onDragEnd={(e) => {
+                        const container = (e.currentTarget as HTMLElement).closest('li') as HTMLElement | null
+                        container?.classList.remove('dragging')
+                        container?.classList.remove('goal-bucket-item--collapsed')
+                        setBucketHoverIndex(null)
+                        setBucketLineTop(null)
+                        // If drop didn't restore, restore here using snapshot
+                        const info = (window as any).__dragBucketInfo as
+                          | { goalId: string; bucketId: string; wasOpen?: boolean; openIds?: string[] }
+                          | null
+                        if (info && info.goalId === goal.id) {
+                          if (info.openIds && info.openIds.length > 0) {
+                            for (const id of info.openIds) {
+                              if (!(bucketExpanded[id] ?? false)) {
+                                onToggleBucketExpanded(id)
+                              }
+                            }
+                          }
+                        }
+                        const ghost = bucketDragCloneRef.current
+                        if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost)
+                        bucketDragCloneRef.current = null
+                        ;(window as any).__dragBucketInfo = null
+                      }}
                       onClick={() => onToggleBucketExpanded(b.id)}
                       onKeyDown={(event) => {
                         const tgt = event.target as HTMLElement
@@ -2181,6 +2361,27 @@ export default function GoalsPage(): ReactElement {
     )
   }
 
+  // Reorder buckets within a goal
+  const reorderBuckets = (
+    goalId: string,
+    fromIndex: number,
+    toIndex: number,
+  ) => {
+    setGoals((gs) =>
+      gs.map((g) => {
+        if (g.id !== goalId) return g
+        const list = g.buckets
+        if (fromIndex < 0 || fromIndex >= list.length || toIndex < 0 || toIndex > list.length) {
+          return g
+        }
+        const next = list.slice()
+        const [moved] = next.splice(fromIndex, 1)
+        next.splice(toIndex, 0, moved)
+        return { ...g, buckets: next }
+      }),
+    )
+  }
+
   return (
     <div className="goals-layer text-white">
       <div className="goals-content site-main__inner">
@@ -2271,6 +2472,7 @@ export default function GoalsPage(): ReactElement {
                   onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
                     reorderTasks(goalId, bucketId, section, fromIndex, toIndex)
                   }
+                  onReorderBuckets={reorderBuckets}
                 />
               ))}
             </div>

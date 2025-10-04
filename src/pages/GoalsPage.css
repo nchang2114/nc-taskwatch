@@ -767,6 +767,23 @@ html[data-theme='light'] .goal-task-add:focus-visible {
   overflow: hidden !important;
 }
 
+/* Bucket drag visuals */
+.goal-bucket-toggle[draggable='true'] {
+  cursor: grab;
+}
+.goal-bucket-item.dragging {
+  opacity: 1;
+}
+.goal-bucket-item--collapsed {
+  height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  border-width: 0 !important;
+  overflow: hidden !important;
+}
+
 /* Visual used as the drag ghost (cloned row) */
 /* Drag clone that keeps row look; colors come from inline copied styles */
 .goal-drag-clone {
@@ -909,6 +926,18 @@ html[data-theme='light'] .goal-insert-line {
   background: rgba(48, 58, 98, 0.98);
 }
 
+/* Align bucket insert line with bucket padding (p-3/md:p-4) */
+.goal-bucket-list .goal-insert-line {
+  left: 0.75rem;
+  right: 0.75rem;
+}
+@media (min-width: 768px) {
+  .goal-bucket-list .goal-insert-line {
+    left: 1rem;
+    right: 1rem;
+  }
+}
+
 /* (removed spacer — maintain compact layout) */
 
 /* Ensure UL containers can host absolutely positioned insert line */
@@ -917,6 +946,13 @@ html[data-theme='light'] .goal-insert-line {
 .mt-2.space-y-2 {
   position: relative;
   /* Add padding so the insert line at extremes can have 3.5px above/below */
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+/* Ensure bucket list can host absolute insert line */
+.goal-bucket-list {
+  position: relative;
   padding-top: 8px;
   padding-bottom: 8px;
 }
