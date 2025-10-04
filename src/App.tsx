@@ -84,6 +84,35 @@ function App() {
     applyTheme(theme)
   }, [applyTheme, theme])
 
+  // Gate hover-only visuals with a root class to avoid accidental previews on touch devices
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
+    const mq1 = window.matchMedia('(hover: hover) and (pointer: fine)')
+    const mq2 = window.matchMedia('(any-hover: hover) and (any-pointer: fine)')
+    const update = () => {
+      const supportsHover = mq1.matches || mq2.matches
+      document.documentElement.classList.toggle('has-hover', supportsHover)
+    }
+    update()
+    if (typeof mq1.addEventListener === 'function') {
+      mq1.addEventListener('change', update)
+      mq2.addEventListener('change', update)
+      return () => {
+        mq1.removeEventListener('change', update)
+        mq2.removeEventListener('change', update)
+      }
+    }
+    // Fallback for older Safari
+    if (typeof mq1.addListener === 'function') {
+      mq1.addListener(update)
+      mq2.addListener(update)
+      return () => {
+        mq1.removeListener(update)
+        mq2.removeListener(update)
+      }
+    }
+  }, [])
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return

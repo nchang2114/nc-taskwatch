@@ -599,11 +599,13 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   stroke-dashoffset: 22;
   transition: stroke-dashoffset 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-/* Hover preview of tick (animate in/out) */
-.goal-task-marker--action:hover .goal-task-check,
-.goal-task-marker--action:focus-visible .goal-task-check { opacity: 1; }
-.goal-task-marker--action:hover .goal-task-check path,
-.goal-task-marker--action:focus-visible .goal-task-check path { stroke-dashoffset: 0; }
+/* Hover preview of tick (animate in/out) — desktops only */
+@media (hover: hover) and (pointer: fine) {
+  .has-hover .goal-task-marker--action:hover .goal-task-check,
+  .has-hover .goal-task-marker--action:focus-visible .goal-task-check { opacity: 1; }
+  .has-hover .goal-task-marker--action:hover .goal-task-check path,
+  .has-hover .goal-task-marker--action:focus-visible .goal-task-check path { stroke-dashoffset: 0; }
+}
 
 /* Completion animation: row pulse/slide, marker fills + check draws, subtle burst */
 .goal-task-row--completing {
