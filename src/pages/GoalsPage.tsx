@@ -313,6 +313,9 @@ interface GoalRowProps {
   goal: Goal
   isOpen: boolean
   onToggle: () => void
+  // Goal-level DnD helpers
+  onCollapseOtherGoalsForDrag: (draggedGoalId: string) => string[]
+  onRestoreGoalsOpenState: (ids: string[]) => void
   // Goal rename
   isRenaming: boolean
   goalRenameValue?: string
@@ -377,6 +380,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
   goal,
   isOpen,
   onToggle,
+  onCollapseOtherGoalsForDrag,
+  onRestoreGoalsOpenState,
   isRenaming,
   goalRenameValue,
   onStartGoalRename,
@@ -725,11 +730,19 @@ const GoalRow: React.FC<GoalRowProps> = ({
           ;(window as any).__goalDragCloneRef = clone
           try { e.dataTransfer.setDragImage(clone, 16, 0) } catch {}
           // Snapshot open state for this goal and collapse after drag image snapshot
-          ;(window as any).__dragGoalInfo = { goalId: goal.id, wasOpen: isOpen }
+          ;(window as any).__dragGoalInfo = { goalId: goal.id, wasOpen: isOpen } as {
+            goalId: string
+            wasOpen?: boolean
+            openIds?: string[]
+          }
           const scheduleCollapse = () => {
             if (isOpen) {
               onToggle()
             }
+            // Close all other open goals during drag and remember them for restoration
+            const othersOpen = onCollapseOtherGoalsForDrag(goal.id)
+            const info = (window as any).__dragGoalInfo as { goalId: string; wasOpen?: boolean; openIds?: string[] }
+            info.openIds = othersOpen
             container?.classList.add('goal-entry--collapsed')
           }
           if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
@@ -746,9 +759,14 @@ const GoalRow: React.FC<GoalRowProps> = ({
           const container = headerEl.closest('li.goal-entry') as HTMLElement | null
           container?.classList.remove('dragging')
           container?.classList.remove('goal-entry--collapsed')
-          const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean } | null
-          if (info && info.goalId === goal.id && info.wasOpen) {
-            onToggle()
+          const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean; openIds?: string[] } | null
+          if (info && info.goalId === goal.id) {
+            if (info.openIds && info.openIds.length > 0) {
+              onRestoreGoalsOpenState(info.openIds)
+            }
+            if (info.wasOpen) {
+              onRestoreGoalsOpenState([goal.id])
+            }
           }
           const ghost = (window as any).__goalDragCloneRef as HTMLElement | null
           if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost)
@@ -2434,6 +2452,29 @@ export default function GoalsPage(): ReactElement {
     )
   }
 
+  // Collapse all other open goals during a goal drag; return snapshot of open goal IDs (excluding dragged)
+  const collapseOtherGoalsForDrag = (draggedId: string): string[] => {
+    const current = expandedRef.current
+    const openIds = Object.keys(current).filter((id) => id !== draggedId && current[id])
+    if (openIds.length === 0) return []
+    setExpanded((prev) => {
+      const next = { ...prev }
+      for (const id of openIds) next[id] = false
+      return next
+    })
+    return openIds
+  }
+
+  // Restore a set of goals to open state
+  const restoreGoalsOpenState = (ids: string[]) => {
+    if (!ids || ids.length === 0) return
+    setExpanded((prev) => {
+      const next = { ...prev }
+      for (const id of ids) next[id] = true
+      return next
+    })
+  }
+
   // Compute insertion metrics for goal list, mirroring bucket logic
   const computeGoalInsertMetrics = (listEl: HTMLElement, y: number) => {
     const items = Array.from(listEl.querySelectorAll('li.goal-entry')) as HTMLElement[]
@@ -2582,13 +2623,21 @@ export default function GoalsPage(): ReactElement {
                 setGoalLineTop(top)
               }}
               onDrop={(e) => {
-                const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean } | null
+                const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean; openIds?: string[] } | null
                 if (!info) return
                 e.preventDefault()
                 const toIndex = goalHoverIndex ?? visibleGoals.length
                 reorderGoalsByVisibleInsert(info.goalId, toIndex)
+                // Restore goals open state snapshot
+                if (info.openIds && info.openIds.length > 0) {
+                  restoreGoalsOpenState(info.openIds)
+                }
+                if (info.wasOpen) {
+                  restoreGoalsOpenState([info.goalId])
+                }
                 setGoalHoverIndex(null)
                 setGoalLineTop(null)
+                ;(window as any).__dragGoalInfo = null
               }}
               onDragLeave={(e) => {
                 if (e.currentTarget.contains(e.relatedTarget as Node)) return
@@ -2605,11 +2654,13 @@ export default function GoalsPage(): ReactElement {
                     goal={g}
                     isOpen={expanded[g.id] ?? false}
                     onToggle={() => toggleExpand(g.id)}
-                  isRenaming={renamingGoalId === g.id}
-                  goalRenameValue={renamingGoalId === g.id ? goalRenameDraft : undefined}
-                  onStartGoalRename={(goalId, initial) => startGoalRename(goalId, initial)}
-                  onGoalRenameChange={(value) => handleGoalRenameChange(value)}
-                  onGoalRenameSubmit={() => submitGoalRename()}
+                    onCollapseOtherGoalsForDrag={collapseOtherGoalsForDrag}
+                    onRestoreGoalsOpenState={restoreGoalsOpenState}
+                    isRenaming={renamingGoalId === g.id}
+                    goalRenameValue={renamingGoalId === g.id ? goalRenameDraft : undefined}
+                    onStartGoalRename={(goalId, initial) => startGoalRename(goalId, initial)}
+                    onGoalRenameChange={(value) => handleGoalRenameChange(value)}
+                    onGoalRenameSubmit={() => submitGoalRename()}
                   onGoalRenameCancel={() => cancelGoalRename()}
                   renamingBucketId={renamingBucketId}
                   bucketRenameValue={bucketRenameDraft}
