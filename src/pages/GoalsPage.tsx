@@ -2029,6 +2029,10 @@ export default function GoalsPage(): ReactElement {
               : g,
           ),
         )
+        // Persist top insertion to align with optimistic UI
+        if (db?.id) {
+          apiSetBucketSortIndex(goalId, db.id, 0).catch(() => {})
+        }
         setBucketExpanded((current) => ({ ...current, [newBucketId]: false }))
         setCompletedCollapsed((current) => ({ ...current, [newBucketId]: true }))
       })
@@ -2141,6 +2145,10 @@ export default function GoalsPage(): ReactElement {
         const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, buckets: [] }
         setGoals((current) => [newGoal, ...current])
         setExpanded((current) => ({ ...current, [id]: true }))
+        // Persist new goal at the top to match optimistic UI order
+        if (db?.id) {
+          apiSetGoalSortIndex(db.id, 0).catch(() => {})
+        }
       })
       .catch(() => {
         const id = `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -2799,7 +2807,8 @@ export default function GoalsPage(): ReactElement {
       next.splice(adjustedTo, 0, moved)
       return next
     })
-    apiSetGoalSortIndex(goalId, toVisibleIndex).catch(() => {})
+    // Persist using the computed global insertion index
+    apiSetGoalSortIndex(goalId, adjustedTo).catch(() => {})
   }
 
   return (
