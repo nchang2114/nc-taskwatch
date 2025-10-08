@@ -1357,8 +1357,76 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       e.stopPropagation()
                                       const key = completingKey(b.id, task.id)
                                       if (completingMap[key]) return
+                                      // Compute per-line strike overlay for sequential left→right wipe
+                                      let overlayTotal = 600
+                                      let rowTotalMs = 1600
+                                      try {
+                                        const marker = e.currentTarget as HTMLElement
+                                        const row = marker.closest('li.goal-task-row') as HTMLElement | null
+                                        const textHost = (row?.querySelector('.goal-task-text') as HTMLElement | null) ?? null
+                                        const textInner = (row?.querySelector('.goal-task-text__inner') as HTMLElement | null) ?? textHost
+                                        if (row && textHost && textInner) {
+                                          const range = document.createRange()
+                                          range.selectNodeContents(textInner)
+                                          const rects = Array.from(range.getClientRects())
+                                          const containerRect = textHost.getBoundingClientRect()
+                                          // Merge fragments that belong to the same visual line
+                                          const merged: Array<{ left: number; right: number; top: number; height: number }> = []
+                                          const byTop = rects
+                                            .filter((r) => r.width > 2 && r.height > 0)
+                                            .sort((a, b) => a.top - b.top)
+                                          const lineThreshold = 4 // px tolerance to group rects on the same line
+                                          byTop.forEach((r) => {
+                                            const last = merged[merged.length - 1]
+                                            if (!last || Math.abs(r.top - last.top) > lineThreshold) {
+                                              merged.push({ left: r.left, right: r.right, top: r.top, height: r.height })
+                                            } else {
+                                              last.left = Math.min(last.left, r.left)
+                                              last.right = Math.max(last.right, r.right)
+                                              last.top = Math.min(last.top, r.top)
+                                              last.height = Math.max(last.height, r.height)
+                                            }
+                                          })
+                                          const lineDur = 520 // ms
+                                          const lineStagger = 220 // ms
+                                          const thickness = 2 // px
+                                          const lineCount = Math.max(1, merged.length)
+                                          // Attach an overlay inside the text host so currentColor is inherited
+                                          const overlay = document.createElement('div')
+                                          overlay.className = 'goal-strike-overlay'
+                                          // Ensure host is position:relative so overlay aligns correctly
+                                          const hostStyle = window.getComputedStyle(textHost)
+                                          const patchPosition = hostStyle.position === 'static'
+                                          if (patchPosition) textHost.style.position = 'relative'
+                                          merged.forEach((m, i) => {
+                                            const top = Math.round((m.top - containerRect.top) + (m.height - thickness) / 2)
+                                            const left = Math.max(0, Math.round(m.left - containerRect.left))
+                                            const width = Math.max(0, Math.round(m.right - m.left))
+                                            const seg = document.createElement('div')
+                                            seg.className = 'goal-strike-line'
+                                            seg.style.top = `${top}px`
+                                            seg.style.left = `${left}px`
+                                            seg.style.height = `${thickness}px`
+                                            seg.style.setProperty('--target-w', `${width}px`)
+                                            seg.style.setProperty('--line-dur', `${lineDur}ms`)
+                                            seg.style.setProperty('--line-delay', `${i * lineStagger}ms`)
+                                            overlay.appendChild(seg)
+                                          })
+                                          textHost.appendChild(overlay)
+                                          // Compute total overlay time and align row slide to begin after wipe completes
+                                          overlayTotal = lineDur + (lineCount - 1) * lineStagger + 100
+                                          rowTotalMs = Math.max(Math.ceil(overlayTotal / 0.7), overlayTotal + 400)
+                                          row.style.setProperty('--row-complete-dur', `${rowTotalMs}ms`)
+                                          // Cleanup overlay after the slide completes to avoid leftovers
+                                          window.setTimeout(() => {
+                                            if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
+                                            if (patchPosition) textHost.style.position = ''
+                                          }, rowTotalMs + 80)
+                                        }
+                                      } catch {}
+                                      // Trigger completing state for marker/check + row timing
                                       setCompletingMap((prev) => ({ ...prev, [key]: true }))
-                                      // Play animation, then commit completion toggle
+                                      // Commit completion after row slide (duration set above)
                                       window.setTimeout(() => {
                                         onToggleTaskComplete(b.id, task.id)
                                         setCompletingMap((prev) => {
@@ -1366,7 +1434,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           delete next[key]
                                           return next
                                         })
-                                      }, 1200)
+                                      }, Math.max(1200, rowTotalMs))
                                     }}
                                     aria-label="Mark task complete"
                                   >
