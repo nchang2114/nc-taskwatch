@@ -118,8 +118,8 @@ async function nextSortIndex(table: 'goals' | 'buckets' | 'tasks', filters?: Rec
   let query = supabase.from(table).select('sort_index').order('sort_index', { ascending: false }).limit(1)
   if (filters) {
     for (const [k, v] of Object.entries(filters)) {
-      // @ts-expect-error dynamic
-      query = query.eq(k, v)
+      // Cast to any to allow dynamic column filtering
+      query = (query as any).eq(k, v)
     }
   }
   const { data } = await query

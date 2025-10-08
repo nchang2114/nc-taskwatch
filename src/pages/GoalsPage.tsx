@@ -2332,8 +2332,7 @@ export default function GoalsPage(): ReactElement {
                       const active = updatedTasks.filter((t) => !t.completed)
                       const completed = updatedTasks.filter((t) => t.completed)
                       completedCountAfter = completed.length
-                      const tasks = newCompleted ? [...active, ...completed] : [...active, ...completed]
-                      // Ensure toggled is last in its section
+                      // Ensure toggled is last in its new section
                       if (newCompleted) {
                         const idx = completed.findIndex((t) => t.id === taskId)
                         if (idx !== -1) {
