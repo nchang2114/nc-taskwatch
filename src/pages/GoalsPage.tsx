@@ -1,5 +1,22 @@
 import React, { useState, useRef, useEffect, useMemo, type ReactElement } from 'react'
 import './GoalsPage.css'
+import {
+  fetchGoalsHierarchy,
+  createGoal as apiCreateGoal,
+  renameGoal as apiRenameGoal,
+  createBucket as apiCreateBucket,
+  renameBucket as apiRenameBucket,
+  setBucketFavorite as apiSetBucketFavorite,
+  deleteBucketById as apiDeleteBucketById,
+  deleteCompletedTasksInBucket as apiDeleteCompletedTasksInBucket,
+  createTask as apiCreateTask,
+  updateTaskText as apiUpdateTaskText,
+  setTaskDifficulty as apiSetTaskDifficulty,
+  setTaskCompletedAndResort as apiSetTaskCompletedAndResort,
+  setTaskSortIndex as apiSetTaskSortIndex,
+  setBucketSortIndex as apiSetBucketSortIndex,
+  setGoalSortIndex as apiSetGoalSortIndex,
+} from '../lib/goalsApi'
 
 // Helper function for class names
 function classNames(...xs: (string | boolean | undefined)[]): string {
@@ -1735,6 +1752,23 @@ export default function GoalsPage(): ReactElement {
     }),
     [customGradientPreview],
   )
+  // On first load, attempt to hydrate from Supabase (single-user session).
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const result = await fetchGoalsHierarchy()
+        if (!cancelled && result && Array.isArray(result.goals)) {
+          setGoals(result.goals as any)
+        }
+      } catch {
+        // ignore; fall back to local defaults
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const previousExpandedRef = useRef<Record<string, boolean> | null>(null)
   const previousBucketExpandedRef = useRef<Record<string, boolean> | null>(null)
   const previousCompletedCollapsedRef = useRef<Record<string, boolean> | null>(null)
@@ -1771,6 +1805,9 @@ export default function GoalsPage(): ReactElement {
     if (!renamingGoalId) return
     const next = goalRenameDraft.trim()
     setGoals((gs) => gs.map((g) => (g.id === renamingGoalId ? { ...g, name: next || g.name } : g)))
+    if (next.length > 0) {
+      apiRenameGoal(renamingGoalId, next).catch(() => {})
+    }
     setRenamingGoalId(null)
     setGoalRenameDraft('')
   }
@@ -1795,6 +1832,9 @@ export default function GoalsPage(): ReactElement {
         buckets: g.buckets.map((b) => (b.id === renamingBucketId ? { ...b, name: next || b.name } : b)),
       })),
     )
+    if (next.length > 0) {
+      apiRenameBucket(renamingBucketId, next).catch(() => {})
+    }
     setRenamingBucketId(null)
     setBucketRenameDraft('')
   }
@@ -1809,6 +1849,7 @@ export default function GoalsPage(): ReactElement {
         g.id === goalId ? { ...g, buckets: g.buckets.filter((b) => b.id !== bucketId) } : g,
       ),
     )
+    apiDeleteBucketById(bucketId).catch(() => {})
   }
 
   const deleteCompletedTasks = (goalId: string, bucketId: string) => {
@@ -1824,6 +1865,7 @@ export default function GoalsPage(): ReactElement {
           : g,
       ),
     )
+    apiDeleteCompletedTasksInBucket(bucketId).catch(() => {})
   }
 
   const toggleBucketExpanded = (bucketId: string) => {
@@ -1905,22 +1947,32 @@ export default function GoalsPage(): ReactElement {
       return
     }
 
-    const newBucketId = `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, tasks: [] }
-
-    setGoals((gs) =>
-      gs.map((g) =>
-        g.id === goalId
-          ? {
-              ...g,
-              buckets: [newBucket, ...g.buckets],
-            }
-          : g,
-      ),
-    )
-
-    setBucketExpanded((current) => ({ ...current, [newBucketId]: false }))
-    setCompletedCollapsed((current) => ({ ...current, [newBucketId]: true }))
+    apiCreateBucket(goalId, trimmed)
+      .then((db) => {
+        const newBucketId = db?.id ?? `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, tasks: [] }
+        setGoals((gs) =>
+          gs.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  buckets: [newBucket, ...g.buckets],
+                }
+              : g,
+          ),
+        )
+        setBucketExpanded((current) => ({ ...current, [newBucketId]: false }))
+        setCompletedCollapsed((current) => ({ ...current, [newBucketId]: true }))
+      })
+      .catch(() => {
+        const newBucketId = `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, tasks: [] }
+        setGoals((gs) =>
+          gs.map((g) => (g.id === goalId ? { ...g, buckets: [newBucket, ...g.buckets] } : g)),
+        )
+        setBucketExpanded((current) => ({ ...current, [newBucketId]: false }))
+        setCompletedCollapsed((current) => ({ ...current, [newBucketId]: true }))
+      })
 
     if (options?.keepDraft) {
       setBucketDrafts((current) => ({ ...current, [goalId]: '' }))
@@ -2014,19 +2066,20 @@ export default function GoalsPage(): ReactElement {
       }
       return
     }
-
-    const newGoalId = `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const gradientForGoal = selectedGoalGradient === 'custom' ? `custom:${customGradientPreview}` : selectedGoalGradient
-
-    const newGoal: Goal = {
-      id: newGoalId,
-      name: trimmed,
-      color: gradientForGoal,
-      buckets: [],
-    }
-
-    setGoals((current) => [newGoal, ...current])
-    setExpanded((current) => ({ ...current, [newGoalId]: true }))
+    apiCreateGoal(trimmed, gradientForGoal)
+      .then((db) => {
+        const id = db?.id ?? `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, buckets: [] }
+        setGoals((current) => [newGoal, ...current])
+        setExpanded((current) => ({ ...current, [id]: true }))
+      })
+      .catch(() => {
+        const id = `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, buckets: [] }
+        setGoals((current) => [newGoal, ...current])
+        setExpanded((current) => ({ ...current, [id]: true }))
+      })
 
     setNextGoalGradientIndex((index) => (index + 1) % GOAL_GRADIENTS.length)
     closeCreateGoal()
@@ -2179,20 +2232,44 @@ export default function GoalsPage(): ReactElement {
       return
     }
 
-    const newTask: TaskItem = { id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, text: trimmed, completed: false, difficulty: 'none' }
-
-    setGoals((gs) =>
-      gs.map((g) =>
-        g.id === goalId
-          ? {
-              ...g,
-              buckets: g.buckets.map((bucket) =>
-                bucket.id === bucketId ? { ...bucket, tasks: [newTask, ...bucket.tasks] } : bucket,
-              ),
-            }
-          : g,
-      ),
-    )
+    apiCreateTask(bucketId, trimmed)
+      .then((db) => {
+        const newTask: TaskItem = { id: db?.id ?? `task_${Date.now()}`, text: trimmed, completed: false, difficulty: 'none' }
+        setGoals((gs) =>
+          gs.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  buckets: g.buckets.map((bucket) => {
+                    if (bucket.id !== bucketId) return bucket
+                    const active = bucket.tasks.filter((t) => !t.completed)
+                    const completed = bucket.tasks.filter((t) => t.completed)
+                    // Prepend new task to the top of active section to match DB prepend strategy
+                    return { ...bucket, tasks: [newTask, ...active, ...completed] }
+                  }),
+                }
+              : g,
+          ),
+        )
+      })
+      .catch(() => {
+        const fallback: TaskItem = { id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, text: trimmed, completed: false, difficulty: 'none' }
+        setGoals((gs) =>
+          gs.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  buckets: g.buckets.map((bucket) => {
+                    if (bucket.id !== bucketId) return bucket
+                    const active = bucket.tasks.filter((t) => !t.completed)
+                    const completed = bucket.tasks.filter((t) => t.completed)
+                    return { ...bucket, tasks: [fallback, ...active, ...completed] }
+                  }),
+                }
+              : g,
+          ),
+        )
+      })
 
     if (options?.keepDraft) {
       setTaskDrafts((current) => ({ ...current, [bucketId]: '' }))
@@ -2246,11 +2323,32 @@ export default function GoalsPage(): ReactElement {
                 bucket.id === bucketId
                   ? (() => {
                       updated = true
+                      const toggled = bucket.tasks.find((t) => t.id === taskId)
+                      const newCompleted = !(toggled?.completed ?? false)
                       const updatedTasks = bucket.tasks.map((task) =>
-                        task.id === taskId ? { ...task, completed: !task.completed } : task,
+                        task.id === taskId ? { ...task, completed: newCompleted } : task,
                       )
-                      completedCountAfter = updatedTasks.filter((task) => task.completed).length
-                      return { ...bucket, tasks: updatedTasks }
+                      // Move the toggled task to the end of its new section to match DB ordering
+                      const active = updatedTasks.filter((t) => !t.completed)
+                      const completed = updatedTasks.filter((t) => t.completed)
+                      completedCountAfter = completed.length
+                      const tasks = newCompleted ? [...active, ...completed] : [...active, ...completed]
+                      // Ensure toggled is last in its section
+                      if (newCompleted) {
+                        const idx = completed.findIndex((t) => t.id === taskId)
+                        if (idx !== -1) {
+                          const [mv] = completed.splice(idx, 1)
+                          completed.push(mv)
+                        }
+                        return { ...bucket, tasks: [...active, ...completed] }
+                      } else {
+                        const idx = active.findIndex((t) => t.id === taskId)
+                        if (idx !== -1) {
+                          const [mv] = active.splice(idx, 1)
+                          active.push(mv)
+                        }
+                        return { ...bucket, tasks: [...active, ...completed] }
+                      }
                     })()
                   : bucket,
               ),
@@ -2265,6 +2363,9 @@ export default function GoalsPage(): ReactElement {
         [bucketId]: completedCountAfter > 0 ? false : true,
       }))
     }
+    const cur = goals.find((g) => g.id === goalId)?.buckets.find((b) => b.id === bucketId)?.tasks.find((t) => t.id === taskId)
+    const newCompleted = !(cur?.completed ?? false)
+    apiSetTaskCompletedAndResort(taskId, bucketId, newCompleted).catch(() => {})
   }
 
   const cycleTaskDifficulty = (goalId: string, bucketId: string, taskId: string) => {
@@ -2281,6 +2382,11 @@ export default function GoalsPage(): ReactElement {
           return 'none' as const
       }
     }
+    // Compute next difficulty first to persist the correct value
+    const cur = goals
+      .find((g) => g.id === goalId)?.buckets
+      .find((b) => b.id === bucketId)?.tasks.find((t) => t.id === taskId)
+    const nextDiff = nextOf(cur?.difficulty)
     setGoals((gs) =>
       gs.map((g) =>
         g.id === goalId
@@ -2288,13 +2394,14 @@ export default function GoalsPage(): ReactElement {
               ...g,
               buckets: g.buckets.map((b) =>
                 b.id === bucketId
-                  ? { ...b, tasks: b.tasks.map((t) => (t.id === taskId ? { ...t, difficulty: nextOf(t.difficulty) } : t)) }
+                  ? { ...b, tasks: b.tasks.map((t) => (t.id === taskId ? { ...t, difficulty: nextDiff } : t)) }
                   : b,
               ),
             }
           : g,
       ),
     )
+    apiSetTaskDifficulty(taskId, nextDiff as any).catch(() => {})
   }
 
   // Inline edit existing task text (Google Tasks-style)
@@ -2397,6 +2504,9 @@ export default function GoalsPage(): ReactElement {
 
     removeTaskEdit(taskId)
     releaseEditSubmittingFlag(taskId)
+    if (nextText.length > 0) {
+      apiUpdateTaskText(taskId, nextText).catch(() => {})
+    }
   }
 
   const handleTaskEditBlur = (goalId: string, bucketId: string, taskId: string) => {
@@ -2424,6 +2534,9 @@ export default function GoalsPage(): ReactElement {
           : g
       )
     )
+    const current = goals.find((g) => g.id === goalId)?.buckets.find((b) => b.id === bucketId)
+    const next = !(current?.favorite ?? false)
+    apiSetBucketFavorite(bucketId, next).catch(() => {})
   }
 
   // Reorder tasks within a bucket section (active or completed), similar to Google Tasks
@@ -2434,6 +2547,10 @@ export default function GoalsPage(): ReactElement {
     fromIndex: number,
     toIndex: number,
   ) => {
+    // Determine moved task id based on current state before mutation
+    const bucket = goals.find((g) => g.id === goalId)?.buckets.find((b) => b.id === bucketId)
+    const listBefore = (bucket?.tasks ?? []).filter((t) => (section === 'active' ? !t.completed : t.completed))
+    const movedId = listBefore[fromIndex]?.id
     setGoals((gs) =>
       gs.map((g) => {
         if (g.id !== goalId) return g
@@ -2456,6 +2573,9 @@ export default function GoalsPage(): ReactElement {
         }
       }),
     )
+    if (movedId) {
+      apiSetTaskSortIndex(bucketId, section, toIndex, movedId).catch(() => {})
+    }
   }
 
   // Reorder buckets within a goal
@@ -2464,6 +2584,9 @@ export default function GoalsPage(): ReactElement {
     fromIndex: number,
     toIndex: number,
   ) => {
+    // Determine moved bucket id
+    const goal = goals.find((g) => g.id === goalId)
+    const movedBucketId = goal?.buckets?.[fromIndex]?.id
     setGoals((gs) =>
       gs.map((g) => {
         if (g.id !== goalId) return g
@@ -2477,6 +2600,9 @@ export default function GoalsPage(): ReactElement {
         return { ...g, buckets: next }
       }),
     )
+    if (movedBucketId) {
+      apiSetBucketSortIndex(goalId, movedBucketId, toIndex).catch(() => {})
+    }
   }
 
   // Collapse all other open goals during a goal drag; return snapshot of open goal IDs (excluding dragged)
@@ -2606,6 +2732,7 @@ export default function GoalsPage(): ReactElement {
       next.splice(adjustedTo, 0, moved)
       return next
     })
+    apiSetGoalSortIndex(goalId, toVisibleIndex).catch(() => {})
   }
 
   return (
