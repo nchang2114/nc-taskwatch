@@ -162,6 +162,25 @@ export async function renameGoal(goalId: string, name: string) {
   await supabase.from('goals').update({ name }).eq('id', goalId)
 }
 
+export async function deleteGoalById(goalId: string) {
+  if (!supabase) return
+  await ensureSingleUserSession()
+  // Collect bucket ids under this goal
+  const { data: buckets } = await supabase
+    .from('buckets')
+    .select('id')
+    .eq('goal_id', goalId)
+  const bucketIds = (buckets ?? []).map((b: any) => b.id as string)
+  if (bucketIds.length > 0) {
+    // Delete tasks in those buckets
+    await supabase.from('tasks').delete().in('bucket_id', bucketIds)
+    // Delete the buckets
+    await supabase.from('buckets').delete().in('id', bucketIds)
+  }
+  // Finally delete the goal
+  await supabase.from('goals').delete().eq('id', goalId)
+}
+
 export async function setGoalSortIndex(goalId: string, toIndex: number) {
   if (!supabase) return
   await ensureSingleUserSession()

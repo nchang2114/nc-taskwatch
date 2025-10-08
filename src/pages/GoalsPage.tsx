@@ -4,6 +4,7 @@ import {
   fetchGoalsHierarchy,
   createGoal as apiCreateGoal,
   renameGoal as apiRenameGoal,
+  deleteGoalById as apiDeleteGoalById,
   createBucket as apiCreateBucket,
   renameBucket as apiRenameBucket,
   setBucketFavorite as apiSetBucketFavorite,
@@ -330,6 +331,7 @@ interface GoalRowProps {
   goal: Goal
   isOpen: boolean
   onToggle: () => void
+  onDeleteGoal: (goalId: string) => void
   // Goal-level DnD helpers
   onCollapseOtherGoalsForDrag: (draggedGoalId: string) => string[]
   onRestoreGoalsOpenState: (ids: string[]) => void
@@ -397,6 +399,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   goal,
   isOpen,
   onToggle,
+  onDeleteGoal,
   onCollapseOtherGoalsForDrag,
   onRestoreGoalsOpenState,
   isRenaming,
@@ -856,7 +859,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
               </svg>
             </button>
             {menuOpen && (
-              <div ref={menuRef} className="goal-menu absolute right-0 top-8 z-10 min-w-[140px] rounded-md border p-1 shadow-lg">
+              <div ref={menuRef} className="goal-menu absolute right-0 top-8 z-10 min-w-[160px] rounded-md border p-1 shadow-lg">
                 <button
                   type="button"
                   className="goal-menu__item"
@@ -867,6 +870,19 @@ const GoalRow: React.FC<GoalRowProps> = ({
                   }}
                 >
                   Rename
+                </button>
+                <div className="goal-menu__divider" />
+                <button
+                  type="button"
+                  className="goal-menu__item goal-menu__item--danger"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setMenuOpen(false)
+                    onDeleteGoal(goal.id)
+                  }}
+                  aria-label="Delete goal"
+                >
+                  Delete goal
                 </button>
               </div>
             )}
@@ -1911,6 +1927,39 @@ export default function GoalsPage(): ReactElement {
     setBucketRenameDraft('')
   }
 
+  const deleteGoal = (goalId: string) => {
+    // Snapshot buckets to clean up per-bucket UI state
+    const target = goals.find((g) => g.id === goalId)
+    setGoals((gs) => gs.filter((g) => g.id !== goalId))
+    setExpanded((prev) => {
+      const { [goalId]: _removed, ...rest } = prev
+      return rest
+    })
+    if (renamingGoalId === goalId) {
+      setRenamingGoalId(null)
+      setGoalRenameDraft('')
+    }
+    if (target) {
+      const bucketIds = target.buckets.map((b) => b.id)
+      setBucketExpanded((prev) => {
+        const next = { ...prev }
+        bucketIds.forEach((id) => delete next[id])
+        return next
+      })
+      setCompletedCollapsed((prev) => {
+        const next = { ...prev }
+        bucketIds.forEach((id) => delete next[id])
+        return next
+      })
+      setTaskDrafts((prev) => {
+        const next = { ...prev }
+        bucketIds.forEach((id) => delete next[id])
+        return next
+      })
+    }
+    apiDeleteGoalById(goalId).catch(() => {})
+  }
+
   const deleteBucket = (goalId: string, bucketId: string) => {
     setGoals((gs) =>
       gs.map((g) =>
@@ -2892,6 +2941,7 @@ export default function GoalsPage(): ReactElement {
                     goal={g}
                     isOpen={expanded[g.id] ?? false}
                     onToggle={() => toggleExpand(g.id)}
+                    onDeleteGoal={(goalId) => deleteGoal(goalId)}
                     onCollapseOtherGoalsForDrag={collapseOtherGoalsForDrag}
                     onRestoreGoalsOpenState={restoreGoalsOpenState}
                     isRenaming={renamingGoalId === g.id}
