@@ -1,4 +1,4 @@
-// TODO: OG REFLECTION STYLES I WANT
+// TODO: OG REFLECTION STYLES I WANT...
 
 import React, { useState } from "react";
 
