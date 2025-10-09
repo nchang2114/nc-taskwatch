@@ -16,7 +16,6 @@ export type DbTask = {
   text: string
   completed: boolean
   difficulty: 'none' | 'green' | 'yellow' | 'red'
-  priority: boolean
   sort_index: number
 }
 
@@ -37,6 +36,7 @@ export async function fetchGoalsHierarchy(): Promise<
             text: string
             completed: boolean
             difficulty?: 'none' | 'green' | 'yellow' | 'red'
+            priority?: boolean
           }>
         }>
       }>
@@ -70,10 +70,9 @@ export async function fetchGoalsHierarchy(): Promise<
   const { data: tasks, error: tErr } = bucketIds.length
     ? await supabase
         .from('tasks')
-        .select('id, user_id, bucket_id, text, completed, difficulty, priority, sort_index')
+        .select('id, user_id, bucket_id, text, completed, difficulty, sort_index')
         .in('bucket_id', bucketIds)
         .order('completed', { ascending: true })
-        .order('priority', { ascending: false })
         .order('sort_index', { ascending: true })
     : { data: [], error: null as any }
   if (tErr) return null
@@ -97,7 +96,8 @@ export async function fetchGoalsHierarchy(): Promise<
         text: t.text,
         completed: !!t.completed,
         difficulty: (t.difficulty as any) ?? 'none',
-        priority: !!(t as any).priority,
+        // Derive priority purely from sort_index sign (negative = priority)
+        priority: typeof (t as any).sort_index === 'number' ? (t as any).sort_index < 0 : false,
       })
     }
   })
@@ -287,15 +287,15 @@ export async function deleteCompletedTasksInBucket(bucketId: string) {
 export async function createTask(bucketId: string, text: string) {
   if (!supabase) return null
   await ensureSingleUserSession()
-  // Insert new active tasks at the TOP by assigning a sort_index smaller than current minimum
-  const sort_index = await prependSortIndexForTasks(bucketId, false)
+  // Insert new active tasks at the END of the non-priority region by default
+  const sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed: false })
   const { data, error } = await supabase
     .from('tasks')
-    .insert([{ bucket_id: bucketId, text, completed: false, difficulty: 'none', priority: false, sort_index }])
-    .select('id, text, completed, difficulty, priority, sort_index')
+    .insert([{ bucket_id: bucketId, text, completed: false, difficulty: 'none', sort_index }])
+    .select('id, text, completed, difficulty, sort_index')
     .single()
   if (error) return null
-  return data as { id: string; text: string; completed: boolean; difficulty: DbTask['difficulty']; priority: boolean; sort_index: number }
+  return data as { id: string; text: string; completed: boolean; difficulty: DbTask['difficulty']; sort_index: number }
 }
 
 export async function updateTaskText(taskId: string, text: string) {
@@ -320,10 +320,26 @@ export async function setTaskPriorityAndResort(
 ) {
   if (!supabase) return
   await ensureSingleUserSession()
-  // When enabling or disabling, we want the task to appear at the first position of its group.
-  // Using the section minimum sort_index ensures top position within that section.
-  const sort_index = await prependSortIndexForTasks(bucketId, completed)
-  await supabase.from('tasks').update({ priority, sort_index }).eq('id', taskId)
+  if (priority) {
+    // Enabling priority: move to top of section; use negative space by prepending.
+    const sort_index = await prependSortIndexForTasks(bucketId, completed)
+    await supabase.from('tasks').update({ sort_index }).eq('id', taskId)
+    return
+  }
+  // Disabling priority: move to first non-priority (smallest nonnegative sort_index)
+  let sort_index = 0
+  const { data } = await supabase
+    .from('tasks')
+    .select('sort_index')
+    .eq('bucket_id', bucketId)
+    .eq('completed', completed)
+    .gte('sort_index', 0)
+    .order('sort_index', { ascending: true })
+    .limit(1)
+  if (data && data.length > 0) {
+    sort_index = (data[0] as any).sort_index ?? 0
+  }
+  await supabase.from('tasks').update({ sort_index }).eq('id', taskId)
 }
 
 export async function setTaskCompletedAndResort(taskId: string, bucketId: string, completed: boolean) {
