@@ -1620,7 +1620,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         longPressTimersRef.current.delete(key)
                                       }
                                     }}
-                                    onPointerLeave={(e) => {
+                                    onPointerLeave={() => {
                                       const key = `${goal.id}:${b.id}:${task.id}`
                                       const timerId = longPressTimersRef.current.get(key)
                                       if (timerId) {
