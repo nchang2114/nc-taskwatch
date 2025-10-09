@@ -17,6 +17,7 @@ import {
   setTaskSortIndex as apiSetTaskSortIndex,
   setBucketSortIndex as apiSetBucketSortIndex,
   setGoalSortIndex as apiSetGoalSortIndex,
+  setTaskPriorityAndResort as apiSetTaskPriorityAndResort,
 } from '../lib/goalsApi'
 
 // Helper function for class names
@@ -55,6 +56,8 @@ interface TaskItem {
   text: string
   completed: boolean
   difficulty?: 'none' | 'green' | 'yellow' | 'red'
+  // Local-only: whether this task is prioritized (not persisted yet)
+  priority?: boolean
 }
 
 // Limit for inline task text editing (mirrors Taskwatch behavior)
@@ -373,6 +376,7 @@ interface GoalRowProps {
   highlightTerm: string
   onToggleTaskComplete: (bucketId: string, taskId: string) => void
   onCycleTaskDifficulty: (bucketId: string, taskId: string) => void
+  onToggleTaskPriority: (bucketId: string, taskId: string) => void
   // Editing existing task text
   editingTasks: Record<string, string>
   onStartTaskEdit: (goalId: string, bucketId: string, taskId: string, initial: string) => void
@@ -438,6 +442,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   highlightTerm,
   onToggleTaskComplete,
   onCycleTaskDifficulty,
+  onToggleTaskPriority,
   editingTasks,
   onStartTaskEdit,
   onTaskEditChange,
@@ -461,6 +466,53 @@ const GoalRow: React.FC<GoalRowProps> = ({
   // Transient animation state for task completion (active → completed)
   const [completingMap, setCompletingMap] = useState<Record<string, boolean>>({})
   const completingKey = (bucketId: string, taskId: string) => `${bucketId}:${taskId}`
+  
+  // Long-press to toggle priority on the difficulty dot
+  const PRIORITY_HOLD_MS = 300
+  const longPressTimersRef = useRef<Map<string, number>>(new Map())
+  const longPressTriggeredRef = useRef<Set<string>>(new Set())
+
+  // FLIP animation for moving task to top
+  const taskRowRefs = useRef(new Map<string, HTMLLIElement>())
+  const registerTaskRowRef = (taskId: string, el: HTMLLIElement | null) => {
+    if (el) taskRowRefs.current.set(taskId, el)
+    else taskRowRefs.current.delete(taskId)
+  }
+  const flipStartRectsRef = useRef(new Map<string, DOMRect>())
+  const prepareFlipForTask = (taskId: string) => {
+    const el = taskRowRefs.current.get(taskId)
+    if (!el) return
+    try {
+      flipStartRectsRef.current.set(taskId, el.getBoundingClientRect())
+    } catch {}
+  }
+  const runFlipForTask = (taskId: string) => {
+    const el = taskRowRefs.current.get(taskId)
+    const start = flipStartRectsRef.current.get(taskId)
+    if (!el || !start) return
+    try {
+      const end = el.getBoundingClientRect()
+      const dx = start.left - end.left
+      const dy = start.top - end.top
+      // If no movement, skip
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return
+      el.style.willChange = 'transform'
+      el.style.transition = 'none'
+      el.style.transform = `translate(${dx}px, ${dy}px)`
+      // Flush
+      void el.getBoundingClientRect()
+      el.style.transition = 'transform 320ms cubic-bezier(0.22, 1, 0.36, 1)'
+      el.style.transform = 'translate(0, 0)'
+      const cleanup = () => {
+        el.style.transition = ''
+        el.style.transform = ''
+        el.style.willChange = ''
+      }
+      el.addEventListener('transitionend', cleanup, { once: true })
+      // Fallback cleanup
+      window.setTimeout(cleanup, 420)
+    } catch {}
+  }
   
 
   // Preserve original transparency — no conversion to opaque
@@ -1295,10 +1347,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                 <React.Fragment key={`${task.id}-wrap`}>
                                   {/* placeholder suppressed; line is rendered absolutely */}
                                   <li
+                                    ref={(el) => registerTaskRowRef(task.id, el)}
                                     key={task.id}
                                     className={classNames(
                                       'goal-task-row',
                                       diffClass,
+                                      task.priority && 'goal-task-row--priority',
                                       isEditing && 'goal-task-row--draft',
                                       completingMap[completingKey(b.id, task.id)] && 'goal-task-row--completing',
                                     )}
@@ -1524,12 +1578,65 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       task.difficulty === 'yellow' && 'goal-task-diff--yellow',
                                       task.difficulty === 'red' && 'goal-task-diff--red',
                                     )}
-                                    onClick={(e) => {
+                                    onPointerDown={(e) => {
                                       e.stopPropagation()
+                                      const key = `${goal.id}:${b.id}:${task.id}`
+                                      try {
+                                        const timerId = window.setTimeout(() => {
+                                          longPressTriggeredRef.current.add(key)
+                                          // Prepare FLIP, toggle, then animate
+                                          prepareFlipForTask(task.id)
+                                          onToggleTaskPriority(b.id, task.id)
+                                          if (typeof window !== 'undefined') {
+                                            window.requestAnimationFrame(() =>
+                                              window.requestAnimationFrame(() => runFlipForTask(task.id)),
+                                            )
+                                          }
+                                        }, PRIORITY_HOLD_MS)
+                                        longPressTimersRef.current.set(key, timerId)
+                                      } catch {}
+                                    }}
+                                    onPointerUp={(e) => {
+                                      e.stopPropagation()
+                                      const key = `${goal.id}:${b.id}:${task.id}`
+                                      const timerId = longPressTimersRef.current.get(key)
+                                      if (timerId) {
+                                        window.clearTimeout(timerId)
+                                        longPressTimersRef.current.delete(key)
+                                      }
+                                      if (longPressTriggeredRef.current.has(key)) {
+                                        longPressTriggeredRef.current.delete(key)
+                                        // consumed by long-press; do not cycle difficulty
+                                        return
+                                      }
                                       onCycleTaskDifficulty(b.id, task.id)
                                     }}
+                                    onPointerCancel={(e) => {
+                                      e.stopPropagation()
+                                      const key = `${goal.id}:${b.id}:${task.id}`
+                                      const timerId = longPressTimersRef.current.get(key)
+                                      if (timerId) {
+                                        window.clearTimeout(timerId)
+                                        longPressTimersRef.current.delete(key)
+                                      }
+                                    }}
+                                    onPointerLeave={(e) => {
+                                      const key = `${goal.id}:${b.id}:${task.id}`
+                                      const timerId = longPressTimersRef.current.get(key)
+                                      if (timerId) {
+                                        window.clearTimeout(timerId)
+                                        longPressTimersRef.current.delete(key)
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        onCycleTaskDifficulty(b.id, task.id)
+                                      }
+                                    }}
                                     aria-label="Set task difficulty"
-                                    title="Difficulty: none → green → yellow → red"
+                                    title="Tap to cycle difficulty • Hold ~300ms for Priority"
                                   />
                                 </li>
                                 </React.Fragment>
@@ -1618,8 +1725,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     <React.Fragment key={`${task.id}-cwrap`}>
                                       {/* placeholder suppressed; line is rendered absolutely */}
                                       <li
+                                        ref={(el) => registerTaskRowRef(task.id, el)}
                                         key={task.id}
-                                        className={classNames('goal-task-row goal-task-row--completed', diffClass, isEditing && 'goal-task-row--draft')}
+                                        className={classNames('goal-task-row goal-task-row--completed', diffClass, task.priority && 'goal-task-row--priority', isEditing && 'goal-task-row--draft')}
                                         draggable
                                         onDragStart={(e) => {
                                           e.dataTransfer.setData('text/plain', task.id)
@@ -1753,12 +1861,64 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           task.difficulty === 'yellow' && 'goal-task-diff--yellow',
                                           task.difficulty === 'red' && 'goal-task-diff--red',
                                         )}
-                                        onClick={(e) => {
+                                        onPointerDown={(e) => {
                                           e.stopPropagation()
+                                          const key = `${goal.id}:${b.id}:${task.id}`
+                                          try {
+                                            const timerId = window.setTimeout(() => {
+                                              longPressTriggeredRef.current.add(key)
+                                              // Prepare FLIP, toggle, then animate
+                                              prepareFlipForTask(task.id)
+                                              onToggleTaskPriority(b.id, task.id)
+                                              if (typeof window !== 'undefined') {
+                                                window.requestAnimationFrame(() =>
+                                                  window.requestAnimationFrame(() => runFlipForTask(task.id)),
+                                                )
+                                              }
+                                            }, PRIORITY_HOLD_MS)
+                                            longPressTimersRef.current.set(key, timerId)
+                                          } catch {}
+                                        }}
+                                        onPointerUp={(e) => {
+                                          e.stopPropagation()
+                                          const key = `${goal.id}:${b.id}:${task.id}`
+                                          const timerId = longPressTimersRef.current.get(key)
+                                          if (timerId) {
+                                            window.clearTimeout(timerId)
+                                            longPressTimersRef.current.delete(key)
+                                          }
+                                          if (longPressTriggeredRef.current.has(key)) {
+                                            longPressTriggeredRef.current.delete(key)
+                                            return
+                                          }
                                           onCycleTaskDifficulty(b.id, task.id)
                                         }}
+                                        onPointerCancel={(e) => {
+                                          e.stopPropagation()
+                                          const key = `${goal.id}:${b.id}:${task.id}`
+                                          const timerId = longPressTimersRef.current.get(key)
+                                          if (timerId) {
+                                            window.clearTimeout(timerId)
+                                            longPressTimersRef.current.delete(key)
+                                          }
+                                        }}
+                                        onPointerLeave={() => {
+                                          const key = `${goal.id}:${b.id}:${task.id}`
+                                          const timerId = longPressTimersRef.current.get(key)
+                                          if (timerId) {
+                                            window.clearTimeout(timerId)
+                                            longPressTimersRef.current.delete(key)
+                                          }
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            onCycleTaskDifficulty(b.id, task.id)
+                                          }
+                                        }}
                                         aria-label="Set task difficulty"
-                                        title="Difficulty: none → green → yellow → red"
+                                        title="Tap to cycle difficulty • Hold ~300ms for Priority"
                                       />
                                       </li>
                                     </React.Fragment>
@@ -2528,6 +2688,63 @@ export default function GoalsPage(): ReactElement {
     apiSetTaskDifficulty(taskId, nextDiff as any).catch(() => {})
   }
 
+  // Toggle priority on a task with a long-press on the difficulty control.
+  // Local-only: reorders task to the top of its current section when enabling.
+  const toggleTaskPriority = (goalId: string, bucketId: string, taskId: string) => {
+    setGoals((gs) =>
+      gs.map((g) => {
+        if (g.id !== goalId) return g
+        return {
+          ...g,
+          buckets: g.buckets.map((b) => {
+            if (b.id !== bucketId) return b
+            const idx = b.tasks.findIndex((t) => t.id === taskId)
+            if (idx < 0) return b
+            const current = b.tasks[idx]
+            const nextPriority = !(current.priority ?? false)
+            // Update priority flag first
+            let updatedTasks = b.tasks.map((t, i) => (i === idx ? { ...t, priority: nextPriority } : t))
+            const moved = updatedTasks.find((t) => t.id === taskId)!
+            const active = updatedTasks.filter((t) => !t.completed)
+            const completed = updatedTasks.filter((t) => t.completed)
+            if (nextPriority) {
+              if (!moved.completed) {
+                const without = active.filter((t) => t.id !== taskId)
+                const newActive = [moved, ...without]
+                updatedTasks = [...newActive, ...completed]
+              } else {
+                const without = completed.filter((t) => t.id !== taskId)
+                const newCompleted = [moved, ...without]
+                updatedTasks = [...active, ...newCompleted]
+              }
+            } else {
+              // De-prioritise: keep within same section, insert as first non-priority
+              if (!moved.completed) {
+                const prios = active.filter((t) => t.priority)
+                const non = active.filter((t) => !t.priority && t.id !== taskId)
+                const newActive = [...prios, moved, ...non]
+                updatedTasks = [...newActive, ...completed]
+              } else {
+                const prios = completed.filter((t) => t.priority)
+                const non = completed.filter((t) => !t.priority && t.id !== taskId)
+                const newCompleted = [...prios, moved, ...non]
+                updatedTasks = [...active, ...newCompleted]
+              }
+            }
+            return { ...b, tasks: updatedTasks }
+          }),
+        }
+      }),
+    )
+    const task = goals
+      .find((g) => g.id === goalId)?.buckets
+      .find((b) => b.id === bucketId)?.tasks
+      .find((t) => t.id === taskId)
+    const completed = !!task?.completed
+    const nextPriority = !(task?.priority ?? false)
+    apiSetTaskPriorityAndResort(taskId, bucketId, completed, nextPriority).catch(() => {})
+  }
+
   // Inline edit existing task text (Google Tasks-style)
   const registerTaskEditRef = (taskId: string, element: HTMLSpanElement | null) => {
     if (element) {
@@ -2980,6 +3197,7 @@ export default function GoalsPage(): ReactElement {
                   highlightTerm={normalizedSearch}
                   onToggleTaskComplete={(bucketId, taskId) => toggleTaskCompletion(g.id, bucketId, taskId)}
                   onCycleTaskDifficulty={(bucketId, taskId) => cycleTaskDifficulty(g.id, bucketId, taskId)}
+                  onToggleTaskPriority={(bucketId, taskId) => toggleTaskPriority(g.id, bucketId, taskId)}
                   editingTasks={taskEdits}
                   onStartTaskEdit={(goalId, bucketId, taskId, initial) => startTaskEdit(goalId, bucketId, taskId, initial)}
                   onTaskEditChange={handleTaskEditChange}

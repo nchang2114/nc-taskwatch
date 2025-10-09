@@ -1178,26 +1178,38 @@ html[data-theme='light'] .goal-insert-line {
 
 /* Difficulty chip and row accents */
 .goal-task-diff {
-  width: 1rem;
-  height: 1rem;
-  border-radius: 9999px;
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  position: relative;
+  width: 2rem; /* larger hitbox */
+  height: 2rem; /* larger hitbox */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
+  border: none; /* visuals move to ::after */
   cursor: pointer;
   padding: 0;
   margin: 0;
   outline: none;
 }
+.goal-task-diff::after {
+  content: '';
+  width: 1rem;  /* visual dot size */
+  height: 1rem; /* visual dot size */
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: transparent;
+  display: block;
+}
 
-.goal-task-diff--green {
+.goal-task-diff--green::after {
   border-color: rgba(34, 197, 94, 0.9);
   background: rgba(34, 197, 94, 0.3);
 }
-.goal-task-diff--yellow {
+.goal-task-diff--yellow::after {
   border-color: rgba(234, 179, 8, 0.95);
   background: rgba(234, 179, 8, 0.35);
 }
-.goal-task-diff--red {
+.goal-task-diff--red::after {
   border-color: rgba(239, 68, 68, 0.95);
   background: rgba(239, 68, 68, 0.35);
 }
@@ -1215,7 +1227,28 @@ html[data-theme='light'] .goal-insert-line {
   border-color: rgba(239, 68, 68, 0.35);
 }
 
-html[data-theme='light'] .goal-task-diff {
+/* Priority: crisp gradient outline (no glow) */
+.goal-task-row--priority {
+  position: relative;
+  border-color: transparent !important; /* let the gradient ring show */
+}
+.goal-task-row--priority::before {
+  content: '';
+  position: absolute;
+  inset: -1px; /* slightly outside the original border */
+  border-radius: inherit;
+  padding: 1px; /* ring width */
+  background: linear-gradient(135deg, #a78bfa 0%, #22d3ee 35%, #f472b6 70%, #60a5fa 100%);
+  pointer-events: none;
+  /* Mask out the middle so only the outline is visible */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+html[data-theme='light'] .goal-task-diff::after {
   border-color: rgba(60, 72, 110, 0.5);
 }
 html[data-theme='light'] .goal-task-diff--green {

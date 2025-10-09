@@ -16,6 +16,7 @@ export type DbTask = {
   text: string
   completed: boolean
   difficulty: 'none' | 'green' | 'yellow' | 'red'
+  priority: boolean
   sort_index: number
 }
 
@@ -69,9 +70,10 @@ export async function fetchGoalsHierarchy(): Promise<
   const { data: tasks, error: tErr } = bucketIds.length
     ? await supabase
         .from('tasks')
-        .select('id, user_id, bucket_id, text, completed, difficulty, sort_index')
+        .select('id, user_id, bucket_id, text, completed, difficulty, priority, sort_index')
         .in('bucket_id', bucketIds)
         .order('completed', { ascending: true })
+        .order('priority', { ascending: false })
         .order('sort_index', { ascending: true })
     : { data: [], error: null as any }
   if (tErr) return null
@@ -95,6 +97,7 @@ export async function fetchGoalsHierarchy(): Promise<
         text: t.text,
         completed: !!t.completed,
         difficulty: (t.difficulty as any) ?? 'none',
+        priority: !!(t as any).priority,
       })
     }
   })
@@ -288,11 +291,11 @@ export async function createTask(bucketId: string, text: string) {
   const sort_index = await prependSortIndexForTasks(bucketId, false)
   const { data, error } = await supabase
     .from('tasks')
-    .insert([{ bucket_id: bucketId, text, completed: false, difficulty: 'none', sort_index }])
-    .select('id, text, completed, difficulty, sort_index')
+    .insert([{ bucket_id: bucketId, text, completed: false, difficulty: 'none', priority: false, sort_index }])
+    .select('id, text, completed, difficulty, priority, sort_index')
     .single()
   if (error) return null
-  return data as { id: string; text: string; completed: boolean; difficulty: DbTask['difficulty']; sort_index: number }
+  return data as { id: string; text: string; completed: boolean; difficulty: DbTask['difficulty']; priority: boolean; sort_index: number }
 }
 
 export async function updateTaskText(taskId: string, text: string) {
@@ -305,6 +308,22 @@ export async function setTaskDifficulty(taskId: string, difficulty: DbTask['diff
   if (!supabase) return
   await ensureSingleUserSession()
   await supabase.from('tasks').update({ difficulty }).eq('id', taskId)
+}
+
+/** Toggle priority and reassign sort_index to position the task at the top of its section when enabling,
+ * or as the first non-priority when disabling. */
+export async function setTaskPriorityAndResort(
+  taskId: string,
+  bucketId: string,
+  completed: boolean,
+  priority: boolean,
+) {
+  if (!supabase) return
+  await ensureSingleUserSession()
+  // When enabling or disabling, we want the task to appear at the first position of its group.
+  // Using the section minimum sort_index ensures top position within that section.
+  const sort_index = await prependSortIndexForTasks(bucketId, completed)
+  await supabase.from('tasks').update({ priority, sort_index }).eq('id', taskId)
 }
 
 export async function setTaskCompletedAndResort(taskId: string, bucketId: string, completed: boolean) {
