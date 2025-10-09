@@ -16,6 +16,7 @@ export type DbTask = {
   text: string
   completed: boolean
   difficulty: 'none' | 'green' | 'yellow' | 'red'
+  priority: boolean
   sort_index: number
 }
 
@@ -70,9 +71,10 @@ export async function fetchGoalsHierarchy(): Promise<
   const { data: tasks, error: tErr } = bucketIds.length
     ? await supabase
         .from('tasks')
-        .select('id, user_id, bucket_id, text, completed, difficulty, sort_index')
+        .select('id, user_id, bucket_id, text, completed, difficulty, priority, sort_index')
         .in('bucket_id', bucketIds)
         .order('completed', { ascending: true })
+        .order('priority', { ascending: false })
         .order('sort_index', { ascending: true })
     : { data: [], error: null as any }
   if (tErr) return null
@@ -96,8 +98,7 @@ export async function fetchGoalsHierarchy(): Promise<
         text: t.text,
         completed: !!t.completed,
         difficulty: (t.difficulty as any) ?? 'none',
-        // Derive priority purely from sort_index sign (negative = priority)
-        priority: typeof (t as any).sort_index === 'number' ? (t as any).sort_index < 0 : false,
+        priority: !!(t as any).priority,
       })
     }
   })
@@ -291,11 +292,11 @@ export async function createTask(bucketId: string, text: string) {
   const sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed: false })
   const { data, error } = await supabase
     .from('tasks')
-    .insert([{ bucket_id: bucketId, text, completed: false, difficulty: 'none', sort_index }])
-    .select('id, text, completed, difficulty, sort_index')
+    .insert([{ bucket_id: bucketId, text, completed: false, difficulty: 'none', priority: false, sort_index }])
+    .select('id, text, completed, difficulty, priority, sort_index')
     .single()
   if (error) return null
-  return data as { id: string; text: string; completed: boolean; difficulty: DbTask['difficulty']; sort_index: number }
+  return data as { id: string; text: string; completed: boolean; difficulty: DbTask['difficulty']; priority: boolean; sort_index: number }
 }
 
 export async function updateTaskText(taskId: string, text: string) {
@@ -321,25 +322,28 @@ export async function setTaskPriorityAndResort(
   if (!supabase) return
   await ensureSingleUserSession()
   if (priority) {
-    // Enabling priority: move to top of section; use negative space by prepending.
+    // Enabling priority: place at the top of its section
     const sort_index = await prependSortIndexForTasks(bucketId, completed)
-    await supabase.from('tasks').update({ sort_index }).eq('id', taskId)
+    await supabase.from('tasks').update({ priority: true, sort_index }).eq('id', taskId)
     return
   }
-  // Disabling priority: move to first non-priority (smallest nonnegative sort_index)
-  let sort_index = 0
+  // Disabling priority: place at the first non-priority position
   const { data } = await supabase
     .from('tasks')
     .select('sort_index')
     .eq('bucket_id', bucketId)
     .eq('completed', completed)
-    .gte('sort_index', 0)
+    .eq('priority', false)
     .order('sort_index', { ascending: true })
     .limit(1)
+  let sort_index: number
   if (data && data.length > 0) {
-    sort_index = (data[0] as any).sort_index ?? 0
+    const minIdx = (data[0] as any).sort_index ?? 0
+    sort_index = Math.floor(minIdx) - STEP
+  } else {
+    sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed, priority: false })
   }
-  await supabase.from('tasks').update({ sort_index }).eq('id', taskId)
+  await supabase.from('tasks').update({ priority: false, sort_index }).eq('id', taskId)
 }
 
 export async function setTaskCompletedAndResort(taskId: string, bucketId: string, completed: boolean) {
