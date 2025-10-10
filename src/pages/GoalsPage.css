@@ -657,6 +657,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   --task-row-overlay: rgba(188, 192, 255, 0.14);
   --task-row-border: rgba(116, 132, 228, 0.58);
   --task-row-shadow: 0 10px 24px rgba(10, 14, 32, 0.42);
+  --priority-overlay: none;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -675,7 +676,8 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   pointer-events: none;
 }
 .goal-task-row::after {
-  background: var(--task-row-overlay);
+  background: var(--priority-overlay), var(--task-row-overlay);
+  background-blend-mode: screen, screen, normal;
   box-shadow: inset 0 0 0 1px var(--task-row-border), var(--task-row-shadow);
   z-index: 1;
 }
@@ -1457,14 +1459,16 @@ html[data-theme='light'] .goal-insert-line {
 .goal-task-row--priority {
   position: relative;
   border-color: transparent !important; /* let the gradient ring show */
+  --priority-overlay: linear-gradient(135deg, rgba(120, 140, 255, 0.14) 0%, rgba(90, 200, 255, 0.1) 52%, rgba(217, 138, 255, 0.12) 100%), radial-gradient(160% 220% at 50% -40%, rgba(88, 110, 255, 0.16), rgba(15, 23, 42, 0) 68%);
+  --task-row-shadow: 0 12px 24px rgba(10, 14, 32, 0.38), 0 0 0 2px rgba(129, 140, 248, 0.18), 0 0 14px rgba(56, 189, 248, 0.16);
 }
 .goal-task-row--priority::before {
   content: '';
   position: absolute;
   inset: -1px; /* slightly outside the original border */
   border-radius: inherit;
-  padding: 2px; /* thicker ring width for priority highlight */
-  background: linear-gradient(135deg, #a78bfa 0%, #22d3ee 35%, #f472b6 70%, #60a5fa 100%);
+  padding: 3px; /* thicker ring width for priority highlight */
+  background: linear-gradient(135deg, #a78bfa 0%, #22d3ee 30%, #f472b6 62%, #60a5fa 100%);
   pointer-events: none;
   /* Mask out the middle so only the outline is visible */
   -webkit-mask:
@@ -1472,6 +1476,47 @@ html[data-theme='light'] .goal-insert-line {
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+}
+
+.goal-task-row--priority.goal-task-row--diff-green {
+  --priority-overlay: linear-gradient(135deg, rgba(34, 197, 94, 0.18) 0%, rgba(16, 185, 129, 0.16) 55%, rgba(59, 196, 231, 0.12) 100%),
+    radial-gradient(150% 210% at 50% -35%, rgba(24, 128, 92, 0.18), rgba(15, 23, 42, 0) 70%);
+  --task-row-shadow: 0 12px 24px rgba(9, 60, 42, 0.32), 0 0 0 2px rgba(34, 197, 94, 0.22), 0 0 16px rgba(16, 185, 129, 0.2);
+}
+
+.goal-task-row--priority.goal-task-row--diff-yellow {
+  --priority-overlay: linear-gradient(135deg, rgba(250, 204, 20, 0.18) 0%, rgba(248, 196, 48, 0.16) 60%, rgba(255, 164, 72, 0.1) 100%),
+    radial-gradient(150% 210% at 50% -35%, rgba(156, 109, 24, 0.16), rgba(15, 23, 42, 0) 72%);
+  --task-row-shadow: 0 12px 24px rgba(87, 53, 12, 0.3), 0 0 0 2px rgba(250, 204, 20, 0.2), 0 0 16px rgba(253, 186, 55, 0.16);
+}
+
+.goal-task-row--priority.goal-task-row--diff-red {
+  --priority-overlay: linear-gradient(135deg, rgba(248, 113, 113, 0.2) 0%, rgba(239, 68, 68, 0.16) 55%, rgba(251, 113, 133, 0.12) 100%),
+    radial-gradient(150% 210% at 50% -35%, rgba(156, 32, 60, 0.2), rgba(15, 23, 42, 0) 70%);
+  --task-row-shadow: 0 12px 24px rgba(98, 16, 34, 0.32), 0 0 0 2px rgba(239, 68, 68, 0.22), 0 0 16px rgba(248, 113, 113, 0.2);
+}
+
+html[data-theme='light'] .goal-task-row--priority {
+  --priority-overlay: linear-gradient(135deg, rgba(194, 196, 255, 0.94) 0%, rgba(170, 210, 255, 0.86) 50%, rgba(255, 206, 232, 0.88) 100%), radial-gradient(180% 240% at 50% -40%, rgba(214, 206, 255, 0.98), rgba(246, 248, 255, 0) 64%);
+  --task-row-shadow: 0 20px 38px rgba(160, 176, 220, 0.44), 0 0 0 2px rgba(150, 160, 226, 0.7), 0 0 32px rgba(210, 200, 255, 0.68);
+}
+
+html[data-theme='light'] .goal-task-row--priority.goal-task-row--diff-green {
+  --priority-overlay: linear-gradient(135deg, rgba(182, 244, 204, 0.96) 0%, rgba(142, 228, 190, 0.9) 56%, rgba(196, 248, 226, 0.82) 100%),
+    radial-gradient(180% 240% at 50% -38%, rgba(190, 250, 218, 0.98), rgba(246, 248, 255, 0) 64%);
+  --task-row-shadow: 0 20px 36px rgba(130, 200, 168, 0.5), 0 0 0 2px rgba(142, 228, 190, 0.68), 0 0 32px rgba(190, 250, 218, 0.7);
+}
+
+html[data-theme='light'] .goal-task-row--priority.goal-task-row--diff-yellow {
+  --priority-overlay: linear-gradient(135deg, rgba(255, 238, 196, 0.95) 0%, rgba(253, 222, 170, 0.9) 54%, rgba(255, 214, 182, 0.82) 100%),
+    radial-gradient(180% 240% at 50% -38%, rgba(255, 240, 212, 0.98), rgba(246, 248, 255, 0) 64%);
+  --task-row-shadow: 0 20px 36px rgba(224, 188, 120, 0.5), 0 0 0 2px rgba(253, 222, 170, 0.68), 0 0 32px rgba(255, 240, 212, 0.7);
+}
+
+html[data-theme='light'] .goal-task-row--priority.goal-task-row--diff-red {
+  --priority-overlay: linear-gradient(135deg, rgba(255, 212, 212, 0.96) 0%, rgba(253, 188, 188, 0.9) 52%, rgba(255, 202, 218, 0.84) 100%),
+    radial-gradient(180% 240% at 50% -38%, rgba(255, 214, 224, 0.98), rgba(246, 248, 255, 0) 64%);
+  --task-row-shadow: 0 20px 36px rgba(224, 148, 160, 0.52), 0 0 0 2px rgba(253, 188, 188, 0.7), 0 0 32px rgba(255, 214, 224, 0.72);
 }
 
 html[data-theme='light'] .goal-task-diff::after {
