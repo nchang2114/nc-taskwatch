@@ -1237,7 +1237,7 @@ html[data-theme='light'] .goal-insert-line {
   position: absolute;
   inset: -1px; /* slightly outside the original border */
   border-radius: inherit;
-  padding: 1px; /* ring width */
+  padding: 2px; /* thicker ring width for priority highlight */
   background: linear-gradient(135deg, #a78bfa 0%, #22d3ee 35%, #f472b6 70%, #60a5fa 100%);
   pointer-events: none;
   /* Mask out the middle so only the outline is visible */
@@ -1250,16 +1250,17 @@ html[data-theme='light'] .goal-insert-line {
 
 html[data-theme='light'] .goal-task-diff::after {
   border-color: rgba(60, 72, 110, 0.5);
+  background: transparent;
 }
-html[data-theme='light'] .goal-task-diff--green {
+html[data-theme='light'] .goal-task-diff--green::after {
   border-color: rgba(22, 163, 74, 0.95);
   background: rgba(22, 163, 74, 0.28);
 }
-html[data-theme='light'] .goal-task-diff--yellow {
+html[data-theme='light'] .goal-task-diff--yellow::after {
   border-color: rgba(202, 138, 4, 0.95);
   background: rgba(202, 138, 4, 0.28);
 }
-html[data-theme='light'] .goal-task-diff--red {
+html[data-theme='light'] .goal-task-diff--red::after {
   border-color: rgba(220, 38, 38, 0.95);
   background: rgba(220, 38, 38, 0.28);
 }
