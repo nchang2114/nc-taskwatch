@@ -9,6 +9,7 @@ import {
   createBucket as apiCreateBucket,
   renameBucket as apiRenameBucket,
   setBucketFavorite as apiSetBucketFavorite,
+  setBucketSurface as apiSetBucketSurface,
   setGoalSurface as apiSetGoalSurface,
   deleteBucketById as apiDeleteBucketById,
   deleteCompletedTasksInBucket as apiDeleteCompletedTasksInBucket,
@@ -132,18 +133,28 @@ const sanitizeEditableValue = (
   return { value: limited, changed }
 }
 
-interface Bucket {
-  id: string
-  name: string
-  favorite: boolean
-  tasks: TaskItem[]
-}
-
 type GoalSurfaceStyle = 'glass' | 'midnight' | 'slate' | 'charcoal' | 'linen' | 'frost'
 
 const GOAL_SURFACE_OPTIONS: GoalSurfaceStyle[] = ['glass', 'midnight', 'slate', 'charcoal', 'linen', 'frost']
 const normalizeSurfaceStyle = (value: string | null | undefined): GoalSurfaceStyle =>
   GOAL_SURFACE_OPTIONS.includes((value as GoalSurfaceStyle) ?? 'glass') ? (value as GoalSurfaceStyle) : 'glass'
+
+type BucketSurfaceStyle = GoalSurfaceStyle
+
+const BUCKET_SURFACE_OPTIONS: BucketSurfaceStyle[] = GOAL_SURFACE_OPTIONS
+
+const normalizeBucketSurfaceStyle = (value: string | null | undefined): BucketSurfaceStyle =>
+  BUCKET_SURFACE_OPTIONS.includes((value as BucketSurfaceStyle) ?? 'glass')
+    ? (value as BucketSurfaceStyle)
+    : 'glass'
+
+interface Bucket {
+  id: string
+  name: string
+  favorite: boolean
+  tasks: TaskItem[]
+  surfaceStyle?: BucketSurfaceStyle
+}
 
 interface Goal {
   id: string
@@ -178,6 +189,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b_demo_1',
         name: 'Planning',
         favorite: true,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't_demo_1', text: 'Scope v1 features', completed: false, difficulty: 'green' },
           { id: 't_demo_2', text: 'Draft milestones', completed: false, difficulty: 'yellow' },
@@ -188,6 +200,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b_demo_2',
         name: 'Build',
         favorite: true,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't_demo_4', text: 'Auth flow', completed: false, difficulty: 'yellow' },
           { id: 't_demo_5', text: 'Payments – stripe webhooks', completed: false, difficulty: 'red' },
@@ -198,6 +211,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b_demo_3',
         name: 'Polish',
         favorite: false,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't_demo_7', text: 'Empty states', completed: false, difficulty: 'green' },
           { id: 't_demo_8', text: 'Dark mode contrast', completed: false, difficulty: 'yellow' },
@@ -208,6 +222,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b_demo_4',
         name: 'QA',
         favorite: false,
+        surfaceStyle: 'glass',
         tasks: [],
       },
     ],
@@ -222,6 +237,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b1',
         name: 'Coding',
         favorite: true,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't1', text: 'Chest spawn logic', completed: false },
           { id: 't2', text: 'XP scaling', completed: false },
@@ -232,6 +248,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b2',
         name: 'Testing',
         favorite: true,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't4', text: 'Challenge balance', completed: false },
           { id: 't5', text: 'FPS hitches', completed: false },
@@ -241,6 +258,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b3',
         name: 'Art/Polish',
         favorite: false,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't6', text: 'Shop UI polish', completed: false },
           { id: 't7', text: 'Icon pass', completed: false },
@@ -258,6 +276,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b4',
         name: 'Flashcards',
         favorite: true,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't8', text: 'N5 verbs', completed: false },
           { id: 't9', text: 'Kana speed run', completed: false },
@@ -267,6 +286,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b5',
         name: 'Listening',
         favorite: true,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't10', text: 'NHK Easy', completed: false },
           { id: 't11', text: 'Anime w/ JP subs', completed: false },
@@ -276,6 +296,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b6',
         name: 'Speaking',
         favorite: false,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't12', text: 'HelloTalk 10m', completed: false },
           { id: 't13', text: 'Shadowing', completed: false },
@@ -293,6 +314,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b7',
         name: 'Gym',
         favorite: true,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't14', text: 'Push day', completed: false },
           { id: 't15', text: 'Stretch 5m', completed: false },
@@ -302,6 +324,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b8',
         name: 'Cooking',
         favorite: true,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't16', text: 'Prep lunches', completed: false },
           { id: 't17', text: 'Protein bowl', completed: false },
@@ -311,6 +334,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b9',
         name: 'Sleep',
         favorite: true,
+        surfaceStyle: 'glass',
         tasks: [
           { id: 't18', text: 'Lights out 11pm', completed: false },
         ],
@@ -365,6 +389,15 @@ const GOAL_SURFACE_CLASS_MAP: Record<GoalSurfaceStyle, string> = {
   frost: 'goal-card--frost',
 }
 
+const BUCKET_SURFACE_CLASS_MAP: Record<BucketSurfaceStyle, string> = {
+  glass: 'goal-bucket-item--surface-glass',
+  midnight: 'goal-bucket-item--surface-midnight',
+  slate: 'goal-bucket-item--surface-slate',
+  charcoal: 'goal-bucket-item--surface-charcoal',
+  linen: 'goal-bucket-item--surface-linen',
+  frost: 'goal-bucket-item--surface-frost',
+}
+
 const GOAL_SURFACE_PRESETS: Array<{
   id: GoalSurfaceStyle
   label: string
@@ -400,6 +433,19 @@ const GOAL_SURFACE_PRESETS: Array<{
     label: 'Frosted silver',
     description: 'Cool haze with gentle metallic glow.',
   },
+]
+
+const BUCKET_SURFACE_PRESETS: Array<{
+  id: BucketSurfaceStyle
+  label: string
+  description: string
+}> = [
+  { id: 'glass', label: 'Glass capsule', description: 'Soft translucency with subtle glow.' },
+  { id: 'midnight', label: 'Midnight band', description: 'Deep navy body with crisp edge.' },
+  { id: 'slate', label: 'Slate outline', description: 'Neutral canvas with airy outline.' },
+  { id: 'charcoal', label: 'Charcoal drift', description: 'Dark graphite with muted sheen.' },
+  { id: 'linen', label: 'Linen mist', description: 'Warm neutral with brushed overlay.' },
+  { id: 'frost', label: 'Frost bloom', description: 'Cool gradient with a silver tint.' },
 ]
 
 const formatGradientLabel = (value: string) =>
@@ -592,6 +638,70 @@ const GoalCustomizer = React.forwardRef<HTMLDivElement, GoalCustomizerProps>(({ 
 
 GoalCustomizer.displayName = 'GoalCustomizer'
 
+interface BucketCustomizerProps {
+  bucket: Bucket
+  onUpdate: (surface: BucketSurfaceStyle) => void
+  onClose: () => void
+}
+
+const BucketCustomizer = React.forwardRef<HTMLDivElement, BucketCustomizerProps>(
+  ({ bucket, onUpdate, onClose }, ref) => {
+    const surfaceStyle = normalizeBucketSurfaceStyle(bucket.surfaceStyle)
+
+    return (
+      <div ref={ref} className="goal-customizer" role="region" aria-label={`Customise bucket ${bucket.name}`}>
+        <div className="goal-customizer__header">
+          <div>
+            <p className="goal-customizer__title">Bucket surface</p>
+            <p className="goal-customizer__subtitle">Pick a card style to match your flow.</p>
+          </div>
+          <button
+            type="button"
+            className="goal-customizer__close"
+            onClick={onClose}
+            aria-label="Close bucket customiser"
+            data-auto-focus="true"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+
+        <div className="goal-customizer__section">
+          <p className="goal-customizer__label">Card surface</p>
+          <div className="goal-customizer__surface-grid">
+            {BUCKET_SURFACE_PRESETS.map((preset) => {
+              const isActive = surfaceStyle === preset.id
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className={classNames('goal-customizer__surface', isActive && 'goal-customizer__surface--active')}
+                  onClick={() => onUpdate(preset.id)}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={classNames('goal-customizer__surface-preview', `goal-customizer__surface-preview--${preset.id}`)}
+                  />
+                  <span className="goal-customizer__surface-title">{preset.label}</span>
+                  <span className="goal-customizer__surface-caption">{preset.description}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="goal-customizer__footer">
+          <button type="button" className="goal-customizer__done" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    )
+  },
+)
+
+BucketCustomizer.displayName = 'BucketCustomizer'
+
 interface GoalRowProps {
   goal: Goal
   isOpen: boolean
@@ -617,6 +727,7 @@ interface GoalRowProps {
   onDeleteBucket: (bucketId: string) => void
   onDeleteCompletedTasks: (bucketId: string) => void
   onToggleBucketFavorite: (bucketId: string) => void
+  onUpdateBucketSurface: (goalId: string, bucketId: string, surface: BucketSurfaceStyle) => void
   bucketExpanded: Record<string, boolean>
   onToggleBucketExpanded: (bucketId: string) => void
   completedCollapsed: Record<string, boolean>
@@ -685,6 +796,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onDeleteBucket,
   onDeleteCompletedTasks,
   onToggleBucketFavorite,
+  onUpdateBucketSurface,
   bucketExpanded,
   onToggleBucketExpanded,
   completedCollapsed,
@@ -997,6 +1109,13 @@ const GoalRow: React.FC<GoalRowProps> = ({
   const bucketMenuAnchorRef = useRef<HTMLButtonElement | null>(null)
   const [bucketMenuPosition, setBucketMenuPosition] = useState({ left: 0, top: 0 })
   const [bucketMenuPositionReady, setBucketMenuPositionReady] = useState(false)
+  const [activeBucketCustomizerId, setActiveBucketCustomizerId] = useState<string | null>(null)
+  const bucketCustomizerDialogRef = useRef<HTMLDivElement | null>(null)
+  const activeBucketCustomizer = useMemo(() => {
+    if (!activeBucketCustomizerId) return null
+    return goal.buckets.find((bucket) => bucket.id === activeBucketCustomizerId) ?? null
+  }, [goal.buckets, activeBucketCustomizerId])
+  const closeBucketCustomizer = useCallback(() => setActiveBucketCustomizerId(null), [])
   const renameInputRef = useRef<HTMLInputElement | null>(null)
   const bucketRenameInputRef = useRef<HTMLInputElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -1123,6 +1242,63 @@ const GoalRow: React.FC<GoalRowProps> = ({
       bucketMenuAnchorRef.current = null
     }
   }, [bucketMenuOpenId])
+
+  useEffect(() => {
+    if (activeBucketCustomizerId && !activeBucketCustomizer) {
+      setActiveBucketCustomizerId(null)
+    }
+  }, [activeBucketCustomizerId, activeBucketCustomizer])
+
+  useEffect(() => {
+    if (!activeBucketCustomizerId) {
+      return
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActiveBucketCustomizerId(null)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [activeBucketCustomizerId])
+
+  useEffect(() => {
+    if (!activeBucketCustomizerId) {
+      return
+    }
+    if (typeof document === 'undefined') {
+      return
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [activeBucketCustomizerId])
+
+  useEffect(() => {
+    if (!activeBucketCustomizerId) {
+      return
+    }
+    if (typeof window === 'undefined') {
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const dialog = bucketCustomizerDialogRef.current
+      if (!dialog) {
+        return
+      }
+      const target = dialog.querySelector<HTMLElement>(
+        '[data-auto-focus="true"], button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      target?.focus()
+    })
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [activeBucketCustomizerId])
 
   useEffect(() => {
     if (isRenaming && renameInputRef.current) {
@@ -1261,6 +1437,18 @@ const GoalRow: React.FC<GoalRowProps> = ({
                 onClick={(event) => {
                   event.stopPropagation()
                   setBucketMenuOpenId(null)
+                  setActiveBucketCustomizerId(activeBucketForMenu.id)
+                }}
+              >
+                Customise
+              </button>
+              <div className="goal-menu__divider" />
+              <button
+                type="button"
+                className="goal-menu__item"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setBucketMenuOpenId(null)
                   onStartBucketRename(goal.id, activeBucketForMenu.id, activeBucketForMenu.name)
                 }}
               >
@@ -1294,6 +1482,36 @@ const GoalRow: React.FC<GoalRowProps> = ({
               >
                 Delete bucket
               </button>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null
+
+  const bucketCustomizerPortal =
+    activeBucketCustomizer && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="goal-customizer-overlay"
+            role="presentation"
+            onMouseDown={(event) => {
+              event.stopPropagation()
+              closeBucketCustomizer()
+            }}
+          >
+            <div
+              ref={bucketCustomizerDialogRef}
+              className="goal-customizer-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Customise bucket ${activeBucketCustomizer.name}`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <BucketCustomizer
+                bucket={activeBucketCustomizer}
+                onUpdate={(surface) => onUpdateBucketSurface(goal.id, activeBucketCustomizer.id, surface)}
+                onClose={closeBucketCustomizer}
+              />
             </div>
           </div>,
           document.body,
@@ -1537,8 +1755,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
                 const completedTasks = b.tasks.filter((task) => task.completed)
                 const isCompletedCollapsed = completedCollapsed[b.id] ?? true
                 const draftValue = taskDrafts[b.id]
+                const bucketSurface = normalizeBucketSurfaceStyle(b.surfaceStyle as BucketSurfaceStyle | null | undefined)
+                const bucketSurfaceClass = BUCKET_SURFACE_CLASS_MAP[bucketSurface] || BUCKET_SURFACE_CLASS_MAP.glass
                 return (
-                  <li key={b.id} className="goal-bucket-item rounded-xl border border-white/10 bg-white/5">
+                  <li key={b.id} className={classNames('goal-bucket-item rounded-xl border', bucketSurfaceClass)}>
                     <div
                       className="goal-bucket-toggle p-3 md:p-4 flex items-center justify-between gap-3 md:gap-4"
                       role="button"
@@ -2413,6 +2633,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
       )}
       {menuPortal}
       {bucketMenuPortal}
+      {bucketCustomizerPortal}
     </div>
   )
 }
@@ -2488,6 +2709,12 @@ export default function GoalsPage(): ReactElement {
           const normalized = result.goals.map((goal: any) => ({
             ...goal,
             surfaceStyle: normalizeSurfaceStyle(goal.surfaceStyle as string | null | undefined),
+            buckets: Array.isArray(goal.buckets)
+              ? goal.buckets.map((bucket: any) => ({
+                  ...bucket,
+                  surfaceStyle: normalizeBucketSurfaceStyle(bucket.surfaceStyle as string | null | undefined),
+                }))
+              : [],
           }))
           setGoals(normalized as any)
         }
@@ -2807,7 +3034,7 @@ export default function GoalsPage(): ReactElement {
     apiCreateBucket(goalId, trimmed)
       .then((db) => {
         const newBucketId = db?.id ?? `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, tasks: [] }
+        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, surfaceStyle: 'glass', tasks: [] }
         setGoals((gs) =>
           gs.map((g) =>
             g.id === goalId
@@ -2827,7 +3054,7 @@ export default function GoalsPage(): ReactElement {
       })
       .catch(() => {
         const newBucketId = `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, tasks: [] }
+        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, surfaceStyle: 'glass', tasks: [] }
         setGoals((gs) =>
           gs.map((g) => (g.id === goalId ? { ...g, buckets: [newBucket, ...g.buckets] } : g)),
         )
@@ -3461,6 +3688,21 @@ export default function GoalsPage(): ReactElement {
     apiSetBucketFavorite(bucketId, next).catch(() => {})
   }
 
+  const updateBucketSurface = (goalId: string, bucketId: string, surface: BucketSurfaceStyle) => {
+    const normalized = normalizeBucketSurfaceStyle(surface)
+    setGoals((gs) =>
+      gs.map((g) =>
+        g.id === goalId
+          ? {
+              ...g,
+              buckets: g.buckets.map((b) => (b.id === bucketId ? { ...b, surfaceStyle: normalized } : b)),
+            }
+          : g,
+      ),
+    )
+    apiSetBucketSurface(bucketId, normalized).catch(() => {})
+  }
+
   // Reorder tasks within a bucket section (active or completed), similar to Google Tasks
   const reorderTasks = (
     goalId: string,
@@ -3688,7 +3930,6 @@ export default function GoalsPage(): ReactElement {
           document.body,
         )
       : null
-
   return (
     <div className="goals-layer text-white">
       <div className="goals-content site-main__inner">
@@ -3788,6 +4029,7 @@ export default function GoalsPage(): ReactElement {
                   onDeleteBucket={(bucketId) => deleteBucket(g.id, bucketId)}
                   onDeleteCompletedTasks={(bucketId) => deleteCompletedTasks(g.id, bucketId)}
                   onToggleBucketFavorite={(bucketId) => toggleBucketFavorite(g.id, bucketId)}
+                  onUpdateBucketSurface={(goalId, bucketId, surface) => updateBucketSurface(goalId, bucketId, surface)}
                   bucketExpanded={bucketExpanded}
                   onToggleBucketExpanded={toggleBucketExpanded}
                   completedCollapsed={completedCollapsed}

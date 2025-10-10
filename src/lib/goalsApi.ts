@@ -8,6 +8,7 @@ export type DbBucket = {
   name: string
   favorite: boolean
   sort_index: number
+  card_surface: string | null
 }
 export type DbTask = {
   id: string
@@ -33,6 +34,7 @@ export async function fetchGoalsHierarchy(): Promise<
           id: string
           name: string
           favorite: boolean
+          surfaceStyle?: string | null
           tasks: Array<{
             id: string
             text: string
@@ -61,7 +63,7 @@ export async function fetchGoalsHierarchy(): Promise<
   // Buckets
   const { data: buckets, error: bErr } = await supabase
     .from('buckets')
-    .select('id, user_id, goal_id, name, favorite, sort_index')
+    .select('id, user_id, goal_id, name, favorite, sort_index, card_surface')
     .in('goal_id', goalIds)
     .order('sort_index', { ascending: true })
   if (bErr) return null
@@ -81,10 +83,22 @@ export async function fetchGoalsHierarchy(): Promise<
   if (tErr) return null
 
   // Build hierarchy
-  const bucketsByGoal = new Map<string, Array<{ id: string; name: string; favorite: boolean; tasks: any[] }>>()
-  const bucketMap = new Map<string, { id: string; name: string; favorite: boolean; tasks: any[] }>()
+  const bucketsByGoal = new Map<
+    string,
+    Array<{ id: string; name: string; favorite: boolean; surfaceStyle?: string | null; tasks: any[] }>
+  >()
+  const bucketMap = new Map<
+    string,
+    { id: string; name: string; favorite: boolean; surfaceStyle?: string | null; tasks: any[] }
+  >()
   ;(buckets ?? []).forEach((b) => {
-    const node = { id: b.id, name: b.name, favorite: b.favorite, tasks: [] as any[] }
+    const node = {
+      id: b.id,
+      name: b.name,
+      favorite: b.favorite,
+      surfaceStyle: (b as any).card_surface ?? null,
+      tasks: [] as any[],
+    }
     bucketMap.set(b.id, node)
     const list = bucketsByGoal.get(b.goal_id) ?? []
     list.push(node)
@@ -108,12 +122,18 @@ export async function fetchGoalsHierarchy(): Promise<
     const rawSurface = (g as any).card_surface
     const surfaceStyle = typeof rawSurface === 'string' && rawSurface.length > 0 ? rawSurface : 'glass'
     return {
-    id: g.id,
-    name: g.name,
-    color: g.color,
-    surfaceStyle,
-    buckets: bucketsByGoal.get(g.id) ?? [],
-  }
+      id: g.id,
+      name: g.name,
+      color: g.color,
+      surfaceStyle,
+      buckets: (bucketsByGoal.get(g.id) ?? []).map((bucket) => ({
+        ...bucket,
+        surfaceStyle:
+          typeof bucket.surfaceStyle === 'string' && bucket.surfaceStyle.length > 0
+            ? bucket.surfaceStyle
+            : 'glass',
+      })),
+    }
   })
 
   return { goals: tree }
@@ -227,17 +247,23 @@ export async function setGoalSortIndex(goalId: string, toIndex: number) {
 }
 
 // ---------- Buckets ----------
-export async function createBucket(goalId: string, name: string) {
+export async function createBucket(goalId: string, name: string, surface: string = 'glass') {
   if (!supabase) return null
   await ensureSingleUserSession()
   const sort_index = await nextSortIndex('buckets', { goal_id: goalId })
   const { data, error } = await supabase
     .from('buckets')
-    .insert([{ goal_id: goalId, name, favorite: false, sort_index }])
-    .select('id, name, favorite, sort_index')
+    .insert([{ goal_id: goalId, name, favorite: false, sort_index, card_surface: surface }])
+    .select('id, name, favorite, sort_index, card_surface')
     .single()
   if (error) return null
   return data as { id: string; name: string; favorite: boolean; sort_index: number }
+}
+
+export async function setBucketSurface(bucketId: string, surface: string | null) {
+  if (!supabase) return
+  await ensureSingleUserSession()
+  await supabase.from('buckets').update({ card_surface: surface }).eq('id', bucketId)
 }
 
 export async function renameBucket(bucketId: string, name: string) {
