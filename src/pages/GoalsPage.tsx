@@ -10,6 +10,7 @@ import {
   renameBucket as apiRenameBucket,
   setBucketFavorite as apiSetBucketFavorite,
   setBucketSurface as apiSetBucketSurface,
+  setGoalColor as apiSetGoalColor,
   setGoalSurface as apiSetGoalSurface,
   deleteBucketById as apiDeleteBucketById,
   deleteCompletedTasksInBucket as apiDeleteCompletedTasksInBucket,
@@ -2810,10 +2811,12 @@ export default function GoalsPage(): ReactElement {
 
   const updateGoalAppearance = (goalId: string, updates: GoalAppearanceUpdate) => {
     const surfaceStyleToPersist = updates.surfaceStyle ? normalizeSurfaceStyle(updates.surfaceStyle) : null
+    let colorToPersist: string | null = null
     setGoals((gs) =>
       gs.map((g) => {
         if (g.id !== goalId) return g
         let next: Goal = { ...g }
+        const previousColor = g.color
         if (updates.surfaceStyle) {
           next.surfaceStyle = normalizeSurfaceStyle(updates.surfaceStyle)
         }
@@ -2823,7 +2826,11 @@ export default function GoalsPage(): ReactElement {
           if (custom) {
             const gradientString = createCustomGradientString(custom.from, custom.to)
             next.customGradient = { ...custom }
-            next.color = `custom:${gradientString}`
+            const newColor = `custom:${gradientString}`
+            next.color = newColor
+            if (newColor !== previousColor) {
+              colorToPersist = newColor
+            }
           } else {
             next.customGradient = undefined
           }
@@ -2834,6 +2841,9 @@ export default function GoalsPage(): ReactElement {
           if (!updates.color.startsWith('custom:')) {
             next.customGradient = undefined
           }
+          if (updates.color !== previousColor) {
+            colorToPersist = updates.color
+          }
         }
 
         return next
@@ -2841,6 +2851,9 @@ export default function GoalsPage(): ReactElement {
     )
     if (surfaceStyleToPersist) {
       apiSetGoalSurface(goalId, surfaceStyleToPersist).catch(() => {})
+    }
+    if (colorToPersist) {
+      apiSetGoalColor(goalId, colorToPersist).catch(() => {})
     }
   }
 

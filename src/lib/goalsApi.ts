@@ -186,6 +186,12 @@ export async function createGoal(name: string, color: string, surface: string = 
   return data as DbGoal
 }
 
+export async function setGoalColor(goalId: string, color: string) {
+  if (!supabase) return
+  await ensureSingleUserSession()
+  await supabase.from('goals').update({ color }).eq('id', goalId)
+}
+
 export async function setGoalSurface(goalId: string, surface: string | null) {
   if (!supabase) return
   await ensureSingleUserSession()
