@@ -1,6 +1,6 @@
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 
-export type DbGoal = { id: string; name: string; color: string; sort_index: number }
+export type DbGoal = { id: string; name: string; color: string; sort_index: number; card_surface: string | null }
 export type DbBucket = {
   id: string
   user_id: string
@@ -28,6 +28,7 @@ export async function fetchGoalsHierarchy(): Promise<
         id: string
         name: string
         color: string
+        surfaceStyle?: string | null
         buckets: Array<{
           id: string
           name: string
@@ -50,7 +51,7 @@ export async function fetchGoalsHierarchy(): Promise<
   // Goals
   const { data: goals, error: gErr } = await supabase
     .from('goals')
-    .select('id, name, color, sort_index')
+    .select('id, name, color, sort_index, card_surface')
     .order('sort_index', { ascending: true })
   if (gErr) return null
   if (!goals || goals.length === 0) return { goals: [] }
@@ -103,12 +104,17 @@ export async function fetchGoalsHierarchy(): Promise<
     }
   })
 
-  const tree = goals.map((g) => ({
+  const tree = goals.map((g) => {
+    const rawSurface = (g as any).card_surface
+    const surfaceStyle = typeof rawSurface === 'string' && rawSurface.length > 0 ? rawSurface : 'glass'
+    return {
     id: g.id,
     name: g.name,
     color: g.color,
+    surfaceStyle,
     buckets: bucketsByGoal.get(g.id) ?? [],
-  }))
+  }
+  })
 
   return { goals: tree }
 }
@@ -147,17 +153,23 @@ async function prependSortIndexForTasks(bucketId: string, completed: boolean) {
 }
 
 // ---------- Goals ----------
-export async function createGoal(name: string, color: string) {
+export async function createGoal(name: string, color: string, surface: string = 'glass') {
   if (!supabase) return null
   await ensureSingleUserSession()
   const sort_index = await nextSortIndex('goals')
   const { data, error } = await supabase
     .from('goals')
-    .insert([{ name, color, sort_index }])
-    .select('id, name, color, sort_index')
+    .insert([{ name, color, sort_index, card_surface: surface }])
+    .select('id, name, color, sort_index, card_surface')
     .single()
   if (error) return null
   return data as DbGoal
+}
+
+export async function setGoalSurface(goalId: string, surface: string | null) {
+  if (!supabase) return
+  await ensureSingleUserSession()
+  await supabase.from('goals').update({ card_surface: surface }).eq('id', goalId)
 }
 
 export async function renameGoal(goalId: string, name: string) {

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo, type ReactElement } from 'react'
+import React, { useState, useRef, useEffect, useMemo, useCallback, type ReactElement } from 'react'
+import { createPortal } from 'react-dom'
 import './GoalsPage.css'
 import {
   fetchGoalsHierarchy,
@@ -8,6 +9,7 @@ import {
   createBucket as apiCreateBucket,
   renameBucket as apiRenameBucket,
   setBucketFavorite as apiSetBucketFavorite,
+  setGoalSurface as apiSetGoalSurface,
   deleteBucketById as apiDeleteBucketById,
   deleteCompletedTasksInBucket as apiDeleteCompletedTasksInBucket,
   createTask as apiCreateTask,
@@ -137,11 +139,31 @@ interface Bucket {
   tasks: TaskItem[]
 }
 
+type GoalSurfaceStyle = 'glass' | 'midnight' | 'slate' | 'charcoal' | 'linen' | 'frost'
+
+const GOAL_SURFACE_OPTIONS: GoalSurfaceStyle[] = ['glass', 'midnight', 'slate', 'charcoal', 'linen', 'frost']
+const normalizeSurfaceStyle = (value: string | null | undefined): GoalSurfaceStyle =>
+  GOAL_SURFACE_OPTIONS.includes((value as GoalSurfaceStyle) ?? 'glass') ? (value as GoalSurfaceStyle) : 'glass'
+
 interface Goal {
   id: string
   name: string
   color: string
+  surfaceStyle?: GoalSurfaceStyle
+  customGradient?: {
+    from: string
+    to: string
+  }
   buckets: Bucket[]
+}
+
+type GoalAppearanceUpdate = {
+  surfaceStyle?: GoalSurfaceStyle
+  color?: string
+  customGradient?: {
+    from: string
+    to: string
+  } | null
 }
 
 // Default data
@@ -150,6 +172,7 @@ const DEFAULT_GOALS: Goal[] = [
     id: 'g_demo',
     name: 'Project X – End-to-end Demo',
     color: 'from-sky-500 to-indigo-500',
+    surfaceStyle: 'glass',
     buckets: [
       {
         id: 'b_demo_1',
@@ -193,6 +216,7 @@ const DEFAULT_GOALS: Goal[] = [
     id: 'g1',
     name: 'Finish PopDot Beta',
     color: 'from-fuchsia-500 to-purple-500',
+    surfaceStyle: 'glass',
     buckets: [
       {
         id: 'b1',
@@ -228,6 +252,7 @@ const DEFAULT_GOALS: Goal[] = [
     id: 'g2',
     name: 'Learn Japanese',
     color: 'from-emerald-500 to-cyan-500',
+    surfaceStyle: 'glass',
     buckets: [
       {
         id: 'b4',
@@ -262,6 +287,7 @@ const DEFAULT_GOALS: Goal[] = [
     id: 'g3',
     name: 'Stay Fit',
     color: 'from-lime-400 to-emerald-500',
+    surfaceStyle: 'glass',
     buckets: [
       {
         id: 'b7',
@@ -309,6 +335,79 @@ const BASE_GRADIENT_PREVIEW: Record<string, string> = {
   'from-amber-400 to-orange-500': 'linear-gradient(135deg, #fbbf24 0%, #fb923c 45%, #f97316 100%)',
 }
 
+const DEFAULT_CUSTOM_GRADIENT_ANGLE = 135
+
+const createCustomGradientString = (from: string, to: string, angle = DEFAULT_CUSTOM_GRADIENT_ANGLE) =>
+  `linear-gradient(${angle}deg, ${from} 0%, ${to} 100%)`
+
+const DEFAULT_CUSTOM_STOPS = {
+  from: '#6366f1',
+  to: '#ec4899',
+}
+
+const extractStopsFromGradient = (value: string): { from: string; to: string } | null => {
+  const matches = value.match(/#(?:[0-9a-fA-F]{3}){1,2}/g)
+  if (matches && matches.length >= 2) {
+    return {
+      from: matches[0],
+      to: matches[1],
+    }
+  }
+  return null
+}
+
+const GOAL_SURFACE_CLASS_MAP: Record<GoalSurfaceStyle, string> = {
+  glass: 'goal-card--glass',
+  midnight: 'goal-card--midnight',
+  slate: 'goal-card--slate',
+  charcoal: 'goal-card--charcoal',
+  linen: 'goal-card--linen',
+  frost: 'goal-card--frost',
+}
+
+const GOAL_SURFACE_PRESETS: Array<{
+  id: GoalSurfaceStyle
+  label: string
+  description: string
+}> = [
+  {
+    id: 'glass',
+    label: 'Aurora glass',
+    description: 'Translucent glow with frosted edges.',
+  },
+  {
+    id: 'midnight',
+    label: 'Midnight matte',
+    description: 'Deeper tone with saturated accent edge.',
+  },
+  {
+    id: 'slate',
+    label: 'Slate outline',
+    description: 'Minimal surface with crisp border.',
+  },
+  {
+    id: 'charcoal',
+    label: 'Charcoal matte',
+    description: 'Inky depth with a muted indigo sheen.',
+  },
+  {
+    id: 'linen',
+    label: 'Linen veil',
+    description: 'Soft warmth with a brushed highlight.',
+  },
+  {
+    id: 'frost',
+    label: 'Frosted silver',
+    description: 'Cool haze with gentle metallic glow.',
+  },
+]
+
+const formatGradientLabel = (value: string) =>
+  value
+    .replace(/^from-/, '')
+    .replace(' to-', ' → ')
+    .replace(/-/g, ' ')
+
 // Components
 const ThinProgress: React.FC<{ value: number; gradient: string; className?: string }> = ({ value, gradient, className }) => {
   const isCustomGradient = gradient.startsWith('custom:')
@@ -329,6 +428,169 @@ const ThinProgress: React.FC<{ value: number; gradient: string; className?: stri
     </div>
   )
 }
+
+interface GoalCustomizerProps {
+  goal: Goal
+  onUpdate: (updates: GoalAppearanceUpdate) => void
+  onClose: () => void
+}
+
+const GoalCustomizer = React.forwardRef<HTMLDivElement, GoalCustomizerProps>(({ goal, onUpdate, onClose }, ref) => {
+  const surfaceStyle: GoalSurfaceStyle = goal.surfaceStyle ?? 'glass'
+  const initialStops = useMemo(() => {
+    if (goal.customGradient) {
+      return goal.customGradient
+    }
+    if (goal.color.startsWith('custom:')) {
+      const parsed = extractStopsFromGradient(goal.color.slice(7))
+      if (parsed) {
+        return { ...parsed }
+      }
+    }
+    return { ...DEFAULT_CUSTOM_STOPS }
+  }, [goal.color, goal.customGradient])
+
+  const [customStops, setCustomStops] = useState(initialStops)
+  const { from: initialFrom, to: initialTo } = initialStops
+
+  useEffect(() => {
+    setCustomStops({ from: initialFrom, to: initialTo })
+  }, [goal.id, initialFrom, initialTo])
+
+  const customPreview = useMemo(() => createCustomGradientString(customStops.from, customStops.to), [customStops])
+  const activeGradient = goal.color.startsWith('custom:') ? 'custom' : goal.color
+  const gradientSwatches = useMemo(() => [...GOAL_GRADIENTS, 'custom'], [])
+  const gradientPreviewMap = useMemo<Record<string, string>>(
+    () => ({
+      ...BASE_GRADIENT_PREVIEW,
+      custom: customPreview,
+    }),
+    [customPreview],
+  )
+
+  const handleSurfaceSelect = (style: GoalSurfaceStyle) => {
+    onUpdate({ surfaceStyle: style })
+  }
+
+  const handleGradientSelect = (value: string) => {
+    if (value === 'custom') {
+      onUpdate({ customGradient: { ...customStops } })
+      return
+    }
+    onUpdate({ color: value, customGradient: null })
+  }
+
+  const handleCustomStopChange = (key: 'from' | 'to') => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value
+    setCustomStops((current) => {
+      const next = { ...current, [key]: nextValue }
+      onUpdate({ customGradient: next })
+      return next
+    })
+  }
+
+  return (
+    <div ref={ref} className="goal-customizer" role="region" aria-label={`Customise ${goal.name}`}>
+      <div className="goal-customizer__header">
+        <div>
+          <p className="goal-customizer__title">Personalise</p>
+          <p className="goal-customizer__subtitle">Tune the card surface and progress glow.</p>
+        </div>
+        <button
+          type="button"
+          className="goal-customizer__close"
+          onClick={onClose}
+          aria-label="Close customiser"
+          data-auto-focus="true"
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+
+      <div className="goal-customizer__section">
+        <p className="goal-customizer__label">Card surface</p>
+        <div className="goal-customizer__surface-grid">
+          {GOAL_SURFACE_PRESETS.map((preset) => {
+            const isActive = surfaceStyle === preset.id
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                className={classNames('goal-customizer__surface', isActive && 'goal-customizer__surface--active')}
+                onClick={() => handleSurfaceSelect(preset.id)}
+              >
+                <span
+                  aria-hidden="true"
+                  className={classNames('goal-customizer__surface-preview', `goal-customizer__surface-preview--${preset.id}`)}
+                />
+                <span className="goal-customizer__surface-title">{preset.label}</span>
+                <span className="goal-customizer__surface-caption">{preset.description}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="goal-customizer__section">
+        <p className="goal-customizer__label">Progress gradient</p>
+        <div className="goal-customizer__swatches">
+          {gradientSwatches.map((value) => {
+            const isCustom = value === 'custom'
+            const preview = gradientPreviewMap[value]
+            const isActive = activeGradient === value
+            return (
+              <button
+                key={value}
+                type="button"
+                className={classNames('goal-customizer__swatch', isActive && 'goal-customizer__swatch--active')}
+                onClick={() => handleGradientSelect(value)}
+                aria-pressed={isActive}
+              >
+                <span
+                  className={classNames('goal-customizer__swatch-fill', isCustom && 'goal-customizer__swatch-fill--custom')}
+                  style={{ backgroundImage: preview }}
+                  aria-hidden="true"
+                >
+                  {isCustom ? '∿' : null}
+                </span>
+                <span className="goal-customizer__swatch-label">
+                  {value === 'custom' ? 'Custom' : formatGradientLabel(value)}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        <div
+          className={classNames(
+            'goal-customizer__custom-grid',
+            activeGradient === 'custom' && 'goal-customizer__custom-grid--active',
+          )}
+          aria-hidden={activeGradient !== 'custom'}
+        >
+          <label className="goal-customizer__color-input">
+            <span>From</span>
+            <input type="color" value={customStops.from} onChange={handleCustomStopChange('from')} aria-label="Custom gradient start colour" />
+          </label>
+          <label className="goal-customizer__color-input">
+            <span>To</span>
+            <input type="color" value={customStops.to} onChange={handleCustomStopChange('to')} aria-label="Custom gradient end colour" />
+          </label>
+          <div className="goal-customizer__custom-preview" style={{ backgroundImage: customPreview }}>
+            <span>Preview</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="goal-customizer__footer">
+        <button type="button" className="goal-customizer__done" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </div>
+  )
+})
+
+GoalCustomizer.displayName = 'GoalCustomizer'
 
 interface GoalRowProps {
   goal: Goal
@@ -397,6 +659,8 @@ interface GoalRowProps {
     fromIndex: number,
     toIndex: number,
   ) => void
+  onOpenCustomizer: (goalId: string) => void
+  activeCustomizerGoalId: string | null
 }
 
 const GoalRow: React.FC<GoalRowProps> = ({
@@ -450,6 +714,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
   registerTaskEditRef,
   onReorderTasks,
   onReorderBuckets,
+  onOpenCustomizer,
+  activeCustomizerGoalId,
 }) => {
   const [dragHover, setDragHover] = useState<
     | { bucketId: string; section: 'active' | 'completed'; index: number }
@@ -584,7 +850,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
       : parseColor('rgb(16, 20, 36)')
 
     const rowCS = window.getComputedStyle(src)
-    const cardEl = src.closest('.rounded-2xl') as HTMLElement | null
+    const cardEl = src.closest('.goal-card') as HTMLElement | null
     const cardCS = cardEl ? window.getComputedStyle(cardEl) : null
 
     // Compose colors: page -> card -> bucket -> row
@@ -728,30 +994,135 @@ const GoalRow: React.FC<GoalRowProps> = ({
   const menuWrapRef = useRef<HTMLDivElement | null>(null)
   const [bucketMenuOpenId, setBucketMenuOpenId] = useState<string | null>(null)
   const bucketMenuRef = useRef<HTMLDivElement | null>(null)
+  const bucketMenuAnchorRef = useRef<HTMLButtonElement | null>(null)
+  const [bucketMenuPosition, setBucketMenuPosition] = useState({ left: 0, top: 0 })
+  const [bucketMenuPositionReady, setBucketMenuPositionReady] = useState(false)
   const renameInputRef = useRef<HTMLInputElement | null>(null)
   const bucketRenameInputRef = useRef<HTMLInputElement | null>(null)
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null)
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
+  const [menuPositionReady, setMenuPositionReady] = useState(false)
+
+  const updateMenuPosition = useCallback(() => {
+    const trigger = menuButtonRef.current
+    const menuEl = menuRef.current
+    if (!trigger || !menuEl) {
+      return
+    }
+    const triggerRect = trigger.getBoundingClientRect()
+    const menuRect = menuEl.getBoundingClientRect()
+    const spacing = 12
+    let left = triggerRect.right - menuRect.width
+    let top = triggerRect.bottom + spacing
+    if (left < spacing) {
+      left = spacing
+    }
+    if (top + menuRect.height > window.innerHeight - spacing) {
+      top = Math.max(spacing, triggerRect.top - spacing - menuRect.height)
+    }
+    if (top < spacing) {
+      top = spacing
+    }
+    if (left + menuRect.width > window.innerWidth - spacing) {
+      left = Math.max(spacing, window.innerWidth - spacing - menuRect.width)
+    }
+    setMenuPosition((prev) => {
+      if (Math.abs(prev.left - left) < 0.5 && Math.abs(prev.top - top) < 0.5) {
+        return prev
+      }
+      return { left, top }
+    })
+    setMenuPositionReady(true)
+  }, [])
+
+  const updateBucketMenuPosition = useCallback(() => {
+    const anchor = bucketMenuAnchorRef.current
+    const menuEl = bucketMenuRef.current
+    if (!anchor || !menuEl) {
+      return
+    }
+    const triggerRect = anchor.getBoundingClientRect()
+    const menuRect = menuEl.getBoundingClientRect()
+    const spacing = 12
+    let top = triggerRect.bottom + spacing
+    let left = triggerRect.right - menuRect.width
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    if (left + menuRect.width > viewportWidth - spacing) {
+      left = Math.max(spacing, viewportWidth - spacing - menuRect.width)
+    }
+    if (left < spacing) {
+      left = spacing
+    }
+    if (top + menuRect.height > viewportHeight - spacing) {
+      top = Math.max(spacing, triggerRect.top - spacing - menuRect.height)
+    }
+    if (top < spacing) {
+      top = spacing
+    }
+    setBucketMenuPosition((prev) => {
+      if (Math.abs(prev.left - left) < 0.5 && Math.abs(prev.top - top) < 0.5) {
+        return prev
+      }
+      return { left, top }
+    })
+    setBucketMenuPositionReady(true)
+  }, [])
 
   useEffect(() => {
-    const onDocClick = (e: MouseEvent) => {
-      const target = e.target as Node
-      const withinWrap = menuWrapRef.current && target instanceof Node && menuWrapRef.current.contains(target)
-      if (withinWrap) return
+    if (!menuOpen) {
+      return
+    }
+    const handleDocClick = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (menuWrapRef.current && menuWrapRef.current.contains(target)) return
+      if (menuRef.current && menuRef.current.contains(target)) return
       setMenuOpen(false)
     }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [])
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleDocClick)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleDocClick)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
 
   useEffect(() => {
-    const onDocClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      // Do not close if clicking inside any bucket menu/button wrapper
-      if (target && target.closest('[data-bucket-menu="true"]')) return
-      setBucketMenuOpenId(null)
+    if (!bucketMenuOpenId) {
+      setBucketMenuPositionReady(false)
+      return
     }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [])
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setBucketMenuOpenId(null)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    setBucketMenuPositionReady(false)
+    const raf = requestAnimationFrame(() => {
+      updateBucketMenuPosition()
+    })
+    const handleRelayout = () => updateBucketMenuPosition()
+    window.addEventListener('resize', handleRelayout)
+    window.addEventListener('scroll', handleRelayout, true)
+    return () => {
+      cancelAnimationFrame(raf)
+      document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', handleRelayout)
+      window.removeEventListener('scroll', handleRelayout, true)
+    }
+  }, [bucketMenuOpenId, updateBucketMenuPosition])
+
+  useEffect(() => {
+    if (!bucketMenuOpenId) {
+      bucketMenuAnchorRef.current = null
+    }
+  }, [bucketMenuOpenId])
 
   useEffect(() => {
     if (isRenaming && renameInputRef.current) {
@@ -771,15 +1142,173 @@ const GoalRow: React.FC<GoalRowProps> = ({
     }
   }, [renamingBucketId])
 
+  useEffect(() => {
+    if (!menuOpen) {
+      setMenuPositionReady(false)
+      return
+    }
+    setMenuPositionReady(false)
+    const raf = requestAnimationFrame(() => {
+      updateMenuPosition()
+    })
+    const handleRelayout = () => updateMenuPosition()
+    window.addEventListener('resize', handleRelayout)
+    window.addEventListener('scroll', handleRelayout, true)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', handleRelayout)
+      window.removeEventListener('scroll', handleRelayout, true)
+    }
+  }, [menuOpen, updateMenuPosition])
+
+  const surfaceStyle = goal.surfaceStyle ?? 'glass'
+  const surfaceClass = GOAL_SURFACE_CLASS_MAP[surfaceStyle] || GOAL_SURFACE_CLASS_MAP.glass
+  const isCustomizerOpen = activeCustomizerGoalId === goal.id
+
+  const menuPortal =
+    menuOpen && typeof document !== 'undefined'
+      ? createPortal(
+          <div className="goal-menu-overlay" role="presentation" onClick={() => setMenuOpen(false)}>
+            <div
+              ref={menuRef}
+              className="goal-menu goal-menu--floating min-w-[160px] rounded-md border p-1 shadow-lg"
+              style={{
+                top: `${menuPosition.top}px`,
+                left: `${menuPosition.left}px`,
+                visibility: menuPositionReady ? 'visible' : 'hidden',
+              }}
+              role="menu"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="goal-menu__item"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMenuOpen(false)
+                  onOpenCustomizer(goal.id)
+                }}
+              >
+                Customise
+              </button>
+              <div className="goal-menu__divider" />
+              <button
+                type="button"
+                className="goal-menu__item"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMenuOpen(false)
+                  onStartGoalRename(goal.id, goal.name)
+                }}
+              >
+                Rename
+              </button>
+              <div className="goal-menu__divider" />
+              <button
+                type="button"
+                className="goal-menu__item goal-menu__item--danger"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMenuOpen(false)
+                  onDeleteGoal(goal.id)
+                }}
+                aria-label="Delete goal"
+              >
+                Delete goal
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null
+
+  const activeBucketForMenu = useMemo(() => {
+    if (!bucketMenuOpenId) {
+      return null
+    }
+    return goal.buckets.find((bucket) => bucket.id === bucketMenuOpenId) ?? null
+  }, [goal.buckets, bucketMenuOpenId])
+
+  const activeBucketCompletedCount = activeBucketForMenu
+    ? activeBucketForMenu.tasks.filter((task) => task.completed).length
+    : 0
+
+  const bucketMenuPortal =
+    bucketMenuOpenId && activeBucketForMenu && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="goal-menu-overlay"
+            role="presentation"
+            onMouseDown={(event) => {
+              event.stopPropagation()
+              setBucketMenuOpenId(null)
+            }}
+          >
+            <div
+              ref={bucketMenuRef}
+              className="goal-menu goal-menu--floating min-w-[180px] rounded-md border p-1 shadow-lg"
+              style={{
+                top: `${bucketMenuPosition.top}px`,
+                left: `${bucketMenuPosition.left}px`,
+                visibility: bucketMenuPositionReady ? 'visible' : 'hidden',
+              }}
+              role="menu"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="goal-menu__item"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setBucketMenuOpenId(null)
+                  onStartBucketRename(goal.id, activeBucketForMenu.id, activeBucketForMenu.name)
+                }}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                disabled={activeBucketCompletedCount === 0}
+                aria-disabled={activeBucketCompletedCount === 0}
+                className={classNames('goal-menu__item', activeBucketCompletedCount === 0 && 'opacity-50 cursor-not-allowed')}
+                onClick={(event) => {
+                  if (activeBucketCompletedCount === 0) {
+                    return
+                  }
+                  event.stopPropagation()
+                  setBucketMenuOpenId(null)
+                  onDeleteCompletedTasks(activeBucketForMenu.id)
+                }}
+              >
+                Delete all completed tasks
+              </button>
+              <div className="goal-menu__divider" />
+              <button
+                type="button"
+                className="goal-menu__item goal-menu__item--danger"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setBucketMenuOpenId(null)
+                  onDeleteBucket(activeBucketForMenu.id)
+                }}
+              >
+                Delete bucket
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null
+
   return (
-    <div className="rounded-2xl bg-white/5 hover:bg-white/10 transition border border-white/5">
+    <div className={classNames('goal-card', surfaceClass, isCustomizerOpen && 'goal-card--customizing')}>
       <div
         role="button"
         tabIndex={0}
         onClick={onToggle}
         onKeyDown={(e) => {
           const target = e.target as HTMLElement
-          if (target && (target.closest('input, textarea, [contenteditable="true"]'))) {
+          if (target && target.closest('input, textarea, [contenteditable="true"]')) {
             return
           }
           if (e.key === 'Enter' || e.key === ' ') {
@@ -789,13 +1318,13 @@ const GoalRow: React.FC<GoalRowProps> = ({
         }}
         className="goal-header-toggle w-full text-left p-4 md:p-5"
         draggable
-        onDragStart={(e) => {
+          onDragStart={(e) => {
           try { e.dataTransfer.setData('text/plain', goal.id) } catch {}
           const headerEl = e.currentTarget as HTMLElement
           const container = headerEl.closest('li.goal-entry') as HTMLElement | null
           container?.classList.add('dragging')
           // Clone visible header for ghost image; copy visuals from the card wrapper for accurate background/border
-          const srcCard = (container?.querySelector('.rounded-2xl') as HTMLElement | null) ?? headerEl
+          const srcCard = (container?.querySelector('.goal-card') as HTMLElement | null) ?? headerEl
           const srcRect = (srcCard ?? headerEl).getBoundingClientRect()
           const clone = headerEl.cloneNode(true) as HTMLElement
           clone.className = headerEl.className + ' goal-bucket-drag-clone'
@@ -896,6 +1425,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
             <button
               type="button"
               className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
+              ref={menuButtonRef}
               onClick={(e) => {
                 e.stopPropagation()
                 setMenuOpen((v) => !v)
@@ -910,40 +1440,13 @@ const GoalRow: React.FC<GoalRowProps> = ({
                 <circle cx="12" cy="18" r="1.6" />
               </svg>
             </button>
-            {menuOpen && (
-              <div ref={menuRef} className="goal-menu absolute right-0 top-8 z-10 min-w-[160px] rounded-md border p-1 shadow-lg">
-                <button
-                  type="button"
-                  className="goal-menu__item"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setMenuOpen(false)
-                    onStartGoalRename(goal.id, goal.name)
-                  }}
-                >
-                  Rename
-                </button>
-                <div className="goal-menu__divider" />
-                <button
-                  type="button"
-                  className="goal-menu__item goal-menu__item--danger"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setMenuOpen(false)
-                    onDeleteGoal(goal.id)
-                  }}
-                  aria-label="Delete goal"
-                >
-                  Delete goal
-                </button>
-              </div>
-            )}
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3 flex-nowrap">
           <ThinProgress value={pct} gradient={goal.color} className="h-1 flex-1 min-w-0" />
           <span className="text-xs sm:text-sm text-white/80 whitespace-nowrap flex-none">{progressLabel}</span>
         </div>
+
       </div>
 
       {isOpen && (
@@ -1171,7 +1674,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                           <span className="goal-bucket-title font-medium truncate">{highlightText(b.name, highlightTerm)}</span>
                         )}
                       </div>
-                      <div className="relative flex items-center gap-2" data-bucket-menu="true">
+                      <div className="relative flex items-center gap-2">
                         <svg
                           className={classNames('w-3.5 h-3.5 goal-chevron-icon transition-transform', isBucketOpen && 'rotate-90')}
                           viewBox="0 0 24 24"
@@ -1185,9 +1688,21 @@ const GoalRow: React.FC<GoalRowProps> = ({
                           className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-white/10"
                           aria-haspopup="menu"
                           aria-label="Bucket actions"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setBucketMenuOpenId((cur) => (cur === b.id ? null : b.id))
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            const button = event.currentTarget as HTMLButtonElement
+                            const isClosing = bucketMenuOpenId === b.id
+                            setBucketMenuOpenId((current) => {
+                              if (current === b.id) {
+                                bucketMenuAnchorRef.current = null
+                                return null
+                              }
+                              bucketMenuAnchorRef.current = button
+                              return b.id
+                            })
+                            if (!isClosing) {
+                              setBucketMenuPositionReady(false)
+                            }
                           }}
                           aria-expanded={bucketMenuOpenId === b.id}
                         >
@@ -1197,47 +1712,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
                             <circle cx="12" cy="18" r="1.6" />
                           </svg>
                         </button>
-                        {bucketMenuOpenId === b.id && (
-                          <div ref={bucketMenuRef} className="goal-menu absolute right-0 top-8 z-10 min-w-[180px] rounded-md border p-1 shadow-lg">
-                            <button
-                              type="button"
-                              className="goal-menu__item"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setBucketMenuOpenId(null)
-                                onStartBucketRename(goal.id, b.id, b.name)
-                              }}
-                            >
-                              Rename
-                            </button>
-                            <button
-                              type="button"
-                              disabled={completedTasks.length === 0}
-                              aria-disabled={completedTasks.length === 0}
-                              className={classNames('goal-menu__item', completedTasks.length === 0 && 'opacity-50 cursor-not-allowed')}
-                              onClick={(e) => {
-                                if (completedTasks.length === 0) return
-                                e.stopPropagation()
-                                setBucketMenuOpenId(null)
-                                onDeleteCompletedTasks(b.id)
-                              }}
-                            >
-                              Delete all completed tasks
-                            </button>
-                            <div className="goal-menu__divider" />
-                            <button
-                              type="button"
-                              className="goal-menu__item goal-menu__item--danger"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setBucketMenuOpenId(null)
-                                onDeleteBucket(b.id)
-                              }}
-                            >
-                              Delete bucket
-                            </button>
-                          </div>
-                        )}
                       </div>
                     </div>
                     {isBucketOpen && (
@@ -1937,6 +2411,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
           </div>
         </div>
       )}
+      {menuPortal}
+      {bucketMenuPortal}
     </div>
   )
 }
@@ -1984,6 +2460,8 @@ export default function GoalsPage(): ReactElement {
   const goalModalInputRef = useRef<HTMLInputElement | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [nextGoalGradientIndex, setNextGoalGradientIndex] = useState(() => DEFAULT_GOALS.length % GOAL_GRADIENTS.length)
+  const [activeCustomizerGoalId, setActiveCustomizerGoalId] = useState<string | null>(null)
+  const customizerDialogRef = useRef<HTMLDivElement | null>(null)
   const customGradientPreview = useMemo(
     () => `linear-gradient(${customGradient.angle}deg, ${customGradient.start} 0%, ${customGradient.end} 100%)`,
     [customGradient],
@@ -1996,6 +2474,10 @@ export default function GoalsPage(): ReactElement {
     }),
     [customGradientPreview],
   )
+  const activeCustomizerGoal = useMemo(
+    () => goals.find((goal) => goal.id === activeCustomizerGoalId) ?? null,
+    [goals, activeCustomizerGoalId],
+  )
   // On first load, attempt to hydrate from Supabase (single-user session).
   useEffect(() => {
     let cancelled = false
@@ -2003,7 +2485,11 @@ export default function GoalsPage(): ReactElement {
       try {
         const result = await fetchGoalsHierarchy()
         if (!cancelled && result && Array.isArray(result.goals)) {
-          setGoals(result.goals as any)
+          const normalized = result.goals.map((goal: any) => ({
+            ...goal,
+            surfaceStyle: normalizeSurfaceStyle(goal.surfaceStyle as string | null | undefined),
+          }))
+          setGoals(normalized as any)
         }
       } catch {
         // ignore; fall back to local defaults
@@ -2019,6 +2505,61 @@ export default function GoalsPage(): ReactElement {
   const expandedRef = useRef(expanded)
   const bucketExpandedRef = useRef(bucketExpanded)
   const completedCollapsedRef = useRef(completedCollapsed)
+
+  useEffect(() => {
+    if (!activeCustomizerGoalId) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActiveCustomizerGoalId(null)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [activeCustomizerGoalId])
+
+  useEffect(() => {
+    if (activeCustomizerGoalId && !activeCustomizerGoal) {
+      setActiveCustomizerGoalId(null)
+    }
+  }, [activeCustomizerGoalId, activeCustomizerGoal])
+
+  useEffect(() => {
+    if (!activeCustomizerGoalId) {
+      return
+    }
+    if (typeof document === 'undefined') {
+      return
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [activeCustomizerGoalId])
+
+  useEffect(() => {
+    if (!activeCustomizerGoalId) {
+      return
+    }
+    if (typeof window === 'undefined') {
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const dialog = customizerDialogRef.current
+      if (!dialog) {
+        return
+      }
+      const target = dialog.querySelector<HTMLElement>('[data-auto-focus="true"], button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+      target?.focus()
+    })
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [activeCustomizerGoalId])
+
+  const closeCustomizer = useCallback(() => setActiveCustomizerGoalId(null), [])
 
   // Goal-level DnD hover state and ghost
   const [goalHoverIndex, setGoalHoverIndex] = useState<number | null>(null)
@@ -2038,6 +2579,42 @@ export default function GoalsPage(): ReactElement {
 
   const toggleExpand = (goalId: string) => {
     setExpanded((e) => ({ ...e, [goalId]: !e[goalId] }))
+  }
+
+  const updateGoalAppearance = (goalId: string, updates: GoalAppearanceUpdate) => {
+    const surfaceStyleToPersist = updates.surfaceStyle ? normalizeSurfaceStyle(updates.surfaceStyle) : null
+    setGoals((gs) =>
+      gs.map((g) => {
+        if (g.id !== goalId) return g
+        let next: Goal = { ...g }
+        if (updates.surfaceStyle) {
+          next.surfaceStyle = normalizeSurfaceStyle(updates.surfaceStyle)
+        }
+
+        if ('customGradient' in updates) {
+          const custom = updates.customGradient
+          if (custom) {
+            const gradientString = createCustomGradientString(custom.from, custom.to)
+            next.customGradient = { ...custom }
+            next.color = `custom:${gradientString}`
+          } else {
+            next.customGradient = undefined
+          }
+        }
+
+        if (updates.color) {
+          next.color = updates.color
+          if (!updates.color.startsWith('custom:')) {
+            next.customGradient = undefined
+          }
+        }
+
+        return next
+      }),
+    )
+    if (surfaceStyleToPersist) {
+      apiSetGoalSurface(goalId, surfaceStyleToPersist).catch(() => {})
+    }
   }
 
   const startGoalRename = (goalId: string, initial: string) => {
@@ -2116,6 +2693,9 @@ export default function GoalsPage(): ReactElement {
         bucketIds.forEach((id) => delete next[id])
         return next
       })
+    }
+    if (activeCustomizerGoalId === goalId) {
+      setActiveCustomizerGoalId(null)
     }
     apiDeleteGoalById(goalId).catch(() => {})
   }
@@ -2351,7 +2931,8 @@ export default function GoalsPage(): ReactElement {
     apiCreateGoal(trimmed, gradientForGoal)
       .then((db) => {
         const id = db?.id ?? `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, buckets: [] }
+        const surfaceStyle = normalizeSurfaceStyle((db?.card_surface as string | null | undefined) ?? 'glass')
+        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, surfaceStyle, buckets: [] }
         setGoals((current) => [newGoal, ...current])
         setExpanded((current) => ({ ...current, [id]: true }))
         // Persist new goal at the top to match optimistic UI order
@@ -2361,7 +2942,7 @@ export default function GoalsPage(): ReactElement {
       })
       .catch(() => {
         const id = `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, buckets: [] }
+        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, surfaceStyle: 'glass', buckets: [] }
         setGoals((current) => [newGoal, ...current])
         setExpanded((current) => ({ ...current, [id]: true }))
       })
@@ -3077,6 +3658,37 @@ export default function GoalsPage(): ReactElement {
     apiSetGoalSortIndex(goalId, adjustedTo).catch(() => {})
   }
 
+  const customizerPortal =
+    activeCustomizerGoal && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="goal-customizer-overlay"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                closeCustomizer()
+              }
+            }}
+          >
+            <div
+              ref={customizerDialogRef}
+              className="goal-customizer-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Customise goal ${activeCustomizerGoal.name}`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <GoalCustomizer
+                goal={activeCustomizerGoal}
+                onUpdate={(updates) => updateGoalAppearance(activeCustomizerGoal.id, updates)}
+                onClose={closeCustomizer}
+              />
+            </div>
+          </div>,
+          document.body,
+        )
+      : null
+
   return (
     <div className="goals-layer text-white">
       <div className="goals-content site-main__inner">
@@ -3205,11 +3817,13 @@ export default function GoalsPage(): ReactElement {
                   onTaskEditBlur={(goalId, bucketId, taskId) => handleTaskEditBlur(goalId, bucketId, taskId)}
                   onTaskEditCancel={(taskId) => handleTaskEditCancel(taskId)}
                   registerTaskEditRef={registerTaskEditRef}
-                    onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
-                      reorderTasks(goalId, bucketId, section, fromIndex, toIndex)
-                    }
-                    onReorderBuckets={reorderBuckets}
-                  />
+                  onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
+                    reorderTasks(goalId, bucketId, section, fromIndex, toIndex)
+                  }
+                  onReorderBuckets={reorderBuckets}
+                  onOpenCustomizer={(goalId) => setActiveCustomizerGoalId(goalId)}
+                  activeCustomizerGoalId={activeCustomizerGoalId}
+                />
                 </li>
               ))}
             </ul>
@@ -3221,6 +3835,8 @@ export default function GoalsPage(): ReactElement {
         <div className="absolute -top-24 -left-24 h-72 w-72 bg-fuchsia-500 blur-3xl rounded-full mix-blend-screen" />
         <div className="absolute -bottom-28 -right-24 h-80 w-80 bg-indigo-500 blur-3xl rounded-full mix-blend-screen" />
       </div>
+
+      {customizerPortal}
 
       {isCreateGoalOpen && (
         <div className="goal-modal-backdrop" role="presentation" onClick={closeCreateGoal}>
