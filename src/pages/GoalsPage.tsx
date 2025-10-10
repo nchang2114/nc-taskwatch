@@ -3034,7 +3034,8 @@ export default function GoalsPage(): ReactElement {
     apiCreateBucket(goalId, trimmed)
       .then((db) => {
         const newBucketId = db?.id ?? `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, surfaceStyle: 'glass', tasks: [] }
+        const surface = normalizeBucketSurfaceStyle((db as any)?.buckets_card_style ?? 'glass')
+        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, surfaceStyle: surface, tasks: [] }
         setGoals((gs) =>
           gs.map((g) =>
             g.id === goalId

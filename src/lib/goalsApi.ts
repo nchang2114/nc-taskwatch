@@ -8,7 +8,7 @@ export type DbBucket = {
   name: string
   favorite: boolean
   sort_index: number
-  card_surface: string | null
+  buckets_card_style: string | null
 }
 export type DbTask = {
   id: string
@@ -63,7 +63,7 @@ export async function fetchGoalsHierarchy(): Promise<
   // Buckets
   const { data: buckets, error: bErr } = await supabase
     .from('buckets')
-    .select('id, user_id, goal_id, name, favorite, sort_index, card_surface')
+    .select('id, user_id, goal_id, name, favorite, sort_index, buckets_card_style')
     .in('goal_id', goalIds)
     .order('sort_index', { ascending: true })
   if (bErr) return null
@@ -96,7 +96,7 @@ export async function fetchGoalsHierarchy(): Promise<
       id: b.id,
       name: b.name,
       favorite: b.favorite,
-      surfaceStyle: (b as any).card_surface ?? null,
+      surfaceStyle: (b as any).buckets_card_style ?? null,
       tasks: [] as any[],
     }
     bucketMap.set(b.id, node)
@@ -253,8 +253,8 @@ export async function createBucket(goalId: string, name: string, surface: string
   const sort_index = await nextSortIndex('buckets', { goal_id: goalId })
   const { data, error } = await supabase
     .from('buckets')
-    .insert([{ goal_id: goalId, name, favorite: false, sort_index, card_surface: surface }])
-    .select('id, name, favorite, sort_index, card_surface')
+    .insert([{ goal_id: goalId, name, favorite: false, sort_index, buckets_card_style: surface }])
+    .select('id, name, favorite, sort_index, buckets_card_style')
     .single()
   if (error) return null
   return data as { id: string; name: string; favorite: boolean; sort_index: number }
@@ -263,7 +263,7 @@ export async function createBucket(goalId: string, name: string, surface: string
 export async function setBucketSurface(bucketId: string, surface: string | null) {
   if (!supabase) return
   await ensureSingleUserSession()
-  await supabase.from('buckets').update({ card_surface: surface }).eq('id', bucketId)
+  await supabase.from('buckets').update({ buckets_card_style: surface }).eq('id', bucketId)
 }
 
 export async function renameBucket(bucketId: string, name: string) {
