@@ -970,7 +970,7 @@ html[data-theme='light'] .goal-completed__title {
 
 html[data-theme='light'] .goal-task-row {
   --task-row-bg: rgba(246, 248, 255, 0.98);
-  --task-row-overlay: rgba(205, 210, 255, 0.34);
+  --task-row-overlay: rgba(205, 210, 255, 0.42);
   --task-row-border: rgba(150, 160, 226, 0.52);
   --task-row-shadow: 0 9px 20px rgba(142, 156, 214, 0.28);
 }
@@ -1471,6 +1471,7 @@ html[data-theme='light'] .goal-insert-line {
   padding: 3px; /* thicker ring width for priority highlight */
   background: linear-gradient(135deg, #a78bfa 0%, #22d3ee 30%, #f472b6 62%, #60a5fa 100%);
   pointer-events: none;
+  z-index: 3;
   /* Mask out the middle so only the outline is visible */
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -1483,6 +1484,18 @@ html[data-theme='light'] .goal-task-row--priority {
   --priority-overlay:
     linear-gradient(135deg, rgba(240, 232, 255, 0.56) 0%, rgba(214, 220, 255, 0.48) 48%, rgba(255, 214, 236, 0.46) 100%),
     radial-gradient(160% 220% at 50% -32%, rgba(206, 200, 255, 0.42), rgba(246, 248, 255, 0) 64%);
+}
+
+html[data-theme='light'] .goal-task-row--priority::before {
+  background:
+    linear-gradient(
+      135deg,
+      #0ea5e9 0%,
+      #4338ca 32%,
+      #7c3aed 58%,
+      #be185d 80%,
+      #ca8a04 100%
+    );
 }
 
 html[data-theme='light'] .goal-task-diff::after {
@@ -1581,7 +1594,7 @@ html[data-theme='light'] .goal-customizer-overlay {
 
 html[data-theme='light'] .goal-task-row--diff-green {
   --task-row-border: rgba(128, 188, 152, 0.68);
-  --task-row-overlay: rgba(198, 232, 204, 0.58);
+  --task-row-overlay: rgba(198, 232, 204, 0.64);
 }
 
 .goal-menu-overlay {
@@ -1992,11 +2005,11 @@ html[data-theme='light'] .goal-customizer__done {
 }
 html[data-theme='light'] .goal-task-row--diff-yellow {
   --task-row-border: rgba(226, 188, 120, 0.68);
-  --task-row-overlay: rgba(248, 233, 193, 0.62);
+  --task-row-overlay: rgba(248, 233, 193, 0.68);
 }
 html[data-theme='light'] .goal-task-row--diff-red {
   --task-row-border: rgba(232, 140, 140, 0.74);
-  --task-row-overlay: rgba(248, 210, 210, 0.64);
+  --task-row-overlay: rgba(248, 210, 210, 0.7);
 }
 
 /* Theme-aware icon colors */
