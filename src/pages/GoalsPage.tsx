@@ -933,6 +933,38 @@ const GoalRow: React.FC<GoalRowProps> = ({
 
   // Copy key visual styles so the drag clone matches layered backgrounds and borders
   const copyVisualStyles = (src: HTMLElement, dst: HTMLElement) => {
+    const rowCS = window.getComputedStyle(src)
+    const isTaskRow = src.classList.contains('goal-task-row') || dst.classList.contains('goal-task-row')
+
+    if (isTaskRow) {
+      const taskVars = ['--task-row-bg', '--task-row-overlay', '--task-row-border', '--task-row-shadow', '--priority-overlay']
+      for (const name of taskVars) {
+        const value = rowCS.getPropertyValue(name)
+        const trimmed = value.trim()
+        if (trimmed) {
+          dst.style.setProperty(name, trimmed)
+        } else {
+          dst.style.removeProperty(name)
+        }
+      }
+
+      dst.style.backgroundColor = rowCS.backgroundColor
+      dst.style.backgroundImage = rowCS.backgroundImage && rowCS.backgroundImage !== 'none' ? rowCS.backgroundImage : 'none'
+      dst.style.backgroundSize = rowCS.backgroundSize
+      dst.style.backgroundPosition = rowCS.backgroundPosition
+      dst.style.backgroundRepeat = rowCS.backgroundRepeat
+      dst.style.borderColor = rowCS.borderColor
+      dst.style.borderWidth = rowCS.borderWidth
+      dst.style.borderStyle = rowCS.borderStyle
+      dst.style.borderRadius = rowCS.borderRadius
+      dst.style.boxShadow = rowCS.boxShadow
+      dst.style.outline = rowCS.outline
+      dst.style.color = rowCS.color
+      dst.style.opacity = rowCS.opacity
+
+      return
+    }
+
     const parseColor = (value: string) => {
       const s = (value || '').trim().toLowerCase()
       let m = s.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)$/)
@@ -962,7 +994,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
       ? parseColor('rgb(248, 250, 255)')
       : parseColor('rgb(16, 20, 36)')
 
-    const rowCS = window.getComputedStyle(src)
     const cardEl = src.closest('.goal-card') as HTMLElement | null
     const cardCS = cardEl ? window.getComputedStyle(cardEl) : null
 
@@ -2059,8 +2090,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     row.classList.add('dragging')
                                     // Clone current row as drag image, keep it in DOM until drag ends
                                     const clone = row.cloneNode(true) as HTMLElement
-                                    // Use dedicated clone class; we copy computed styles for colors/borders
-                                    clone.className = 'goal-drag-clone'
+                                    // Preserve task modifiers so difficulty/priority visuals stay intact
+                                    clone.className = `${row.className} goal-drag-clone`
+                                    clone.classList.remove('dragging', 'goal-task-row--collapsed')
                                     // Match row width to avoid layout surprises in the ghost
                                     const rowRect = row.getBoundingClientRect()
                                     clone.style.width = `${Math.floor(rowRect.width)}px`
@@ -2430,7 +2462,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           const row = e.currentTarget as HTMLElement
                                           row.classList.add('dragging')
                                           const clone = row.cloneNode(true) as HTMLElement
-                                          clone.className = 'goal-drag-clone'
+                                          clone.className = `${row.className} goal-drag-clone`
+                                          clone.classList.remove('dragging', 'goal-task-row--collapsed')
                                           const rowRect = row.getBoundingClientRect()
                                           clone.style.width = `${Math.floor(rowRect.width)}px`
                                           copyVisualStyles(row, clone)
