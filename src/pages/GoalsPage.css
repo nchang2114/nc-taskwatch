@@ -112,63 +112,65 @@ html[data-theme='light'] .goal-draft-input::placeholder {
 }
 
 .goal-card--glass {
-  background: linear-gradient(135deg, rgba(32, 45, 84, 0.62), rgba(15, 23, 42, 0.82));
-  border-color: rgba(165, 180, 252, 0.24);
-  box-shadow: 0 26px 56px -38px rgba(51, 102, 204, 0.55);
+  background: #1f2634;
+  border-color: rgba(148, 163, 184, 0.2);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .goal-card--glass:hover {
-  background: linear-gradient(135deg, rgba(43, 63, 114, 0.66), rgba(17, 25, 44, 0.85));
+  background: #242c3d;
+  border-color: rgba(148, 163, 184, 0.28);
 }
 
 .goal-card--midnight {
-  background: linear-gradient(150deg, rgba(20, 24, 65, 0.92), rgba(9, 12, 30, 0.95));
-  border-color: rgba(129, 140, 248, 0.32);
-  box-shadow: 0 32px 64px -44px rgba(30, 64, 175, 0.72);
+  background: linear-gradient(135deg, rgba(62, 64, 120, 0.92), rgba(47, 54, 110, 0.92));
+  border-color: rgba(137, 148, 255, 0.38);
+  box-shadow: 0 22px 40px -32px rgba(54, 68, 148, 0.5);
 }
 
 .goal-card--midnight:hover {
-  border-color: rgba(129, 140, 248, 0.5);
+  border-color: rgba(156, 168, 255, 0.46);
 }
 
 .goal-card--slate {
-  background: linear-gradient(160deg, rgba(15, 23, 42, 0.88), rgba(30, 41, 59, 0.74));
-  border-color: rgba(148, 163, 184, 0.16);
-  box-shadow: 0 22px 52px -38px rgba(15, 23, 42, 0.68);
+  background: linear-gradient(135deg, rgba(58, 70, 97, 0.9), rgba(44, 60, 88, 0.92));
+  border-color: rgba(160, 180, 210, 0.4);
+  box-shadow: 0 18px 34px -28px rgba(35, 50, 77, 0.45);
 }
 
 .goal-card--slate:hover {
-  border-color: rgba(226, 232, 240, 0.18);
+  border-color: rgba(182, 202, 232, 0.5);
 }
 
 .goal-card--charcoal {
-  background: linear-gradient(158deg, rgba(8, 11, 23, 0.96), rgba(24, 27, 41, 0.88));
-  border-color: rgba(99, 102, 241, 0.34);
-  box-shadow: 0 36px 72px -46px rgba(11, 15, 32, 0.82);
+  background: linear-gradient(135deg, rgba(74, 65, 100, 0.9), rgba(60, 53, 88, 0.9));
+  border-color: rgba(186, 162, 224, 0.36);
+  box-shadow: 0 24px 44px -34px rgba(53, 38, 87, 0.48);
 }
 
 .goal-card--charcoal:hover {
-  border-color: rgba(129, 140, 248, 0.52);
+  border-color: rgba(206, 182, 242, 0.46);
 }
 
 .goal-card--linen {
-  background: linear-gradient(152deg, rgba(70, 60, 50, 0.6), rgba(28, 34, 46, 0.78));
-  border-color: rgba(248, 214, 170, 0.26);
-  box-shadow: 0 30px 64px -44px rgba(214, 158, 98, 0.28);
+  background: linear-gradient(135deg, rgba(118, 92, 74, 0.88), rgba(101, 78, 66, 0.9));
+  border-color: rgba(246, 200, 150, 0.35);
+  box-shadow: 0 20px 36px -30px rgba(112, 80, 52, 0.34);
 }
 
 .goal-card--linen:hover {
-  border-color: rgba(251, 191, 133, 0.38);
+  border-color: rgba(251, 220, 180, 0.45);
 }
 
 .goal-card--frost {
-  background: linear-gradient(148deg, rgba(78, 110, 153, 0.58), rgba(34, 48, 78, 0.78));
-  border-color: rgba(165, 201, 255, 0.3);
-  box-shadow: 0 32px 68px -46px rgba(96, 165, 250, 0.34);
+  background: linear-gradient(135deg, rgba(88, 120, 146, 0.88), rgba(72, 104, 132, 0.88));
+  border-color: rgba(170, 206, 255, 0.34);
+  box-shadow: 0 22px 42px -34px rgba(88, 140, 200, 0.32);
 }
 
 .goal-card--frost:hover {
-  border-color: rgba(191, 219, 254, 0.46);
+  border-color: rgba(196, 224, 255, 0.44);
 }
 
 .goal-card--customizing {
@@ -189,19 +191,25 @@ html[data-theme='light'] .goal-card:hover {
 }
 
 html[data-theme='light'] .goal-card--glass {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(231, 240, 255, 0.94));
-  border-color: rgba(129, 140, 248, 0.32);
-  box-shadow: 0 22px 48px -36px rgba(99, 102, 241, 0.28);
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.24);
+  box-shadow: 0 12px 28px -24px rgba(15, 23, 42, 0.22);
+}
+
+html[data-theme='light'] .goal-card--glass:hover {
+  border-color: rgba(129, 140, 248, 0.3);
 }
 
 html[data-theme='light'] .goal-card--midnight {
-  background: linear-gradient(145deg, rgba(231, 236, 255, 0.96), rgba(209, 222, 255, 0.9));
-  border-color: rgba(99, 102, 241, 0.46);
+  background: linear-gradient(135deg, #e8ebff, #dfe4ff);
+  border-color: rgba(137, 148, 255, 0.42);
+  box-shadow: 0 18px 34px -28px rgba(129, 140, 248, 0.22);
 }
 
 html[data-theme='light'] .goal-card--slate {
-  background: linear-gradient(150deg, rgba(244, 247, 255, 0.94), rgba(230, 236, 250, 0.88));
-  border-color: rgba(148, 163, 184, 0.32);
+  background: linear-gradient(135deg, #f2f5ff, #e7ecfb);
+  border-color: rgba(162, 179, 209, 0.46);
+  box-shadow: 0 16px 32px -26px rgba(120, 144, 190, 0.24);
 }
 
 html[data-theme='light'] .goal-card--customizing {
@@ -210,18 +218,21 @@ html[data-theme='light'] .goal-card--customizing {
 }
 
 html[data-theme='light'] .goal-card--charcoal {
-  background: linear-gradient(150deg, rgba(223, 229, 247, 0.97), rgba(202, 209, 233, 0.92));
-  border-color: rgba(99, 102, 241, 0.45);
+  background: linear-gradient(135deg, #f1ecfb, #e8e4f7);
+  border-color: rgba(189, 170, 225, 0.4);
+  box-shadow: 0 18px 32px -28px rgba(125, 104, 166, 0.24);
 }
 
 html[data-theme='light'] .goal-card--linen {
-  background: linear-gradient(150deg, rgba(250, 244, 235, 0.97), rgba(240, 230, 216, 0.9));
-  border-color: rgba(245, 196, 135, 0.35);
+  background: linear-gradient(135deg, #f9f2ea, #f3e8dc);
+  border-color: rgba(247, 202, 150, 0.42);
+  box-shadow: 0 18px 32px -28px rgba(196, 153, 110, 0.22);
 }
 
 html[data-theme='light'] .goal-card--frost {
-  background: linear-gradient(150deg, rgba(240, 248, 255, 0.98), rgba(216, 232, 255, 0.9));
-  border-color: rgba(148, 197, 255, 0.42);
+  background: linear-gradient(135deg, #edf6ff, #e3f0fa);
+  border-color: rgba(174, 207, 255, 0.4);
+  box-shadow: 0 18px 34px -28px rgba(146, 192, 241, 0.22);
 }
 
 .goals-toolbar {
@@ -970,10 +981,10 @@ html[data-theme='light'] .goal-completed__title {
 }
 
 html[data-theme='light'] .goal-task-row {
-  --task-row-bg: rgba(236, 240, 252, 0.98); /* slightly darker base */
-  --task-row-overlay: rgba(205, 210, 255, 0.42);
-  --task-row-border: rgba(150, 160, 226, 0.52);
-  --task-row-shadow: 0 9px 20px rgba(142, 156, 214, 0.28);
+  --task-row-bg: rgba(246, 249, 255, 0.98); /* brighter base */
+  --task-row-overlay: rgba(212, 219, 255, 0.32);
+  --task-row-border: rgba(163, 176, 228, 0.46);
+  --task-row-shadow: 0 9px 20px rgba(142, 156, 214, 0.22);
 }
 
 html[data-theme='light'] .goal-task-marker,
@@ -1063,70 +1074,76 @@ html[data-theme='light'] .goal-task-add:focus-visible {
 }
 
 .goal-bucket-item--surface-glass {
-  background: linear-gradient(150deg, rgba(33, 45, 78, 0.62), rgba(18, 27, 48, 0.78));
-  border-color: rgba(148, 163, 184, 0.24);
-  box-shadow: 0 20px 40px -28px rgba(59, 130, 246, 0.32);
+  background: #20283a;
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .goal-bucket-item--surface-midnight {
-  background: linear-gradient(150deg, rgba(21, 25, 63, 0.86), rgba(10, 13, 30, 0.92));
-  border-color: rgba(129, 140, 248, 0.32);
-  box-shadow: 0 24px 46px -32px rgba(79, 70, 229, 0.36);
+  background: linear-gradient(135deg, rgba(62, 64, 120, 0.9), rgba(47, 54, 110, 0.9));
+  border-color: rgba(137, 148, 255, 0.36);
+  box-shadow: 0 18px 34px -26px rgba(54, 68, 148, 0.45);
 }
 
 .goal-bucket-item--surface-slate {
-  background: linear-gradient(150deg, rgba(24, 32, 54, 0.74), rgba(18, 29, 50, 0.68));
-  border-color: rgba(148, 163, 184, 0.18);
-  box-shadow: 0 18px 40px -30px rgba(14, 22, 40, 0.42);
+  background: linear-gradient(135deg, rgba(58, 70, 97, 0.88), rgba(44, 60, 88, 0.9));
+  border-color: rgba(160, 180, 210, 0.38);
+  box-shadow: 0 16px 30px -24px rgba(35, 50, 77, 0.42);
 }
 
 .goal-bucket-item--surface-charcoal {
-  background: linear-gradient(150deg, rgba(10, 12, 22, 0.94), rgba(26, 28, 42, 0.88));
-  border-color: rgba(99, 102, 241, 0.34);
-  box-shadow: 0 26px 50px -34px rgba(17, 24, 39, 0.58);
+  background: linear-gradient(135deg, rgba(74, 65, 100, 0.88), rgba(60, 53, 88, 0.88));
+  border-color: rgba(186, 162, 224, 0.34);
+  box-shadow: 0 20px 36px -28px rgba(53, 38, 87, 0.45);
 }
 
 .goal-bucket-item--surface-linen {
-  background: linear-gradient(150deg, rgba(78, 64, 56, 0.6), rgba(32, 38, 48, 0.68));
-  border-color: rgba(251, 191, 133, 0.28);
-  box-shadow: 0 22px 44px -32px rgba(214, 164, 120, 0.28);
+  background: linear-gradient(135deg, rgba(118, 92, 74, 0.85), rgba(101, 78, 66, 0.88));
+  border-color: rgba(246, 200, 150, 0.3);
+  box-shadow: 0 18px 34px -26px rgba(112, 80, 52, 0.32);
 }
 
 .goal-bucket-item--surface-frost {
-  background: linear-gradient(150deg, rgba(82, 120, 176, 0.62), rgba(40, 60, 96, 0.74));
-  border-color: rgba(165, 201, 255, 0.32);
-  box-shadow: 0 24px 48px -34px rgba(96, 165, 250, 0.32);
+  background: linear-gradient(135deg, rgba(88, 120, 146, 0.85), rgba(72, 104, 132, 0.86));
+  border-color: rgba(170, 206, 255, 0.32);
+  box-shadow: 0 18px 36px -28px rgba(88, 140, 200, 0.3);
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-glass {
-  background: linear-gradient(150deg, rgba(238, 245, 255, 0.95), rgba(214, 229, 255, 0.86));
-  border-color: rgba(148, 163, 184, 0.32);
-  box-shadow: 0 16px 34px -26px rgba(99, 102, 241, 0.18);
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.26);
+  box-shadow: 0 10px 24px -22px rgba(102, 112, 133, 0.22);
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-midnight {
-  background: linear-gradient(150deg, rgba(208, 219, 255, 0.94), rgba(173, 198, 255, 0.82));
-  border-color: rgba(99, 102, 241, 0.46);
+  background: linear-gradient(135deg, #e8ebff, #dfe4ff);
+  border-color: rgba(137, 148, 255, 0.4);
+  box-shadow: 0 14px 28px -24px rgba(129, 140, 248, 0.24);
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-slate {
-  background: linear-gradient(150deg, rgba(245, 247, 251, 0.95), rgba(227, 234, 247, 0.9));
-  border-color: rgba(148, 163, 184, 0.36);
+  background: linear-gradient(135deg, #f2f5ff, #e7ecfb);
+  border-color: rgba(162, 179, 209, 0.4);
+  box-shadow: 0 12px 26px -22px rgba(120, 144, 190, 0.2);
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-charcoal {
-  background: linear-gradient(150deg, rgba(214, 219, 232, 0.92), rgba(191, 199, 216, 0.88));
-  border-color: rgba(129, 140, 248, 0.48);
+  background: linear-gradient(135deg, #f1ecfb, #e8e4f7);
+  border-color: rgba(189, 170, 225, 0.36);
+  box-shadow: 0 14px 28px -24px rgba(125, 104, 166, 0.2);
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-linen {
-  background: linear-gradient(150deg, rgba(252, 243, 233, 0.96), rgba(238, 223, 205, 0.88));
-  border-color: rgba(250, 209, 150, 0.4);
+  background: linear-gradient(135deg, #f9f2ea, #f3e8dc);
+  border-color: rgba(247, 202, 150, 0.36);
+  box-shadow: 0 14px 28px -24px rgba(196, 153, 110, 0.2);
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-frost {
-  background: linear-gradient(150deg, rgba(233, 244, 255, 0.96), rgba(204, 223, 245, 0.86));
-  border-color: rgba(164, 200, 255, 0.4);
+  background: linear-gradient(135deg, #edf6ff, #e3f0fa);
+  border-color: rgba(174, 207, 255, 0.38);
+  box-shadow: 0 14px 28px -24px rgba(146, 192, 241, 0.2);
 }
 
 .goal-task-row--draft {
@@ -1732,27 +1749,27 @@ html[data-theme='light'] .goal-task-row--diff-green {
 }
 
 .goal-customizer__surface-preview--glass {
-  background-image: linear-gradient(135deg, rgba(72, 116, 235, 0.42), rgba(98, 58, 180, 0.45));
+  background: #232c3c;
 }
 
 .goal-customizer__surface-preview--midnight {
-  background-image: linear-gradient(145deg, rgba(45, 56, 140, 0.6), rgba(32, 38, 89, 0.78));
+  background-image: linear-gradient(135deg, rgba(62, 64, 120, 0.92), rgba(47, 54, 110, 0.92));
 }
 
 .goal-customizer__surface-preview--slate {
-  background-image: linear-gradient(150deg, rgba(31, 41, 78, 0.55), rgba(30, 48, 92, 0.4));
+  background-image: linear-gradient(135deg, rgba(58, 70, 97, 0.88), rgba(44, 60, 88, 0.9));
 }
 
 .goal-customizer__surface-preview--charcoal {
-  background-image: linear-gradient(150deg, rgba(14, 18, 32, 0.92), rgba(44, 48, 76, 0.62));
+  background-image: linear-gradient(135deg, rgba(74, 65, 100, 0.88), rgba(60, 53, 88, 0.88));
 }
 
 .goal-customizer__surface-preview--linen {
-  background-image: linear-gradient(150deg, rgba(96, 80, 68, 0.58), rgba(45, 54, 70, 0.4));
+  background-image: linear-gradient(135deg, rgba(118, 92, 74, 0.85), rgba(101, 78, 66, 0.88));
 }
 
 .goal-customizer__surface-preview--frost {
-  background-image: linear-gradient(150deg, rgba(109, 141, 194, 0.58), rgba(58, 86, 138, 0.44));
+  background-image: linear-gradient(135deg, rgba(88, 120, 146, 0.85), rgba(72, 104, 132, 0.86));
 }
 
 .goal-customizer__surface-title {
@@ -1942,27 +1959,27 @@ html[data-theme='light'] .goal-customizer__surface-preview {
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--glass {
-  background-image: linear-gradient(150deg, rgba(238, 245, 255, 0.95), rgba(214, 229, 255, 0.86));
+  background: #ffffff;
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--midnight {
-  background-image: linear-gradient(150deg, rgba(208, 219, 255, 0.94), rgba(173, 198, 255, 0.82));
+  background-image: linear-gradient(135deg, #e8ebff, #dfe4ff);
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--slate {
-  background-image: linear-gradient(150deg, rgba(245, 247, 251, 0.95), rgba(227, 234, 247, 0.9));
+  background-image: linear-gradient(135deg, #f2f5ff, #e7ecfb);
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--charcoal {
-  background-image: linear-gradient(150deg, rgba(214, 219, 232, 0.92), rgba(191, 199, 216, 0.88));
+  background-image: linear-gradient(135deg, #f1ecfb, #e8e4f7);
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--linen {
-  background-image: linear-gradient(150deg, rgba(252, 243, 233, 0.96), rgba(238, 223, 205, 0.88));
+  background-image: linear-gradient(135deg, #f9f2ea, #f3e8dc);
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--frost {
-  background-image: linear-gradient(150deg, rgba(233, 244, 255, 0.96), rgba(204, 223, 245, 0.86));
+  background-image: linear-gradient(135deg, #edf6ff, #e3f0fa);
 }
 
 html[data-theme='light'] .goal-customizer__swatch {

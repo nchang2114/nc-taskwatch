@@ -406,33 +406,33 @@ const GOAL_SURFACE_PRESETS: Array<{
 }> = [
   {
     id: 'glass',
-    label: 'Aurora glass',
-    description: 'Translucent glow with frosted edges.',
-  },
-  {
-    id: 'midnight',
-    label: 'Midnight matte',
-    description: 'Deeper tone with saturated accent edge.',
+    label: 'Simple',
+    description: 'Clean card with a soft shadow.',
   },
   {
     id: 'slate',
-    label: 'Slate outline',
-    description: 'Minimal surface with crisp border.',
+    label: 'Outline',
+    description: 'Flat surface with a defined border.',
+  },
+  {
+    id: 'midnight',
+    label: 'Midnight',
+    description: 'Deep blue card that keeps focus.',
   },
   {
     id: 'charcoal',
-    label: 'Charcoal matte',
-    description: 'Inky depth with a muted indigo sheen.',
+    label: 'Charcoal',
+    description: 'Dark graphite with a muted sheen.',
   },
   {
     id: 'linen',
-    label: 'Linen veil',
-    description: 'Soft warmth with a brushed highlight.',
+    label: 'Warm',
+    description: 'Muted warmth with gentle texture.',
   },
   {
     id: 'frost',
-    label: 'Frosted silver',
-    description: 'Cool haze with gentle metallic glow.',
+    label: 'Frosted',
+    description: 'Cool neutral with a soft glow.',
   },
 ]
 
@@ -441,12 +441,12 @@ const BUCKET_SURFACE_PRESETS: Array<{
   label: string
   description: string
 }> = [
-  { id: 'glass', label: 'Glass capsule', description: 'Soft translucency with subtle glow.' },
-  { id: 'midnight', label: 'Midnight band', description: 'Deep navy body with crisp edge.' },
-  { id: 'slate', label: 'Slate outline', description: 'Neutral canvas with airy outline.' },
-  { id: 'charcoal', label: 'Charcoal drift', description: 'Dark graphite with muted sheen.' },
-  { id: 'linen', label: 'Linen mist', description: 'Warm neutral with brushed overlay.' },
-  { id: 'frost', label: 'Frost bloom', description: 'Cool gradient with a silver tint.' },
+  { id: 'glass', label: 'Simple', description: 'Clean bucket surface with a light shadow.' },
+  { id: 'slate', label: 'Outline', description: 'Neutral canvas with a defined border.' },
+  { id: 'midnight', label: 'Midnight', description: 'Deep navy surface with contrast.' },
+  { id: 'charcoal', label: 'Charcoal', description: 'Dark graphite for bold stacks.' },
+  { id: 'linen', label: 'Warm', description: 'Soft warmth with gentle texture.' },
+  { id: 'frost', label: 'Frosted', description: 'Cool tint with a subtle glow.' },
 ]
 
 const formatGradientLabel = (value: string) =>
@@ -2968,7 +2968,7 @@ export default function GoalsPage(): ReactElement {
   const toggleBucketExpanded = (bucketId: string) => {
     setBucketExpanded((current) => ({
       ...current,
-      [bucketId]: !(current[bucketId] ?? true),
+      [bucketId]: !(current[bucketId] ?? false),
     }))
   }
 
