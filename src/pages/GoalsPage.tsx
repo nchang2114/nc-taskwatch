@@ -407,32 +407,32 @@ const GOAL_SURFACE_PRESETS: Array<{
   {
     id: 'glass',
     label: 'Simple',
-    description: 'Clean card with a soft shadow.',
+    description: 'Barely-there wash with a soft outline.',
   },
   {
     id: 'slate',
-    label: 'Outline',
-    description: 'Flat surface with a defined border.',
+    label: 'Coastal',
+    description: 'Airy blue tint with a gentle fade.',
   },
   {
     id: 'midnight',
     label: 'Midnight',
-    description: 'Deep blue card that keeps focus.',
+    description: 'Cool indigo haze for subtle depth.',
   },
   {
     id: 'charcoal',
-    label: 'Charcoal',
-    description: 'Dark graphite with a muted sheen.',
+    label: 'Cherry',
+    description: 'Blush pink highlight with a pastel glow.',
   },
   {
     id: 'linen',
     label: 'Warm',
-    description: 'Muted warmth with gentle texture.',
+    description: 'Golden peach accent with gentle warmth.',
   },
   {
     id: 'frost',
-    label: 'Frosted',
-    description: 'Cool neutral with a soft glow.',
+    label: 'Frost',
+    description: 'Minty aqua highlight with a breezy feel.',
   },
 ]
 
@@ -441,12 +441,12 @@ const BUCKET_SURFACE_PRESETS: Array<{
   label: string
   description: string
 }> = [
-  { id: 'glass', label: 'Simple', description: 'Clean bucket surface with a light shadow.' },
-  { id: 'slate', label: 'Outline', description: 'Neutral canvas with a defined border.' },
-  { id: 'midnight', label: 'Midnight', description: 'Deep navy surface with contrast.' },
-  { id: 'charcoal', label: 'Charcoal', description: 'Dark graphite for bold stacks.' },
-  { id: 'linen', label: 'Warm', description: 'Soft warmth with gentle texture.' },
-  { id: 'frost', label: 'Frosted', description: 'Cool tint with a subtle glow.' },
+  { id: 'glass', label: 'Simple', description: 'Barely-there wash with a soft outline.' },
+  { id: 'slate', label: 'Coastal', description: 'Airy blue tint for relaxed columns.' },
+  { id: 'midnight', label: 'Midnight', description: 'Cool indigo haze for subtle depth.' },
+  { id: 'charcoal', label: 'Cherry', description: 'Blush pink highlight with a pastel glow.' },
+  { id: 'linen', label: 'Warm', description: 'Golden peach accent with gentle warmth.' },
+  { id: 'frost', label: 'Frost', description: 'Minty aqua highlight with a breezy feel.' },
 ]
 
 const formatGradientLabel = (value: string) =>
