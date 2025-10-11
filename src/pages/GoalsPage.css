@@ -970,7 +970,7 @@ html[data-theme='light'] .goal-completed__title {
 }
 
 html[data-theme='light'] .goal-task-row {
-  --task-row-bg: rgba(246, 248, 255, 0.98);
+  --task-row-bg: rgba(236, 240, 252, 0.98); /* slightly darker base */
   --task-row-overlay: rgba(205, 210, 255, 0.42);
   --task-row-border: rgba(150, 160, 226, 0.52);
   --task-row-shadow: 0 9px 20px rgba(142, 156, 214, 0.28);

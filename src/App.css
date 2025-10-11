@@ -190,7 +190,6 @@
   font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   font-size: clamp(2.2rem, 6vw, 3.8rem);
   color: var(--text-primary);
 }

@@ -3419,8 +3419,9 @@ export default function GoalsPage(): ReactElement {
   }
 
   const toggleTaskCompletion = (goalId: string, bucketId: string, taskId: string) => {
-    let updated = false
-    let completedCountAfter = 0
+    let toggledNewCompleted: boolean | null = null
+    let shouldCollapseAfterFirstComplete = false
+
     setGoals((gs) =>
       gs.map((goal) =>
         goal.id === goalId
@@ -3429,16 +3430,22 @@ export default function GoalsPage(): ReactElement {
               buckets: goal.buckets.map((bucket) =>
                 bucket.id === bucketId
                   ? (() => {
-                      updated = true
                       const toggled = bucket.tasks.find((t) => t.id === taskId)
                       const newCompleted = !(toggled?.completed ?? false)
+                      toggledNewCompleted = newCompleted
+                      const previousCompletedCount = bucket.tasks.reduce(
+                        (count, task) => (task.completed ? count + 1 : count),
+                        0,
+                      )
                       const updatedTasks = bucket.tasks.map((task) =>
                         task.id === taskId ? { ...task, completed: newCompleted } : task,
                       )
                       // Move the toggled task to the end of its new section to match DB ordering
                       const active = updatedTasks.filter((t) => !t.completed)
                       const completed = updatedTasks.filter((t) => t.completed)
-                      completedCountAfter = completed.length
+                      if (!shouldCollapseAfterFirstComplete && previousCompletedCount === 0 && completed.length > 0) {
+                        shouldCollapseAfterFirstComplete = true
+                      }
                       // Ensure toggled is last in its new section
                       if (newCompleted) {
                         const idx = completed.findIndex((t) => t.id === taskId)
@@ -3463,15 +3470,16 @@ export default function GoalsPage(): ReactElement {
       ),
     )
 
-    if (updated) {
+    if (shouldCollapseAfterFirstComplete) {
       setCompletedCollapsed((current) => ({
         ...current,
-        [bucketId]: completedCountAfter > 0 ? false : true,
+        [bucketId]: true,
       }))
     }
-    const cur = goals.find((g) => g.id === goalId)?.buckets.find((b) => b.id === bucketId)?.tasks.find((t) => t.id === taskId)
-    const newCompleted = !(cur?.completed ?? false)
-    apiSetTaskCompletedAndResort(taskId, bucketId, newCompleted).catch(() => {})
+
+    if (toggledNewCompleted !== null) {
+      apiSetTaskCompletedAndResort(taskId, bucketId, toggledNewCompleted).catch(() => {})
+    }
   }
 
   const cycleTaskDifficulty = (goalId: string, bucketId: string, taskId: string) => {
