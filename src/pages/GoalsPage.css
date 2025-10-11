@@ -1410,8 +1410,8 @@ html[data-theme='light'] .goal-insert-line {
 /* Difficulty chip and row accents */
 .goal-task-diff {
   position: relative;
-  width: 2rem; /* larger hitbox */
-  height: 2rem; /* larger hitbox */
+  width: 2rem; /* restore original size */
+  height: 2rem; /* restore original size */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1424,25 +1424,25 @@ html[data-theme='light'] .goal-insert-line {
 }
 .goal-task-diff::after {
   content: '';
-  width: 1rem;  /* visual dot size */
-  height: 1rem; /* visual dot size */
+  width: 1rem;  /* restore original dot size */
+  height: 1rem; /* restore original dot size */
   border-radius: 9999px;
-  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  border: 1.75px solid rgba(255, 255, 255, 0.6); /* tad thicker ring */
   background: transparent;
   display: block;
 }
 
 .goal-task-diff--green::after {
-  border-color: rgba(34, 197, 94, 0.86);
-  background: rgba(34, 197, 94, 0.42);
+  border-color: #22c55e; /* vibrant green-500 */
+  background: rgba(16, 185, 129, 0.34); /* tad darker fill */
 }
 .goal-task-diff--yellow::after {
-  border-color: rgba(250, 204, 20, 0.86);
-  background: rgba(250, 204, 20, 0.4);
+  border-color: #f59e0b; /* amber-500 */
+  background: rgba(245, 158, 11, 0.34); /* tad darker fill */
 }
 .goal-task-diff--red::after {
-  border-color: rgba(248, 113, 113, 0.88);
-  background: rgba(248, 113, 113, 0.46);
+  border-color: #ff5757; /* vibrant coral/red */
+  background: rgba(239, 68, 68, 0.36); /* tad darker fill */
 }
 
 .goal-task-row--diff-green {
@@ -1499,16 +1499,16 @@ html[data-theme='light'] .goal-task-diff::after {
   background: transparent;
 }
 html[data-theme='light'] .goal-task-diff--green::after {
-  border-color: rgba(34, 197, 94, 0.88);
-  background: rgba(34, 197, 94, 0.3);
+  border-color: #16a34a;
+  background: rgba(34, 197, 94, 0.32);
 }
 html[data-theme='light'] .goal-task-diff--yellow::after {
-  border-color: rgba(234, 179, 8, 0.88);
-  background: rgba(234, 179, 8, 0.26);
+  border-color: #d97706;
+  background: rgba(251, 191, 36, 0.28);
 }
 html[data-theme='light'] .goal-task-diff--red::after {
-  border-color: rgba(239, 68, 68, 0.88);
-  background: rgba(239, 68, 68, 0.28);
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.30);
 }
 
 .goal-customizer-overlay {
