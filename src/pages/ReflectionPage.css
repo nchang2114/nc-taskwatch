@@ -90,14 +90,14 @@
 }
 
 html[data-theme='light'] .reflection-goal-card {
-  background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(200, 210, 240, 0.5);
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(128, 146, 238, 0.3);
 }
 
 html[data-theme='light'] .reflection-goal-card:hover {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(180, 195, 235, 0.6);
-  box-shadow: 0 8px 20px rgba(180, 195, 235, 0.2);
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(92, 91, 255, 0.28);
+  box-shadow: 0 16px 32px -20px rgba(94, 112, 180, 0.22);
 }
 
 .reflection-goal-header {
@@ -124,7 +124,7 @@ html[data-theme='light'] .reflection-goal-card:hover {
 }
 
 html[data-theme='light'] .reflection-goal-time {
-  color: rgba(60, 75, 120, 0.8);
+  color: rgba(32, 40, 92, 0.78);
 }
 
 .reflection-progress {
@@ -137,7 +137,7 @@ html[data-theme='light'] .reflection-goal-time {
 }
 
 html[data-theme='light'] .reflection-progress {
-  background: rgba(200, 210, 240, 0.3);
+  background: rgba(240, 244, 255, 0.7);
 }
 
 .reflection-progress__bar {
@@ -185,14 +185,14 @@ html[data-theme='light'] .reflection-progress {
 }
 
 html[data-theme='light'] .reflection-prompt {
-  background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(200, 210, 240, 0.5);
-  color: rgba(40, 55, 95, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(128, 146, 238, 0.28);
+  color: rgba(24, 30, 86, 0.9);
 }
 
 html[data-theme='light'] .reflection-prompt:hover {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(180, 195, 235, 0.6);
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(92, 91, 255, 0.35);
 }
 
 /* --- Journal --- */
@@ -223,19 +223,19 @@ html[data-theme='light'] .reflection-prompt:hover {
 }
 
 html[data-theme='light'] .reflection-journal {
-  background: rgba(255, 255, 255, 0.8);
-  border-color: rgba(200, 210, 240, 0.5);
-  color: rgba(30, 40, 70, 0.95);
+  background: rgba(248, 250, 255, 0.92);
+  border-color: rgba(128, 146, 238, 0.3);
+  color: rgba(24, 30, 86, 0.95);
 }
 
 html[data-theme='light'] .reflection-journal::placeholder {
-  color: rgba(100, 115, 155, 0.5);
+  color: rgba(72, 84, 140, 0.5);
 }
 
 html[data-theme='light'] .reflection-journal:focus {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(88, 112, 242, 0.15);
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(92, 91, 255, 0.38);
+  box-shadow: 0 0 0 3px rgba(92, 91, 255, 0.18);
 }
 
 /* --- Actions --- */
@@ -269,14 +269,14 @@ html[data-theme='light'] .reflection-journal:focus {
 }
 
 html[data-theme='light'] .reflection-save {
-  background: linear-gradient(130deg, var(--accent) 0%, var(--accent-strong) 95%);
+  background: linear-gradient(135deg, #5c5bff 0%, #1fc8ff 100%);
   color: white;
-  box-shadow: 0 8px 20px rgba(88, 112, 242, 0.25);
+  box-shadow: 0 12px 28px rgba(94, 112, 180, 0.28);
 }
 
 html[data-theme='light'] .reflection-save:hover {
-  background: linear-gradient(130deg, #6885ff 0%, #42b7ff 95%);
-  box-shadow: 0 12px 28px rgba(88, 112, 242, 0.35);
+  background: linear-gradient(135deg, #6866ff 0%, #27d0ff 100%);
+  box-shadow: 0 16px 34px rgba(94, 112, 180, 0.32);
 }
 
 /* --- Responsive --- */

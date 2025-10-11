@@ -53,46 +53,46 @@
 }
 
 html[data-theme='light'] .goals-heading {
-  color: rgba(32, 42, 76, 0.94);
+  color: rgba(26, 32, 90, 0.95);
 }
 
 html[data-theme='light'] .goal-search input {
-  background: rgba(226, 234, 255, 0.75);
-  border-color: rgba(168, 182, 224, 0.6);
-  color: rgba(28, 38, 72, 0.92);
+  background: rgba(240, 244, 255, 0.78);
+  border-color: rgba(118, 136, 236, 0.45);
+  color: rgba(28, 34, 86, 0.94);
 }
 
 html[data-theme='light'] .goal-search input::placeholder {
-  color: rgba(38, 48, 84, 0.58);
+  color: rgba(72, 84, 140, 0.6);
 }
 
 html[data-theme='light'] .goal-search__icon {
-  color: rgba(46, 60, 102, 0.58);
+  color: rgba(82, 94, 150, 0.6);
 }
 
 html[data-theme='light'] .goal-new-button {
-  background: rgba(210, 224, 255, 0.65);
-  border-color: rgba(164, 182, 230, 0.6);
-  color: rgba(32, 44, 82, 0.9);
+  background: rgba(92, 91, 255, 0.16);
+  border-color: rgba(92, 91, 255, 0.3);
+  color: rgba(24, 30, 86, 0.94);
 }
 
 html[data-theme='light'] .goal-new-button:hover,
 html[data-theme='light'] .goal-new-button:focus-visible {
-  background: rgba(196, 210, 250, 0.85);
-  color: rgba(24, 32, 68, 0.95);
+  background: rgba(92, 91, 255, 0.24);
+  color: rgba(20, 26, 78, 0.96);
 }
 
 html[data-theme='light'] .goal-draft {
-  border-color: rgba(158, 176, 220, 0.6);
-  background: rgba(226, 234, 255, 0.78);
+  border-color: rgba(132, 150, 238, 0.42);
+  background: rgba(242, 246, 255, 0.9);
 }
 
 html[data-theme='light'] .goal-draft-input {
-  color: rgba(26, 36, 70, 0.94);
+  color: rgba(30, 36, 90, 0.94);
 }
 
 html[data-theme='light'] .goal-draft-input::placeholder {
-  color: rgba(36, 46, 82, 0.5);
+  color: rgba(72, 84, 140, 0.5);
 }
 
 /* Goal card surfaces */
@@ -180,59 +180,59 @@ html[data-theme='light'] .goal-draft-input::placeholder {
 
 html[data-theme='light'] .goal-card {
   backdrop-filter: none;
-  background: linear-gradient(140deg, rgba(255, 255, 255, 0.96), rgba(236, 243, 255, 0.92));
-  border-color: rgba(148, 163, 184, 0.28);
-  box-shadow: 0 18px 42px -32px rgba(15, 23, 42, 0.22);
+  background: #ffffff;
+  border-color: rgba(128, 146, 238, 0.28);
+  box-shadow: 0 20px 45px -28px rgba(82, 96, 150, 0.28);
 }
 
 html[data-theme='light'] .goal-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(99, 102, 241, 0.35);
+  border-color: rgba(92, 91, 255, 0.38);
 }
 
 html[data-theme='light'] .goal-card--glass {
-  background: #ffffff;
-  border-color: rgba(148, 163, 184, 0.24);
-  box-shadow: 0 12px 28px -24px rgba(15, 23, 42, 0.22);
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(128, 146, 238, 0.24);
+  box-shadow: 0 16px 38px -28px rgba(82, 96, 150, 0.24);
 }
 
 html[data-theme='light'] .goal-card--glass:hover {
-  border-color: rgba(129, 140, 248, 0.3);
+  border-color: rgba(92, 91, 255, 0.34);
 }
 
 html[data-theme='light'] .goal-card--midnight {
-  background: linear-gradient(135deg, #e8ebff, #dfe4ff);
-  border-color: rgba(137, 148, 255, 0.42);
-  box-shadow: 0 18px 34px -28px rgba(129, 140, 248, 0.22);
+  background: linear-gradient(135deg, #5c5bff, #3f6cff);
+  border-color: rgba(92, 91, 255, 0.45);
+  box-shadow: 0 22px 42px -30px rgba(93, 95, 240, 0.36);
 }
 
 html[data-theme='light'] .goal-card--slate {
-  background: linear-gradient(135deg, #f2f5ff, #e7ecfb);
-  border-color: rgba(162, 179, 209, 0.46);
-  box-shadow: 0 16px 32px -26px rgba(120, 144, 190, 0.24);
+  background: linear-gradient(135deg, #1fc8ff, #3a9bff);
+  border-color: rgba(31, 200, 255, 0.42);
+  box-shadow: 0 20px 40px -30px rgba(66, 150, 220, 0.32);
 }
 
 html[data-theme='light'] .goal-card--customizing {
-  border-color: rgba(79, 70, 229, 0.5);
-  box-shadow: 0 28px 56px -40px rgba(79, 70, 229, 0.24);
+  border-color: rgba(92, 91, 255, 0.6);
+  box-shadow: 0 32px 60px -42px rgba(92, 91, 255, 0.4);
 }
 
 html[data-theme='light'] .goal-card--charcoal {
-  background: linear-gradient(135deg, #f1ecfb, #e8e4f7);
-  border-color: rgba(189, 170, 225, 0.4);
-  box-shadow: 0 18px 32px -28px rgba(125, 104, 166, 0.24);
+  background: linear-gradient(135deg, #ff7bbf, #ff5f9f);
+  border-color: rgba(255, 133, 196, 0.4);
+  box-shadow: 0 20px 40px -30px rgba(220, 110, 170, 0.34);
 }
 
 html[data-theme='light'] .goal-card--linen {
-  background: linear-gradient(135deg, #f9f2ea, #f3e8dc);
-  border-color: rgba(247, 202, 150, 0.42);
-  box-shadow: 0 18px 32px -28px rgba(196, 153, 110, 0.22);
+  background: linear-gradient(135deg, #ffd07d, #ffb45a);
+  border-color: rgba(255, 184, 108, 0.42);
+  box-shadow: 0 20px 38px -30px rgba(226, 156, 88, 0.32);
 }
 
 html[data-theme='light'] .goal-card--frost {
-  background: linear-gradient(135deg, #edf6ff, #e3f0fa);
-  border-color: rgba(174, 207, 255, 0.4);
-  box-shadow: 0 18px 34px -28px rgba(146, 192, 241, 0.22);
+  background: linear-gradient(135deg, #7de9ff, #4fd7ff);
+  border-color: rgba(79, 215, 255, 0.42);
+  box-shadow: 0 22px 42px -32px rgba(86, 196, 230, 0.32);
 }
 
 .goals-toolbar {
@@ -331,16 +331,16 @@ html[data-theme='light'] .goal-card--frost {
 }
 
 html[data-theme='light'] .goal-draft {
-  border-color: rgba(158, 176, 220, 0.6);
-  background: rgba(226, 234, 255, 0.78);
+  border-color: rgba(132, 150, 238, 0.42);
+  background: rgba(242, 246, 255, 0.9);
 }
 
 html[data-theme='light'] .goal-draft-input {
-  color: rgba(26, 36, 70, 0.94);
+  color: rgba(30, 36, 90, 0.94);
 }
 
 html[data-theme='light'] .goal-draft-input::placeholder {
-  color: rgba(36, 46, 82, 0.5);
+  color: rgba(72, 84, 140, 0.5);
 }
 
 .goal-modal-backdrop {
@@ -516,8 +516,8 @@ html[data-theme='light'] .goal-draft-input::placeholder {
 }
 
 html[data-theme='light'] .goal-gradient-option--active .goal-gradient-swatch {
-  border-color: rgba(60, 86, 150, 0.95);
-  box-shadow: 0 12px 28px rgba(120, 138, 202, 0.35);
+  border-color: rgba(92, 91, 255, 0.5);
+  box-shadow: 0 16px 34px rgba(93, 95, 240, 0.3);
 }
 
 .goal-modal__footer {
@@ -561,98 +561,99 @@ html[data-theme='light'] .goal-gradient-option--active .goal-gradient-swatch {
 }
 
 html[data-theme='light'] .goal-modal {
-  background: rgba(247, 249, 255, 0.96);
-  color: rgba(26, 32, 60, 0.96);
-  border-color: rgba(168, 182, 228, 0.26);
+  background: rgba(255, 255, 255, 0.96);
+  color: rgba(26, 32, 92, 0.96);
+  border-color: rgba(128, 146, 238, 0.32);
 }
 
 html[data-theme='light'] .goal-modal__header p {
-  color: rgba(42, 50, 88, 0.6);
+  color: rgba(66, 78, 136, 0.62);
 }
 
 html[data-theme='light'] .goal-modal__label {
-  color: rgba(40, 48, 86, 0.65);
+  color: rgba(62, 76, 134, 0.68);
 }
 
 html[data-theme='light'] .goal-modal__input {
-  background: rgba(232, 238, 255, 0.72);
-  border-color: rgba(188, 202, 236, 0.6);
-  color: rgba(28, 36, 72, 0.92);
+  background: rgba(240, 244, 255, 0.86);
+  border-color: rgba(128, 146, 238, 0.42);
+  color: rgba(28, 34, 86, 0.94);
 }
 
 html[data-theme='light'] .goal-modal__input::placeholder {
-  color: rgba(32, 42, 76, 0.5);
+  color: rgba(72, 84, 140, 0.52);
 }
 
 html[data-theme='light'] .goal-modal__button--muted {
-  background: rgba(216, 224, 248, 0.85);
-  color: rgba(32, 46, 86, 0.85);
+  background: rgba(92, 91, 255, 0.14);
+  color: rgba(28, 34, 86, 0.92);
 }
 
 html[data-theme='light'] .goal-modal__button--muted:hover,
 html[data-theme='light'] .goal-modal__button--muted:focus-visible {
-  background: rgba(196, 208, 244, 0.92);
+  background: rgba(92, 91, 255, 0.22);
+  color: rgba(22, 28, 80, 0.96);
 }
 /* Light theme adjustments */
 html[data-theme='light'] .goals-layer {
-  color: rgba(28, 36, 62, 0.96);
+  color: rgba(26, 34, 90, 0.96);
 }
 
 html[data-theme='light'] .goals-layer :where(.text-white) {
-  color: rgba(24, 32, 58, 0.98) !important;
+  color: rgba(20, 26, 82, 0.98) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.text-white\/90) {
-  color: rgba(26, 34, 60, 0.92) !important;
+  color: rgba(26, 32, 90, 0.92) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.text-white\/80) {
-  color: rgba(36, 46, 78, 0.86) !important;
+  color: rgba(34, 42, 96, 0.86) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.text-white\/70) {
-  color: rgba(50, 60, 100, 0.78) !important;
+  color: rgba(46, 56, 110, 0.8) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.text-white\/60) {
-  color: rgba(66, 78, 122, 0.66) !important;
+  color: rgba(60, 72, 126, 0.7) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.text-white\/50) {
-  color: rgba(88, 100, 140, 0.58) !important;
+  color: rgba(78, 90, 140, 0.62) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.text-white\/40) {
-  color: rgba(110, 120, 152, 0.52) !important;
+  color: rgba(96, 108, 154, 0.56) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.bg-white\/5) {
-  background: rgba(255, 255, 255, 0.9) !important;
-  box-shadow: 0 18px 36px rgba(54, 70, 120, 0.08);
+  background: rgba(249, 251, 255, 0.92) !important;
+  box-shadow: 0 18px 36px rgba(86, 110, 178, 0.12);
 }
 
 html[data-theme='light'] .goals-layer :where(.hover\:bg-white\/10:hover) {
-  background: rgba(255, 255, 255, 0.95) !important;
+  background: rgba(245, 248, 255, 0.96) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.bg-white\/10) {
-  background: rgba(210, 218, 244, 0.38) !important;
+  background: rgba(240, 244, 255, 0.6) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.hover\:bg-white\/20:hover) {
-  background: rgba(200, 210, 236, 0.58) !important;
+  background: rgba(232, 238, 255, 0.75) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.border-white\/5) {
-  border-color: rgba(126, 142, 190, 0.18) !important;
+  border-color: rgba(128, 146, 238, 0.28) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.border-white\/10) {
-  border-color: rgba(122, 140, 198, 0.26) !important;
+  border-color: rgba(128, 146, 238, 0.36) !important;
 }
 
 html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/10.text-sm) {
-  color: rgba(34, 42, 74, 0.86) !important;
+  color: rgba(30, 36, 92, 0.86) !important;
 }
 
 /* Prefer reduced motion: tone down hover transitions */
@@ -960,7 +961,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 }
 
 html[data-theme='light'] .goal-completed__title {
-  color: rgba(60, 72, 110, 0.6);
+  color: rgba(82, 96, 150, 0.62);
 }
 
 .goal-completed__chevron {
@@ -981,15 +982,15 @@ html[data-theme='light'] .goal-completed__title {
 }
 
 html[data-theme='light'] .goal-task-row {
-  --task-row-bg: rgba(246, 249, 255, 0.98); /* brighter base */
-  --task-row-overlay: rgba(212, 219, 255, 0.32);
-  --task-row-border: rgba(163, 176, 228, 0.46);
-  --task-row-shadow: 0 9px 20px rgba(142, 156, 214, 0.22);
+  --task-row-bg: rgba(248, 250, 255, 0.98);
+  --task-row-overlay: rgba(92, 91, 255, 0.12);
+  --task-row-border: rgba(128, 146, 238, 0.32);
+  --task-row-shadow: 0 10px 24px rgba(94, 112, 180, 0.24);
 }
 
 html[data-theme='light'] .goal-task-marker,
 html[data-theme='light'] .goal-task-marker--action {
-  border-color: rgba(146, 154, 230, 0.46);
+  border-color: rgba(128, 146, 238, 0.38);
 }
 
 html[data-theme='light'] .goal-task-marker--completed {
@@ -1000,19 +1001,19 @@ html[data-theme='light'] .goal-task-marker--completed {
 
 html[data-theme='light'] .goal-task-marker--action:hover,
 html[data-theme='light'] .goal-task-marker--action:focus-visible {
-  background: rgba(164, 172, 236, 0.2);
-  border-color: rgba(152, 162, 236, 0.64);
+  background: rgba(92, 91, 255, 0.16);
+  border-color: rgba(92, 91, 255, 0.38);
 }
 
 html[data-theme='light'] .goal-task-row--completed {
-  background: rgba(220, 226, 248, 0.9);
-  color: rgba(88, 102, 142, 0.78);
+  background: rgba(234, 240, 255, 0.92);
+  color: rgba(74, 88, 146, 0.74);
   /* Subtle outline color for completed rows in light theme */
-  --task-row-border: rgba(126, 142, 190, 0.18);
+  --task-row-border: rgba(118, 136, 208, 0.22);
 }
 
 html[data-theme='light'] .goal-task-text {
-  color: rgba(32, 42, 76, 0.9);
+  color: rgba(24, 30, 86, 0.94);
 }
 
 .goal-bucket-body-header {
@@ -1035,7 +1036,7 @@ html[data-theme='light'] .goal-task-text {
 }
 
 html[data-theme='light'] .goal-section-title {
-  color: rgba(60, 72, 110, 0.62);
+  color: rgba(82, 96, 150, 0.64);
 }
 .goal-task-add {
   font-size: 0.75rem;
@@ -1062,15 +1063,15 @@ html[data-theme='light'] .goal-section-title {
 }
 
 html[data-theme='light'] .goal-task-add {
-  background: rgba(220, 228, 255, 0.62);
-  border-color: rgba(168, 182, 226, 0.6);
-  color: rgba(36, 46, 88, 0.86);
+  background: rgba(92, 91, 255, 0.12);
+  border-color: rgba(92, 91, 255, 0.26);
+  color: rgba(30, 38, 92, 0.88);
 }
 
 html[data-theme='light'] .goal-task-add:hover,
 html[data-theme='light'] .goal-task-add:focus-visible {
-  background: rgba(196, 210, 250, 0.86);
-  color: rgba(28, 38, 74, 0.96);
+  background: rgba(92, 91, 255, 0.2);
+  color: rgba(22, 28, 80, 0.96);
 }
 
 .goal-bucket-item--surface-glass {
@@ -1111,39 +1112,39 @@ html[data-theme='light'] .goal-task-add:focus-visible {
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-glass {
-  background: #ffffff;
-  border-color: rgba(148, 163, 184, 0.26);
-  box-shadow: 0 10px 24px -22px rgba(102, 112, 133, 0.22);
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(128, 146, 238, 0.28);
+  box-shadow: 0 18px 36px -28px rgba(82, 96, 150, 0.24);
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-midnight {
-  background: linear-gradient(135deg, #e8ebff, #dfe4ff);
-  border-color: rgba(137, 148, 255, 0.4);
-  box-shadow: 0 14px 28px -24px rgba(129, 140, 248, 0.24);
+  background: linear-gradient(135deg, #5c5bff, #3f6cff);
+  border-color: rgba(92, 91, 255, 0.45);
+  box-shadow: 0 20px 40px -30px rgba(93, 95, 240, 0.32);
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-slate {
-  background: linear-gradient(135deg, #f2f5ff, #e7ecfb);
-  border-color: rgba(162, 179, 209, 0.4);
-  box-shadow: 0 12px 26px -22px rgba(120, 144, 190, 0.2);
+  background: linear-gradient(135deg, #1fc8ff, #3a9bff);
+  border-color: rgba(31, 200, 255, 0.42);
+  box-shadow: 0 18px 36px -28px rgba(66, 150, 220, 0.28);
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-charcoal {
-  background: linear-gradient(135deg, #f1ecfb, #e8e4f7);
-  border-color: rgba(189, 170, 225, 0.36);
-  box-shadow: 0 14px 28px -24px rgba(125, 104, 166, 0.2);
+  background: linear-gradient(135deg, #ff7bbf, #ff5f9f);
+  border-color: rgba(255, 133, 196, 0.4);
+  box-shadow: 0 18px 36px -28px rgba(220, 110, 170, 0.3);
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-linen {
-  background: linear-gradient(135deg, #f9f2ea, #f3e8dc);
-  border-color: rgba(247, 202, 150, 0.36);
-  box-shadow: 0 14px 28px -24px rgba(196, 153, 110, 0.2);
+  background: linear-gradient(135deg, #ffd07d, #ffb45a);
+  border-color: rgba(255, 184, 108, 0.38);
+  box-shadow: 0 18px 34px -28px rgba(226, 156, 88, 0.28);
 }
 
 html[data-theme='light'] .goal-bucket-item--surface-frost {
-  background: linear-gradient(135deg, #edf6ff, #e3f0fa);
-  border-color: rgba(174, 207, 255, 0.38);
-  box-shadow: 0 14px 28px -24px rgba(146, 192, 241, 0.2);
+  background: linear-gradient(135deg, #7de9ff, #4fd7ff);
+  border-color: rgba(79, 215, 255, 0.4);
+  box-shadow: 0 20px 38px -30px rgba(86, 196, 230, 0.28);
 }
 
 .goal-task-row--draft {
@@ -1280,9 +1281,9 @@ html[data-theme='light'] .goal-bucket-item--surface-frost {
   gap: 10px;
 }
 html[data-theme='light'] .goal-drag-image {
-  background: rgba(220, 228, 255, 0.9);
-  color: rgba(32, 42, 76, 0.9);
-  border-color: rgba(160, 176, 220, 0.4);
+  background: rgba(248, 250, 255, 0.94);
+  color: rgba(24, 30, 86, 0.94);
+  border-color: rgba(128, 146, 238, 0.3);
 }
 
 .goal-drag-image__marker {
@@ -1304,7 +1305,7 @@ html[data-theme='light'] .goal-drag-image {
   border: 2px solid rgba(255, 255, 255, 0.5);
 }
 html[data-theme='light'] .goal-drag-image__diff {
-  border-color: rgba(60, 72, 110, 0.4);
+  border-color: rgba(92, 91, 255, 0.4);
 }
 
 /* Drop preview placeholder */
@@ -1328,7 +1329,7 @@ html[data-theme='light'] .goal-drag-image__diff {
   z-index: 5;
 }
 html[data-theme='light'] .goal-task-row--placeholder::after {
-  background: rgba(48, 58, 98, 0.95);
+  background: rgba(26, 34, 86, 0.95);
 }
 
 /* Goal-level DnD: list + entries + header drag affordance */
@@ -1375,7 +1376,7 @@ html[data-theme='light'] .goal-task-row--placeholder::after {
   z-index: 10; /* ensure line sits above task rows */
 }
 html[data-theme='light'] .goal-insert-line {
-  background: rgba(48, 58, 98, 0.98);
+  background: rgba(26, 34, 86, 0.98);
 }
 
 /* Align bucket insert line with bucket padding (p-3/md:p-4) */
@@ -1500,32 +1501,24 @@ html[data-theme='light'] .goal-insert-line {
 /* No extra overlay/shadow/border changes for priority in light theme */
 
 html[data-theme='light'] .goal-task-row--priority::before {
-  background:
-    linear-gradient(
-      135deg,
-      #0ea5e9 0%,
-      #4338ca 32%,
-      #7c3aed 58%,
-      #be185d 80%,
-      #ca8a04 100%
-    );
+  background: linear-gradient(135deg, #1fc8ff 0%, #5c5bff 32%, #ff7bbf 66%, #ffd07d 100%);
 }
 
 html[data-theme='light'] .goal-task-diff::after {
-  border-color: rgba(60, 72, 110, 0.5);
+  border-color: rgba(32, 40, 92, 0.5);
   background: transparent;
 }
 html[data-theme='light'] .goal-task-diff--green::after {
-  border-color: #16a34a;
-  background: rgba(34, 197, 94, 0.32);
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.24);
 }
 html[data-theme='light'] .goal-task-diff--yellow::after {
-  border-color: #d97706;
-  background: rgba(251, 191, 36, 0.28);
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.22);
 }
 html[data-theme='light'] .goal-task-diff--red::after {
-  border-color: #ef4444;
-  background: rgba(239, 68, 68, 0.30);
+  border-color: #f43f5e;
+  background: rgba(244, 63, 94, 0.2);
 }
 
 .goal-customizer-overlay {
@@ -1606,8 +1599,8 @@ html[data-theme='light'] .goal-customizer-overlay {
 }
 
 html[data-theme='light'] .goal-task-row--diff-green {
-  --task-row-border: rgba(128, 188, 152, 0.68);
-  --task-row-overlay: rgba(198, 232, 204, 0.64);
+  --task-row-border: rgba(56, 189, 149, 0.64);
+  --task-row-overlay: rgba(167, 243, 208, 0.52);
 }
 
 .goal-menu-overlay {
@@ -1918,44 +1911,44 @@ html[data-theme='light'] .goal-task-row--diff-green {
 }
 
 html[data-theme='light'] .goal-customizer {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(236, 243, 255, 0.94));
-  border-color: rgba(148, 163, 184, 0.24);
-  box-shadow: 0 26px 52px -40px rgba(15, 23, 42, 0.18);
-  color: rgba(31, 41, 55, 0.88);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(238, 244, 255, 0.95));
+  border-color: rgba(128, 146, 238, 0.28);
+  box-shadow: 0 28px 58px -40px rgba(82, 96, 150, 0.24);
+  color: rgba(24, 30, 86, 0.9);
 }
 
 html[data-theme='light'] .goal-customizer__title {
-  color: rgba(79, 70, 229, 0.64);
+  color: rgba(92, 91, 255, 0.68);
 }
 
 html[data-theme='light'] .goal-customizer__subtitle {
-  color: rgba(71, 85, 105, 0.72);
+  color: rgba(74, 88, 146, 0.72);
 }
 
 html[data-theme='light'] .goal-customizer__label {
-  color: rgba(71, 85, 105, 0.62);
+  color: rgba(74, 88, 146, 0.66);
 }
 
 html[data-theme='light'] .goal-customizer__surface {
-  border-color: rgba(148, 163, 184, 0.32);
-  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(128, 146, 238, 0.32);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 html[data-theme='light'] .goal-customizer__surface--active {
-  background: rgba(99, 102, 241, 0.12);
-  border-color: rgba(99, 102, 241, 0.45);
+  background: rgba(92, 91, 255, 0.14);
+  border-color: rgba(92, 91, 255, 0.45);
 }
 
 html[data-theme='light'] .goal-customizer__surface-title {
-  color: rgba(30, 41, 59, 0.9);
+  color: rgba(26, 32, 90, 0.94);
 }
 
 html[data-theme='light'] .goal-customizer__surface-caption {
-  color: rgba(71, 85, 105, 0.75);
+  color: rgba(74, 88, 146, 0.72);
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview {
-  border-color: rgba(148, 163, 184, 0.28);
+  border-color: rgba(128, 146, 238, 0.3);
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--glass {
@@ -1963,73 +1956,73 @@ html[data-theme='light'] .goal-customizer__surface-preview--glass {
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--midnight {
-  background-image: linear-gradient(135deg, #e8ebff, #dfe4ff);
+  background-image: linear-gradient(135deg, #5c5bff, #3f6cff);
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--slate {
-  background-image: linear-gradient(135deg, #f2f5ff, #e7ecfb);
+  background-image: linear-gradient(135deg, #1fc8ff, #3a9bff);
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--charcoal {
-  background-image: linear-gradient(135deg, #f1ecfb, #e8e4f7);
+  background-image: linear-gradient(135deg, #ff7bbf, #ff5f9f);
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--linen {
-  background-image: linear-gradient(135deg, #f9f2ea, #f3e8dc);
+  background-image: linear-gradient(135deg, #ffd07d, #ffb45a);
 }
 
 html[data-theme='light'] .goal-customizer__surface-preview--frost {
-  background-image: linear-gradient(135deg, #edf6ff, #e3f0fa);
+  background-image: linear-gradient(135deg, #7de9ff, #4fd7ff);
 }
 
 html[data-theme='light'] .goal-customizer__swatch {
-  border-color: rgba(148, 163, 184, 0.3);
-  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(128, 146, 238, 0.3);
+  background: rgba(255, 255, 255, 0.84);
 }
 
 html[data-theme='light'] .goal-customizer__swatch--active {
-  border-color: rgba(99, 102, 241, 0.45);
-  background: rgba(96, 165, 250, 0.12);
+  border-color: rgba(92, 91, 255, 0.45);
+  background: rgba(31, 200, 255, 0.14);
 }
 
 html[data-theme='light'] .goal-customizer__swatch-label {
-  color: rgba(71, 85, 105, 0.75);
+  color: rgba(74, 88, 146, 0.72);
 }
 
 html[data-theme='light'] .goal-customizer__color-input {
-  color: rgba(71, 85, 105, 0.75);
+  color: rgba(74, 88, 146, 0.72);
 }
 
 html[data-theme='light'] .goal-customizer__custom-preview {
-  color: rgba(51, 65, 85, 0.78);
-  border-color: rgba(148, 163, 184, 0.3);
+  color: rgba(38, 48, 102, 0.82);
+  border-color: rgba(128, 146, 238, 0.3);
 }
 
 html[data-theme='light'] .goal-customizer__close {
-  border-color: rgba(99, 102, 241, 0.32);
-  background: rgba(99, 102, 241, 0.12);
-  color: rgba(79, 70, 229, 0.75);
+  border-color: rgba(92, 91, 255, 0.34);
+  background: rgba(92, 91, 255, 0.12);
+  color: rgba(26, 34, 90, 0.85);
 }
 
 html[data-theme='light'] .goal-customizer__done {
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  color: rgba(248, 250, 252, 0.98);
-  box-shadow: 0 12px 26px -18px rgba(79, 70, 229, 0.4);
+  background: linear-gradient(135deg, #5c5bff 0%, #1fc8ff 100%);
+  color: #ffffff;
+  box-shadow: 0 14px 28px -18px rgba(79, 103, 206, 0.42);
 }
 html[data-theme='light'] .goal-task-row--diff-yellow {
-  --task-row-border: rgba(226, 188, 120, 0.68);
-  --task-row-overlay: rgba(248, 233, 193, 0.68);
+  --task-row-border: rgba(252, 196, 92, 0.7);
+  --task-row-overlay: rgba(255, 229, 180, 0.7);
 }
 html[data-theme='light'] .goal-task-row--diff-red {
-  --task-row-border: rgba(232, 140, 140, 0.74);
-  --task-row-overlay: rgba(248, 210, 210, 0.7);
+  --task-row-border: rgba(255, 140, 160, 0.72);
+  --task-row-overlay: rgba(255, 214, 220, 0.7);
 }
 
 /* Theme-aware icon colors */
 .goal-chevron-icon { color: rgba(255, 255, 255, 0.7); }
 .goal-kebab-icon { color: rgba(255, 255, 255, 0.8); }
-html[data-theme='light'] .goal-chevron-icon { color: rgba(60, 72, 110, 0.8); }
-html[data-theme='light'] .goal-kebab-icon { color: rgba(60, 72, 110, 0.85); }
+html[data-theme='light'] .goal-chevron-icon { color: rgba(32, 40, 92, 0.82); }
+html[data-theme='light'] .goal-kebab-icon { color: rgba(24, 30, 86, 0.88); }
 
 /* Theme-aware dropdown menu */
 .goal-menu {
@@ -2040,7 +2033,7 @@ html[data-theme='light'] .goal-kebab-icon { color: rgba(60, 72, 110, 0.85); }
 }
 html[data-theme='light'] .goal-menu {
   background: rgba(255, 255, 255, 0.98);
-  border-color: rgba(21, 30, 60, 0.12);
+  border-color: rgba(128, 146, 238, 0.24);
 }
 
 .goal-menu__item {
@@ -2056,13 +2049,13 @@ html[data-theme='light'] .goal-menu {
   background: rgba(255, 255, 255, 0.10);
 }
 html[data-theme='light'] .goal-menu__item:hover {
-  background: rgba(21, 30, 60, 0.06);
+  background: rgba(92, 91, 255, 0.12);
 }
 .goal-menu__item--danger {
   color: #fca5a5; /* red-300 */
 }
 html[data-theme='light'] .goal-menu__item--danger {
-  color: #dc2626; /* red-600 */
+  color: #f43f5e; /* rose-500 */
 }
 .goal-menu__divider {
   height: 1px;
@@ -2070,7 +2063,7 @@ html[data-theme='light'] .goal-menu__item--danger {
   background: rgba(255, 255, 255, 0.1);
 }
 html[data-theme='light'] .goal-menu__divider {
-  background: rgba(21, 30, 60, 0.12);
+  background: rgba(128, 146, 238, 0.24);
 }
 
 .goal-task-input::placeholder {
@@ -2085,15 +2078,15 @@ html[data-theme='light'] .goal-menu__divider {
 }
 
 html[data-theme='light'] .goal-highlight {
-  background: rgba(82, 98, 160, 0.2);
+  background: rgba(92, 91, 255, 0.16);
 }
 
 html[data-theme='light'] .goal-task-input {
-  color: rgba(34, 44, 82, 0.94);
+  color: rgba(24, 30, 86, 0.94);
 }
 
 html[data-theme='light'] .goal-task-input::placeholder {
-  color: rgba(32, 42, 80, 0.45);
+  color: rgba(72, 84, 140, 0.5);
 }
 
 .goal-progress-fill {
@@ -2132,7 +2125,7 @@ html[data-theme='light'] .goal-task-input::placeholder {
 }
 
 html[data-theme='light'] .goal-task-empty {
-  color: rgba(60, 74, 120, 0.58);
+  color: rgba(82, 96, 150, 0.6);
 }
 
 .goal-bucket-draft {
@@ -2162,16 +2155,16 @@ html[data-theme='light'] .goal-task-empty {
 }
 
 html[data-theme='light'] .goal-bucket-draft {
-  border-color: rgba(150, 168, 220, 0.45);
-  background: rgba(226, 234, 255, 0.72);
+  border-color: rgba(128, 146, 238, 0.34);
+  background: rgba(240, 244, 255, 0.78);
 }
 
 html[data-theme='light'] .goal-bucket-draft-input {
-  color: rgba(28, 36, 70, 0.94);
+  color: rgba(30, 36, 90, 0.94);
 }
 
 html[data-theme='light'] .goal-bucket-draft-input::placeholder {
-  color: rgba(32, 40, 72, 0.48);
+  color: rgba(72, 84, 140, 0.52);
 }
 
 .goal-bucket-toggle {
@@ -2209,11 +2202,11 @@ html[data-theme='light'] .goal-bucket-draft-input::placeholder {
 }
 
 html[data-theme='light'] .goal-bucket-toggle:hover {
-  background: rgba(214, 222, 246, 0.62);
+  background: rgba(92, 91, 255, 0.12);
 }
 
 html[data-theme='light'] .goal-bucket-toggle:focus-visible {
-  outline-color: rgba(88, 110, 168, 0.6);
+  outline-color: rgba(92, 91, 255, 0.4);
 }
 
 .goal-bucket-body {
@@ -2222,17 +2215,17 @@ html[data-theme='light'] .goal-bucket-toggle:focus-visible {
 }
 
 html[data-theme='light'] .goal-bucket-body {
-  border-color: rgba(160, 176, 220, 0.3);
+  border-color: rgba(128, 146, 238, 0.26);
 }
 
 
 html[data-theme='light'] .goal-gradient-custom-editor {
-  background: rgba(236, 240, 255, 0.86);
-  border-color: rgba(184, 198, 238, 0.55);
+  background: rgba(248, 250, 255, 0.94);
+  border-color: rgba(128, 146, 238, 0.3);
 }
 
 html[data-theme='light'] .goal-gradient-custom-field label {
-  color: rgba(44, 56, 96, 0.7);
+  color: rgba(74, 88, 146, 0.72);
 }
 .goal-tasks-body, .goal-tasks-body ul, .goal-task-empty {
   margin-left: 0.5rem;
