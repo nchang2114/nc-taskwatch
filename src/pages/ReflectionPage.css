@@ -79,14 +79,14 @@
   width: 100%; /* stretch full width */
   padding: clamp(1rem, 2.5vw, 1.25rem) clamp(1rem, 3vw, 1.5rem);
   border-radius: clamp(1rem, 2.5vw, 1.25rem);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(20, 28, 72, 0.48);
+  border: 1px solid rgba(118, 142, 255, 0.28);
   transition: all 200ms ease;
 }
 
 .reflection-goal-card:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(26, 36, 88, 0.62);
+  border-color: rgba(139, 132, 255, 0.36);
 }
 
 html[data-theme='light'] .reflection-goal-card {
@@ -127,11 +127,15 @@ html[data-theme='light'] .reflection-goal-time {
   color: rgba(32, 40, 92, 0.78);
 }
 
+.reflection-goal-time {
+  color: rgba(170, 190, 255, 0.82);
+}
+
 .reflection-progress {
   width: 100%;
   height: 0.6rem; /* slightly thicker */
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(24, 34, 80, 0.55);
   overflow: hidden;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
 }
@@ -171,8 +175,8 @@ html[data-theme='light'] .reflection-progress {
   width: 100%;
   padding: clamp(0.75rem, 2vw, 1rem) clamp(0.875rem, 2.5vw, 1.25rem);
   border-radius: clamp(0.75rem, 2vw, 1rem);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(18, 28, 72, 0.42);
+  border: 1px solid rgba(118, 142, 255, 0.26);
   font-size: clamp(0.875rem, 1.8vw, 0.95rem);
   color: var(--text-primary);
   line-height: 1.5;
@@ -180,8 +184,8 @@ html[data-theme='light'] .reflection-progress {
 }
 
 .reflection-prompt:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(24, 36, 90, 0.52);
+  border-color: rgba(139, 132, 255, 0.34);
 }
 
 html[data-theme='light'] .reflection-prompt {
@@ -201,8 +205,8 @@ html[data-theme='light'] .reflection-prompt:hover {
   min-height: 140px;
   padding: clamp(0.75rem, 2vw, 1rem) clamp(0.875rem, 2.5vw, 1.25rem);
   border-radius: clamp(0.75rem, 2vw, 1rem);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(18, 28, 72, 0.45);
+  border: 1px solid rgba(118, 142, 255, 0.28);
   color: var(--text-primary);
   font-family: inherit;
   font-size: clamp(0.875rem, 1.8vw, 0.95rem);
@@ -213,13 +217,13 @@ html[data-theme='light'] .reflection-prompt:hover {
 }
 
 .reflection-journal::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(170, 190, 255, 0.5);
 }
 
 .reflection-journal:focus {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+  background: rgba(24, 36, 90, 0.58);
+  border-color: rgba(139, 132, 255, 0.36);
+  box-shadow: 0 0 0 2px rgba(139, 132, 255, 0.18);
 }
 
 html[data-theme='light'] .reflection-journal {
@@ -247,21 +251,21 @@ html[data-theme='light'] .reflection-journal:focus {
 .reflection-save {
   padding: clamp(0.625rem, 1.5vw, 0.75rem) clamp(1.25rem, 3vw, 1.75rem);
   border-radius: clamp(0.75rem, 2vw, 1rem);
-  background: white;
-  color: rgb(17, 24, 39);
+  background: linear-gradient(135deg, #8b84ff 0%, #35d4ff 100%);
+  color: #060a1d;
   font-family: var(--font-display);
   font-size: clamp(0.875rem, 1.8vw, 0.95rem);
   font-weight: 600;
   border: none;
   cursor: pointer;
   transition: all 200ms ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 16px 36px -20px rgba(74, 90, 230, 0.5);
 }
 
 .reflection-save:hover {
-  background: rgba(255, 255, 255, 0.9);
+  background: linear-gradient(135deg, #9d96ff 0%, #3fe0ff 100%);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 40px -20px rgba(74, 90, 230, 0.55);
 }
 
 .reflection-save:active {

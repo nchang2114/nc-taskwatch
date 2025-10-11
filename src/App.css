@@ -58,7 +58,7 @@
   flex: 1;
   width: 100%;
   display: flex;
-  background: linear-gradient(162deg, rgba(10, 16, 32, 0.92) 0%, rgba(16, 24, 50, 0.82) 45%, rgba(8, 14, 28, 0.88) 100%);
+  background: linear-gradient(164deg, rgba(6, 10, 29, 0.96) 0%, rgba(12, 18, 40, 0.9) 52%, rgba(8, 14, 36, 0.94) 100%);
 }
 
 .tab-panel {
@@ -313,7 +313,7 @@ html[data-theme='light'] .navbar {
 
 .brand-text {
   display: inline-block;
-  background: linear-gradient(115deg, rgba(94, 174, 255, 0.94) 0%, rgba(72, 204, 255, 0.9) 58%, rgba(200, 240, 255, 0.92) 100%);
+  background: linear-gradient(118deg, #2ae4ff 0%, #8b84ff 52%, #ff7edb 100%);
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
@@ -364,7 +364,7 @@ html[data-theme='light'] .brand-text {
   font-weight: 500;
   font-size: clamp(0.92rem, 1.55vw, 1.12rem);
   letter-spacing: 0.012em;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(208, 220, 255, 0.74);
   transition: color 180ms ease;
   white-space: nowrap;
   min-width: clamp(5rem, 10.5vw, 6.8rem);
@@ -387,7 +387,7 @@ html[data-theme='light'] .brand-text {
 
 .nav-link:hover,
 .nav-link:focus-visible {
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(244, 248, 255, 0.95);
 }
 
 .nav-link:focus-visible {
@@ -459,7 +459,7 @@ html[data-theme='light'] .brand-text {
   border-radius: clamp(0.6rem, 2vw, 0.85rem);
   padding-inline: clamp(0.4rem, 2vw, 0.8rem);
   font-size: clamp(0.95rem, 2vw, 1.05rem);
-  color: rgba(238, 242, 255, 0.85);
+  color: rgba(212, 222, 255, 0.8);
   transition: background 180ms ease, color 180ms ease;
 }
 
@@ -469,8 +469,8 @@ html[data-theme='light'] .brand-text {
 
 .nav-link--drawer:hover,
 .nav-link--drawer:focus-visible {
-  background: rgba(255, 255, 255, 0.09);
-  color: #ffffff;
+  background: rgba(139, 132, 255, 0.16);
+  color: #f4f7ff;
 }
 
 html[data-theme='light'] .nav-link,
@@ -816,7 +816,7 @@ html[data-theme='light'] .nav-links--drawer {
   padding: clamp(0.78rem, 2.2vw, 1rem) clamp(1.2rem, 3vw, 1.45rem);
   border-radius: 999px;
   border: 1px solid var(--control-border);
-  background: linear-gradient(140deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 68%), var(--control-surface);
+  background: linear-gradient(150deg, rgba(139, 132, 255, 0.16) 0%, rgba(47, 212, 255, 0.08) 68%), var(--control-surface);
   color: var(--text-control);
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -837,7 +837,7 @@ html[data-theme='light'] .nav-links--drawer {
   position: absolute;
   inset: 4px;
   border-radius: inherit;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.08) 72%, rgba(255, 255, 255, 0) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(191, 208, 255, 0.12) 70%, rgba(255, 255, 255, 0) 100%);
   mix-blend-mode: soft-light;
   pointer-events: none;
   opacity: 0.5;
@@ -845,8 +845,8 @@ html[data-theme='light'] .nav-links--drawer {
 
 .control:hover:not(:disabled) {
   transform: translateY(-2px);
-  background: linear-gradient(140deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.06) 68%), var(--control-surface-hover);
-  box-shadow: var(--control-shadow), var(--control-highlight), 0 12px 22px rgba(16, 28, 64, 0.18);
+  background: linear-gradient(150deg, rgba(139, 132, 255, 0.22) 0%, rgba(47, 212, 255, 0.12) 68%), var(--control-surface-hover);
+  box-shadow: var(--control-shadow), var(--control-highlight), 0 14px 26px rgba(10, 18, 48, 0.28);
 }
 
 .control:focus-visible {
@@ -858,7 +858,7 @@ html[data-theme='light'] .nav-links--drawer {
   background: linear-gradient(130deg, var(--accent) 0%, var(--accent-strong) 90%);
   color: var(--text-control-contrast);
   border: none;
-  box-shadow: var(--control-shadow), var(--control-highlight), 0 16px 28px rgba(68, 112, 255, 0.3);
+  box-shadow: var(--control-shadow), var(--control-highlight), 0 20px 38px rgba(58, 124, 255, 0.32);
   letter-spacing: 0.12em;
 }
 
@@ -869,8 +869,8 @@ html[data-theme='light'] .nav-links--drawer {
 .control-primary:hover:not(:disabled) {
   background: linear-gradient(130deg, var(--accent) 0%, var(--accent-strong) 90%);
   color: var(--text-control-contrast);
-  box-shadow: var(--control-shadow), var(--control-highlight), 0 18px 32px rgba(64, 120, 255, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  box-shadow: var(--control-shadow), var(--control-highlight), 0 24px 44px rgba(58, 124, 255, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .control-secondary {
@@ -906,14 +906,14 @@ html[data-theme='light'] .nav-links--drawer {
   gap: clamp(0.85rem, 2.2vw, 1.4rem);
   padding: clamp(1.4rem, 3.6vw, 2rem);
   border-radius: clamp(16px, 3.4vw, 22px);
-  border: 1px solid rgba(92, 120, 210, 0.38);
-  background: linear-gradient(150deg, rgba(24, 32, 64, 0.88) 0%, rgba(16, 24, 50, 0.86) 58%, rgba(12, 18, 40, 0.9) 100%);
-  box-shadow: 0 28px 56px -30px rgba(4, 10, 32, 0.78);
+  border: 1px solid rgba(100, 122, 242, 0.36);
+  background: linear-gradient(155deg, rgba(14, 18, 48, 0.92) 0%, rgba(10, 16, 40, 0.92) 58%, rgba(8, 14, 36, 0.94) 100%);
+  box-shadow: 0 32px 72px -36px rgba(2, 6, 24, 0.85);
   backdrop-filter: blur(16px);
 }
 
 .history-section--empty {
-  background: linear-gradient(160deg, rgba(16, 24, 44, 0.7) 0%, rgba(12, 18, 36, 0.64) 68%, rgba(10, 16, 32, 0.7) 100%);
+  background: linear-gradient(155deg, rgba(12, 18, 44, 0.78) 0%, rgba(8, 14, 36, 0.72) 60%, rgba(6, 12, 32, 0.78) 100%);
 }
 
 .history-section__header {
@@ -946,8 +946,8 @@ html[data-theme='light'] .nav-links--drawer {
   min-width: clamp(1.8rem, 5vw, 2.4rem);
   padding: 0.15rem clamp(0.45rem, 1.4vw, 0.65rem);
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: linear-gradient(135deg, #35d4ff 0%, #8b84ff 100%);
+  color: #060a1d;
   font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -961,9 +961,9 @@ html[data-theme='light'] .nav-links--drawer {
   justify-content: center;
   padding: clamp(0.28rem, 1vw, 0.42rem) clamp(0.65rem, 1.8vw, 0.9rem);
   border-radius: 999px;
-  border: 1px solid rgba(126, 148, 236, 0.48);
-  background: rgba(40, 52, 104, 0.6);
-  color: var(--accent);
+  border: 1px solid rgba(114, 138, 255, 0.45);
+  background: rgba(34, 44, 100, 0.6);
+  color: rgba(162, 192, 255, 0.9);
   font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -979,8 +979,9 @@ html[data-theme='light'] .nav-links--drawer {
 }
 
 .history-undo:not(:disabled):hover {
-  background: rgba(60, 78, 138, 0.78);
-  border-color: rgba(158, 178, 250, 0.64);
+  background: rgba(48, 62, 134, 0.8);
+  border-color: rgba(134, 160, 255, 0.62);
+  color: #f4f7ff;
 }
 
 .history-undo:focus-visible {
@@ -1003,9 +1004,9 @@ html[data-theme='light'] .nav-links--drawer {
   gap: 0.5rem;
   padding: clamp(0.85rem, 2.3vw, 1.1rem) clamp(1rem, 2.3vw, 1.3rem);
   border-radius: 14px;
-  border: 1px solid rgba(126, 148, 236, 0.32);
-  background: linear-gradient(150deg, rgba(32, 40, 76, 0.86) 0%, rgba(24, 32, 62, 0.82) 58%, rgba(18, 24, 48, 0.84) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(118, 142, 255, 0.36);
+  background: linear-gradient(155deg, rgba(18, 26, 62, 0.92) 0%, rgba(12, 20, 52, 0.88) 56%, rgba(10, 18, 48, 0.9) 100%);
+  box-shadow: inset 0 1px 0 rgba(139, 132, 255, 0.16);
 }
 
 .history-entry__footer {
@@ -1055,7 +1056,7 @@ html[data-theme='light'] .nav-links--drawer {
 .history-entry__meta {
   font-family: var(--font-body);
   font-size: clamp(0.8rem, 1.6vw, 0.92rem);
-  color: rgba(198, 210, 248, 0.74);
+  color: rgba(170, 190, 255, 0.68);
   letter-spacing: 0.04em;
 }
 
@@ -1065,9 +1066,9 @@ html[data-theme='light'] .nav-links--drawer {
   justify-content: center;
   padding: clamp(0.25rem, 0.8vw, 0.4rem) clamp(0.55rem, 1.6vw, 0.75rem);
   border-radius: 10px;
-  border: 1px solid rgba(126, 148, 236, 0.45);
-  background: rgba(28, 38, 80, 0.7);
-  color: rgba(208, 220, 255, 0.86);
+  border: 1px solid rgba(118, 142, 255, 0.45);
+  background: rgba(28, 38, 84, 0.82);
+  color: rgba(200, 218, 255, 0.9);
   font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -1078,9 +1079,9 @@ html[data-theme='light'] .nav-links--drawer {
 }
 
 .history-entry__delete:hover {
-  background: rgba(58, 72, 124, 0.82);
-  border-color: rgba(158, 178, 250, 0.65);
-  color: var(--accent);
+  background: rgba(52, 70, 140, 0.88);
+  border-color: rgba(132, 156, 255, 0.68);
+  color: #35d4ff;
 }
 
 .history-entry__delete:focus-visible {
