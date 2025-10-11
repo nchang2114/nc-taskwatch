@@ -653,8 +653,9 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 }
 
 .goal-task-row {
-  --task-row-bg: rgba(26, 34, 66, 0.88);
-  --task-row-overlay: rgba(188, 192, 255, 0.14);
+  /* Dark mode: neutral grey base so overlay colors are less vibrant */
+  --task-row-bg: rgba(56, 56, 62, 0.62);
+  --task-row-overlay: rgba(188, 192, 255, 0.10);
   --task-row-border: rgba(116, 132, 228, 0.58);
   --task-row-shadow: 0 10px 24px rgba(10, 14, 32, 0.42);
   --priority-overlay: none;
