@@ -1304,7 +1304,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                           onClick={() => toggleGoalExpansion(goal.id)}
                           aria-expanded={goalExpanded}
                         >
-                          <span>{goal.name}</span>
+                          <span className="task-selector__goal-info">
+                            <span className="task-selector__goal-badge" aria-hidden="true">
+                              Goal
+                            </span>
+                            <span className="task-selector__goal-name">{goal.name}</span>
+                          </span>
                           <span className="task-selector__chevron" aria-hidden="true">
                             {goalExpanded ? '−' : '+'}
                           </span>
@@ -1330,7 +1335,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                                     onClick={() => toggleBucketExpansion(bucket.id)}
                                     aria-expanded={bucketExpanded}
                                   >
-                                    <span>{bucket.name}</span>
+                                    <span className="task-selector__bucket-info">
+                                      <span className="task-selector__bucket-badge" aria-hidden="true">
+                                        Bucket
+                                      </span>
+                                      <span className="task-selector__bucket-name">{bucket.name}</span>
+                                    </span>
                                     <span className="task-selector__chevron" aria-hidden="true">
                                       {bucketExpanded ? '−' : '+'}
                                     </span>
@@ -1400,73 +1410,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                                       ) : (
                                         <p className="task-selector__empty-sub">No active tasks.</p>
                                       )}
-                                      {completedTasks.length > 0 ? (
-                                        <>
-                                          <p className="task-selector__subheading">Completed</p>
-                                          <ul className="task-selector__tasks task-selector__tasks--completed">
-                                            {completedTasks.map((task) => {
-                                              const candidateLower = task.text.trim().toLocaleLowerCase()
-                                              const matches = focusSource
-                                                ? focusSource.goalId === goal.id &&
-                                                  focusSource.bucketId === bucket.id &&
-                                                  candidateLower === currentTaskLower
-                                                : !isDefaultTask && candidateLower === currentTaskLower
-                                              const diffClass = diffClsForTask(task.difficulty as any)
-                                              const completedClassName = [
-                                                'task-selector__task',
-                                                'task-selector__task--completed',
-                                                'goal-task-row',
-                                                'goal-task-row',
-                                                diffClass,
-                                                task.priority ? 'goal-task-row--priority' : '',
-                                                'goal-task-row--completed',
-                                                matches ? 'task-selector__task--active' : '',
-                                              ]
-                                                .filter(Boolean)
-                                                .join(' ')
-                                              const diffBadgeClass =
-                                                task.difficulty && task.difficulty !== 'none'
-                                                  ? ['goal-task-diff', `goal-task-diff--${task.difficulty}`, 'task-selector__diff', 'task-selector__diff-chip']
-                                                      .filter(Boolean)
-                                                      .join(' ')
-                                                  : null
-                                              return (
-                                                <li key={`${task.id}-completed`}>
-                                                  <button
-                                                    type="button"
-                                                    className={completedClassName}
-                                                    onClick={() =>
-                                                      handleSelectTask(task.text, {
-                                                        goalId: goal.id,
-                                                        bucketId: bucket.id,
-                                                        goalName: goal.name,
-                                                        bucketName: bucket.name,
-                                                        taskId: task.id,
-                                                        taskDifficulty: task.difficulty ?? 'none',
-                                                        priority: task.priority ?? false,
-                                                        goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
-                                                        bucketSurface,
-                                                      })
-                                                    }
-                                                  >
-                                                    <div className="task-selector__task-main">
-                                                      <div className="task-selector__task-content">
-                                                        <span className="goal-task-text">
-                                                          <span className="goal-task-text__inner">{task.text}</span>
-                                                        </span>
-                                                        <span className="task-selector__origin task-selector__origin--dropdown">
-                                                          {`${goal.name} → ${bucket.name}`}
-                                                        </span>
-                                                      </div>
-                                                      {diffBadgeClass ? <span className={diffBadgeClass} aria-hidden="true" /> : null}
-                                                    </div>
-                                                  </button>
-                                                </li>
-                                              )
-                                            })}
-                                          </ul>
-                                        </>
-                                      ) : null}
                                     </div>
                                   ) : null}
                                 </li>
