@@ -29,6 +29,7 @@ import {
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
 import { createGoalsSnapshot, publishGoalsSnapshot } from '../lib/goalsSync'
+import { broadcastFocusTask } from '../lib/focusChannel'
 
 // Helper function for class names
 function classNames(...xs: (string | boolean | undefined)[]): string {
@@ -68,6 +69,126 @@ export interface TaskItem {
   difficulty?: 'none' | 'green' | 'yellow' | 'red'
   // Local-only: whether this task is prioritized (not persisted yet)
   priority?: boolean
+}
+
+type FocusPromptTarget = {
+  goalId: string
+  bucketId: string
+  taskId: string
+}
+
+const makeTaskFocusKey = (goalId: string, bucketId: string, taskId: string): string =>
+  `${goalId}__${bucketId}__${taskId}`
+
+const computeSelectionOffsetWithin = (element: HTMLElement, mode: 'start' | 'end' = 'start'): number | null => {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) {
+    return null
+  }
+  const range = selection.getRangeAt(selection.rangeCount - 1)
+  const node = mode === 'start' ? range.startContainer : range.endContainer
+  if (!element.contains(node)) {
+    return null
+  }
+  const probe = range.cloneRange()
+  probe.selectNodeContents(element)
+  try {
+    if (mode === 'start') {
+      probe.setEnd(range.startContainer, range.startOffset)
+    } else {
+      probe.setEnd(range.endContainer, range.endOffset)
+    }
+  } catch {
+    return null
+  }
+  return probe.toString().length
+}
+
+const resolveCaretOffsetFromPoint = (
+  element: HTMLElement,
+  clientX: number,
+  clientY: number,
+): number | null => {
+  if (typeof document === 'undefined') {
+    return null
+  }
+  const doc = element.ownerDocument ?? document
+  let range: Range | null = null
+
+  const anyDoc = doc as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node | null; offset: number } | null
+  }
+
+  if (typeof anyDoc.caretRangeFromPoint === 'function') {
+    try {
+      range = anyDoc.caretRangeFromPoint(clientX, clientY)
+    } catch {
+      range = null
+    }
+  }
+
+  if (!range && typeof anyDoc.caretPositionFromPoint === 'function') {
+    try {
+      const position = anyDoc.caretPositionFromPoint(clientX, clientY)
+      if (position?.offsetNode) {
+        const tempRange = doc.createRange()
+        const maxOffset = position.offsetNode.textContent?.length ?? 0
+        const safeOffset = Math.max(0, Math.min(position.offset, maxOffset))
+        tempRange.setStart(position.offsetNode, safeOffset)
+        tempRange.collapse(true)
+        range = tempRange
+      }
+    } catch {
+      range = null
+    }
+  }
+
+  if (!range) {
+    return null
+  }
+
+  if (!element.contains(range.startContainer)) {
+    const walker = doc.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    const firstText = walker.nextNode()
+    if (!firstText) {
+      return 0
+    }
+    const maxOffset = firstText.textContent?.length ?? 0
+    range.setStart(firstText, Math.max(0, Math.min(range.startOffset, maxOffset)))
+    range.collapse(true)
+  }
+
+  const probe = range.cloneRange()
+  probe.selectNodeContents(element)
+  try {
+    probe.setEnd(range.startContainer, range.startOffset)
+  } catch {
+    return null
+  }
+  return probe.toString().length
+}
+
+const findActivationCaretOffset = (
+  element: HTMLElement | null,
+  clientX: number,
+  clientY: number,
+): number | null => {
+  if (!element) {
+    return null
+  }
+  const fromPoint = resolveCaretOffsetFromPoint(element, clientX, clientY)
+  if (fromPoint !== null) {
+    return fromPoint
+  }
+  const fromSelection = computeSelectionOffsetWithin(element, 'start')
+  if (fromSelection !== null) {
+    return fromSelection
+  }
+  return computeSelectionOffsetWithin(element, 'end')
 }
 
 // Limit for inline task text editing (mirrors Taskwatch behavior)
@@ -753,12 +874,22 @@ interface GoalRowProps {
   onToggleTaskPriority: (bucketId: string, taskId: string) => void
   // Editing existing task text
   editingTasks: Record<string, string>
-  onStartTaskEdit: (goalId: string, bucketId: string, taskId: string, initial: string) => void
+  onStartTaskEdit: (
+    goalId: string,
+    bucketId: string,
+    taskId: string,
+    initial: string,
+    options?: { caretOffset?: number | null },
+  ) => void
   onTaskEditChange: (taskId: string, value: string) => void
   onTaskEditSubmit: (goalId: string, bucketId: string, taskId: string) => void
   onTaskEditBlur: (goalId: string, bucketId: string, taskId: string) => void
   onTaskEditCancel: (taskId: string) => void
   registerTaskEditRef: (taskId: string, element: HTMLSpanElement | null) => void
+  focusPromptTarget: FocusPromptTarget | null
+  onTaskTextClick: (goalId: string, bucketId: string, taskId: string) => void
+  onDismissFocusPrompt: () => void
+  onStartFocusTask: (goal: Goal, bucket: Bucket, task: TaskItem) => void
   onReorderTasks: (
     goalId: string,
     bucketId: string,
@@ -825,6 +956,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onTaskEditChange,
   onTaskEditBlur,
   registerTaskEditRef,
+  focusPromptTarget,
+  onTaskTextClick,
+  onDismissFocusPrompt,
+  onStartFocusTask,
   onReorderTasks,
   onReorderBuckets,
   onOpenCustomizer,
@@ -2068,6 +2203,13 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                   : task.difficulty === 'red'
                                   ? 'goal-task-row--diff-red'
                                   : ''
+                              const focusPromptKey = makeTaskFocusKey(goal.id, b.id, task.id)
+                              const isFocusPromptActive =
+                                !isEditing &&
+                                focusPromptTarget !== null &&
+                                focusPromptTarget.goalId === goal.id &&
+                                focusPromptTarget.bucketId === b.id &&
+                                focusPromptTarget.taskId === task.id
                               
                               return (
                                 <React.Fragment key={`${task.id}-wrap`}>
@@ -2075,6 +2217,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                   <li
                                     ref={(el) => registerTaskRowRef(task.id, el)}
                                     key={task.id}
+                                    data-focus-prompt-key={focusPromptKey}
                                     className={classNames(
                                       'goal-task-row',
                                       diffClass,
@@ -2290,7 +2433,21 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       className="goal-task-text goal-task-text--button"
                                       onClick={(e) => {
                                         e.stopPropagation()
-                                        onStartTaskEdit(goal.id, b.id, task.id, task.text)
+                                        onTaskTextClick(goal.id, b.id, task.id)
+                                      }}
+                                      onDoubleClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        const container = e.currentTarget.querySelector('.goal-task-text__inner') as HTMLElement | null
+                                        const caretOffset = findActivationCaretOffset(container, e.clientX, e.clientY)
+                                        onDismissFocusPrompt()
+                                        onStartTaskEdit(
+                                          goal.id,
+                                          b.id,
+                                          task.id,
+                                          task.text,
+                                          caretOffset !== null ? { caretOffset } : undefined,
+                                        )
                                       }}
                                       aria-label="Edit task text"
                                     >
@@ -2366,6 +2523,27 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     title="Tap to cycle difficulty • Hold ~300ms for Priority"
                                   />
                                 </li>
+                                {!isEditing && isFocusPromptActive ? (
+                                  <li
+                                    key={`${task.id}-focus`}
+                                    className="goal-task-focus-row"
+                                    data-focus-prompt-key={focusPromptKey}
+                                  >
+                                    <div className="goal-task-focus">
+                                      <button
+                                        type="button"
+                                        className="goal-task-focus__button"
+                                        onClick={(event) => {
+                                          event.stopPropagation()
+                                          onStartFocusTask(goal, b, task)
+                                          onDismissFocusPrompt()
+                                        }}
+                                      >
+                                        Start Focus
+                                      </button>
+                                    </div>
+                                  </li>
+                                ) : null}
                                 </React.Fragment>
                               )
                             })}
@@ -2447,6 +2625,13 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       : task.difficulty === 'red'
                                       ? 'goal-task-row--diff-red'
                                       : ''
+                                  const focusPromptKey = makeTaskFocusKey(goal.id, b.id, task.id)
+                                  const isFocusPromptActive =
+                                    !isEditing &&
+                                    focusPromptTarget !== null &&
+                                    focusPromptTarget.goalId === goal.id &&
+                                    focusPromptTarget.bucketId === b.id &&
+                                    focusPromptTarget.taskId === task.id
                                   
                                   return (
                                     <React.Fragment key={`${task.id}-cwrap`}>
@@ -2454,7 +2639,14 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       <li
                                         ref={(el) => registerTaskRowRef(task.id, el)}
                                         key={task.id}
-                                        className={classNames('goal-task-row goal-task-row--completed', diffClass, task.priority && 'goal-task-row--priority', isEditing && 'goal-task-row--draft')}
+                                        data-focus-prompt-key={focusPromptKey}
+                                        className={classNames(
+                                          'goal-task-row goal-task-row--completed',
+                                          diffClass,
+                                          task.priority && 'goal-task-row--priority',
+                                          isEditing && 'goal-task-row--draft',
+                                          isFocusPromptActive && 'goal-task-row--focus-prompt',
+                                        )}
                                         draggable
                                         onDragStart={(e) => {
                                           e.dataTransfer.setData('text/plain', task.id)
@@ -2572,13 +2764,27 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         <button
                                           type="button"
                                           className="goal-task-text goal-task-text--button"
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            onStartTaskEdit(goal.id, b.id, task.id, task.text)
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        onTaskTextClick(goal.id, b.id, task.id)
+                                      }}
+                                      onDoubleClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        const container = e.currentTarget.querySelector('.goal-task-text__inner') as HTMLElement | null
+                                        const caretOffset = findActivationCaretOffset(container, e.clientX, e.clientY)
+                                        onDismissFocusPrompt()
+                                        onStartTaskEdit(
+                                          goal.id,
+                                          b.id,
+                                          task.id,
+                                              task.text,
+                                              caretOffset !== null ? { caretOffset } : undefined,
+                                            )
                                           }}
                                           aria-label="Edit task text"
                                         >
-                                          {highlightText(task.text, highlightTerm)}
+                                          <span className="goal-task-text__inner">{highlightText(task.text, highlightTerm)}</span>
                                         </button>
                                       )}
                                       <button
@@ -2648,7 +2854,28 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         aria-label="Set task difficulty"
                                         title="Tap to cycle difficulty • Hold ~300ms for Priority"
                                       />
+                                    </li>
+                                    {!isEditing && isFocusPromptActive ? (
+                                      <li
+                                        key={`${task.id}-focus`}
+                                        className="goal-task-focus-row"
+                                        data-focus-prompt-key={focusPromptKey}
+                                      >
+                                        <div className="goal-task-focus">
+                                          <button
+                                            type="button"
+                                            className="goal-task-focus__button"
+                                            onClick={(event) => {
+                                              event.stopPropagation()
+                                              onStartFocusTask(goal, b, task)
+                                              onDismissFocusPrompt()
+                                            }}
+                                          >
+                                            Start Focus
+                                          </button>
+                                        </div>
                                       </li>
+                                    ) : null}
                                     </React.Fragment>
                                   )
                                 })}
@@ -2711,6 +2938,8 @@ export default function GoalsPage(): ReactElement {
   const [taskEdits, setTaskEdits] = useState<Record<string, string>>({})
   const taskEditRefs = useRef(new Map<string, HTMLSpanElement>())
   const submittingEdits = useRef(new Set<string>())
+  const [focusPromptTarget, setFocusPromptTarget] = useState<FocusPromptTarget | null>(null)
+  const focusPromptKeyRef = useRef<string | null>(null)
   const [isCreateGoalOpen, setIsCreateGoalOpen] = useState(false)
   const [goalNameInput, setGoalNameInput] = useState('')
   const [selectedGoalGradient, setSelectedGoalGradient] = useState(GOAL_GRADIENTS[0])
@@ -2766,6 +2995,40 @@ export default function GoalsPage(): ReactElement {
   const previousExpandedRef = useRef<Record<string, boolean> | null>(null)
   const previousBucketExpandedRef = useRef<Record<string, boolean> | null>(null)
   const previousCompletedCollapsedRef = useRef<Record<string, boolean> | null>(null)
+
+  useEffect(() => {
+    focusPromptKeyRef.current = focusPromptTarget
+      ? makeTaskFocusKey(focusPromptTarget.goalId, focusPromptTarget.bucketId, focusPromptTarget.taskId)
+      : null
+  }, [focusPromptTarget])
+
+  useEffect(() => {
+    if (!focusPromptTarget) {
+      return
+    }
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const key = focusPromptKeyRef.current
+      if (!key) {
+        setFocusPromptTarget(null)
+        return
+      }
+      const target = event.target
+      if (target instanceof Element) {
+        const container = target.closest('[data-focus-prompt-key]')
+        if (container && container.getAttribute('data-focus-prompt-key') === key) {
+          return
+        }
+      }
+      setFocusPromptTarget(null)
+    }
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [focusPromptTarget])
   const expandedRef = useRef(expanded)
   const bucketExpandedRef = useRef(bucketExpanded)
   const completedCollapsedRef = useRef(completedCollapsed)
@@ -3454,6 +3717,44 @@ export default function GoalsPage(): ReactElement {
     taskDraftRefs.current.delete(bucketId)
   }
 
+  const handleTaskTextClick = useCallback((goalId: string, bucketId: string, taskId: string) => {
+    setFocusPromptTarget((current) => {
+      if (
+        current &&
+        current.goalId === goalId &&
+        current.bucketId === bucketId &&
+        current.taskId === taskId
+      ) {
+        return null
+      }
+      return { goalId, bucketId, taskId }
+    })
+  }, [])
+
+  const dismissFocusPrompt = useCallback(() => {
+    setFocusPromptTarget(null)
+  }, [])
+
+  const handleStartFocusTask = useCallback(
+    (goal: Goal, bucket: Bucket, task: TaskItem) => {
+      broadcastFocusTask({
+        goalId: goal.id,
+        goalName: goal.name,
+        bucketId: bucket.id,
+        bucketName: bucket.name,
+        taskId: task.id,
+        taskName: task.text,
+        taskDifficulty: task.difficulty ?? null,
+        priority: task.priority ?? null,
+        goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+        bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+        autoStart: true,
+      })
+      setFocusPromptTarget(null)
+    },
+    [],
+  )
+
   const toggleTaskCompletion = (goalId: string, bucketId: string, taskId: string) => {
     let toggledNewCompleted: boolean | null = null
     let shouldCollapseAfterFirstComplete = false
@@ -3624,7 +3925,7 @@ export default function GoalsPage(): ReactElement {
     taskEditRefs.current.delete(taskId)
   }
 
-  const focusTaskEditInput = (taskId: string) => {
+  const focusTaskEditInput = (taskId: string, caretOffset?: number | null) => {
     const node = taskEditRefs.current.get(taskId)
     if (!node) return
     node.focus()
@@ -3632,20 +3933,58 @@ export default function GoalsPage(): ReactElement {
       const selection = window.getSelection()
       if (selection) {
         const range = document.createRange()
-        range.selectNodeContents(node)
-        range.collapse(false)
+        const textLength = node.textContent?.length ?? 0
+        const targetOffset =
+          caretOffset === undefined || caretOffset === null
+            ? textLength
+            : Math.max(0, Math.min(caretOffset, textLength))
+        if (targetOffset === textLength) {
+          range.selectNodeContents(node)
+          range.collapse(false)
+        } else {
+          const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+          let remaining = targetOffset
+          let current: Node | null = null
+          let positioned = false
+          while ((current = walker.nextNode())) {
+            const length = current.textContent?.length ?? 0
+            if (remaining <= length) {
+              range.setStart(current, Math.max(0, remaining))
+              positioned = true
+              break
+            }
+            remaining -= length
+          }
+          if (!positioned) {
+            range.selectNodeContents(node)
+            range.collapse(false)
+          } else {
+            range.collapse(true)
+          }
+        }
         selection.removeAllRanges()
         selection.addRange(range)
       }
     }
   }
 
-  const startTaskEdit = (_goalId: string, bucketId: string, taskId: string, initial: string) => {
+  const startTaskEdit = (
+    goalId: string,
+    bucketId: string,
+    taskId: string,
+    initial: string,
+    options?: { caretOffset?: number | null },
+  ) => {
     setTaskEdits((current) => ({ ...current, [taskId]: initial }))
     // Expand parent bucket to ensure visible
     setBucketExpanded((current) => ({ ...current, [bucketId]: true }))
+    if (focusPromptTarget) {
+      setFocusPromptTarget((current) =>
+        current && current.goalId === goalId && current.bucketId === bucketId && current.taskId === taskId ? null : current,
+      )
+    }
     if (typeof window !== 'undefined') {
-      const scheduleFocus = () => focusTaskEditInput(taskId)
+      const scheduleFocus = () => focusTaskEditInput(taskId, options?.caretOffset ?? null)
       if (typeof window.requestAnimationFrame === 'function') {
         window.requestAnimationFrame(() => window.requestAnimationFrame(scheduleFocus))
       } else {
@@ -4111,12 +4450,18 @@ export default function GoalsPage(): ReactElement {
                   onCycleTaskDifficulty={(bucketId, taskId) => cycleTaskDifficulty(g.id, bucketId, taskId)}
                   onToggleTaskPriority={(bucketId, taskId) => toggleTaskPriority(g.id, bucketId, taskId)}
                   editingTasks={taskEdits}
-                  onStartTaskEdit={(goalId, bucketId, taskId, initial) => startTaskEdit(goalId, bucketId, taskId, initial)}
+                  onStartTaskEdit={(goalId, bucketId, taskId, initial, options) =>
+                    startTaskEdit(goalId, bucketId, taskId, initial, options)
+                  }
                   onTaskEditChange={handleTaskEditChange}
                   onTaskEditSubmit={(goalId, bucketId, taskId) => handleTaskEditSubmit(goalId, bucketId, taskId)}
                   onTaskEditBlur={(goalId, bucketId, taskId) => handleTaskEditBlur(goalId, bucketId, taskId)}
                   onTaskEditCancel={(taskId) => handleTaskEditCancel(taskId)}
                   registerTaskEditRef={registerTaskEditRef}
+                  focusPromptTarget={focusPromptTarget}
+                  onTaskTextClick={handleTaskTextClick}
+                  onDismissFocusPrompt={dismissFocusPrompt}
+                  onStartFocusTask={handleStartFocusTask}
                   onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
                     reorderTasks(goalId, bucketId, section, fromIndex, toIndex)
                   }

@@ -3,6 +3,7 @@ import './App.css'
 import GoalsPage from './pages/GoalsPage'
 import ReflectionPage from './pages/ReflectionPage'
 import TaskwatchPage from './pages/TaskwatchPage'
+import { FOCUS_EVENT_TYPE } from './lib/focusChannel'
 
 type Theme = 'light' | 'dark'
 type TabKey = 'goals' | 'taskwatch' | 'reflection'
@@ -213,6 +214,20 @@ function App() {
     setActiveTab(tab)
     closeNav()
   }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handleFocusSwitch = () => {
+      setActiveTab('taskwatch')
+      setIsNavOpen(false)
+    }
+    window.addEventListener(FOCUS_EVENT_TYPE, handleFocusSwitch)
+    return () => {
+      window.removeEventListener(FOCUS_EVENT_TYPE, handleFocusSwitch)
+    }
+  }, [])
 
   const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
   const brandButtonClassName = useMemo(

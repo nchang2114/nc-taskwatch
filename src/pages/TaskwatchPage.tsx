@@ -5,6 +5,7 @@ import {
   type ChangeEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -12,6 +13,7 @@ import {
 } from 'react'
 import '../App.css'
 import { fetchGoalsHierarchy, setTaskCompletedAndResort } from '../lib/goalsApi'
+import { FOCUS_EVENT_TYPE, type FocusBroadcastDetail, type FocusBroadcastEvent } from '../lib/focusChannel'
 import {
   createGoalsSnapshot,
   publishGoalsSnapshot,
@@ -1026,7 +1028,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     })
   }
 
-  const registerNewHistoryEntry = (elapsedMs: number, taskName: string) => {
+  const registerNewHistoryEntry = useCallback((elapsedMs: number, taskName: string) => {
     const now = Date.now()
     const startedAt = sessionStart ?? now - elapsedMs
     const entry: HistoryEntry = {
@@ -1044,7 +1046,59 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       }
       return next
     })
-  }
+  }, [sessionStart])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handleFocusBroadcast = (event: Event) => {
+      const custom = event as FocusBroadcastEvent
+      const detail = custom.detail as FocusBroadcastDetail | undefined
+      if (!detail) {
+        return
+      }
+      const taskName = detail.taskName?.trim().slice(0, MAX_TASK_STORAGE_LENGTH) ?? ''
+      const goalName = detail.goalName?.trim().slice(0, MAX_TASK_STORAGE_LENGTH) ?? ''
+      const bucketName = detail.bucketName?.trim().slice(0, MAX_TASK_STORAGE_LENGTH) ?? ''
+      const safeGoalSurface = ensureSurfaceStyle(detail.goalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE)
+      const safeBucketSurface =
+        detail.bucketSurface !== undefined && detail.bucketSurface !== null
+          ? ensureSurfaceStyle(detail.bucketSurface, DEFAULT_SURFACE_STYLE)
+          : null
+
+      setCurrentTaskName(taskName)
+      setFocusSource({
+        goalId: detail.goalId,
+        bucketId: detail.bucketId,
+        goalName,
+        bucketName,
+        taskId: detail.taskId ?? null,
+        taskDifficulty: detail.taskDifficulty ?? null,
+        priority: detail.priority ?? null,
+        goalSurface: safeGoalSurface,
+        bucketSurface: safeBucketSurface,
+      })
+      setCustomTaskDraft(taskName)
+      setIsSelectorOpen(false)
+
+      if (detail.autoStart) {
+        const now = Date.now()
+        if (elapsed > 0) {
+          const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
+          registerNewHistoryEntry(elapsed, entryName)
+        }
+        setElapsed(0)
+        setSessionStart(now)
+        lastTickRef.current = null
+        setIsRunning(true)
+      }
+    }
+    window.addEventListener(FOCUS_EVENT_TYPE, handleFocusBroadcast as EventListener)
+    return () => {
+      window.removeEventListener(FOCUS_EVENT_TYPE, handleFocusBroadcast as EventListener)
+    }
+  }, [elapsed, normalizedCurrentTask, registerNewHistoryEntry])
 
   const formattedTime = useMemo(() => formatTime(elapsed), [elapsed])
   const formattedClock = useMemo(() => formatClockTime(currentTime), [currentTime])
