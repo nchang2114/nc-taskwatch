@@ -281,6 +281,16 @@
   flex-direction: column;
   gap: clamp(1rem, 3vw, 1.5rem);
   z-index: 30;
+  overscroll-behavior: contain;
+}
+
+.task-selector-popover:focus {
+  outline: none;
+}
+
+.task-selector-popover:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 
 .task-selector__section {
@@ -673,11 +683,16 @@
 .focus-task__origin,
 .task-selector__origin {
   display: block;
-  font-size: 0.9rem;
+  max-width: 100%;
+  font-size: clamp(0.62rem, 2.1vw, 0.88rem);
   letter-spacing: 0.03em;
   font-weight: 600;
   color: var(--text-secondary);
   text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .focus-task__origin {
@@ -687,6 +702,8 @@
 
 .task-selector__origin--dropdown {
   margin-top: 0.35rem;
+  text-align: left;
+  font-size: clamp(0.6rem, 2vw, 0.82rem);
 }
 
 .focus-task__diff-chip,
@@ -710,6 +727,25 @@
 
 .goal-task-row__meta .goal-task-diff {
   transform: scale(0.92);
+}
+
+@media (max-width: 640px) {
+  .task-selector-container {
+    width: 100%;
+  }
+
+  .task-selector-popover {
+    position: fixed;
+    left: max(0.65rem, env(safe-area-inset-left));
+    right: max(0.65rem, env(safe-area-inset-right));
+    top: clamp(5.25rem, 15vh, 7.25rem);
+    bottom: max(1.15rem, env(safe-area-inset-bottom));
+    width: auto;
+    max-height: none;
+    border-radius: 0.9rem;
+    padding: clamp(0.8rem, 4vw, 1.1rem);
+    box-shadow: 0 18px 46px rgba(12, 20, 43, 0.55);
+  }
 }
 
 .focus-task__chevron {
