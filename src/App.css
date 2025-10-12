@@ -184,6 +184,795 @@
   padding-inline: 0.35rem;
 }
 
+.task-selector-container {
+  position: relative;
+  width: min(720px, 100%);
+}
+
+.task-selector {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(0.6rem, 2vw, 1rem);
+  padding: clamp(0.85rem, 3vw, 1.1rem) clamp(1rem, 3.4vw, 1.45rem);
+  border-radius: 1.1rem;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-background);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  cursor: pointer;
+  box-shadow: var(--panel-shadow);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.task-selector:hover,
+.task-selector:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 18px 40px var(--glow);
+}
+
+.task-selector:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.task-selector--open {
+  box-shadow: 0 24px 48px var(--glow);
+}
+
+.task-selector__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: clamp(0.2rem, 1vw, 0.35rem);
+}
+
+.task-selector__label {
+  font-size: clamp(0.8rem, 2vw, 0.95rem);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.task-selector__value {
+  font-size: clamp(1rem, 3vw, 1.25rem);
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+  line-height: 1.3;
+  text-align: left;
+}
+
+.task-selector__value--placeholder {
+  color: var(--text-muted);
+}
+
+.task-selector__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(1.6rem, 5vw, 2rem);
+  height: clamp(1.6rem, 5vw, 2rem);
+  color: var(--text-secondary);
+  transition: transform 180ms ease;
+}
+
+.task-selector--open .task-selector__icon {
+  transform: rotate(180deg);
+}
+
+.task-selector-popover {
+  position: absolute;
+  top: calc(100% + clamp(0.6rem, 2vw, 0.9rem));
+  right: 0;
+  width: min(420px, calc(100vw - 1.5rem));
+  max-height: clamp(320px, 70vh, 520px);
+  padding: clamp(1rem, 3vw, 1.4rem);
+  border-radius: 1rem;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-background);
+  box-shadow: var(--panel-shadow);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1rem, 3vw, 1.5rem);
+  z-index: 30;
+}
+
+.task-selector__section {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.6rem, 2vw, 0.9rem);
+}
+
+.task-selector__section-title {
+  margin: 0;
+  font-size: clamp(0.85rem, 2.2vw, 1rem);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+
+.task-selector__custom-form {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.task-selector__input {
+  flex: 1 1 auto;
+  border-radius: 0.75rem;
+  border: 1px solid var(--control-border);
+  background: var(--control-surface);
+  padding: 0.65rem 0.9rem;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.task-selector__input::placeholder {
+  color: var(--text-muted);
+}
+
+.task-selector__input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--control-surface-hover);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.task-selector__set-button {
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 0.7rem;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--text-control-contrast);
+  cursor: pointer;
+  box-shadow: var(--control-shadow);
+  transition: transform 150ms ease;
+}
+
+.task-selector__set-button:active {
+  transform: translateY(1px);
+}
+
+
+.task-selector__clear-button {
+  align-self: flex-end;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+}
+
+.task-selector__clear-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.task-selector__list,
+.task-selector__goals,
+.task-selector__buckets,
+.task-selector__tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.task-selector__task {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.18rem;
+  border: 1px solid var(--surface-border, transparent);
+  border-radius: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--surface-bg, var(--control-surface));
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--surface-shadow, none);
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.task-selector__task:hover,
+.task-selector__task:focus-visible {
+  border-color: var(--surface-border-hover, var(--surface-border, var(--control-border)));
+  background: var(--surface-bg-hover, var(--surface-bg, var(--control-surface-hover)));
+}
+
+.task-selector__task.goal-task-row {
+  display: block;
+  border: none;
+  padding: 0.7rem 0.9rem;
+  background: var(--task-row-bg);
+  box-shadow: none;
+}
+
+.task-selector__task.goal-task-row:hover,
+.task-selector__task.goal-task-row:focus-visible {
+  border: none;
+  background: var(--task-row-bg);
+}
+
+.task-selector__task.goal-task-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.task-selector__task.goal-task-row .goal-task-diff {
+  pointer-events: none;
+  cursor: default;
+}
+
+.task-selector__task-main {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.task-selector__task-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.task-selector__task.goal-task-row .goal-task-text {
+  display: block;
+  color: inherit;
+}
+
+.task-selector__task:active {
+  transform: translateY(1px);
+}
+
+.task-selector__task--active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.task-selector__task--completed {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.task-selector__task--completed.task-selector__task--active {
+  opacity: 1;
+}
+
+.task-selector__task-name {
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.task-selector__task-meta {
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+
+.task-selector__empty,
+.task-selector__empty-sub {
+  margin: 0;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.task-selector__empty-sub {
+  font-size: 0.75rem;
+}
+
+.task-selector__goal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.task-selector__goal-toggle,
+.task-selector__bucket-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--surface-border, var(--control-border));
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--surface-bg, var(--control-surface));
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  cursor: pointer;
+  box-shadow: var(--surface-shadow, none);
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.task-selector__goal-toggle:hover,
+.task-selector__goal-toggle:focus-visible,
+.task-selector__bucket-toggle:hover,
+.task-selector__bucket-toggle:focus-visible {
+  border-color: var(--surface-border-hover, var(--surface-border, var(--control-border)));
+  background: var(--surface-bg-hover, var(--surface-bg, var(--control-surface-hover)));
+}
+
+.task-selector__goal-toggle:focus-visible,
+.task-selector__bucket-toggle:focus-visible,
+.task-selector__task:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.task-selector__chevron {
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--text-secondary);
+}
+
+.task-selector__bucket-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding-inline-start: 0.85rem;
+}
+
+.task-selector__tasks--completed .task-selector__task {
+  background: var(--surface-bg, var(--control-surface));
+}
+
+.task-selector__subheading {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.task-selector__meta {
+  margin-top: 0.18rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.focus-task {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: clamp(0.85rem, 2.6vw, 1.35rem);
+  padding: clamp(0.85rem, 2.6vw, 1.2rem) clamp(1rem, 3vw, 1.45rem);
+  border-radius: 1rem;
+  box-shadow: 0 20px 46px rgba(6, 10, 30, 0.45);
+  transition: box-shadow 180ms ease, transform 180ms ease;
+}
+
+.focus-task--open {
+  transform: translateY(-1px);
+  box-shadow: 0 26px 60px rgba(6, 10, 30, 0.5);
+}
+
+.focus-task--empty {
+  opacity: 0.9;
+}
+
+.focus-task__complete {
+  width: clamp(2.2rem, 3.8vw, 2.6rem);
+  height: clamp(2.2rem, 3.8vw, 2.6rem);
+  border-radius: 0.85rem;
+  border: 1px solid rgba(118, 142, 255, 0.4);
+  background: rgba(18, 26, 60, 0.48);
+  color: rgba(134, 239, 172, 0.92);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease, color 160ms ease;
+}
+
+.focus-task__complete .goal-task-check {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.focus-task__complete:focus-visible {
+  outline: 2px solid rgba(134, 239, 172, 0.68);
+  outline-offset: 2px;
+}
+
+.focus-task__complete:hover {
+  border-color: rgba(134, 239, 172, 0.68);
+  background: rgba(24, 34, 72, 0.6);
+}
+
+.focus-task__complete:active {
+  transform: scale(0.96);
+}
+
+.focus-task__complete:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+
+.focus-task__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: clamp(0.24rem, 1vw, 0.42rem);
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.focus-task__body:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.focus-task__label {
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.focus-task__name {
+  font-size: clamp(0.92rem, 2.8vw, 1.18rem);
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  line-height: 1.35;
+  display: inline-block;
+}
+
+.focus-task__name--placeholder {
+  color: var(--text-muted);
+}
+
+.focus-task__content {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: clamp(0.7rem, 2.4vw, 1.1rem);
+}
+
+.focus-task__main {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.32rem, 1.1vw, 0.55rem);
+  align-items: center;
+  text-align: center;
+}
+
+.focus-task__origin,
+.task-selector__origin {
+  display: block;
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.focus-task__origin {
+  margin-top: 0.25rem;
+  color: var(--text-primary);
+}
+
+.task-selector__origin--dropdown {
+  margin-top: 0.35rem;
+}
+
+.focus-task__diff-chip,
+.task-selector__diff,
+.task-selector__diff-chip {
+  pointer-events: none;
+  cursor: default;
+}
+
+.focus-task__diff-chip {
+  transform: scale(1.05);
+}
+
+.task-selector__diff {
+  transform: none;
+}
+
+.task-selector__diff-chip {
+  transform: scale(0.92);
+}
+
+.goal-task-row__meta .goal-task-diff {
+  transform: scale(0.92);
+}
+
+.focus-task__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(1.6rem, 5vw, 2rem);
+  height: clamp(1.6rem, 5vw, 2rem);
+  color: var(--text-secondary);
+  transition: transform 180ms ease;
+}
+
+.focus-task__chevron--open {
+  transform: rotate(180deg);
+}
+
+.surface-goal {
+  --surface-bg: var(--panel-background);
+  --surface-border: var(--panel-border);
+  --surface-shadow: var(--panel-shadow);
+  --surface-bg-hover: var(--control-surface-hover);
+  --surface-border-hover: var(--accent);
+}
+
+.surface-bucket {
+  --surface-bg: var(--control-surface);
+  --surface-border: var(--control-border);
+  --surface-shadow: none;
+  --surface-bg-hover: var(--control-surface-hover);
+  --surface-border-hover: var(--control-border);
+}
+
+.surface-task {
+  --surface-bg: var(--control-surface);
+  --surface-border: transparent;
+  --surface-shadow: none;
+  --surface-bg-hover: var(--control-surface-hover);
+  --surface-border-hover: var(--control-border);
+}
+
+.surface-goal--glass {
+  --surface-bg: rgba(24, 32, 72, 0.28);
+  --surface-border: rgba(118, 142, 255, 0.16);
+  --surface-shadow: 0 16px 32px -24px rgba(2, 6, 24, 0.24);
+  --surface-bg-hover: rgba(28, 38, 84, 0.36);
+  --surface-border-hover: rgba(139, 132, 255, 0.24);
+}
+
+.surface-goal--midnight {
+  --surface-bg: linear-gradient(135deg, rgba(142, 153, 255, 0.24), rgba(108, 134, 255, 0.14));
+  --surface-border: rgba(121, 132, 255, 0.22);
+  --surface-shadow: 0 18px 34px -24px rgba(40, 54, 170, 0.24);
+  --surface-bg-hover: linear-gradient(135deg, rgba(142, 153, 255, 0.24), rgba(108, 134, 255, 0.14));
+  --surface-border-hover: rgba(141, 152, 255, 0.32);
+}
+
+.surface-goal--slate {
+  --surface-bg: linear-gradient(135deg, rgba(151, 227, 255, 0.24), rgba(115, 189, 255, 0.14));
+  --surface-border: rgba(82, 168, 255, 0.22);
+  --surface-shadow: 0 18px 34px -24px rgba(22, 94, 160, 0.24);
+  --surface-bg-hover: linear-gradient(135deg, rgba(151, 227, 255, 0.24), rgba(115, 189, 255, 0.14));
+  --surface-border-hover: rgba(120, 186, 255, 0.32);
+}
+
+.surface-goal--charcoal {
+  --surface-bg: linear-gradient(135deg, rgba(255, 188, 213, 0.26), rgba(255, 214, 229, 0.16));
+  --surface-border: rgba(231, 174, 206, 0.24);
+  --surface-shadow: 0 18px 34px -24px rgba(142, 54, 120, 0.2);
+  --surface-bg-hover: linear-gradient(135deg, rgba(255, 188, 213, 0.26), rgba(255, 214, 229, 0.16));
+  --surface-border-hover: rgba(240, 186, 214, 0.32);
+}
+
+.surface-goal--linen {
+  --surface-bg: linear-gradient(135deg, rgba(255, 214, 170, 0.26), rgba(255, 233, 192, 0.16));
+  --surface-border: rgba(255, 201, 150, 0.24);
+  --surface-shadow: 0 18px 32px -24px rgba(158, 92, 28, 0.2);
+  --surface-bg-hover: linear-gradient(135deg, rgba(255, 214, 170, 0.26), rgba(255, 233, 192, 0.16));
+  --surface-border-hover: rgba(255, 211, 168, 0.32);
+}
+
+.surface-goal--frost {
+  --surface-bg: linear-gradient(135deg, rgba(174, 233, 255, 0.24), rgba(142, 210, 255, 0.14));
+  --surface-border: rgba(124, 222, 255, 0.24);
+  --surface-shadow: 0 18px 34px -24px rgba(38, 124, 162, 0.22);
+  --surface-bg-hover: linear-gradient(135deg, rgba(174, 233, 255, 0.24), rgba(142, 210, 255, 0.14));
+  --surface-border-hover: rgba(140, 230, 255, 0.32);
+}
+
+.surface-bucket--glass,
+.surface-task--glass {
+  --surface-bg: rgba(24, 32, 72, 0.24);
+  --surface-border: rgba(118, 142, 255, 0.16);
+  --surface-shadow: 0 16px 28px -22px rgba(2, 6, 24, 0.22);
+  --surface-bg-hover: rgba(28, 38, 84, 0.32);
+  --surface-border-hover: rgba(139, 132, 255, 0.26);
+}
+
+.surface-bucket--midnight,
+.surface-task--midnight {
+  --surface-bg: linear-gradient(135deg, rgba(142, 153, 255, 0.24), rgba(110, 138, 255, 0.14));
+  --surface-border: rgba(121, 132, 255, 0.2);
+  --surface-shadow: 0 16px 30px -22px rgba(40, 54, 170, 0.24);
+  --surface-bg-hover: linear-gradient(135deg, rgba(142, 153, 255, 0.24), rgba(110, 138, 255, 0.14));
+  --surface-border-hover: rgba(141, 152, 255, 0.28);
+}
+
+.surface-bucket--slate,
+.surface-task--slate {
+  --surface-bg: linear-gradient(135deg, rgba(151, 227, 255, 0.24), rgba(120, 198, 255, 0.14));
+  --surface-border: rgba(82, 168, 255, 0.2);
+  --surface-shadow: 0 16px 30px -22px rgba(22, 94, 160, 0.22);
+  --surface-bg-hover: linear-gradient(135deg, rgba(151, 227, 255, 0.24), rgba(120, 198, 255, 0.14));
+  --surface-border-hover: rgba(120, 186, 255, 0.26);
+}
+
+.surface-bucket--charcoal,
+.surface-task--charcoal {
+  --surface-bg: linear-gradient(135deg, rgba(255, 188, 213, 0.26), rgba(255, 214, 229, 0.16));
+  --surface-border: rgba(231, 174, 206, 0.22);
+  --surface-shadow: 0 16px 30px -22px rgba(142, 54, 120, 0.2);
+  --surface-bg-hover: linear-gradient(135deg, rgba(255, 188, 213, 0.26), rgba(255, 214, 229, 0.16));
+  --surface-border-hover: rgba(240, 186, 214, 0.28);
+}
+
+.surface-bucket--linen,
+.surface-task--linen {
+  --surface-bg: linear-gradient(135deg, rgba(255, 214, 170, 0.26), rgba(255, 233, 192, 0.16));
+  --surface-border: rgba(255, 201, 150, 0.22);
+  --surface-shadow: 0 16px 28px -22px rgba(158, 92, 28, 0.2);
+  --surface-bg-hover: linear-gradient(135deg, rgba(255, 214, 170, 0.26), rgba(255, 233, 192, 0.16));
+  --surface-border-hover: rgba(255, 211, 168, 0.26);
+}
+
+.surface-bucket--frost,
+.surface-task--frost {
+  --surface-bg: linear-gradient(135deg, rgba(174, 233, 255, 0.24), rgba(142, 210, 255, 0.14));
+  --surface-border: rgba(124, 222, 255, 0.22);
+  --surface-shadow: 0 16px 30px -22px rgba(38, 124, 162, 0.2);
+  --surface-bg-hover: linear-gradient(135deg, rgba(174, 233, 255, 0.24), rgba(142, 210, 255, 0.14));
+  --surface-border-hover: rgba(140, 230, 255, 0.28);
+}
+
+html[data-theme='light'] .surface-goal {
+  --surface-bg: #ffffff;
+  --surface-border: rgba(128, 146, 238, 0.28);
+  --surface-shadow: 0 20px 45px -28px rgba(82, 96, 150, 0.28);
+  --surface-bg-hover: rgba(247, 249, 255, 0.95);
+  --surface-border-hover: rgba(92, 91, 255, 0.38);
+}
+
+html[data-theme='light'] .surface-goal--glass {
+  --surface-bg: rgba(255, 255, 255, 0.88);
+  --surface-border: rgba(128, 146, 238, 0.18);
+  --surface-shadow: 0 12px 28px -20px rgba(82, 96, 150, 0.16);
+  --surface-bg-hover: rgba(255, 255, 255, 0.92);
+  --surface-border-hover: rgba(92, 91, 255, 0.24);
+}
+
+html[data-theme='light'] .surface-goal--midnight {
+  --surface-bg: linear-gradient(135deg, rgba(118, 126, 255, 0.18), rgba(164, 177, 255, 0.12));
+  --surface-border: rgba(92, 91, 255, 0.22);
+  --surface-shadow: 0 14px 28px -20px rgba(93, 95, 240, 0.18);
+  --surface-bg-hover: linear-gradient(135deg, rgba(118, 126, 255, 0.18), rgba(164, 177, 255, 0.12));
+  --surface-border-hover: rgba(92, 91, 255, 0.26);
+}
+
+html[data-theme='light'] .surface-goal--slate {
+  --surface-bg: linear-gradient(135deg, rgba(120, 215, 255, 0.18), rgba(162, 220, 255, 0.12));
+  --surface-border: rgba(31, 200, 255, 0.22);
+  --surface-shadow: 0 14px 28px -20px rgba(66, 150, 220, 0.16);
+  --surface-bg-hover: linear-gradient(135deg, rgba(120, 215, 255, 0.18), rgba(162, 220, 255, 0.12));
+  --surface-border-hover: rgba(31, 200, 255, 0.26);
+}
+
+html[data-theme='light'] .surface-goal--charcoal {
+  --surface-bg: linear-gradient(135deg, rgba(255, 188, 213, 0.18), rgba(255, 222, 232, 0.12));
+  --surface-border: rgba(255, 155, 201, 0.22);
+  --surface-shadow: 0 14px 28px -20px rgba(220, 110, 170, 0.16);
+  --surface-bg-hover: linear-gradient(135deg, rgba(255, 188, 213, 0.18), rgba(255, 222, 232, 0.12));
+  --surface-border-hover: rgba(255, 155, 201, 0.26);
+}
+
+html[data-theme='light'] .surface-goal--linen {
+  --surface-bg: linear-gradient(135deg, rgba(255, 220, 170, 0.18), rgba(255, 235, 194, 0.12));
+  --surface-border: rgba(255, 198, 140, 0.22);
+  --surface-shadow: 0 14px 28px -20px rgba(226, 156, 88, 0.16);
+  --surface-bg-hover: linear-gradient(135deg, rgba(255, 220, 170, 0.18), rgba(255, 235, 194, 0.12));
+  --surface-border-hover: rgba(255, 198, 140, 0.26);
+}
+
+html[data-theme='light'] .surface-goal--frost {
+  --surface-bg: linear-gradient(135deg, rgba(174, 233, 255, 0.18), rgba(154, 224, 255, 0.12));
+  --surface-border: rgba(124, 222, 255, 0.22);
+  --surface-shadow: 0 14px 28px -20px rgba(86, 196, 230, 0.16);
+  --surface-bg-hover: linear-gradient(135deg, rgba(174, 233, 255, 0.18), rgba(154, 224, 255, 0.12));
+  --surface-border-hover: rgba(124, 222, 255, 0.26);
+}
+
+html[data-theme='light'] .surface-bucket--glass,
+html[data-theme='light'] .surface-task--glass {
+  --surface-bg: rgba(255, 255, 255, 0.84);
+  --surface-border: rgba(128, 146, 238, 0.16);
+  --surface-shadow: 0 12px 22px -18px rgba(82, 96, 150, 0.14);
+  --surface-bg-hover: rgba(250, 252, 255, 0.92);
+  --surface-border-hover: rgba(92, 91, 255, 0.22);
+}
+
+html[data-theme='light'] .surface-bucket--midnight,
+html[data-theme='light'] .surface-task--midnight {
+  --surface-bg: linear-gradient(135deg, rgba(118, 126, 255, 0.2), rgba(164, 177, 255, 0.12));
+  --surface-border: rgba(92, 91, 255, 0.2);
+  --surface-shadow: 0 12px 22px -18px rgba(93, 95, 240, 0.16);
+  --surface-bg-hover: linear-gradient(135deg, rgba(118, 126, 255, 0.2), rgba(164, 177, 255, 0.12));
+  --surface-border-hover: rgba(92, 91, 255, 0.24);
+}
+
+html[data-theme='light'] .surface-bucket--slate,
+html[data-theme='light'] .surface-task--slate {
+  --surface-bg: linear-gradient(135deg, rgba(120, 215, 255, 0.2), rgba(162, 220, 255, 0.12));
+  --surface-border: rgba(31, 200, 255, 0.2);
+  --surface-shadow: 0 12px 22px -18px rgba(66, 150, 220, 0.16);
+  --surface-bg-hover: linear-gradient(135deg, rgba(120, 215, 255, 0.2), rgba(162, 220, 255, 0.12));
+  --surface-border-hover: rgba(31, 200, 255, 0.24);
+}
+
+html[data-theme='light'] .surface-bucket--charcoal,
+html[data-theme='light'] .surface-task--charcoal {
+  --surface-bg: linear-gradient(135deg, rgba(255, 188, 213, 0.2), rgba(255, 222, 232, 0.12));
+  --surface-border: rgba(255, 155, 201, 0.2);
+  --surface-shadow: 0 12px 22px -18px rgba(220, 110, 170, 0.16);
+  --surface-bg-hover: linear-gradient(135deg, rgba(255, 188, 213, 0.2), rgba(255, 222, 232, 0.12));
+  --surface-border-hover: rgba(255, 155, 201, 0.24);
+}
+
+html[data-theme='light'] .surface-bucket--linen,
+html[data-theme='light'] .surface-task--linen {
+  --surface-bg: linear-gradient(135deg, rgba(255, 220, 170, 0.2), rgba(255, 235, 194, 0.12));
+  --surface-border: rgba(255, 198, 140, 0.2);
+  --surface-shadow: 0 12px 22px -18px rgba(226, 156, 88, 0.16);
+  --surface-bg-hover: linear-gradient(135deg, rgba(255, 220, 170, 0.2), rgba(255, 235, 194, 0.12));
+  --surface-border-hover: rgba(255, 198, 140, 0.24);
+}
+
+html[data-theme='light'] .surface-bucket--frost,
+html[data-theme='light'] .surface-task--frost {
+  --surface-bg: linear-gradient(135deg, rgba(174, 233, 255, 0.2), rgba(154, 224, 255, 0.12));
+  --surface-border: rgba(124, 222, 255, 0.2);
+  --surface-shadow: 0 12px 22px -18px rgba(86, 196, 230, 0.16);
+  --surface-bg-hover: linear-gradient(135deg, rgba(174, 233, 255, 0.2), rgba(154, 224, 255, 0.12));
+  --surface-border-hover: rgba(124, 222, 255, 0.24);
+}
+
+html[data-theme='light'] .focus-task__complete {
+  border: 1px solid rgba(92, 91, 255, 0.28);
+  background: rgba(235, 241, 255, 0.96);
+  color: rgba(16, 185, 129, 0.8);
+}
+
+html[data-theme='light'] .focus-task__complete:hover {
+  border-color: rgba(16, 185, 129, 0.72);
+  background: rgba(220, 232, 255, 0.98);
+}
+
 .stopwatch-heading {
   margin: 0;
   align-self: center;

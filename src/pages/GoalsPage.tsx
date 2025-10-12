@@ -23,6 +23,12 @@ import {
   setGoalSortIndex as apiSetGoalSortIndex,
   setTaskPriorityAndResort as apiSetTaskPriorityAndResort,
 } from '../lib/goalsApi'
+import {
+  DEFAULT_SURFACE_STYLE,
+  ensureSurfaceStyle,
+  type SurfaceStyle,
+} from '../lib/surfaceStyles'
+import { createGoalsSnapshot, publishGoalsSnapshot } from '../lib/goalsSync'
 
 // Helper function for class names
 function classNames(...xs: (string | boolean | undefined)[]): string {
@@ -55,7 +61,7 @@ function highlightText(text: string, term: string): React.ReactNode {
 }
 
 // Type definitions
-interface TaskItem {
+export interface TaskItem {
   id: string
   text: string
   completed: boolean
@@ -134,22 +140,16 @@ const sanitizeEditableValue = (
   return { value: limited, changed }
 }
 
-type GoalSurfaceStyle = 'glass' | 'midnight' | 'slate' | 'charcoal' | 'linen' | 'frost'
-
-const GOAL_SURFACE_OPTIONS: GoalSurfaceStyle[] = ['glass', 'midnight', 'slate', 'charcoal', 'linen', 'frost']
+type GoalSurfaceStyle = SurfaceStyle
 const normalizeSurfaceStyle = (value: string | null | undefined): GoalSurfaceStyle =>
-  GOAL_SURFACE_OPTIONS.includes((value as GoalSurfaceStyle) ?? 'glass') ? (value as GoalSurfaceStyle) : 'glass'
+  ensureSurfaceStyle(value, DEFAULT_SURFACE_STYLE)
 
 type BucketSurfaceStyle = GoalSurfaceStyle
 
-const BUCKET_SURFACE_OPTIONS: BucketSurfaceStyle[] = GOAL_SURFACE_OPTIONS
-
 const normalizeBucketSurfaceStyle = (value: string | null | undefined): BucketSurfaceStyle =>
-  BUCKET_SURFACE_OPTIONS.includes((value as BucketSurfaceStyle) ?? 'glass')
-    ? (value as BucketSurfaceStyle)
-    : 'glass'
+  ensureSurfaceStyle(value, DEFAULT_SURFACE_STYLE)
 
-interface Bucket {
+export interface Bucket {
   id: string
   name: string
   favorite: boolean
@@ -157,7 +157,7 @@ interface Bucket {
   surfaceStyle?: BucketSurfaceStyle
 }
 
-interface Goal {
+export interface Goal {
   id: string
   name: string
   color: string
@@ -2674,6 +2674,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
 
 export default function GoalsPage(): ReactElement {
   const [goals, setGoals] = useState(DEFAULT_GOALS)
+  useEffect(() => {
+    publishGoalsSnapshot(createGoalsSnapshot(goals))
+  }, [goals])
   // Goal rename state
   const [renamingGoalId, setRenamingGoalId] = useState<string | null>(null)
   const [goalRenameDraft, setGoalRenameDraft] = useState<string>('')

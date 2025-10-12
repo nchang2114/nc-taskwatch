@@ -63,6 +63,7 @@ html[data-theme='dark'] {
   --panel-highlight: -16px -16px 32px rgba(32, 40, 92, 0.3);
   --text-primary: #f4f7ff;
   --text-secondary: rgba(174, 195, 255, 0.68);
+  --text-muted: rgba(174, 195, 255, 0.54);
   --text-control: #f4f7ff;
   --text-control-contrast: #ffffff;
   --accent: #8b84ff;
@@ -99,6 +100,7 @@ html[data-theme='light'] {
   --panel-highlight: -10px -10px 28px rgba(255, 255, 255, 0.82);
   --text-primary: #1d2252;
   --text-secondary: rgba(62, 78, 126, 0.72);
+  --text-muted: rgba(62, 78, 126, 0.58);
   --text-control: #1a1f4b;
   --text-control-contrast: #ffffff;
   --accent: #5c5bff;
