@@ -345,6 +345,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const initialTaskName = useMemo(() => getStoredTaskName(), [])
   const [elapsed, setElapsed] = useState(0)
   const [isRunning, setIsRunning] = useState(false)
+  const [isTimeHidden, setIsTimeHidden] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>(() => getStoredHistory())
   const [deletedHistoryStack, setDeletedHistoryStack] = useState<{ entry: HistoryEntry; index: number }[]>([])
   const [currentTaskName, setCurrentTaskName] = useState<string>(initialTaskName)
@@ -906,6 +907,10 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     lastTickRef.current = null
   }
 
+  const handleToggleTimeVisibility = useCallback(() => {
+    setIsTimeHidden((current) => !current)
+  }, [])
+
   const registerHistoryTaskRef = (id: string, node: HTMLSpanElement | null) => {
     if (node) {
       historyTaskRefs.current.set(id, node)
@@ -1115,7 +1120,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     lengthClass = 'time-length-sm'
   }
 
-  const timeValueClassName = ['time-value', baseTimeClass, lengthClass].filter(Boolean).join(' ')
+  const timeValueClassName = ['time-value', baseTimeClass, lengthClass, isTimeHidden ? 'time-value--hidden' : '']
+    .filter(Boolean)
+    .join(' ')
+  const timeToggleLabel = isTimeHidden ? 'Show time' : 'Hide time'
+  const timeToggleTitle = isTimeHidden ? 'Show stopwatch time' : 'Hide stopwatch time'
   const statusText = isRunning ? 'running' : elapsed > 0 ? 'paused' : 'idle'
   const primaryLabel = isRunning ? 'Pause' : elapsed > 0 ? 'Resume' : 'Start'
 
@@ -1433,15 +1442,29 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         ) : null}
       </div>
       <section className="stopwatch-card" role="region" aria-live="polite">
+        <button
+          type="button"
+          className="card-clock-toggle"
+          onClick={handleToggleTimeVisibility}
+          aria-pressed={isTimeHidden}
+          aria-label={timeToggleTitle}
+        >
+          {timeToggleLabel}
+        </button>
         <time className="card-clock" dateTime={clockDateTime} aria-label="Current time">
           {formattedClock}
         </time>
         <div className="time-display">
           <span className="time-label">elapsed</span>
-          <span className={timeValueClassName}>
+          <span className={timeValueClassName} aria-hidden={isTimeHidden}>
             {formattedTime}
           </span>
         </div>
+        {isTimeHidden ? (
+          <span className="sr-only" role="status">
+            Stopwatch time hidden
+          </span>
+        ) : null}
 
         <div className="status-row" aria-live="polite">
           <span className={`status-dot status-${statusText}`} aria-hidden="true" />
