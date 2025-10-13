@@ -488,22 +488,40 @@ export default function ReflectionPage() {
       return 'conic-gradient(var(--reflection-chart-unlogged) 0deg 360deg)'
     }
     let cumulative = 0
+    let previousEnd = 0
+    const EPSILON = 1e-4
     const slices = segments
       .map((segment, index) => {
         const fraction = Math.max(segment.fraction, 0)
         if (fraction <= 0) {
           return null
         }
-        const start = cumulative
+
+        // Clamp each slice so floating point drift never collapses or wraps segments.
+        const start = Math.min(Math.max(previousEnd, 0), 1)
         cumulative += fraction
+
+        let end = index === segments.length - 1 ? 1 : Math.min(Math.max(cumulative, start), 1)
+        if (index === segments.length - 1 && end < 1) {
+          end = 1
+        }
+
+        if (end - start <= EPSILON) {
+          previousEnd = end
+          return null
+        }
+
+        previousEnd = end
         const startDeg = start * 360
-        const endDeg = index === segments.length - 1 ? 360 : cumulative * 360
+        const endDeg = end * 360
         return `${segment.color} ${startDeg}deg ${endDeg}deg`
       })
       .filter((slice): slice is string => Boolean(slice))
+
     if (slices.length === 0) {
       return 'conic-gradient(var(--reflection-chart-unlogged) 0deg 360deg)'
     }
+
     return `conic-gradient(${slices.join(', ')})`
   }, [segments])
   const unloggedMs = useMemo(
