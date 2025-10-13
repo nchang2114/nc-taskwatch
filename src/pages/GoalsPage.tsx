@@ -28,7 +28,13 @@ import {
   ensureSurfaceStyle,
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
-import { createGoalsSnapshot, publishGoalsSnapshot } from '../lib/goalsSync'
+import {
+  createGoalsSnapshot,
+  publishGoalsSnapshot,
+  readStoredGoalsSnapshot,
+  subscribeToGoalsSnapshot,
+  type GoalSnapshot,
+} from '../lib/goalsSync'
 import { broadcastFocusTask } from '../lib/focusChannel'
 
 // Helper function for class names
@@ -472,6 +478,42 @@ const GOAL_GRADIENTS = [
   'from-sky-500 to-indigo-500',
   'from-amber-400 to-orange-500',
 ]
+
+const FALLBACK_GOAL_COLOR = GOAL_GRADIENTS[0]
+
+const computeSnapshotSignature = (snapshot: GoalSnapshot[]): string => JSON.stringify(snapshot)
+
+function reconcileGoalsWithSnapshot(snapshot: GoalSnapshot[], current: Goal[]): Goal[] {
+  return snapshot.map((goal) => {
+    const existingGoal = current.find((item) => item.id === goal.id)
+    return {
+      id: goal.id,
+      name: goal.name,
+      color: goal.color ?? existingGoal?.color ?? FALLBACK_GOAL_COLOR,
+      surfaceStyle: goal.surfaceStyle,
+      customGradient: existingGoal?.customGradient,
+      buckets: goal.buckets.map((bucket) => {
+        const existingBucket = existingGoal?.buckets.find((item) => item.id === bucket.id)
+        return {
+          id: bucket.id,
+          name: bucket.name,
+          favorite: bucket.favorite,
+          surfaceStyle: bucket.surfaceStyle,
+          tasks: bucket.tasks.map((task) => {
+            const existingTask = existingBucket?.tasks.find((item) => item.id === task.id)
+            return {
+              id: task.id,
+              text: task.text,
+              completed: task.completed,
+              difficulty: task.difficulty,
+              priority: task.priority ?? existingTask?.priority ?? false,
+            }
+          }),
+        }
+      }),
+    }
+  })
+}
 
 const BASE_GRADIENT_PREVIEW: Record<string, string> = {
   'from-fuchsia-500 to-purple-500': 'linear-gradient(135deg, #f471b5 0%, #a855f7 50%, #6b21a8 100%)',
@@ -2900,10 +2942,37 @@ const GoalRow: React.FC<GoalRowProps> = ({
 }
 
 export default function GoalsPage(): ReactElement {
-  const [goals, setGoals] = useState(DEFAULT_GOALS)
+  const [goals, setGoals] = useState<Goal[]>(() => {
+    const stored = readStoredGoalsSnapshot()
+    if (stored.length > 0) {
+      return reconcileGoalsWithSnapshot(stored, DEFAULT_GOALS)
+    }
+    return DEFAULT_GOALS
+  })
+  const skipNextPublishRef = useRef(false)
+  const lastSnapshotSignatureRef = useRef<string | null>(null)
   useEffect(() => {
-    publishGoalsSnapshot(createGoalsSnapshot(goals))
+    if (skipNextPublishRef.current) {
+      skipNextPublishRef.current = false
+      return
+    }
+    const snapshot = createGoalsSnapshot(goals)
+    const signature = computeSnapshotSignature(snapshot)
+    lastSnapshotSignatureRef.current = signature
+    publishGoalsSnapshot(snapshot)
   }, [goals])
+  useEffect(() => {
+    const unsubscribe = subscribeToGoalsSnapshot((snapshot) => {
+      const signature = computeSnapshotSignature(snapshot)
+      if (lastSnapshotSignatureRef.current === signature) {
+        return
+      }
+      skipNextPublishRef.current = true
+      lastSnapshotSignatureRef.current = signature
+      setGoals((current) => reconcileGoalsWithSnapshot(snapshot, current))
+    })
+    return unsubscribe
+  }, [])
   // Goal rename state
   const [renamingGoalId, setRenamingGoalId] = useState<string | null>(null)
   const [goalRenameDraft, setGoalRenameDraft] = useState<string>('')
