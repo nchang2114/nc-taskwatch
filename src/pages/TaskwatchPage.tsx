@@ -1123,7 +1123,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const timeValueClassName = ['time-value', baseTimeClass, lengthClass, isTimeHidden ? 'time-value--hidden' : '']
     .filter(Boolean)
     .join(' ')
-  const timeToggleLabel = isTimeHidden ? 'Show time' : 'Hide time'
+  const timeToggleLabel = isTimeHidden ? 'Show Time' : 'Hide Time'
   const timeToggleTitle = isTimeHidden ? 'Show stopwatch time' : 'Hide stopwatch time'
   const statusText = isRunning ? 'running' : elapsed > 0 ? 'paused' : 'idle'
   const primaryLabel = isRunning ? 'Pause' : elapsed > 0 ? 'Resume' : 'Start'
