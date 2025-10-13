@@ -22,6 +22,7 @@ import {
   setBucketSortIndex as apiSetBucketSortIndex,
   setGoalSortIndex as apiSetGoalSortIndex,
   setTaskPriorityAndResort as apiSetTaskPriorityAndResort,
+  seedGoalsIfEmpty,
 } from '../lib/goalsApi'
 import {
   DEFAULT_SURFACE_STYLE,
@@ -470,6 +471,23 @@ const DEFAULT_GOALS: Goal[] = [
     ],
   },
 ]
+
+const DEFAULT_GOAL_SEEDS: Parameters<typeof seedGoalsIfEmpty>[0] = DEFAULT_GOALS.map((goal) => ({
+  name: goal.name,
+  color: goal.color,
+  surfaceStyle: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+  buckets: goal.buckets.map((bucket) => ({
+    name: bucket.name,
+    favorite: bucket.favorite,
+    surfaceStyle: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+    tasks: bucket.tasks.map((task) => ({
+      text: task.text,
+      completed: task.completed,
+      difficulty: task.difficulty ?? 'none',
+      priority: task.priority ?? false,
+    })),
+  })),
+}))
 
 const GOAL_GRADIENTS = [
   'from-fuchsia-500 to-purple-500',
@@ -3039,6 +3057,11 @@ export default function GoalsPage(): ReactElement {
     let cancelled = false
     ;(async () => {
       try {
+        await seedGoalsIfEmpty(DEFAULT_GOAL_SEEDS)
+      } catch (error) {
+        console.warn('[GoalsPage] Failed to seed Supabase defaults:', error)
+      }
+      try {
         const result = await fetchGoalsHierarchy()
         if (!cancelled && result && Array.isArray(result.goals)) {
           const normalized = result.goals.map((goal: any) => ({
@@ -3707,43 +3730,77 @@ export default function GoalsPage(): ReactElement {
       return
     }
 
+    const temporaryId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const optimisticTask: TaskItem = { id: temporaryId, text: trimmed, completed: false, difficulty: 'none' }
+
+    setGoals((gs) =>
+      gs.map((g) =>
+        g.id === goalId
+          ? {
+              ...g,
+              buckets: g.buckets.map((bucket) => {
+                if (bucket.id !== bucketId) return bucket
+                const active = bucket.tasks.filter((t) => !t.completed)
+                const completed = bucket.tasks.filter((t) => t.completed)
+                return { ...bucket, tasks: [optimisticTask, ...active, ...completed] }
+              }),
+            }
+          : g,
+      ),
+    )
+
     apiCreateTask(bucketId, trimmed)
       .then((db) => {
-        const newTask: TaskItem = { id: db?.id ?? `task_${Date.now()}`, text: trimmed, completed: false, difficulty: 'none' }
-        setGoals((gs) =>
-          gs.map((g) =>
+        if (!db) {
+          return
+        }
+        setGoals((current) =>
+          current.map((g) =>
             g.id === goalId
               ? {
                   ...g,
                   buckets: g.buckets.map((bucket) => {
                     if (bucket.id !== bucketId) return bucket
-                    const active = bucket.tasks.filter((t) => !t.completed)
-                    const completed = bucket.tasks.filter((t) => t.completed)
-                    // Prepend new task to the top of active section to match DB prepend strategy
-                    return { ...bucket, tasks: [newTask, ...active, ...completed] }
+                    return {
+                      ...bucket,
+                      tasks: bucket.tasks.map((task) =>
+                        task.id === temporaryId
+                          ? {
+                              ...task,
+                              id: db.id,
+                              text: db.text,
+                              completed: db.completed,
+                              difficulty: db.difficulty ?? 'none',
+                              priority: db.priority ?? false,
+                            }
+                          : task,
+                      ),
+                    }
                   }),
                 }
               : g,
           ),
         )
       })
-      .catch(() => {
-        const fallback: TaskItem = { id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, text: trimmed, completed: false, difficulty: 'none' }
-        setGoals((gs) =>
-          gs.map((g) =>
+      .catch((error) => {
+        console.warn('[GoalsPage] Failed to persist new task:', error)
+        setGoals((current) =>
+          current.map((g) =>
             g.id === goalId
               ? {
                   ...g,
-                  buckets: g.buckets.map((bucket) => {
-                    if (bucket.id !== bucketId) return bucket
-                    const active = bucket.tasks.filter((t) => !t.completed)
-                    const completed = bucket.tasks.filter((t) => t.completed)
-                    return { ...bucket, tasks: [fallback, ...active, ...completed] }
-                  }),
+                  buckets: g.buckets.map((bucket) =>
+                    bucket.id === bucketId
+                      ? { ...bucket, tasks: bucket.tasks.filter((task) => task.id !== temporaryId) }
+                      : bucket,
+                  ),
                 }
               : g,
           ),
         )
+        if (!options?.keepDraft) {
+          setTaskDrafts((drafts) => ({ ...drafts, [bucketId]: trimmed }))
+        }
       })
 
     if (options?.keepDraft) {
@@ -3825,6 +3882,8 @@ export default function GoalsPage(): ReactElement {
   )
 
   const toggleTaskCompletion = (goalId: string, bucketId: string, taskId: string) => {
+    const previousGoals = goals
+    const previousCompletedCollapsed = completedCollapsed
     let toggledNewCompleted: boolean | null = null
     let shouldCollapseAfterFirstComplete = false
 
@@ -3884,7 +3943,11 @@ export default function GoalsPage(): ReactElement {
     }
 
     if (toggledNewCompleted !== null) {
-      apiSetTaskCompletedAndResort(taskId, bucketId, toggledNewCompleted).catch(() => {})
+      apiSetTaskCompletedAndResort(taskId, bucketId, toggledNewCompleted).catch((error) => {
+        console.warn('[GoalsPage] Failed to persist task completion toggle:', error)
+        setGoals(() => previousGoals)
+        setCompletedCollapsed(() => previousCompletedCollapsed)
+      })
     }
   }
 

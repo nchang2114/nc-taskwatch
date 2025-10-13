@@ -21,6 +21,27 @@ export type DbTask = {
   sort_index: number
 }
 
+type TaskSeed = {
+  text: string
+  completed?: boolean
+  difficulty?: DbTask['difficulty']
+  priority?: boolean
+}
+
+type BucketSeed = {
+  name: string
+  favorite?: boolean
+  surfaceStyle?: string | null
+  tasks?: TaskSeed[]
+}
+
+export type GoalSeed = {
+  name: string
+  color?: string | null
+  surfaceStyle?: string | null
+  buckets?: BucketSeed[]
+}
+
 /** Fetch Goals → Buckets → Tasks for the current session user, ordered for UI. */
 export async function fetchGoalsHierarchy(): Promise<
   | null
@@ -175,11 +196,15 @@ async function prependSortIndexForTasks(bucketId: string, completed: boolean) {
 // ---------- Goals ----------
 export async function createGoal(name: string, color: string, surface: string = 'glass') {
   if (!supabase) return null
-  await ensureSingleUserSession()
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) {
+    console.warn('[goalsApi] Unable to create goal without an authenticated session.')
+    return null
+  }
   const sort_index = await nextSortIndex('goals')
   const { data, error } = await supabase
     .from('goals')
-    .insert([{ name, color, sort_index, card_surface: surface }])
+    .insert([{ user_id: session.user.id, name, color, sort_index, card_surface: surface }])
     .select('id, name, color, sort_index, card_surface')
     .single()
   if (error) return null
@@ -255,11 +280,15 @@ export async function setGoalSortIndex(goalId: string, toIndex: number) {
 // ---------- Buckets ----------
 export async function createBucket(goalId: string, name: string, surface: string = 'glass') {
   if (!supabase) return null
-  await ensureSingleUserSession()
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) {
+    console.warn('[goalsApi] Unable to create bucket without an authenticated session.')
+    return null
+  }
   const sort_index = await nextSortIndex('buckets', { goal_id: goalId })
   const { data, error } = await supabase
     .from('buckets')
-    .insert([{ goal_id: goalId, name, favorite: false, sort_index, buckets_card_style: surface }])
+    .insert([{ user_id: session.user.id, goal_id: goalId, name, favorite: false, sort_index, buckets_card_style: surface }])
     .select('id, name, favorite, sort_index, buckets_card_style')
     .single()
   if (error) return null
@@ -330,29 +359,41 @@ export async function deleteCompletedTasksInBucket(bucketId: string) {
 
 // ---------- Tasks ----------
 export async function createTask(bucketId: string, text: string) {
-  if (!supabase) return null
-  await ensureSingleUserSession()
+  if (!supabase) throw new Error('Supabase client unavailable')
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) {
+    console.warn('[goalsApi] Unable to create task without an authenticated session.')
+    throw new Error('Missing Supabase session')
+  }
   // Insert new active tasks at the END of the non-priority region by default
   const sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed: false })
   const { data, error } = await supabase
     .from('tasks')
-    .insert([{ bucket_id: bucketId, text, completed: false, difficulty: 'none', priority: false, sort_index }])
+    .insert([{ user_id: session.user.id, bucket_id: bucketId, text, completed: false, difficulty: 'none', priority: false, sort_index }])
     .select('id, text, completed, difficulty, priority, sort_index')
     .single()
-  if (error) return null
+  if (error || !data) {
+    throw error ?? new Error('Failed to create task')
+  }
   return data as { id: string; text: string; completed: boolean; difficulty: DbTask['difficulty']; priority: boolean; sort_index: number }
 }
 
 export async function updateTaskText(taskId: string, text: string) {
-  if (!supabase) return
+  if (!supabase) throw new Error('Supabase client unavailable')
   await ensureSingleUserSession()
-  await supabase.from('tasks').update({ text }).eq('id', taskId)
+  const { error } = await supabase.from('tasks').update({ text }).eq('id', taskId)
+  if (error) {
+    throw error
+  }
 }
 
 export async function setTaskDifficulty(taskId: string, difficulty: DbTask['difficulty']) {
-  if (!supabase) return
+  if (!supabase) throw new Error('Supabase client unavailable')
   await ensureSingleUserSession()
-  await supabase.from('tasks').update({ difficulty }).eq('id', taskId)
+  const { error } = await supabase.from('tasks').update({ difficulty }).eq('id', taskId)
+  if (error) {
+    throw error
+  }
 }
 
 /** Toggle priority and reassign sort_index to position the task at the top of its section when enabling,
@@ -363,12 +404,15 @@ export async function setTaskPriorityAndResort(
   completed: boolean,
   priority: boolean,
 ) {
-  if (!supabase) return
+  if (!supabase) throw new Error('Supabase client unavailable')
   await ensureSingleUserSession()
   if (priority) {
     // Enabling priority: place at the top of its section
     const sort_index = await prependSortIndexForTasks(bucketId, completed)
-    await supabase.from('tasks').update({ priority: true, sort_index }).eq('id', taskId)
+    const { error } = await supabase.from('tasks').update({ priority: true, sort_index }).eq('id', taskId)
+    if (error) {
+      throw error
+    }
     return
   }
   // Disabling priority: place at the first non-priority position
@@ -387,18 +431,24 @@ export async function setTaskPriorityAndResort(
   } else {
     sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed, priority: false })
   }
-  await supabase.from('tasks').update({ priority: false, sort_index }).eq('id', taskId)
+  const { error } = await supabase.from('tasks').update({ priority: false, sort_index }).eq('id', taskId)
+  if (error) {
+    throw error
+  }
 }
 
 export async function setTaskCompletedAndResort(taskId: string, bucketId: string, completed: boolean) {
-  if (!supabase) return
+  if (!supabase) throw new Error('Supabase client unavailable')
   await ensureSingleUserSession()
   const sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed })
-  await supabase.from('tasks').update({ completed, sort_index }).eq('id', taskId)
+  const { error } = await supabase.from('tasks').update({ completed, sort_index }).eq('id', taskId)
+  if (error) {
+    throw error
+  }
 }
 
 export async function setTaskSortIndex(bucketId: string, section: 'active' | 'completed', toIndex: number, taskId: string) {
-  if (!supabase) return
+  if (!supabase) throw new Error('Supabase client unavailable')
   await ensureSingleUserSession()
   const { data: rows } = await supabase
     .from('tasks')
@@ -428,4 +478,130 @@ export async function setTaskSortIndex(bucketId: string, section: 'active' | 'co
     newSort = STEP
   }
   await supabase.from('tasks').update({ sort_index: newSort }).eq('id', taskId)
+}
+
+export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
+  if (!supabase) return false
+  if (!seeds || seeds.length === 0) return false
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) {
+    console.warn('[goalsApi] Cannot seed goals without an authenticated session.')
+    return false
+  }
+  const userId = session.user.id
+  try {
+    const { data: existing, error: existingError } = await supabase.from('goals').select('id').limit(1)
+    if (existingError) {
+      console.warn('[goalsApi] Unable to inspect existing goals before seeding:', existingError.message)
+      return false
+    }
+    if (existing && existing.length > 0) {
+      return false
+    }
+
+    const goalInserts = seeds.map((goal, index) => ({
+      user_id: userId,
+      name: goal.name,
+      color: goal.color ?? 'from-fuchsia-500 to-purple-500',
+      sort_index: (index + 1) * STEP,
+      card_surface: goal.surfaceStyle ?? 'glass',
+    }))
+
+    const { data: insertedGoals, error: goalsError } = await supabase
+      .from('goals')
+      .insert(goalInserts)
+      .select('id')
+    if (goalsError || !insertedGoals) {
+      if (goalsError) {
+        console.warn('[goalsApi] Failed to seed goals:', goalsError.message)
+      }
+      return false
+    }
+
+    const goalIdBySeedIndex = insertedGoals.map((row) => row.id as string)
+
+    const bucketInserts: Array<{
+      user_id: string
+      goal_id: string
+      name: string
+      favorite: boolean
+      sort_index: number
+      buckets_card_style: string | null
+    }> = []
+
+    seeds.forEach((goal, goalIndex) => {
+      const goalId = goalIdBySeedIndex[goalIndex]
+      if (!goalId) return
+      goal.buckets?.forEach((bucket, bucketIndex) => {
+        bucketInserts.push({
+          user_id: userId,
+          goal_id: goalId,
+          name: bucket.name,
+          favorite: Boolean(bucket.favorite),
+          sort_index: (bucketIndex + 1) * STEP,
+          buckets_card_style: bucket.surfaceStyle ?? 'glass',
+        })
+      })
+    })
+
+    const insertedBuckets =
+      bucketInserts.length > 0
+        ? await supabase
+            .from('buckets')
+            .insert(bucketInserts)
+            .select('id')
+        : { data: [] as any[], error: null as any }
+
+    if (insertedBuckets.error) {
+      console.warn('[goalsApi] Failed to seed buckets:', insertedBuckets.error.message)
+      return false
+    }
+
+    const bucketIdByMetaIndex = (insertedBuckets.data ?? []).map((row) => row.id as string)
+    let bucketCursor = 0
+    const taskInserts: Array<{
+      user_id: string
+      bucket_id: string
+      text: string
+      completed: boolean
+      difficulty: DbTask['difficulty']
+      priority: boolean
+      sort_index: number
+    }> = []
+
+    seeds.forEach((goal) => {
+      goal.buckets?.forEach((bucket) => {
+        const bucketId = bucketIdByMetaIndex[bucketCursor]
+        bucketCursor += 1
+        if (!bucketId) return
+        const active = (bucket.tasks ?? []).filter((task) => !task.completed)
+        const completed = (bucket.tasks ?? []).filter((task) => !!task.completed)
+        const ordered = [...active, ...completed]
+        ordered.forEach((task, taskIndex) => {
+          taskInserts.push({
+            user_id: userId,
+            bucket_id: bucketId,
+            text: task.text,
+            completed: Boolean(task.completed),
+            difficulty: task.difficulty ?? 'none',
+            priority: Boolean(task.priority),
+            sort_index: (taskIndex + 1) * STEP,
+          })
+        })
+      })
+    })
+
+    if (taskInserts.length > 0) {
+      const { error: tasksError } = await supabase.from('tasks').insert(taskInserts)
+      if (tasksError) {
+        console.warn('[goalsApi] Failed to seed tasks:', tasksError.message)
+        return false
+      }
+    }
+
+    return true
+  } catch (error) {
+    console.warn('[goalsApi] Unexpected error while seeding defaults:', error)
+    return false
+  }
 }
