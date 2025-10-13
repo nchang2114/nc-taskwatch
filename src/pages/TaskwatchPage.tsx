@@ -12,7 +12,7 @@ import {
   useState,
 } from 'react'
 import '../App.css'
-import { fetchGoalsHierarchy, setTaskCompletedAndResort } from '../lib/goalsApi'
+import { fetchGoalsHierarchy, setTaskCompletedAndResort, setTaskDifficulty } from '../lib/goalsApi'
 import { FOCUS_EVENT_TYPE, type FocusBroadcastDetail, type FocusBroadcastEvent } from '../lib/focusChannel'
 import {
   createGoalsSnapshot,
@@ -60,6 +60,20 @@ type FocusSource = {
   priority: boolean | null
   goalSurface: SurfaceStyle | null
   bucketSurface: SurfaceStyle | null
+}
+
+const getNextDifficulty = (value: FocusCandidate['difficulty'] | null): FocusCandidate['difficulty'] => {
+  switch (value) {
+    case 'green':
+      return 'yellow'
+    case 'yellow':
+      return 'red'
+    case 'red':
+      return 'none'
+    case 'none':
+    default:
+      return 'green'
+  }
 }
 
 const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
@@ -784,13 +798,17 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       : focusDifficulty === 'red'
       ? 'goal-task-row--diff-red'
       : ''
-  const focusDiffBadgeClass = [
+  const canCycleFocusDifficulty = Boolean(effectiveTaskId && effectiveGoalId && effectiveBucketId)
+  const focusDiffButtonClass = [
     'goal-task-diff',
     focusDifficulty && focusDifficulty !== 'none' ? `goal-task-diff--${focusDifficulty}` : '',
     'focus-task__diff-chip',
   ]
     .filter(Boolean)
     .join(' ')
+  const focusDifficultyLabel = focusDifficulty
+    ? `Cycle task difficulty (current ${focusDifficulty})`
+    : 'Cycle task difficulty'
 
   const toggleGoalExpansion = (goalId: string) => {
     const isExpanded = expandedGoals.has(goalId)
@@ -836,6 +854,63 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       return true
     })
   }
+
+  const handleCycleFocusDifficulty = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (!canCycleFocusDifficulty || !effectiveGoalId || !effectiveBucketId || !effectiveTaskId) {
+        return
+      }
+      const nextDifficulty = getNextDifficulty(focusDifficulty ?? 'none')
+      setGoalsSnapshot((current) => {
+        let mutated = false
+        const updated = current.map((goal) => {
+          if (goal.id !== effectiveGoalId) {
+            return goal
+          }
+          const updatedBuckets = goal.buckets.map((bucket) => {
+            if (bucket.id !== effectiveBucketId) {
+              return bucket
+            }
+            const updatedTasks = bucket.tasks.map((task) => {
+              if (task.id !== effectiveTaskId) {
+                return task
+              }
+              mutated = true
+              return { ...task, difficulty: nextDifficulty }
+            })
+            return { ...bucket, tasks: updatedTasks }
+          })
+          return { ...goal, buckets: updatedBuckets }
+        })
+        if (mutated) {
+          publishGoalsSnapshot(updated)
+          return updated
+        }
+        return current
+      })
+      setFocusSource((current) => {
+        if (!current || current.taskId !== effectiveTaskId) {
+          return current
+        }
+        return {
+          ...current,
+          taskDifficulty: nextDifficulty,
+        }
+      })
+      setTaskDifficulty(effectiveTaskId, nextDifficulty).catch((error) => {
+        console.warn('Failed to update focus task difficulty', error)
+      })
+    },
+    [
+      canCycleFocusDifficulty,
+      effectiveGoalId,
+      effectiveBucketId,
+      effectiveTaskId,
+      focusDifficulty,
+    ],
+  )
 
   const handleCompleteFocus = async () => {
     const taskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
@@ -1269,8 +1344,17 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
               </div>
             </div>
           </button>
-          <div className="focus-task__indicators" aria-hidden="true">
-            {focusDiffBadgeClass ? <span className={focusDiffBadgeClass} /> : null}
+          <div className="focus-task__indicators">
+            <button
+              type="button"
+              className={focusDiffButtonClass}
+              onClick={handleCycleFocusDifficulty}
+              disabled={!canCycleFocusDifficulty}
+              aria-label={focusDifficultyLabel}
+              title={focusDifficultyLabel}
+            >
+              <span className="sr-only">{focusDifficultyLabel}</span>
+            </button>
             <span className={`focus-task__chevron${isSelectorOpen ? ' focus-task__chevron--open' : ''}`}>
               <svg viewBox="0 0 20 20" fill="currentColor">
                 <path d="M5.293 7.293a1 1 0 0 1 1.414 0L10 10.586l3.293-3.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 0-1.414z" />
