@@ -5,6 +5,7 @@ import {
   type ChangeEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -12,7 +13,12 @@ import {
   useState,
 } from 'react'
 import '../App.css'
-import { fetchGoalsHierarchy, setTaskCompletedAndResort, setTaskDifficulty } from '../lib/goalsApi'
+import {
+  fetchGoalsHierarchy,
+  setTaskCompletedAndResort,
+  setTaskDifficulty,
+  setTaskPriorityAndResort,
+} from '../lib/goalsApi'
 import { FOCUS_EVENT_TYPE, type FocusBroadcastDetail, type FocusBroadcastEvent } from '../lib/focusChannel'
 import {
   createGoalsSnapshot,
@@ -84,6 +90,7 @@ const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 const MAX_TASK_STORAGE_LENGTH = 256
 const FOCUS_COMPLETION_RESET_DELAY_MS = 800
+const PRIORITY_HOLD_MS = 300
 
 declare global {
   interface Window {
@@ -376,6 +383,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const selectorPopoverRef = useRef<HTMLDivElement | null>(null)
   const focusTaskContainerRef = useRef<HTMLDivElement | null>(null)
   const focusCompletionTimeoutRef = useRef<number | null>(null)
+  const focusPriorityHoldTimerRef = useRef<number | null>(null)
+  const focusPriorityHoldTriggeredRef = useRef(false)
   const [isSelectorOpen, setIsSelectorOpen] = useState(false)
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
   const [hasRequestedGoals, setHasRequestedGoals] = useState(false)
@@ -806,9 +815,13 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   ]
     .filter(Boolean)
     .join(' ')
-  const focusDifficultyLabel = focusDifficulty
-    ? `Cycle task difficulty (current ${focusDifficulty})`
-    : 'Cycle task difficulty'
+  const canToggleFocusPriority = Boolean(effectiveTaskId && effectiveGoalId && effectiveBucketId)
+  const focusDifficultyDescriptor = focusDifficulty && focusDifficulty !== 'none' ? focusDifficulty : 'none'
+  const focusDiffButtonTitle = !canToggleFocusPriority
+    ? `Cycle task difficulty (current ${focusDifficultyDescriptor})`
+    : focusPriority
+    ? `Tap to cycle difficulty (current ${focusDifficultyDescriptor}) • Hold ~300ms to remove priority`
+    : `Tap to cycle difficulty (current ${focusDifficultyDescriptor}) • Hold ~300ms to mark as priority`
 
   const toggleGoalExpansion = (goalId: string) => {
     const isExpanded = expandedGoals.has(goalId)
@@ -855,62 +868,227 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     })
   }
 
-  const handleCycleFocusDifficulty = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault()
+  const cycleFocusDifficulty = useCallback(() => {
+    if (!canCycleFocusDifficulty || !effectiveGoalId || !effectiveBucketId || !effectiveTaskId) {
+      return
+    }
+    const nextDifficulty = getNextDifficulty(focusDifficulty ?? 'none')
+    setGoalsSnapshot((current) => {
+      let mutated = false
+      const updated = current.map((goal) => {
+        if (goal.id !== effectiveGoalId) {
+          return goal
+        }
+        const updatedBuckets = goal.buckets.map((bucket) => {
+          if (bucket.id !== effectiveBucketId) {
+            return bucket
+          }
+          const updatedTasks = bucket.tasks.map((task) => {
+            if (task.id !== effectiveTaskId) {
+              return task
+            }
+            mutated = true
+            return { ...task, difficulty: nextDifficulty }
+          })
+          return { ...bucket, tasks: updatedTasks }
+        })
+        return { ...goal, buckets: updatedBuckets }
+      })
+      if (mutated) {
+        publishGoalsSnapshot(updated)
+        return updated
+      }
+      return current
+    })
+    setFocusSource((current) => {
+      if (!current || current.taskId !== effectiveTaskId) {
+        return current
+      }
+      return {
+        ...current,
+        taskDifficulty: nextDifficulty,
+      }
+    })
+    setTaskDifficulty(effectiveTaskId, nextDifficulty).catch((error) => {
+      console.warn('Failed to update focus task difficulty', error)
+    })
+  }, [
+    canCycleFocusDifficulty,
+    effectiveGoalId,
+    effectiveBucketId,
+    effectiveTaskId,
+    focusDifficulty,
+  ])
+
+  const toggleFocusPriority = useCallback(() => {
+    if (!canToggleFocusPriority || !effectiveGoalId || !effectiveBucketId || !effectiveTaskId) {
+      return
+    }
+    const snapshotTask = goalsSnapshot
+      .find((goal) => goal.id === effectiveGoalId)?.buckets
+      .find((bucket) => bucket.id === effectiveBucketId)?.tasks
+      .find((task) => task.id === effectiveTaskId) ?? null
+    const wasCompleted = snapshotTask?.completed ?? false
+    const nextPriority = !focusPriority
+    setGoalsSnapshot((current) => {
+      let mutated = false
+      const updated = current.map((goal) => {
+        if (goal.id !== effectiveGoalId) {
+          return goal
+        }
+        let goalMutated = false
+        const updatedBuckets = goal.buckets.map((bucket) => {
+          if (bucket.id !== effectiveBucketId) {
+            return bucket
+          }
+          const idx = bucket.tasks.findIndex((task) => task.id === effectiveTaskId)
+          if (idx === -1) {
+            return bucket
+          }
+          goalMutated = true
+          mutated = true
+          let updatedTasks = bucket.tasks.map((task, index) =>
+            index === idx ? { ...task, priority: nextPriority } : task,
+          )
+          const moved = updatedTasks.find((task) => task.id === effectiveTaskId)!
+          const active = updatedTasks.filter((task) => !task.completed)
+          const completed = updatedTasks.filter((task) => task.completed)
+          if (nextPriority) {
+            if (!moved.completed) {
+              const without = active.filter((task) => task.id !== effectiveTaskId)
+              const newActive = [moved, ...without]
+              updatedTasks = [...newActive, ...completed]
+            } else {
+              const without = completed.filter((task) => task.id !== effectiveTaskId)
+              const newCompleted = [moved, ...without]
+              updatedTasks = [...active, ...newCompleted]
+            }
+          } else {
+            if (!moved.completed) {
+              const prios = active.filter((task) => task.priority)
+              const non = active.filter((task) => !task.priority && task.id !== effectiveTaskId)
+              const newActive = [...prios, moved, ...non]
+              updatedTasks = [...newActive, ...completed]
+            } else {
+              const prios = completed.filter((task) => task.priority)
+              const non = completed.filter((task) => !task.priority && task.id !== effectiveTaskId)
+              const newCompleted = [...prios, moved, ...non]
+              updatedTasks = [...active, ...newCompleted]
+            }
+          }
+          return { ...bucket, tasks: updatedTasks }
+        })
+        return goalMutated ? { ...goal, buckets: updatedBuckets } : goal
+      })
+      if (mutated) {
+        publishGoalsSnapshot(updated)
+        return updated
+      }
+      return current
+    })
+    setFocusSource((current) => {
+      if (!current || current.taskId !== effectiveTaskId) {
+        return current
+      }
+      return {
+        ...current,
+        priority: nextPriority,
+      }
+    })
+    setTaskPriorityAndResort(effectiveTaskId, effectiveBucketId, wasCompleted, nextPriority).catch((error) => {
+      console.warn('Failed to update focus task priority', error)
+    })
+  }, [
+    canToggleFocusPriority,
+    effectiveGoalId,
+    effectiveBucketId,
+    effectiveTaskId,
+    focusPriority,
+    goalsSnapshot,
+  ])
+
+  const clearPriorityHoldTimer = useCallback(() => {
+    if (focusPriorityHoldTimerRef.current !== null) {
+      if (typeof window !== 'undefined') {
+        window.clearTimeout(focusPriorityHoldTimerRef.current)
+      }
+      focusPriorityHoldTimerRef.current = null
+    }
+  }, [])
+
+  const handleDifficultyPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
       event.stopPropagation()
-      if (!canCycleFocusDifficulty || !effectiveGoalId || !effectiveBucketId || !effectiveTaskId) {
+      if (!canCycleFocusDifficulty) {
         return
       }
-      const nextDifficulty = getNextDifficulty(focusDifficulty ?? 'none')
-      setGoalsSnapshot((current) => {
-        let mutated = false
-        const updated = current.map((goal) => {
-          if (goal.id !== effectiveGoalId) {
-            return goal
-          }
-          const updatedBuckets = goal.buckets.map((bucket) => {
-            if (bucket.id !== effectiveBucketId) {
-              return bucket
-            }
-            const updatedTasks = bucket.tasks.map((task) => {
-              if (task.id !== effectiveTaskId) {
-                return task
-              }
-              mutated = true
-              return { ...task, difficulty: nextDifficulty }
-            })
-            return { ...bucket, tasks: updatedTasks }
-          })
-          return { ...goal, buckets: updatedBuckets }
-        })
-        if (mutated) {
-          publishGoalsSnapshot(updated)
-          return updated
+      focusPriorityHoldTriggeredRef.current = false
+      clearPriorityHoldTimer()
+      if (canToggleFocusPriority && typeof window !== 'undefined') {
+        try {
+          focusPriorityHoldTimerRef.current = window.setTimeout(() => {
+            focusPriorityHoldTriggeredRef.current = true
+            focusPriorityHoldTimerRef.current = null
+            toggleFocusPriority()
+          }, PRIORITY_HOLD_MS)
+        } catch (error) {
+          focusPriorityHoldTimerRef.current = null
         }
-        return current
-      })
-      setFocusSource((current) => {
-        if (!current || current.taskId !== effectiveTaskId) {
-          return current
-        }
-        return {
-          ...current,
-          taskDifficulty: nextDifficulty,
-        }
-      })
-      setTaskDifficulty(effectiveTaskId, nextDifficulty).catch((error) => {
-        console.warn('Failed to update focus task difficulty', error)
-      })
+      }
     },
-    [
-      canCycleFocusDifficulty,
-      effectiveGoalId,
-      effectiveBucketId,
-      effectiveTaskId,
-      focusDifficulty,
-    ],
+    [canCycleFocusDifficulty, canToggleFocusPriority, clearPriorityHoldTimer, toggleFocusPriority],
   )
+
+  const handleDifficultyPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      const wasTriggered = focusPriorityHoldTriggeredRef.current
+      clearPriorityHoldTimer()
+      if (wasTriggered) {
+        focusPriorityHoldTriggeredRef.current = false
+        return
+      }
+      focusPriorityHoldTriggeredRef.current = false
+      cycleFocusDifficulty()
+    },
+    [clearPriorityHoldTimer, cycleFocusDifficulty],
+  )
+
+  const handleDifficultyPointerLeave = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      clearPriorityHoldTimer()
+      focusPriorityHoldTriggeredRef.current = false
+    },
+    [clearPriorityHoldTimer],
+  )
+
+  const handleDifficultyPointerCancel = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      clearPriorityHoldTimer()
+      focusPriorityHoldTriggeredRef.current = false
+    },
+    [clearPriorityHoldTimer],
+  )
+
+  const handleDifficultyKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        event.stopPropagation()
+        cycleFocusDifficulty()
+      }
+    },
+    [cycleFocusDifficulty],
+  )
+
+  useEffect(() => {
+    return () => {
+      clearPriorityHoldTimer()
+      focusPriorityHoldTriggeredRef.current = false
+    }
+  }, [clearPriorityHoldTimer])
 
   const handleCompleteFocus = async () => {
     const taskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
@@ -1348,12 +1526,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             <button
               type="button"
               className={focusDiffButtonClass}
-              onClick={handleCycleFocusDifficulty}
+              onPointerDown={handleDifficultyPointerDown}
+              onPointerUp={handleDifficultyPointerUp}
+              onPointerLeave={handleDifficultyPointerLeave}
+              onPointerCancel={handleDifficultyPointerCancel}
+              onKeyDown={handleDifficultyKeyDown}
               disabled={!canCycleFocusDifficulty}
-              aria-label={focusDifficultyLabel}
-              title={focusDifficultyLabel}
+              aria-label={focusDiffButtonTitle}
+              title={focusDiffButtonTitle}
             >
-              <span className="sr-only">{focusDifficultyLabel}</span>
+              <span className="sr-only">{focusDiffButtonTitle}</span>
             </button>
             <span className={`focus-task__chevron${isSelectorOpen ? ' focus-task__chevron--open' : ''}`}>
               <svg viewBox="0 0 20 20" fill="currentColor">
