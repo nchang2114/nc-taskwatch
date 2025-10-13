@@ -1249,7 +1249,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                         ? ['goal-task-diff', `goal-task-diff--${task.difficulty}`, 'task-selector__diff', 'task-selector__diff-chip']
                             .filter(Boolean)
                             .join(' ')
-                        : null
+                        : ['goal-task-diff', 'goal-task-diff--none', 'task-selector__diff', 'task-selector__diff-chip']
+                            .join(' ')
                     return (
                       <li key={task.taskId} className="task-selector__item">
                         <button
@@ -1278,7 +1279,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                                 {`${task.goalName} → ${task.bucketName}`}
                               </span>
                             </div>
-                            {diffBadgeClass ? <span className={diffBadgeClass} aria-hidden="true" /> : null}
+                            <span className={diffBadgeClass} aria-hidden="true" />
                           </div>
                         </button>
                       </li>
@@ -1358,22 +1359,23 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                                                 focusSource.bucketId === bucket.id &&
                                                 candidateLower === currentTaskLower
                                               : !isDefaultTask && candidateLower === currentTaskLower
-                                              const diffClass = diffClsForTask(task.difficulty as any)
-                                              const taskClassName = [
-                                                'task-selector__task',
-                                                'goal-task-row',
-                                                diffClass,
-                                                task.priority ? 'goal-task-row--priority' : '',
-                                                matches ? 'task-selector__task--active' : '',
-                                              ]
-                                                .filter(Boolean)
-                                                .join(' ')
+                                            const diffClass = diffClsForTask(task.difficulty as any)
+                                            const taskClassName = [
+                                              'task-selector__task',
+                                              'goal-task-row',
+                                              diffClass,
+                                              task.priority ? 'goal-task-row--priority' : '',
+                                              matches ? 'task-selector__task--active' : '',
+                                            ]
+                                              .filter(Boolean)
+                                              .join(' ')
                                             const diffBadgeClass =
                                               task.difficulty && task.difficulty !== 'none'
                                                 ? ['goal-task-diff', `goal-task-diff--${task.difficulty}`, 'task-selector__diff', 'task-selector__diff-chip']
                                                     .filter(Boolean)
                                                     .join(' ')
-                                                : null
+                                                : ['goal-task-diff', 'goal-task-diff--none', 'task-selector__diff', 'task-selector__diff-chip']
+                                                    .join(' ')
                                             return (
                                               <li key={task.id}>
                                                 <button
@@ -1402,7 +1404,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                                                         {`${goal.name} → ${bucket.name}`}
                                                       </span>
                                                     </div>
-                                                    {diffBadgeClass ? <span className={diffBadgeClass} aria-hidden="true" /> : null}
+                                                    <span className={diffBadgeClass} aria-hidden="true" />
                                                   </div>
                                                 </button>
                                               </li>
