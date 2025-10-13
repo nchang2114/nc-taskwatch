@@ -63,6 +63,7 @@ type FocusSource = {
 }
 
 const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
+const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
 const CURRENT_TASK_STORAGE_KEY = 'nc-taskwatch-current-task'
 const CURRENT_TASK_SOURCE_KEY = 'nc-taskwatch-current-task-source'
 const MAX_TASK_STORAGE_LENGTH = 256
@@ -387,6 +388,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history))
     } catch (error) {
       console.warn('Failed to persist stopwatch history', error)
+    }
+    try {
+      const event = new CustomEvent(HISTORY_EVENT_NAME, { detail: history })
+      window.dispatchEvent(event)
+    } catch (error) {
+      console.warn('Failed to broadcast stopwatch history update', error)
     }
   }, [history])
 
