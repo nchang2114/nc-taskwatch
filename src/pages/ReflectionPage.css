@@ -1,9 +1,13 @@
 :root {
   --reflection-chart-unlogged: #6b7280;
+  --reflection-chart-unlogged-soft: rgba(107, 114, 128, 0.16);
+  --reflection-chart-unlogged-stroke: rgba(107, 114, 128, 0.36);
 }
 
 html[data-theme='light'] {
   --reflection-chart-unlogged: #d1d5db;
+  --reflection-chart-unlogged-soft: rgba(204, 210, 222, 0.24);
+  --reflection-chart-unlogged-stroke: rgba(158, 163, 175, 0.38);
 }
 
 .reflection-page {

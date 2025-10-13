@@ -81,7 +81,10 @@ type PieArc = {
   color: string
   path: string
   fill: string
+  stroke?: string
+  strokeWidth?: number
   gradient?: PieGradient
+  isUnlogged?: boolean
 }
 
 const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
@@ -379,13 +382,18 @@ const createPieArcs = (segments: PieSegment[], windowMs: number): PieArc[] => {
     return []
   }
 
-  const segmentTotal = segments.reduce((sum, segment) => sum + Math.max(segment.durationMs, 0), 0)
+  const filteredSegments = segments.filter((segment) => Math.max(segment.durationMs, 0) > 0)
+  if (filteredSegments.length === 0) {
+    return []
+  }
+
+  const segmentTotal = filteredSegments.reduce((sum, segment) => sum + Math.max(segment.durationMs, 0), 0)
   const denominator = Math.max(windowMs, segmentTotal, 1)
   let accumulated = 0
   const arcs: PieArc[] = []
 
-  for (let index = 0; index < segments.length; index += 1) {
-    const segment = segments[index]
+  for (let index = 0; index < filteredSegments.length; index += 1) {
+    const segment = filteredSegments[index]
     const value = Math.max(segment.durationMs, 0)
     if (!Number.isFinite(value) || value <= 0) {
       continue
@@ -393,7 +401,7 @@ const createPieArcs = (segments: PieSegment[], windowMs: number): PieArc[] => {
 
     const startRatio = clamp01(accumulated / denominator)
     accumulated += value
-    let endRatio = index === segments.length - 1 ? 1 : clamp01(accumulated / denominator)
+    let endRatio = index === filteredSegments.length - 1 ? 1 : clamp01(accumulated / denominator)
     if (endRatio < startRatio) {
       endRatio = startRatio
     }
@@ -408,12 +416,30 @@ const createPieArcs = (segments: PieSegment[], windowMs: number): PieArc[] => {
     const gradient = createGradientForSegment(segment.id, segment.colorInfo, startAngle, endAngle)
     const normalizedBase = normalizeHexColor(segment.baseColor)
     const fallbackFill = normalizedBase ? applyAlphaToHex(normalizedBase, 0.58) : segment.baseColor
+    const isUnlogged = Boolean(segment.isUnlogged)
+    const baseStroke = normalizedBase
+      ? applyAlphaToHex(mixHexColors(normalizedBase, '#ffffff', 0.45), 0.22)
+      : 'rgba(255, 255, 255, 0.08)'
+
+    let fillValue = gradient && !isUnlogged ? `url(#${gradient.id})` : fallbackFill
+    let strokeValue = baseStroke
+    let strokeWidth = 0.8
+
+    if (isUnlogged) {
+      fillValue = 'var(--reflection-chart-unlogged-soft)'
+      strokeValue = 'var(--reflection-chart-unlogged-stroke)'
+      strokeWidth = 1.1
+    }
+
     arcs.push({
       id: segment.id,
       color: segment.swatch,
       path: describeDonutSlice(startAngle, endAngle),
-      fill: gradient ? `url(#${gradient.id})` : fallbackFill,
-      gradient: gradient ?? undefined,
+      fill: fillValue,
+      stroke: strokeValue,
+      strokeWidth,
+      gradient: !isUnlogged && gradient ? gradient : undefined,
+      isUnlogged,
     })
   }
 
@@ -728,37 +754,34 @@ export default function ReflectionPage() {
   )
   const activeRangeConfig = RANGE_DEFS[activeRange]
   const loggedSegments = useMemo(() => segments.filter((segment) => !segment.isUnlogged), [segments])
-  const unloggedSegment = useMemo(() => segments.find((segment) => segment.isUnlogged), [segments])
+  const unloggedFraction = useMemo(
+    () => Math.max(0, 1 - loggedSegments.reduce((sum, segment) => sum + segment.fraction, 0)),
+    [loggedSegments],
+  )
   const legendSegments = useMemo(() => {
     const base = loggedSegments.length > 1 ? [...loggedSegments].sort((a, b) => b.durationMs - a.durationMs) : loggedSegments
-    if (unloggedSegment && unloggedSegment.durationMs > 0) {
-      return [...base, unloggedSegment]
-    }
-    if (!unloggedSegment && windowMs > loggedMs) {
+    if (unloggedFraction > 0 && windowMs > loggedMs) {
       return [
         ...base,
         {
           id: 'unlogged',
           label: 'Unlogged Time',
           durationMs: windowMs - loggedMs,
-          fraction: 0,
+          fraction: unloggedFraction,
           swatch: 'var(--reflection-chart-unlogged)',
           baseColor: 'var(--reflection-chart-unlogged)',
           isUnlogged: true,
-        },
+        } as PieSegment,
       ]
     }
     return base
-  }, [loggedSegments, unloggedSegment, windowMs, loggedMs])
+  }, [loggedSegments, windowMs, loggedMs, unloggedFraction])
   const pieArcs = useMemo(() => createPieArcs(segments, windowMs), [segments, windowMs])
   const pieGradients = useMemo(
     () => pieArcs.flatMap((arc) => (arc.gradient ? [arc.gradient] : [])),
     [pieArcs],
   )
-  const unloggedMs = useMemo(
-    () => unloggedSegment?.durationMs ?? Math.max(windowMs - loggedMs, 0),
-    [unloggedSegment, windowMs, loggedMs],
-  )
+  const unloggedMs = useMemo(() => Math.max(windowMs - loggedMs, 0), [windowMs, loggedMs])
   const tabPanelId = 'reflection-range-panel'
 
   return (
@@ -851,23 +874,34 @@ export default function ReflectionPage() {
               ) : null}
               {pieArcs.length === 0 ? (
                 <path
-                  className="reflection-pie__slice"
+                  className="reflection-pie__slice reflection-pie__slice--unlogged"
                   d={FULL_DONUT_PATH}
-                  fill="var(--reflection-chart-unlogged)"
+                  fill="var(--reflection-chart-unlogged-soft)"
+                  stroke="var(--reflection-chart-unlogged-stroke)"
+                  strokeWidth="1.1"
+                  strokeLinejoin="round"
                   fillRule="evenodd"
                   clipRule="evenodd"
                 />
               ) : (
-                pieArcs.map((arc) => (
-                  <path
-                    key={arc.id}
-                    className="reflection-pie__slice"
-                    d={arc.path}
-                    fill={arc.fill}
-                    fillRule="evenodd"
-                    clipRule="evenodd"
-                  />
-                ))
+                pieArcs.map((arc) => {
+                  const className = arc.isUnlogged
+                    ? 'reflection-pie__slice reflection-pie__slice--unlogged'
+                    : 'reflection-pie__slice'
+                  return (
+                    <path
+                      key={arc.id}
+                      className={className}
+                      d={arc.path}
+                      fill={arc.fill}
+                      stroke={arc.stroke ?? 'none'}
+                      strokeWidth={arc.strokeWidth ?? 0}
+                      strokeLinejoin="round"
+                      fillRule="evenodd"
+                      clipRule="evenodd"
+                    />
+                  )
+                })
               )}
             </svg>
             <div className="reflection-pie__center">
