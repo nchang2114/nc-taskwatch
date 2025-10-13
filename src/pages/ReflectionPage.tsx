@@ -50,10 +50,32 @@ type PieSegment = {
 
 const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
 const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
+const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
+const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 const UNLABELED_FOCUS_LABEL = 'Unlabeled Focus'
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
 
 type GoalLookup = Map<string, { goalName: string; color?: string }>
+
+const normalizeColor = (value: string | undefined): string | undefined => {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (trimmed.length === 0) {
+    return undefined
+  }
+  const lower = trimmed.toLowerCase()
+  if (
+    lower.startsWith('#') ||
+    lower.startsWith('rgb(') ||
+    lower.startsWith('rgba(') ||
+    lower.startsWith('hsl(') ||
+    lower.startsWith('hsla(') ||
+    lower.startsWith('var(')
+  ) {
+    return trimmed
+  }
+  return undefined
+}
 
 const sanitizeHistory = (value: unknown): HistoryEntry[] => {
   if (!Array.isArray(value)) {
@@ -139,13 +161,14 @@ const createGoalTaskMap = (snapshot: GoalSnapshot[]): GoalLookup => {
     if (!goalName) {
       return
     }
+    const goalColor = normalizeColor(goal.color)
     goal.buckets.forEach((bucket) => {
       bucket.tasks.forEach((task) => {
         const key = task.text.trim().toLowerCase()
         if (!key || map.has(key)) {
           return
         }
-        map.set(key, { goalName, color: goal.color ?? undefined })
+        map.set(key, { goalName, color: goalColor })
       })
     })
   })
@@ -155,6 +178,15 @@ const createGoalTaskMap = (snapshot: GoalSnapshot[]): GoalLookup => {
 type GoalMetadata = {
   label: string
   colorHint?: string
+}
+
+type ActiveSessionState = {
+  taskName: string
+  goalName: string | null
+  startedAt: number | null
+  baseElapsed: number
+  isRunning: boolean
+  updatedAt: number
 }
 
 const resolveGoalMetadata = (taskName: string, lookup: GoalLookup): GoalMetadata => {
@@ -167,6 +199,38 @@ const resolveGoalMetadata = (taskName: string, lookup: GoalLookup): GoalMetadata
     return { label: match.goalName, colorHint: match.color }
   }
   return { label: trimmed }
+}
+
+const sanitizeActiveSession = (value: unknown): ActiveSessionState | null => {
+  if (typeof value !== 'object' || value === null) {
+    return null
+  }
+  const candidate = value as Record<string, unknown>
+  const rawTaskName = typeof candidate.taskName === 'string' ? candidate.taskName : ''
+  const taskName = rawTaskName.trim()
+  const rawGoalName = typeof candidate.goalName === 'string' ? candidate.goalName.trim() : ''
+  const goalName = rawGoalName.length > 0 ? rawGoalName : null
+  const startedAt = typeof candidate.startedAt === 'number' ? candidate.startedAt : null
+  const baseElapsed = typeof candidate.baseElapsed === 'number' ? Math.max(0, candidate.baseElapsed) : 0
+  const isRunning = Boolean(candidate.isRunning)
+  const updatedAt = typeof candidate.updatedAt === 'number' ? candidate.updatedAt : Date.now()
+  return { taskName, goalName, startedAt, baseElapsed, isRunning, updatedAt }
+}
+
+const readStoredActiveSession = (): ActiveSessionState | null => {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    const raw = window.localStorage.getItem(CURRENT_SESSION_STORAGE_KEY)
+    if (!raw) {
+      return null
+    }
+    const parsed = JSON.parse(raw)
+    return sanitizeActiveSession(parsed)
+  } catch {
+    return null
+  }
 }
 
 const computeRangeOverview = (
@@ -235,7 +299,7 @@ const computeRangeOverview = (
       id,
       label: segment.label,
       durationMs: segment.durationMs,
-      fraction: segment.durationMs / windowMs,
+      fraction: Math.min(Math.max(segment.durationMs / windowMs, 0), 1),
       color,
     }
   })
@@ -273,10 +337,28 @@ export default function ReflectionPage() {
   const [activeRange, setActiveRange] = useState<ReflectionRangeKey>('24h')
   const [history, setHistory] = useState<HistoryEntry[]>(() => readStoredHistory())
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
+  const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(() => readStoredActiveSession())
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [journal, setJournal] = useState('')
 
   const goalLookup = useMemo(() => createGoalTaskMap(goalsSnapshot), [goalsSnapshot])
+  const enhancedGoalLookup = useMemo(() => {
+    if (!activeSession || !activeSession.goalName) {
+      return goalLookup
+    }
+    const key = activeSession.taskName?.trim().toLowerCase()
+    const goalName = activeSession.goalName.trim()
+    if (!key) {
+      return goalLookup
+    }
+    const existing = goalLookup.get(key)
+    if (existing && existing.goalName === goalName) {
+      return goalLookup
+    }
+    const map = new Map(goalLookup)
+    map.set(key, { goalName, color: undefined })
+    return map
+  }, [goalLookup, activeSession])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -285,6 +367,10 @@ export default function ReflectionPage() {
     const handleStorage = (event: StorageEvent) => {
       if (event.key === HISTORY_STORAGE_KEY) {
         setHistory(readStoredHistory())
+        return
+      }
+      if (event.key === CURRENT_SESSION_STORAGE_KEY) {
+        setActiveSession(readStoredActiveSession())
       }
     }
     const handleHistoryBroadcast = (event: Event) => {
@@ -296,13 +382,24 @@ export default function ReflectionPage() {
         setHistory(readStoredHistory())
       }
     }
+    const handleSessionBroadcast = (event: Event) => {
+      const custom = event as CustomEvent<unknown>
+      const detail = sanitizeActiveSession(custom.detail)
+      if (detail) {
+        setActiveSession(detail)
+      } else {
+        setActiveSession(readStoredActiveSession())
+      }
+    }
 
     window.addEventListener('storage', handleStorage)
     window.addEventListener(HISTORY_EVENT_NAME, handleHistoryBroadcast as EventListener)
+    window.addEventListener(CURRENT_SESSION_EVENT_NAME, handleSessionBroadcast as EventListener)
 
     return () => {
       window.removeEventListener('storage', handleStorage)
       window.removeEventListener(HISTORY_EVENT_NAME, handleHistoryBroadcast as EventListener)
+      window.removeEventListener(CURRENT_SESSION_EVENT_NAME, handleSessionBroadcast as EventListener)
     }
   }, [])
 
@@ -319,15 +416,50 @@ export default function ReflectionPage() {
     }
     const intervalId = window.setInterval(() => {
       setNowTick(Date.now())
-    }, 60000)
+    }, 1000)
     return () => {
       window.clearInterval(intervalId)
     }
   }, [])
 
+  const effectiveHistory = useMemo(() => {
+    if (!activeSession) {
+      return history
+    }
+    const now = Date.now()
+    const baseElapsed = Math.max(0, activeSession.baseElapsed)
+    const runningElapsed =
+      activeSession.isRunning && typeof activeSession.startedAt === 'number'
+        ? Math.max(0, now - activeSession.startedAt)
+        : 0
+    const totalElapsed = baseElapsed + runningElapsed
+    if (totalElapsed <= 0) {
+      return history
+    }
+    const defaultStart = now - totalElapsed
+    const startCandidate =
+      typeof activeSession.startedAt === 'number'
+        ? activeSession.startedAt
+        : activeSession.updatedAt - totalElapsed
+    const startedAt = Math.min(startCandidate, now)
+    const safeStartedAt = Number.isFinite(startedAt) ? startedAt : defaultStart
+    const endedAt = activeSession.isRunning ? now : safeStartedAt + totalElapsed
+    const taskLabel =
+      activeSession.taskName.length > 0 ? activeSession.taskName : activeSession.goalName ?? UNLABELED_FOCUS_LABEL
+    const activeEntry: HistoryEntry = {
+      id: 'active-session',
+      taskName: taskLabel,
+      elapsed: totalElapsed,
+      startedAt: safeStartedAt,
+      endedAt,
+    }
+    const filteredHistory = history.filter((entry) => entry.id !== activeEntry.id)
+    return [activeEntry, ...filteredHistory]
+  }, [history, activeSession, nowTick])
+
   const { segments, windowMs, loggedMs } = useMemo(
-    () => computeRangeOverview(history, activeRange, goalLookup),
-    [history, activeRange, goalLookup, nowTick],
+    () => computeRangeOverview(effectiveHistory, activeRange, enhancedGoalLookup),
+    [effectiveHistory, activeRange, enhancedGoalLookup, nowTick],
   )
   const activeRangeConfig = RANGE_DEFS[activeRange]
   const loggedSegments = useMemo(() => segments.filter((segment) => !segment.isUnlogged), [segments])

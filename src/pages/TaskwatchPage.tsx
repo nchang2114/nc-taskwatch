@@ -66,6 +66,8 @@ const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
 const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
 const CURRENT_TASK_STORAGE_KEY = 'nc-taskwatch-current-task'
 const CURRENT_TASK_SOURCE_KEY = 'nc-taskwatch-current-task-source'
+const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
+const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 const MAX_TASK_STORAGE_LENGTH = 256
 
 declare global {
@@ -540,6 +542,10 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   const normalizedCurrentTask = useMemo(() => currentTaskName.trim(), [currentTaskName])
   const safeTaskName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
+  const sessionGoalName = focusSource?.goalName?.trim() || null
+  const sessionTaskLabel =
+    normalizedCurrentTask.length > 0 ? normalizedCurrentTask : sessionGoalName ? sessionGoalName : ''
+  const elapsedSeconds = Math.floor(elapsed / 1000)
 
   const focusCandidates = useMemo<FocusCandidate[]>(() => {
     const candidates: FocusCandidate[] = []
@@ -673,6 +679,50 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       }
     })
   }, [activeFocusCandidate, goalsSnapshot])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const hasActiveSession = isRunning || elapsed > 0
+    if (!hasActiveSession) {
+      try {
+        window.localStorage.removeItem(CURRENT_SESSION_STORAGE_KEY)
+      } catch (error) {
+        console.warn('Failed to clear active session state', error)
+      }
+      try {
+        const event = new CustomEvent(CURRENT_SESSION_EVENT_NAME, { detail: null })
+        window.dispatchEvent(event)
+      } catch {
+        // ignore dispatch errors
+      }
+      return
+    }
+
+    const payload = {
+      taskName: sessionTaskLabel,
+      goalName: sessionGoalName,
+      startedAt: sessionStart,
+      baseElapsed: elapsed,
+      isRunning,
+      updatedAt: Date.now(),
+    }
+
+    try {
+      window.localStorage.setItem(CURRENT_SESSION_STORAGE_KEY, JSON.stringify(payload))
+    } catch (error) {
+      console.warn('Failed to persist active session state', error)
+    }
+
+    try {
+      const event = new CustomEvent(CURRENT_SESSION_EVENT_NAME, { detail: payload })
+      window.dispatchEvent(event)
+    } catch {
+      // ignore dispatch errors
+    }
+  }, [isRunning, elapsedSeconds, sessionStart, sessionTaskLabel, sessionGoalName])
 
   useEffect(() => {
     if (goalsSnapshot.length === 0) {
