@@ -48,6 +48,12 @@ type PieSegment = {
   isUnlogged?: boolean
 }
 
+type PieArc = {
+  id: string
+  color: string
+  path: string
+}
+
 const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
 const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
 const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
@@ -153,6 +159,104 @@ const getPaletteColorForLabel = (label: string) => {
   const index = hash % CHART_COLORS.length
   return CHART_COLORS[index]
 }
+
+const PIE_VIEWBOX_SIZE = 200
+const PIE_CENTER = PIE_VIEWBOX_SIZE / 2
+const PIE_RADIUS = PIE_VIEWBOX_SIZE / 2 - 2
+const PIE_INNER_RADIUS = PIE_RADIUS * 0.56
+const ARC_EPSILON = 1e-6
+
+const clamp01 = (value: number) => Math.min(Math.max(value, 0), 1)
+
+const polarToCartesian = (cx: number, cy: number, radius: number, angleDeg: number) => {
+  const angleRad = ((angleDeg - 90) * Math.PI) / 180
+  return {
+    x: cx + radius * Math.cos(angleRad),
+    y: cy + radius * Math.sin(angleRad),
+  }
+}
+
+const describeFullDonut = () => {
+  const outerStart = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_RADIUS, 0)
+  const outerOpposite = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_RADIUS, 180)
+  const innerStart = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_INNER_RADIUS, 0)
+  const innerOpposite = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_INNER_RADIUS, 180)
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${PIE_RADIUS} ${PIE_RADIUS} 0 1 1 ${outerOpposite.x} ${outerOpposite.y}`,
+    `A ${PIE_RADIUS} ${PIE_RADIUS} 0 1 1 ${outerStart.x} ${outerStart.y}`,
+    'Z',
+    `M ${innerStart.x} ${innerStart.y}`,
+    `A ${PIE_INNER_RADIUS} ${PIE_INNER_RADIUS} 0 1 0 ${innerOpposite.x} ${innerOpposite.y}`,
+    `A ${PIE_INNER_RADIUS} ${PIE_INNER_RADIUS} 0 1 0 ${innerStart.x} ${innerStart.y}`,
+    'Z',
+  ].join(' ')
+}
+
+const describeDonutSlice = (startAngle: number, endAngle: number) => {
+  const start = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_RADIUS, startAngle)
+  const end = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_RADIUS, endAngle)
+  const innerEnd = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_INNER_RADIUS, endAngle)
+  const innerStart = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_INNER_RADIUS, startAngle)
+  const sweepAngle = Math.max(Math.min(endAngle - startAngle, 360), 0)
+  if (sweepAngle >= 360 - ARC_EPSILON) {
+    return describeFullDonut()
+  }
+  const largeArcFlag = sweepAngle > 180 ? 1 : 0
+  const sweepFlagOuter = 1
+  const sweepFlagInner = 0
+  return [
+    `M ${start.x} ${start.y}`,
+    `A ${PIE_RADIUS} ${PIE_RADIUS} 0 ${largeArcFlag} ${sweepFlagOuter} ${end.x} ${end.y}`,
+    `L ${innerEnd.x} ${innerEnd.y}`,
+    `A ${PIE_INNER_RADIUS} ${PIE_INNER_RADIUS} 0 ${largeArcFlag} ${sweepFlagInner} ${innerStart.x} ${innerStart.y}`,
+    'Z',
+  ].join(' ')
+}
+
+const createPieArcs = (segments: PieSegment[], windowMs: number): PieArc[] => {
+  if (segments.length === 0) {
+    return []
+  }
+
+  const segmentTotal = segments.reduce((sum, segment) => sum + Math.max(segment.durationMs, 0), 0)
+  const denominator = Math.max(windowMs, segmentTotal, 1)
+  let accumulated = 0
+  const arcs: PieArc[] = []
+
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]
+    const value = Math.max(segment.durationMs, 0)
+    if (!Number.isFinite(value) || value <= 0) {
+      continue
+    }
+
+    const startRatio = clamp01(accumulated / denominator)
+    accumulated += value
+    let endRatio = index === segments.length - 1 ? 1 : clamp01(accumulated / denominator)
+    if (endRatio < startRatio) {
+      endRatio = startRatio
+    }
+
+    const sweepRatio = endRatio - startRatio
+    if (sweepRatio <= ARC_EPSILON) {
+      continue
+    }
+
+    const startAngle = startRatio * 360
+    const endAngle = Math.min(startAngle + sweepRatio * 360, 360)
+
+    arcs.push({
+      id: segment.id,
+      color: segment.color,
+      path: describeDonutSlice(startAngle, endAngle),
+    })
+  }
+
+  return arcs
+}
+
+const FULL_DONUT_PATH = describeFullDonut()
 
 const createGoalTaskMap = (snapshot: GoalSnapshot[]): GoalLookup => {
   const map: GoalLookup = new Map()
@@ -483,47 +587,7 @@ export default function ReflectionPage() {
     }
     return base
   }, [loggedSegments, unloggedSegment, windowMs, loggedMs])
-  const pieGradient = useMemo(() => {
-    if (segments.length === 0) {
-      return 'conic-gradient(var(--reflection-chart-unlogged) 0deg 360deg)'
-    }
-    let cumulative = 0
-    let previousEnd = 0
-    const EPSILON = 1e-4
-    const slices = segments
-      .map((segment, index) => {
-        const fraction = Math.max(segment.fraction, 0)
-        if (fraction <= 0) {
-          return null
-        }
-
-        // Clamp each slice so floating point drift never collapses or wraps segments.
-        const start = Math.min(Math.max(previousEnd, 0), 1)
-        cumulative += fraction
-
-        let end = index === segments.length - 1 ? 1 : Math.min(Math.max(cumulative, start), 1)
-        if (index === segments.length - 1 && end < 1) {
-          end = 1
-        }
-
-        if (end - start <= EPSILON) {
-          previousEnd = end
-          return null
-        }
-
-        previousEnd = end
-        const startDeg = start * 360
-        const endDeg = end * 360
-        return `${segment.color} ${startDeg}deg ${endDeg}deg`
-      })
-      .filter((slice): slice is string => Boolean(slice))
-
-    if (slices.length === 0) {
-      return 'conic-gradient(var(--reflection-chart-unlogged) 0deg 360deg)'
-    }
-
-    return `conic-gradient(${slices.join(', ')})`
-  }, [segments])
+  const pieArcs = useMemo(() => createPieArcs(segments, windowMs), [segments, windowMs])
   const unloggedMs = useMemo(
     () => unloggedSegment?.durationMs ?? Math.max(windowMs - loggedMs, 0),
     [unloggedSegment, windowMs, loggedMs],
@@ -567,7 +631,34 @@ export default function ReflectionPage() {
           aria-live="polite"
           aria-label={`${activeRangeConfig.label} chart`}
         >
-          <div className="reflection-pie" style={{ background: pieGradient }}>
+          <div className="reflection-pie">
+            <svg
+              className="reflection-pie__chart"
+              viewBox={`0 0 ${PIE_VIEWBOX_SIZE} ${PIE_VIEWBOX_SIZE}`}
+              aria-hidden="true"
+              focusable="false"
+            >
+              {pieArcs.length === 0 ? (
+                <path
+                  className="reflection-pie__slice"
+                  d={FULL_DONUT_PATH}
+                  fill="var(--reflection-chart-unlogged)"
+                  fillRule="evenodd"
+                  clipRule="evenodd"
+                />
+              ) : (
+                pieArcs.map((arc) => (
+                  <path
+                    key={arc.id}
+                    className="reflection-pie__slice"
+                    d={arc.path}
+                    fill={arc.color}
+                    fillRule="evenodd"
+                    clipRule="evenodd"
+                  />
+                ))
+              )}
+            </svg>
             <div className="reflection-pie__center">
               <span className="reflection-pie__range">{activeRangeConfig.shortLabel}</span>
               <span className="reflection-pie__value">{formatDuration(loggedMs)}</span>
