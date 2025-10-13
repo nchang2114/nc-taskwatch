@@ -69,6 +69,7 @@ const CURRENT_TASK_SOURCE_KEY = 'nc-taskwatch-current-task-source'
 const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 const MAX_TASK_STORAGE_LENGTH = 256
+const FOCUS_COMPLETION_RESET_DELAY_MS = 800
 
 declare global {
   interface Window {
@@ -360,6 +361,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const selectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const selectorPopoverRef = useRef<HTMLDivElement | null>(null)
   const focusTaskContainerRef = useRef<HTMLDivElement | null>(null)
+  const focusCompletionTimeoutRef = useRef<number | null>(null)
   const [isSelectorOpen, setIsSelectorOpen] = useState(false)
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
   const [hasRequestedGoals, setHasRequestedGoals] = useState(false)
@@ -477,6 +479,15 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       if (frameRef.current !== null) {
         cancelAnimationFrame(frameRef.current)
         frameRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (focusCompletionTimeoutRef.current !== null) {
+        window.clearTimeout(focusCompletionTimeoutRef.current)
+        focusCompletionTimeoutRef.current = null
       }
     }
   }, [])
@@ -837,6 +848,10 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     if (isCompletingFocus) {
       return
     }
+    if (focusCompletionTimeoutRef.current !== null) {
+      window.clearTimeout(focusCompletionTimeoutRef.current)
+      focusCompletionTimeoutRef.current = null
+    }
     setIsCompletingFocus(true)
 
     const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
@@ -887,13 +902,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     } catch (error) {
       console.warn('Failed to mark task complete from Taskwatch', error)
     } finally {
-      setIsCompletingFocus(false)
+      const timeoutId = window.setTimeout(() => {
+        setIsCompletingFocus(false)
+        setCurrentTaskName('')
+        setFocusSource(null)
+        setCustomTaskDraft('')
+        setIsSelectorOpen(false)
+        focusCompletionTimeoutRef.current = null
+      }, FOCUS_COMPLETION_RESET_DELAY_MS)
+      focusCompletionTimeoutRef.current = timeoutId
     }
-
-    setCurrentTaskName('')
-    setFocusSource(null)
-    setCustomTaskDraft('')
-    setIsSelectorOpen(false)
   }
 
   const handleSelectTask = (taskName: string, source: FocusSource | null) => {
@@ -1205,7 +1223,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         >
           <button
             type="button"
-            className="goal-task-marker goal-task-marker--action focus-task__complete"
+            className={[
+              'goal-task-marker',
+              'goal-task-marker--action',
+              'focus-task__complete',
+              isCompletingFocus ? 'focus-task__complete--animating' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
             onClick={handleCompleteFocus}
             disabled={!canCompleteFocus}
             aria-label="Mark focus task complete"

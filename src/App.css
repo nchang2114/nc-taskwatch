@@ -697,12 +697,103 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  position: relative;
+  overflow: visible;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease, color 160ms ease;
 }
 
 .focus-task__complete .goal-task-check {
   width: 1.1rem;
   height: 1.1rem;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.focus-task__complete .goal-task-check path {
+  stroke: rgb(134, 239, 172);
+  stroke-width: 2.2;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 22;
+  stroke-dashoffset: 22;
+  animation: none;
+}
+
+.focus-task__complete--animating {
+  animation: goal-marker-pop 300ms cubic-bezier(0.18, 0.9, 0.24, 1.15) forwards;
+}
+
+.focus-task__complete--animating::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  transform: translate(-50%, -50%) scale(0.6);
+  opacity: 0;
+  pointer-events: none;
+  box-shadow:
+    -16px -4px 0 0 #22d3ee,
+     14px -6px 0 0 #a78bfa,
+     -6px -16px 0 0 #f59e0b,
+      8px  16px 0 0 #10b981,
+     12px  10px 0 0 #60a5fa,
+    -14px  10px 0 0 #ef4444;
+  animation: goal-confetti-pop 680ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.focus-task__complete--animating .goal-task-check {
+  opacity: 1;
+}
+
+.focus-task__complete--animating .goal-task-check path {
+  animation: focus-check-draw 380ms cubic-bezier(0.22, 1, 0.36, 1) 100ms forwards;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .has-hover .focus-task__complete:hover .goal-task-check,
+  .has-hover .focus-task__complete:focus-visible .goal-task-check {
+    opacity: 1;
+  }
+
+  .has-hover .focus-task__complete:hover .goal-task-check path,
+  .has-hover .focus-task__complete:focus-visible .goal-task-check path {
+    animation: focus-check-draw 380ms cubic-bezier(0.22, 1, 0.36, 1) 60ms forwards;
+  }
+}
+
+@keyframes focus-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes goal-marker-pop {
+  0% {
+    transform: scale(0.94);
+  }
+  50% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1.02);
+  }
+}
+
+@keyframes goal-confetti-pop {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.6) rotate(-6deg);
+  }
+  65% {
+    opacity: 0.28;
+    transform: translate(-50%, -50%) scale(1.25) rotate(6deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.4) rotate(10deg);
+  }
 }
 
 .focus-task__complete:focus-visible {
