@@ -835,10 +835,14 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible {
 
 .task-selector__diff {
   transform: none;
+  justify-self: end;
+  align-self: center;
 }
 
 .task-selector__diff-chip {
   transform: scale(0.92);
+  justify-self: end;
+  align-self: center;
 }
 
 .goal-task-row__meta .goal-task-diff {
