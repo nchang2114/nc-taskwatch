@@ -39,19 +39,55 @@ type HistoryEntry = {
   endedAt: number
 }
 
+type GoalGradientInfo = {
+  start: string
+  end: string
+  angle?: number
+  css: string
+}
+
+type GoalColorInfo = {
+  gradient?: GoalGradientInfo
+  solidColor?: string
+}
+
 type PieSegment = {
   id: string
   label: string
   durationMs: number
-  color: string
   fraction: number
+  swatch: string
+  baseColor: string
+  gradient?: GoalGradientInfo
+  colorInfo?: GoalColorInfo
   isUnlogged?: boolean
+}
+
+type PieGradientStop = {
+  offset: string
+  color: string
+  opacity?: number
+}
+
+type PieGradient = {
+  id: string
+  type: 'linear' | 'radial'
+  stops: PieGradientStop[]
+  x1?: number
+  y1?: number
+  x2?: number
+  y2?: number
+  cx?: number
+  cy?: number
+  r?: number
 }
 
 type PieArc = {
   id: string
   color: string
   path: string
+  fill: string
+  gradient?: PieGradient
 }
 
 const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
@@ -61,27 +97,7 @@ const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 const UNLABELED_FOCUS_LABEL = 'Unlabeled Focus'
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
 
-type GoalLookup = Map<string, { goalName: string; color?: string }>
-
-const normalizeColor = (value: string | undefined): string | undefined => {
-  if (!value) return undefined
-  const trimmed = value.trim()
-  if (trimmed.length === 0) {
-    return undefined
-  }
-  const lower = trimmed.toLowerCase()
-  if (
-    lower.startsWith('#') ||
-    lower.startsWith('rgb(') ||
-    lower.startsWith('rgba(') ||
-    lower.startsWith('hsl(') ||
-    lower.startsWith('hsla(') ||
-    lower.startsWith('var(')
-  ) {
-    return trimmed
-  }
-  return undefined
-}
+type GoalLookup = Map<string, { goalName: string; colorInfo?: GoalColorInfo }>
 
 const sanitizeHistory = (value: unknown): HistoryEntry[] => {
   if (!Array.isArray(value)) {
@@ -176,6 +192,156 @@ const polarToCartesian = (cx: number, cy: number, radius: number, angleDeg: numb
   }
 }
 
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
+
+const normalizeHexColor = (value: string): string | null => {
+  const trimmed = value.trim()
+  if (!HEX_COLOR_PATTERN.test(trimmed)) {
+    return null
+  }
+  if (trimmed.length === 4) {
+    const [, r, g, b] = trimmed
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase()
+  }
+  return trimmed.toLowerCase()
+}
+
+const hexToRgb = (hex: string) => {
+  const normalized = normalizeHexColor(hex)
+  if (!normalized) {
+    return null
+  }
+  const value = normalized.slice(1)
+  const r = parseInt(value.slice(0, 2), 16)
+  const g = parseInt(value.slice(2, 4), 16)
+  const b = parseInt(value.slice(4, 6), 16)
+  return { r, g, b }
+}
+
+const rgbToHex = (r: number, g: number, b: number) => {
+  const clamp = (component: number) => Math.min(255, Math.max(0, Math.round(component)))
+  const toHex = (component: number) => clamp(component).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
+const mixHexColors = (source: string, target: string, ratio: number) => {
+  const sourceRgb = hexToRgb(source)
+  const targetRgb = hexToRgb(target)
+  if (!sourceRgb || !targetRgb) {
+    return source
+  }
+  const safeRatio = clamp01(ratio)
+  const mix = (a: number, b: number) => a * (1 - safeRatio) + b * safeRatio
+  return rgbToHex(mix(sourceRgb.r, targetRgb.r), mix(sourceRgb.g, targetRgb.g), mix(sourceRgb.b, targetRgb.b))
+}
+
+const applyAlphaToHex = (hex: string, alpha: number) => {
+  const normalized = normalizeHexColor(hex)
+  if (!normalized) {
+    return hex
+  }
+  const clampedAlpha = Math.min(1, Math.max(0, alpha))
+  const alphaByte = Math.round(clampedAlpha * 255)
+  return `${normalized}${alphaByte.toString(16).padStart(2, '0')}`
+}
+
+const PRESET_GOAL_GRADIENTS: Record<string, string> = {
+  'from-fuchsia-500 to-purple-500': 'linear-gradient(135deg, #f471b5 0%, #a855f7 50%, #6b21a8 100%)',
+  'from-emerald-500 to-cyan-500': 'linear-gradient(135deg, #34d399 0%, #10b981 45%, #0ea5e9 100%)',
+  'from-lime-400 to-emerald-500': 'linear-gradient(135deg, #bef264 0%, #4ade80 45%, #22c55e 100%)',
+  'from-sky-500 to-indigo-500': 'linear-gradient(135deg, #38bdf8 0%, #60a5fa 50%, #6366f1 100%)',
+  'from-amber-400 to-orange-500': 'linear-gradient(135deg, #fbbf24 0%, #fb923c 45%, #f97316 100%)',
+}
+
+const extractGradientColors = (gradient: string): { start: string; end: string; angle?: number } | null => {
+  const matches = gradient.match(/#(?:[0-9a-fA-F]{3}){1,2}/g)
+  if (!matches || matches.length === 0) {
+    return null
+  }
+  const start = normalizeHexColor(matches[0]) ?? matches[0]
+  const end = normalizeHexColor(matches[matches.length - 1]) ?? matches[matches.length - 1]
+  const angleMatch = gradient.match(/(-?\d+(?:\.\d+)?)deg/)
+  return {
+    start,
+    end,
+    angle: angleMatch ? Number.parseFloat(angleMatch[1]) : undefined,
+  }
+}
+
+const resolveGoalColorInfo = (value: string | undefined): GoalColorInfo | undefined => {
+  if (!value) {
+    return undefined
+  }
+  const trimmed = value.trim()
+  if (trimmed.length === 0) {
+    return undefined
+  }
+
+  let gradientString: string | null = null
+  if (trimmed.startsWith('custom:')) {
+    gradientString = trimmed.slice(7)
+  } else if (trimmed.includes('gradient(')) {
+    gradientString = trimmed
+  } else if (PRESET_GOAL_GRADIENTS[trimmed]) {
+    gradientString = PRESET_GOAL_GRADIENTS[trimmed]
+  } else {
+    const normalized = normalizeHexColor(trimmed)
+    if (normalized) {
+      return { solidColor: normalized }
+    }
+    return undefined
+  }
+
+  const parsed = extractGradientColors(gradientString)
+  if (!parsed) {
+    return undefined
+  }
+
+  return {
+    gradient: {
+      css: gradientString,
+      start: parsed.start,
+      end: parsed.end,
+      angle: parsed.angle,
+    },
+  }
+}
+
+const createGradientForSegment = (
+  segmentId: string,
+  colorInfo: GoalColorInfo | undefined,
+  startAngle: number,
+  endAngle: number,
+): PieGradient | null => {
+  const gradientSource = colorInfo?.gradient
+  const baseStart = gradientSource?.start ?? colorInfo?.solidColor
+  if (!baseStart) {
+    return null
+  }
+  const baseEnd = gradientSource?.end ?? baseStart
+  const midAngle = startAngle + (endAngle - startAngle) / 2
+  const outerPoint = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_RADIUS, midAngle)
+  const innerPoint = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_INNER_RADIUS, midAngle)
+
+  const highlight = mixHexColors(baseStart, '#ffffff', 0.42)
+  const midTone = mixHexColors(baseEnd, '#ffffff', 0.18)
+  const shadow = mixHexColors(baseEnd, '#020617', 0.55)
+
+  return {
+    id: `pie-grad-${segmentId}`,
+    type: 'linear',
+    x1: outerPoint.x,
+    y1: outerPoint.y,
+    x2: innerPoint.x,
+    y2: innerPoint.y,
+    stops: [
+      { offset: '0%', color: applyAlphaToHex(highlight, 0.6) },
+      { offset: '55%', color: applyAlphaToHex(midTone, 0.45) },
+      { offset: '100%', color: applyAlphaToHex(shadow, 0.7) },
+    ],
+  }
+}
+
 const describeFullDonut = () => {
   const outerStart = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_RADIUS, 0)
   const outerOpposite = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_RADIUS, 180)
@@ -245,11 +411,15 @@ const createPieArcs = (segments: PieSegment[], windowMs: number): PieArc[] => {
 
     const startAngle = startRatio * 360
     const endAngle = Math.min(startAngle + sweepRatio * 360, 360)
-
+    const gradient = createGradientForSegment(segment.id, segment.colorInfo, startAngle, endAngle)
+    const normalizedBase = normalizeHexColor(segment.baseColor)
+    const fallbackFill = normalizedBase ? applyAlphaToHex(normalizedBase, 0.58) : segment.baseColor
     arcs.push({
       id: segment.id,
-      color: segment.color,
+      color: segment.swatch,
       path: describeDonutSlice(startAngle, endAngle),
+      fill: gradient ? `url(#${gradient.id})` : fallbackFill,
+      gradient: gradient ?? undefined,
     })
   }
 
@@ -265,14 +435,14 @@ const createGoalTaskMap = (snapshot: GoalSnapshot[]): GoalLookup => {
     if (!goalName) {
       return
     }
-    const goalColor = normalizeColor(goal.color)
+    const colorInfo = resolveGoalColorInfo(goal.color)
     goal.buckets.forEach((bucket) => {
       bucket.tasks.forEach((task) => {
         const key = task.text.trim().toLowerCase()
         if (!key || map.has(key)) {
           return
         }
-        map.set(key, { goalName, color: goalColor })
+        map.set(key, { goalName, colorInfo })
       })
     })
   })
@@ -281,7 +451,7 @@ const createGoalTaskMap = (snapshot: GoalSnapshot[]): GoalLookup => {
 
 type GoalMetadata = {
   label: string
-  colorHint?: string
+  colorInfo?: GoalColorInfo
 }
 
 type ActiveSessionState = {
@@ -300,7 +470,7 @@ const resolveGoalMetadata = (taskName: string, lookup: GoalLookup): GoalMetadata
   }
   const match = lookup.get(trimmed.toLowerCase())
   if (match) {
-    return { label: match.goalName, colorHint: match.color }
+    return { label: match.goalName, colorInfo: match.colorInfo }
   }
   return { label: trimmed }
 }
@@ -349,7 +519,7 @@ const computeRangeOverview = (
     string,
     {
       durationMs: number
-      colorHint?: string
+      colorInfo?: GoalColorInfo
     }
   >()
 
@@ -370,14 +540,14 @@ const computeRangeOverview = (
     if (current) {
       current.durationMs += overlapMs
     } else {
-      totals.set(metadata.label, { durationMs: overlapMs, colorHint: metadata.colorHint })
+      totals.set(metadata.label, { durationMs: overlapMs, colorInfo: metadata.colorInfo })
     }
   })
 
   let segments = Array.from(totals.entries()).map(([label, info]) => ({
     label,
     durationMs: info.durationMs,
-    colorHint: info.colorHint,
+    colorInfo: info.colorInfo,
   }))
 
   segments.sort((a, b) => b.durationMs - a.durationMs)
@@ -394,9 +564,10 @@ const computeRangeOverview = (
   }
 
   const pieSegments: PieSegment[] = segments.map((segment) => {
-    const color = segment.colorHint && segment.colorHint.trim().length > 0
-      ? segment.colorHint
-      : getPaletteColorForLabel(segment.label)
+    const gradient = segment.colorInfo?.gradient
+    const solid = segment.colorInfo?.solidColor
+    const baseColor = gradient?.start ?? solid ?? getPaletteColorForLabel(segment.label)
+    const swatch = gradient?.css ?? baseColor
     const slug = segment.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'segment'
     const id = `${slug}-${Math.abs(hashString(segment.label))}`
     return {
@@ -404,7 +575,10 @@ const computeRangeOverview = (
       label: segment.label,
       durationMs: segment.durationMs,
       fraction: Math.min(Math.max(segment.durationMs / windowMs, 0), 1),
-      color,
+      swatch,
+      baseColor,
+      gradient,
+      colorInfo: segment.colorInfo,
     }
   })
 
@@ -417,7 +591,8 @@ const computeRangeOverview = (
       label: 'Unlogged Time',
       durationMs: unloggedMs,
       fraction: unloggedMs / windowMs,
-      color: 'var(--reflection-chart-unlogged)',
+      swatch: 'var(--reflection-chart-unlogged)',
+      baseColor: 'var(--reflection-chart-unlogged)',
       isUnlogged: true,
     })
   }
@@ -460,7 +635,7 @@ export default function ReflectionPage() {
       return goalLookup
     }
     const map = new Map(goalLookup)
-    map.set(key, { goalName, color: undefined })
+    map.set(key, { goalName, colorInfo: undefined })
     return map
   }, [goalLookup, activeSession])
 
@@ -580,7 +755,9 @@ export default function ReflectionPage() {
           id: 'unlogged',
           label: 'Unlogged Time',
           durationMs: windowMs - loggedMs,
-          color: 'var(--reflection-chart-unlogged)',
+          fraction: 0,
+          swatch: 'var(--reflection-chart-unlogged)',
+          baseColor: 'var(--reflection-chart-unlogged)',
           isUnlogged: true,
         },
       ]
@@ -588,6 +765,10 @@ export default function ReflectionPage() {
     return base
   }, [loggedSegments, unloggedSegment, windowMs, loggedMs])
   const pieArcs = useMemo(() => createPieArcs(segments, windowMs), [segments, windowMs])
+  const pieGradients = useMemo(
+    () => pieArcs.flatMap((arc) => (arc.gradient ? [arc.gradient] : [])),
+    [pieArcs],
+  )
   const unloggedMs = useMemo(
     () => unloggedSegment?.durationMs ?? Math.max(windowMs - loggedMs, 0),
     [unloggedSegment, windowMs, loggedMs],
@@ -638,6 +819,50 @@ export default function ReflectionPage() {
               aria-hidden="true"
               focusable="false"
             >
+              {pieGradients.length > 0 ? (
+                <defs>
+                  {pieGradients.map((gradient) =>
+                    gradient.type === 'linear' ? (
+                      <linearGradient
+                        key={gradient.id}
+                        id={gradient.id}
+                        x1={gradient.x1}
+                        y1={gradient.y1}
+                        x2={gradient.x2}
+                        y2={gradient.y2}
+                        gradientUnits="userSpaceOnUse"
+                      >
+                        {gradient.stops.map((stop, index) => (
+                          <stop
+                            key={`${gradient.id}-stop-${index}`}
+                            offset={stop.offset}
+                            stopColor={stop.color}
+                            stopOpacity={typeof stop.opacity === 'number' ? stop.opacity : undefined}
+                          />
+                        ))}
+                      </linearGradient>
+                    ) : (
+                      <radialGradient
+                        key={gradient.id}
+                        id={gradient.id}
+                        cx={gradient.cx}
+                        cy={gradient.cy}
+                        r={gradient.r}
+                        gradientUnits="userSpaceOnUse"
+                      >
+                        {gradient.stops.map((stop, index) => (
+                          <stop
+                            key={`${gradient.id}-stop-${index}`}
+                            offset={stop.offset}
+                            stopColor={stop.color}
+                            stopOpacity={typeof stop.opacity === 'number' ? stop.opacity : undefined}
+                          />
+                        ))}
+                      </radialGradient>
+                    ),
+                  )}
+                </defs>
+              ) : null}
               {pieArcs.length === 0 ? (
                 <path
                   className="reflection-pie__slice"
@@ -652,7 +877,7 @@ export default function ReflectionPage() {
                     key={arc.id}
                     className="reflection-pie__slice"
                     d={arc.path}
-                    fill={arc.color}
+                    fill={arc.fill}
                     fillRule="evenodd"
                     clipRule="evenodd"
                   />
@@ -672,7 +897,7 @@ export default function ReflectionPage() {
                 key={segment.id}
                 className={`reflection-legend__item${segment.isUnlogged ? ' reflection-legend__item--unlogged' : ''}`}
               >
-                <span className="reflection-legend__swatch" style={{ background: segment.color }} aria-hidden="true" />
+                <span className="reflection-legend__swatch" style={{ background: segment.swatch }} aria-hidden="true" />
                 <div className="reflection-legend__meta">
                   <span className="reflection-legend__label">{segment.label}</span>
                   <span className="reflection-legend__value">{formatDuration(segment.durationMs)}</span>
