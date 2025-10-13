@@ -773,12 +773,13 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       : focusDifficulty === 'red'
       ? 'goal-task-row--diff-red'
       : ''
-  const focusDiffBadgeClass =
-    focusDifficulty && focusDifficulty !== 'none'
-      ? ['goal-task-diff', `goal-task-diff--${focusDifficulty}`, 'focus-task__diff-chip']
-          .filter(Boolean)
-          .join(' ')
-      : null
+  const focusDiffBadgeClass = [
+    'goal-task-diff',
+    focusDifficulty && focusDifficulty !== 'none' ? `goal-task-diff--${focusDifficulty}` : '',
+    'focus-task__diff-chip',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   const toggleGoalExpansion = (goalId: string) => {
     const isExpanded = expandedGoals.has(goalId)
