@@ -81,8 +81,6 @@ type PieArc = {
   color: string
   path: string
   fill: string
-  stroke?: string
-  strokeWidth?: number
   gradient?: PieGradient
   isUnlogged?: boolean
 }
@@ -417,27 +415,16 @@ const createPieArcs = (segments: PieSegment[], windowMs: number): PieArc[] => {
     const normalizedBase = normalizeHexColor(segment.baseColor)
     const fallbackFill = normalizedBase ? applyAlphaToHex(normalizedBase, 0.58) : segment.baseColor
     const isUnlogged = Boolean(segment.isUnlogged)
-    const baseStroke = normalizedBase
-      ? applyAlphaToHex(mixHexColors(normalizedBase, '#ffffff', 0.45), 0.22)
-      : 'rgba(255, 255, 255, 0.08)'
-
-    let fillValue = gradient && !isUnlogged ? `url(#${gradient.id})` : fallbackFill
-    let strokeValue = baseStroke
-    let strokeWidth = 0.8
-
-    if (isUnlogged) {
-      fillValue = 'var(--reflection-chart-unlogged-soft)'
-      strokeValue = 'var(--reflection-chart-unlogged-stroke)'
-      strokeWidth = 1.1
-    }
-
+    const fillValue = isUnlogged
+      ? 'var(--reflection-chart-unlogged-soft)'
+      : gradient
+        ? `url(#${gradient.id})`
+        : fallbackFill
     arcs.push({
       id: segment.id,
       color: segment.swatch,
       path: describeDonutSlice(startAngle, endAngle),
       fill: fillValue,
-      stroke: strokeValue,
-      strokeWidth,
       gradient: !isUnlogged && gradient ? gradient : undefined,
       isUnlogged,
     })
@@ -894,9 +881,6 @@ export default function ReflectionPage() {
                       className={className}
                       d={arc.path}
                       fill={arc.fill}
-                      stroke={arc.stroke ?? 'none'}
-                      strokeWidth={arc.strokeWidth ?? 0}
-                      strokeLinejoin="round"
                       fillRule="evenodd"
                       clipRule="evenodd"
                     />
