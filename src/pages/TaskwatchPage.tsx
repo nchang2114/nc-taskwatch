@@ -1175,14 +1175,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                   <span className="focus-task__origin">{`${focusGoalName} → ${focusBucketName}`}</span>
                 ) : null}
               </div>
-              {focusDiffBadgeClass ? <span className={focusDiffBadgeClass} aria-hidden="true" /> : null}
             </div>
           </button>
-          <span className={`focus-task__chevron${isSelectorOpen ? ' focus-task__chevron--open' : ''}`} aria-hidden="true">
-            <svg viewBox="0 0 20 20" fill="currentColor">
-              <path d="M5.293 7.293a1 1 0 0 1 1.414 0L10 10.586l3.293-3.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 0-1.414z" />
-            </svg>
-          </span>
+          <div className="focus-task__indicators" aria-hidden="true">
+            {focusDiffBadgeClass ? <span className={focusDiffBadgeClass} /> : null}
+            <span className={`focus-task__chevron${isSelectorOpen ? ' focus-task__chevron--open' : ''}`}>
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 0 1 1.414 0L10 10.586l3.293-3.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 0-1.414z" />
+              </svg>
+            </span>
+          </div>
         </div>
         {isSelectorOpen ? (
           <div
