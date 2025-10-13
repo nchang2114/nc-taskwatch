@@ -3882,58 +3882,64 @@ export default function GoalsPage(): ReactElement {
   )
 
   const toggleTaskCompletion = (goalId: string, bucketId: string, taskId: string) => {
-    const previousGoals = goals
-    const previousCompletedCollapsed = completedCollapsed
+    const previousGoals = goals.map((goal) => ({
+      ...goal,
+      buckets: goal.buckets.map((bucket) => ({
+        ...bucket,
+        tasks: bucket.tasks.map((task) => ({ ...task })),
+      })),
+    }))
+    const previousCompletedCollapsed = { ...completedCollapsed }
     let toggledNewCompleted: boolean | null = null
     let shouldCollapseAfterFirstComplete = false
 
-    setGoals((gs) =>
-      gs.map((goal) =>
-        goal.id === goalId
-          ? {
-              ...goal,
-              buckets: goal.buckets.map((bucket) =>
-                bucket.id === bucketId
-                  ? (() => {
-                      const toggled = bucket.tasks.find((t) => t.id === taskId)
-                      const newCompleted = !(toggled?.completed ?? false)
-                      toggledNewCompleted = newCompleted
-                      const previousCompletedCount = bucket.tasks.reduce(
-                        (count, task) => (task.completed ? count + 1 : count),
-                        0,
-                      )
-                      const updatedTasks = bucket.tasks.map((task) =>
-                        task.id === taskId ? { ...task, completed: newCompleted } : task,
-                      )
-                      // Move the toggled task to the end of its new section to match DB ordering
-                      const active = updatedTasks.filter((t) => !t.completed)
-                      const completed = updatedTasks.filter((t) => t.completed)
-                      if (!shouldCollapseAfterFirstComplete && previousCompletedCount === 0 && completed.length > 0) {
-                        shouldCollapseAfterFirstComplete = true
-                      }
-                      // Ensure toggled is last in its new section
-                      if (newCompleted) {
-                        const idx = completed.findIndex((t) => t.id === taskId)
-                        if (idx !== -1) {
-                          const [mv] = completed.splice(idx, 1)
-                          completed.push(mv)
-                        }
-                        return { ...bucket, tasks: [...active, ...completed] }
-                      } else {
-                        const idx = active.findIndex((t) => t.id === taskId)
-                        if (idx !== -1) {
-                          const [mv] = active.splice(idx, 1)
-                          active.push(mv)
-                        }
-                        return { ...bucket, tasks: [...active, ...completed] }
-                      }
-                    })()
-                  : bucket,
-              ),
+    const nextGoals = goals.map((goal) => {
+      if (goal.id !== goalId) {
+        return goal
+      }
+      return {
+        ...goal,
+        buckets: goal.buckets.map((bucket) => {
+          if (bucket.id !== bucketId) {
+            return bucket
+          }
+          const toggled = bucket.tasks.find((t) => t.id === taskId)
+          if (!toggled) {
+            return bucket
+          }
+          const newCompleted = !toggled.completed
+          toggledNewCompleted = newCompleted
+          const previousCompletedCount = bucket.tasks.reduce(
+            (count, task) => (task.completed ? count + 1 : count),
+            0,
+          )
+          const updatedTasks = bucket.tasks.map((task) =>
+            task.id === taskId ? { ...task, completed: newCompleted } : task,
+          )
+          const active = updatedTasks.filter((t) => !t.completed)
+          const completed = updatedTasks.filter((t) => t.completed)
+          if (!shouldCollapseAfterFirstComplete && previousCompletedCount === 0 && completed.length > 0) {
+            shouldCollapseAfterFirstComplete = true
+          }
+          if (newCompleted) {
+            const idx = completed.findIndex((t) => t.id === taskId)
+            if (idx !== -1) {
+              const [mv] = completed.splice(idx, 1)
+              completed.push(mv)
             }
-          : goal,
-      ),
-    )
+            return { ...bucket, tasks: [...active, ...completed] }
+          }
+          const idx = active.findIndex((t) => t.id === taskId)
+          if (idx !== -1) {
+            const [mv] = active.splice(idx, 1)
+            active.push(mv)
+          }
+          return { ...bucket, tasks: [...active, ...completed] }
+        }),
+      }
+    })
+
+    setGoals(nextGoals)
 
     if (shouldCollapseAfterFirstComplete) {
       setCompletedCollapsed((current) => ({
@@ -3943,11 +3949,28 @@ export default function GoalsPage(): ReactElement {
     }
 
     if (toggledNewCompleted !== null) {
-      apiSetTaskCompletedAndResort(taskId, bucketId, toggledNewCompleted).catch((error) => {
-        console.warn('[GoalsPage] Failed to persist task completion toggle:', error)
-        setGoals(() => previousGoals)
-        setCompletedCollapsed(() => previousCompletedCollapsed)
-      })
+      apiSetTaskCompletedAndResort(taskId, bucketId, toggledNewCompleted)
+        .then((persisted) => {
+          const persistedCompleted =
+            persisted && typeof persisted.completed === 'string'
+              ? persisted.completed.toLowerCase() === 'true'
+              : Boolean(persisted?.completed)
+          if (persistedCompleted !== toggledNewCompleted) {
+            console.warn(
+              '[GoalsPage] Supabase completion toggle mismatch; expected',
+              toggledNewCompleted,
+              'but received',
+              persisted?.completed,
+            )
+            setGoals(() => previousGoals)
+            setCompletedCollapsed(() => previousCompletedCollapsed)
+          }
+        })
+        .catch((error) => {
+          console.warn('[GoalsPage] Failed to persist task completion toggle:', error)
+          setGoals(() => previousGoals)
+          setCompletedCollapsed(() => previousCompletedCollapsed)
+        })
     }
   }
 

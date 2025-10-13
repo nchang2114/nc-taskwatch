@@ -193,6 +193,60 @@ async function prependSortIndexForTasks(bucketId: string, completed: boolean) {
   return minIdx - STEP
 }
 
+async function updateTaskWithGuard(
+  taskId: string,
+  bucketId: string,
+  updates: Partial<DbTask>,
+  selectColumns?: string,
+): Promise<any[]> {
+  if (!supabase) {
+    throw new Error('Supabase client unavailable')
+  }
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) {
+    throw new Error('Missing Supabase session')
+  }
+  let guarded = supabase
+    .from('tasks')
+    .update(updates)
+    .eq('id', taskId)
+    .eq('bucket_id', bucketId)
+    .eq('user_id', session.user.id)
+  let data: any[] | null = null
+  let error: any = null
+  if (selectColumns) {
+    const { data: withSelect, error: withSelectError } = await guarded.select(selectColumns)
+    data = withSelect as any[] | null
+    error = withSelectError
+  } else {
+    const { error: updateError } = await guarded
+    error = updateError
+  }
+  if (error) {
+    throw error
+  }
+  if (data && Array.isArray(data) && data.length > 0) {
+    return data as any[]
+  }
+  // Fallback path for legacy rows that may not have a user_id populated.
+  const fallback = supabase.from('tasks').update(updates).eq('id', taskId).eq('bucket_id', bucketId)
+  if (selectColumns) {
+    const { data: fallbackData, error: fallbackError } = await fallback.select(selectColumns)
+    if (fallbackError) {
+      throw fallbackError
+    }
+    if (!fallbackData || !Array.isArray(fallbackData) || fallbackData.length === 0) {
+      throw new Error('Task not found during update')
+    }
+    return fallbackData as any[]
+  }
+  const { error: fallbackError } = await fallback
+  if (fallbackError) {
+    throw fallbackError
+  }
+  return []
+}
+
 // ---------- Goals ----------
 export async function createGoal(name: string, color: string, surface: string = 'glass') {
   if (!supabase) return null
@@ -405,14 +459,10 @@ export async function setTaskPriorityAndResort(
   priority: boolean,
 ) {
   if (!supabase) throw new Error('Supabase client unavailable')
-  await ensureSingleUserSession()
   if (priority) {
     // Enabling priority: place at the top of its section
     const sort_index = await prependSortIndexForTasks(bucketId, completed)
-    const { error } = await supabase.from('tasks').update({ priority: true, sort_index }).eq('id', taskId)
-    if (error) {
-      throw error
-    }
+  await updateTaskWithGuard(taskId, bucketId, { priority: true, sort_index }, 'id')
     return
   }
   // Disabling priority: place at the first non-priority position
@@ -431,25 +481,71 @@ export async function setTaskPriorityAndResort(
   } else {
     sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed, priority: false })
   }
-  const { error } = await supabase.from('tasks').update({ priority: false, sort_index }).eq('id', taskId)
-  if (error) {
-    throw error
+  await updateTaskWithGuard(taskId, bucketId, { priority: false, sort_index }, 'id')
+}
+
+const parseBooleanish = (value: unknown): boolean | null => {
+  if (typeof value === 'boolean') {
+    return value
   }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === 'true' || normalized === 't' || normalized === '1') {
+      return true
+    }
+    if (normalized === 'false' || normalized === 'f' || normalized === '0') {
+      return false
+    }
+  }
+  if (typeof value === 'number') {
+    if (value === 1) return true
+    if (value === 0) return false
+  }
+  return null
 }
 
 export async function setTaskCompletedAndResort(taskId: string, bucketId: string, completed: boolean) {
   if (!supabase) throw new Error('Supabase client unavailable')
-  await ensureSingleUserSession()
-  const sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed })
-  const { error } = await supabase.from('tasks').update({ completed, sort_index }).eq('id', taskId)
-  if (error) {
-    throw error
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) {
+    throw new Error('[goalsApi] Missing Supabase session for completion toggle')
   }
+
+  const sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed })
+  const updates: Partial<DbTask> = { completed, sort_index }
+  if (completed) {
+    updates.priority = false
+  }
+
+  const completionRows = await updateTaskWithGuard(taskId, bucketId, updates, 'id, completed')
+  const persisted = completionRows[0]
+  if (!persisted) {
+    throw new Error(`[goalsApi] Task ${taskId} not found for completion toggle`)
+  }
+  const persistedCompleted = parseBooleanish((persisted as any).completed)
+  if (persistedCompleted !== completed) {
+    const { data: refetch, error } = await supabase
+      .from('tasks')
+      .select('id, completed')
+      .eq('id', taskId)
+      .eq('bucket_id', bucketId)
+      .maybeSingle()
+    if (error) {
+      throw error
+    }
+    const finalCompleted = parseBooleanish(refetch?.completed)
+    if (finalCompleted !== completed) {
+      throw new Error(
+        `[goalsApi] Completion update mismatch for task ${taskId}: expected ${completed} but received ${refetch?.completed}`,
+      )
+    }
+    return refetch
+  }
+  return persisted
 }
 
 export async function setTaskSortIndex(bucketId: string, section: 'active' | 'completed', toIndex: number, taskId: string) {
   if (!supabase) throw new Error('Supabase client unavailable')
-  await ensureSingleUserSession()
   const { data: rows } = await supabase
     .from('tasks')
     .select('id, sort_index')
@@ -477,7 +573,7 @@ export async function setTaskSortIndex(bucketId: string, section: 'active' | 'co
   } else {
     newSort = STEP
   }
-  await supabase.from('tasks').update({ sort_index: newSort }).eq('id', taskId)
+  await updateTaskWithGuard(taskId, bucketId, { sort_index: newSort }, 'id')
 }
 
 export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
