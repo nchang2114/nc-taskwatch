@@ -40,6 +40,8 @@ type HistoryEntry = {
   elapsed: number
   startedAt: number
   endedAt: number
+  goalName: string | null
+  bucketName: string | null
 }
 
 type FocusCandidate = {
@@ -88,6 +90,7 @@ const CURRENT_TASK_STORAGE_KEY = 'nc-taskwatch-current-task'
 const CURRENT_TASK_SOURCE_KEY = 'nc-taskwatch-current-task-source'
 const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
+const UNCATEGORISED_LABEL = 'Uncategorised'
 const MAX_TASK_STORAGE_LENGTH = 256
 const FOCUS_COMPLETION_RESET_DELAY_MS = 800
 const PRIORITY_HOLD_MS = 300
@@ -193,12 +196,22 @@ const sanitizeHistory = (value: unknown): HistoryEntry[] => {
       const elapsed = typeof candidate.elapsed === 'number' ? candidate.elapsed : null
       const startedAt = typeof candidate.startedAt === 'number' ? candidate.startedAt : null
       const endedAt = typeof candidate.endedAt === 'number' ? candidate.endedAt : null
+      const goalNameRaw = typeof candidate.goalName === 'string' ? candidate.goalName : ''
+      const bucketNameRaw = typeof candidate.bucketName === 'string' ? candidate.bucketName : ''
 
       if (!id || taskName === null || elapsed === null || startedAt === null || endedAt === null) {
         return null
       }
 
-      return { id, taskName, elapsed, startedAt, endedAt }
+      return {
+        id,
+        taskName,
+        elapsed,
+        startedAt,
+        endedAt,
+        goalName: goalNameRaw.length > 0 ? goalNameRaw : null,
+        bucketName: bucketNameRaw.length > 0 ? bucketNameRaw : null,
+      }
     })
     .filter((entry): entry is HistoryEntry => Boolean(entry))
 }
@@ -385,6 +398,10 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const focusCompletionTimeoutRef = useRef<number | null>(null)
   const focusPriorityHoldTimerRef = useRef<number | null>(null)
   const focusPriorityHoldTriggeredRef = useRef(false)
+  const focusContextRef = useRef<{ goalName: string | null; bucketName: string | null }>({
+    goalName: null,
+    bucketName: null,
+  })
   const [isSelectorOpen, setIsSelectorOpen] = useState(false)
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
   const [hasRequestedGoals, setHasRequestedGoals] = useState(false)
@@ -634,6 +651,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     }
     return null
   }, [focusCandidates, focusSource, normalizedCurrentTask])
+
+  const effectiveGoalName = focusSource?.goalName ?? activeFocusCandidate?.goalName ?? null
+  const effectiveBucketName = focusSource?.bucketName ?? activeFocusCandidate?.bucketName ?? null
+
+  useEffect(() => {
+    focusContextRef.current = {
+      goalName: effectiveGoalName,
+      bucketName: effectiveBucketName,
+    }
+  }, [effectiveGoalName, effectiveBucketName])
 
   useEffect(() => {
     setFocusSource((current) => {
@@ -1094,6 +1121,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     const taskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
     const bucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
     const goalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
+    const entryGoalName = focusSource?.goalName ?? activeFocusCandidate?.goalName ?? null
+    const entryBucketName = focusSource?.bucketName ?? activeFocusCandidate?.bucketName ?? null
 
     if (!taskId || !bucketId || !goalId) {
       return
@@ -1109,7 +1138,10 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
     const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
     if (elapsed > 0) {
-      registerNewHistoryEntry(elapsed, entryName)
+      registerNewHistoryEntry(elapsed, entryName, {
+        goalName: entryGoalName,
+        bucketName: entryBucketName,
+      })
     }
 
     setIsRunning(false)
@@ -1362,25 +1394,39 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     })
   }
 
-  const registerNewHistoryEntry = useCallback((elapsedMs: number, taskName: string) => {
-    const now = Date.now()
-    const startedAt = sessionStart ?? now - elapsedMs
-    const entry: HistoryEntry = {
-      id: makeHistoryId(),
-      taskName,
-      elapsed: elapsedMs,
-      startedAt,
-      endedAt: now,
-    }
-
-    setHistory((current) => {
-      const next = [entry, ...current]
-      if (next.length > 250) {
-        return next.slice(0, 250)
+  const registerNewHistoryEntry = useCallback(
+    (
+      elapsedMs: number,
+      taskName: string,
+      context?: { goalName?: string | null; bucketName?: string | null },
+    ) => {
+      const now = Date.now()
+      const startedAt = sessionStart ?? now - elapsedMs
+      const fallbackContext = focusContextRef.current
+      const goalName =
+        context?.goalName !== undefined ? context.goalName : fallbackContext.goalName ?? null
+      const bucketName =
+        context?.bucketName !== undefined ? context.bucketName : fallbackContext.bucketName ?? null
+      const entry: HistoryEntry = {
+        id: makeHistoryId(),
+        taskName,
+        elapsed: elapsedMs,
+        startedAt,
+        endedAt: now,
+        goalName,
+        bucketName,
       }
-      return next
-    })
-  }, [sessionStart])
+
+      setHistory((current) => {
+        const next = [entry, ...current]
+        if (next.length > 250) {
+          return next.slice(0, 250)
+        }
+        return next
+      })
+    },
+    [sessionStart],
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1392,6 +1438,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       if (!detail) {
         return
       }
+      const previousContext = focusContextRef.current
       const taskName = detail.taskName?.trim().slice(0, MAX_TASK_STORAGE_LENGTH) ?? ''
       const goalName = detail.goalName?.trim().slice(0, MAX_TASK_STORAGE_LENGTH) ?? ''
       const bucketName = detail.bucketName?.trim().slice(0, MAX_TASK_STORAGE_LENGTH) ?? ''
@@ -1420,7 +1467,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         const now = Date.now()
         if (elapsed > 0) {
           const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
-          registerNewHistoryEntry(elapsed, entryName)
+          registerNewHistoryEntry(elapsed, entryName, previousContext)
         }
         setElapsed(0)
         setSessionStart(now)
@@ -1863,6 +1910,15 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           <ol className="history-list">
             {history.map((entry) => {
               const dateRangeLabel = formatDateRange(entry.startedAt, entry.endedAt)
+              const goalLabel =
+                entry.goalName && entry.goalName.trim().length > 0 ? entry.goalName : UNCATEGORISED_LABEL
+              const bucketLabel =
+                entry.bucketName && entry.bucketName.trim().length > 0 ? entry.bucketName : UNCATEGORISED_LABEL
+              const hasBucketLabel = bucketLabel.length > 0
+              const pathAria =
+                hasBucketLabel && bucketLabel !== goalLabel
+                  ? `Goal ${goalLabel}, Bucket ${bucketLabel}`
+                  : `Goal ${goalLabel}`
               return (
                 <li key={entry.id} className="history-entry">
                   <div className="history-entry__top">
@@ -1883,7 +1939,20 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                     <span className="history-entry__duration">{formatTime(entry.elapsed)}</span>
                   </div>
                   <div className="history-entry__footer">
-                    <div className="history-entry__meta">{dateRangeLabel}</div>
+                    <div className="history-entry__footer-meta">
+                      <div className="history-entry__trail" aria-label={pathAria}>
+                        <span className="history-entry__trail-goal">{goalLabel}</span>
+                        {hasBucketLabel ? (
+                          <>
+                            <span className="history-entry__trail-separator" aria-hidden="true">
+                              →
+                            </span>
+                            <span className="history-entry__trail-bucket">{bucketLabel}</span>
+                          </>
+                        ) : null}
+                      </div>
+                      <div className="history-entry__meta">{dateRangeLabel}</div>
+                    </div>
                     <button
                       type="button"
                       className="history-entry__delete"

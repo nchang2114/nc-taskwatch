@@ -89,7 +89,7 @@ const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
 const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
 const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
-const UNLABELED_FOCUS_LABEL = 'Unlabeled Focus'
+const UNCATEGORISED_LABEL = 'Uncategorised'
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
 
 type GoalLookup = Map<string, { goalName: string; colorInfo?: GoalColorInfo }>
@@ -473,13 +473,13 @@ type ActiveSessionState = {
 const resolveGoalMetadata = (taskName: string, lookup: GoalLookup): GoalMetadata => {
   const trimmed = taskName.trim()
   if (!trimmed) {
-    return { label: UNLABELED_FOCUS_LABEL }
+    return { label: UNCATEGORISED_LABEL }
   }
   const match = lookup.get(trimmed.toLowerCase())
   if (match) {
     return { label: match.goalName, colorInfo: match.colorInfo }
   }
-  return { label: trimmed }
+  return { label: UNCATEGORISED_LABEL }
 }
 
 const sanitizeActiveSession = (value: unknown): ActiveSessionState | null => {
@@ -723,7 +723,7 @@ export default function ReflectionPage() {
     const safeStartedAt = Number.isFinite(startedAt) ? startedAt : defaultStart
     const endedAt = activeSession.isRunning ? now : safeStartedAt + totalElapsed
     const taskLabel =
-      activeSession.taskName.length > 0 ? activeSession.taskName : activeSession.goalName ?? UNLABELED_FOCUS_LABEL
+      activeSession.taskName.length > 0 ? activeSession.taskName : activeSession.goalName ?? UNCATEGORISED_LABEL
     const activeEntry: HistoryEntry = {
       id: 'active-session',
       taskName: taskLabel,
