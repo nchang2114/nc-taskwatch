@@ -31,6 +31,8 @@ type HistoryEntry = {
   elapsed: number
   startedAt: number
   endedAt: number
+  goalName: string | null
+  bucketName: string | null
 }
 
 type GoalGradientInfo = {
@@ -109,10 +111,20 @@ const sanitizeHistory = (value: unknown): HistoryEntry[] => {
       const elapsed = typeof candidate.elapsed === 'number' ? candidate.elapsed : null
       const startedAt = typeof candidate.startedAt === 'number' ? candidate.startedAt : null
       const endedAt = typeof candidate.endedAt === 'number' ? candidate.endedAt : null
+      const goalNameRaw = typeof candidate.goalName === 'string' ? candidate.goalName : ''
+      const bucketNameRaw = typeof candidate.bucketName === 'string' ? candidate.bucketName : ''
       if (!id || elapsed === null || startedAt === null || endedAt === null) {
         return null
       }
-      return { id, taskName, elapsed, startedAt, endedAt }
+      return {
+        id,
+        taskName,
+        elapsed,
+        startedAt,
+        endedAt,
+        goalName: goalNameRaw.trim().length > 0 ? goalNameRaw : null,
+        bucketName: bucketNameRaw.trim().length > 0 ? bucketNameRaw : null,
+      }
     })
     .filter((entry): entry is HistoryEntry => Boolean(entry))
 }
@@ -456,6 +468,22 @@ const createGoalTaskMap = (snapshot: GoalSnapshot[]): GoalLookup => {
   return map
 }
 
+const createGoalColorMap = (snapshot: GoalSnapshot[]): Map<string, GoalColorInfo | undefined> => {
+  const map = new Map<string, GoalColorInfo | undefined>()
+  snapshot.forEach((goal) => {
+    const goalName = goal.name?.trim()
+    if (!goalName) {
+      return
+    }
+    const normalized = goalName.toLowerCase()
+    if (map.has(normalized)) {
+      return
+    }
+    map.set(normalized, resolveGoalColorInfo(goal.color))
+  })
+  return map
+}
+
 type GoalMetadata = {
   label: string
   colorInfo?: GoalColorInfo
@@ -470,15 +498,25 @@ type ActiveSessionState = {
   updatedAt: number
 }
 
-const resolveGoalMetadata = (taskName: string, lookup: GoalLookup): GoalMetadata => {
-  const trimmed = taskName.trim()
-  if (!trimmed) {
-    return { label: UNCATEGORISED_LABEL }
+const resolveGoalMetadata = (
+  entry: HistoryEntry,
+  taskLookup: GoalLookup,
+  goalColorLookup: Map<string, GoalColorInfo | undefined>,
+): GoalMetadata => {
+  const goalName = entry.goalName?.trim()
+  if (goalName && goalName.length > 0) {
+    const colorInfo = goalColorLookup.get(goalName.toLowerCase())
+    return { label: goalName, colorInfo }
   }
-  const match = lookup.get(trimmed.toLowerCase())
-  if (match) {
-    return { label: match.goalName, colorInfo: match.colorInfo }
+
+  const taskName = entry.taskName.trim()
+  if (taskName.length > 0) {
+    const match = taskLookup.get(taskName.toLowerCase())
+    if (match) {
+      return { label: match.goalName, colorInfo: match.colorInfo }
+    }
   }
+
   return { label: UNCATEGORISED_LABEL }
 }
 
@@ -517,7 +555,8 @@ const readStoredActiveSession = (): ActiveSessionState | null => {
 const computeRangeOverview = (
   history: HistoryEntry[],
   range: ReflectionRangeKey,
-  lookup: GoalLookup,
+  taskLookup: GoalLookup,
+  goalColorLookup: Map<string, GoalColorInfo | undefined>,
 ): { segments: PieSegment[]; windowMs: number; loggedMs: number } => {
   const { durationMs: windowMs } = RANGE_DEFS[range]
   const now = Date.now()
@@ -542,7 +581,7 @@ const computeRangeOverview = (
     if (overlapMs <= 0) {
       return
     }
-    const metadata = resolveGoalMetadata(entry.taskName, lookup)
+    const metadata = resolveGoalMetadata(entry, taskLookup, goalColorLookup)
     const current = totals.get(metadata.label)
     if (current) {
       current.durationMs += overlapMs
@@ -620,6 +659,7 @@ export default function ReflectionPage() {
   const [journal, setJournal] = useState('')
 
   const goalLookup = useMemo(() => createGoalTaskMap(goalsSnapshot), [goalsSnapshot])
+  const goalColorLookup = useMemo(() => createGoalColorMap(goalsSnapshot), [goalsSnapshot])
   const enhancedGoalLookup = useMemo(() => {
     if (!activeSession || !activeSession.goalName) {
       return goalLookup
@@ -634,9 +674,9 @@ export default function ReflectionPage() {
       return goalLookup
     }
     const map = new Map(goalLookup)
-    map.set(key, { goalName, colorInfo: undefined })
+    map.set(key, { goalName, colorInfo: goalColorLookup.get(goalName.toLowerCase()) })
     return map
-  }, [goalLookup, activeSession])
+  }, [goalLookup, goalColorLookup, activeSession])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -730,14 +770,16 @@ export default function ReflectionPage() {
       elapsed: totalElapsed,
       startedAt: safeStartedAt,
       endedAt,
+      goalName: activeSession.goalName ?? null,
+      bucketName: null,
     }
     const filteredHistory = history.filter((entry) => entry.id !== activeEntry.id)
     return [activeEntry, ...filteredHistory]
   }, [history, activeSession, nowTick])
 
   const { segments, windowMs, loggedMs } = useMemo(
-    () => computeRangeOverview(effectiveHistory, activeRange, enhancedGoalLookup),
-    [effectiveHistory, activeRange, enhancedGoalLookup, nowTick],
+    () => computeRangeOverview(effectiveHistory, activeRange, enhancedGoalLookup, goalColorLookup),
+    [effectiveHistory, activeRange, enhancedGoalLookup, goalColorLookup, nowTick],
   )
   const activeRangeConfig = RANGE_DEFS[activeRange]
   const loggedSegments = useMemo(() => segments.filter((segment) => !segment.isUnlogged), [segments])
