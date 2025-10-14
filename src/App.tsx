@@ -34,11 +34,7 @@ const TAB_PANEL_IDS: Record<TabKey, string> = {
   reflection: 'tab-panel-reflection',
 }
 
-const SWIPE_RULES: Record<TabKey, { left: TabKey; right: TabKey }> = {
-  taskwatch: { left: 'goals', right: 'reflection' },
-  goals: { left: 'taskwatch', right: 'reflection' },
-  reflection: { left: 'taskwatch', right: 'goals' },
-}
+const SWIPE_SEQUENCE: TabKey[] = ['reflection', 'taskwatch', 'goals']
 
 
 function App() {
@@ -349,10 +345,16 @@ function App() {
       if (state.active && !state.handled) {
         const dx = event.clientX - state.startX
         if (Math.abs(dx) >= SWIPE_TRIGGER_DISTANCE) {
-          const directionKey = dx > 0 ? 'right' : 'left'
-          const next = SWIPE_RULES[activeTab]?.[directionKey]
-          if (next && next !== activeTab) {
-            selectTab(next)
+          const currentIndex = SWIPE_SEQUENCE.indexOf(activeTab)
+          if (currentIndex !== -1) {
+            const length = SWIPE_SEQUENCE.length
+            const nextIndex = dx < 0
+              ? (currentIndex + 1) % length
+              : (currentIndex - 1 + length) % length
+            const next = SWIPE_SEQUENCE[nextIndex]
+            if (next !== activeTab) {
+              selectTab(next)
+            }
           }
         }
       }
