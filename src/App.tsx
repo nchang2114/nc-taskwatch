@@ -495,10 +495,10 @@ function App() {
 
       <main
         className={mainClassName}
-        onPointerDown={handleSwipePointerDown}
-        onPointerMove={handleSwipePointerMove}
-        onPointerUp={handleSwipePointerUp}
-        onPointerCancel={handleSwipePointerCancel}
+        onPointerDownCapture={handleSwipePointerDown}
+        onPointerMoveCapture={handleSwipePointerMove}
+        onPointerUpCapture={handleSwipePointerUp}
+        onPointerCancelCapture={handleSwipePointerCancel}
       >
         <section
           id={TAB_PANEL_IDS.goals}
