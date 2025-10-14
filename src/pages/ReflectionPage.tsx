@@ -92,6 +92,12 @@ const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
 const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 const UNCATEGORISED_LABEL = 'Uncategorised'
+const UNCATEGORISED_GRADIENT = {
+  css: 'linear-gradient(135deg, #94a3b8 0%, #64748b 45%, #1e293b 100%)',
+  start: '#94a3b8',
+  end: '#1e293b',
+  angle: 135,
+} satisfies GoalGradientInfo
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
 
 type GoalLookup = Map<string, { goalName: string; colorInfo?: GoalColorInfo }>
@@ -517,7 +523,7 @@ const resolveGoalMetadata = (
     }
   }
 
-  return { label: UNCATEGORISED_LABEL }
+  return { label: UNCATEGORISED_LABEL, colorInfo: { gradient: UNCATEGORISED_GRADIENT } }
 }
 
 const sanitizeActiveSession = (value: unknown): ActiveSessionState | null => {
