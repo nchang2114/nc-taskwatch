@@ -364,7 +364,7 @@ function App() {
       if (state.active && !state.handled) {
         const dx = event.clientX - state.startX
         if (Math.abs(dx) >= SWIPE_TRIGGER_DISTANCE) {
-          if (dx < 0) {
+          if (dx > 0) {
             cycleTab(1)
           } else {
             cycleTab(-1)
