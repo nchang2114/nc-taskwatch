@@ -34,7 +34,12 @@ const TAB_PANEL_IDS: Record<TabKey, string> = {
   reflection: 'tab-panel-reflection',
 }
 
-const SWIPE_TAB_SEQUENCE: TabKey[] = ['goals', 'reflection', 'taskwatch']
+const SWIPE_RULES: Record<TabKey, { left: TabKey; right: TabKey }> = {
+  taskwatch: { left: 'goals', right: 'reflection' },
+  goals: { left: 'taskwatch', right: 'reflection' },
+  reflection: { left: 'taskwatch', right: 'goals' },
+}
+
 
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
@@ -262,26 +267,6 @@ function App() {
   const SWIPE_TRIGGER_DISTANCE = 72
   const SWIPE_MAX_OFF_AXIS = 80
 
-  const cycleTab = useCallback(
-    (direction: 1 | -1) => {
-      const currentIndex = SWIPE_TAB_SEQUENCE.indexOf(activeTab)
-      if (currentIndex === -1) {
-        return
-      }
-      const length = SWIPE_TAB_SEQUENCE.length
-      let nextIndex = currentIndex + direction
-      if (nextIndex < 0) {
-        nextIndex = length - 1
-      } else if (nextIndex >= length) {
-        nextIndex = 0
-      }
-      const nextTab = SWIPE_TAB_SEQUENCE[nextIndex]
-      if (nextTab !== activeTab) {
-        selectTab(nextTab)
-      }
-    },
-    [activeTab, selectTab],
-  )
 
   const handleSwipePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
@@ -364,10 +349,10 @@ function App() {
       if (state.active && !state.handled) {
         const dx = event.clientX - state.startX
         if (Math.abs(dx) >= SWIPE_TRIGGER_DISTANCE) {
-          if (dx > 0) {
-            cycleTab(-1)
-          } else {
-            cycleTab(1)
+          const directionKey = dx > 0 ? 'right' : 'left'
+          const next = SWIPE_RULES[activeTab]?.[directionKey]
+          if (next && next !== activeTab) {
+            selectTab(next)
           }
         }
       }
@@ -380,7 +365,7 @@ function App() {
         handled: false,
       }
     },
-    [cycleTab],
+    [activeTab, selectTab],
   )
 
   const handleSwipePointerUp = useCallback(
