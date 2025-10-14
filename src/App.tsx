@@ -348,7 +348,7 @@ function App() {
           const currentIndex = SWIPE_SEQUENCE.indexOf(activeTab)
           if (currentIndex !== -1) {
             const length = SWIPE_SEQUENCE.length
-            const nextIndex = dx < 0
+            const nextIndex = dx > 0
               ? (currentIndex + 1) % length
               : (currentIndex - 1 + length) % length
             const next = SWIPE_SEQUENCE[nextIndex]
