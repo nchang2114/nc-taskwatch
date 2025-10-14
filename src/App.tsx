@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import './App.css'
 import GoalsPage from './pages/GoalsPage'
 import ReflectionPage from './pages/ReflectionPage'
@@ -32,6 +33,8 @@ const TAB_PANEL_IDS: Record<TabKey, string> = {
   taskwatch: 'tab-panel-taskwatch',
   reflection: 'tab-panel-reflection',
 }
+
+const SWIPE_TAB_SEQUENCE: TabKey[] = ['goals', 'reflection', 'taskwatch']
 
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
@@ -199,21 +202,24 @@ function App() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
   }
 
-  const toggleNav = () => {
+  const closeNav = useCallback(() => {
+    setIsNavOpen(false)
+  }, [])
+
+  const selectTab = useCallback(
+    (tab: TabKey) => {
+      setActiveTab(tab)
+      closeNav()
+    },
+    [closeNav],
+  )
+
+  const toggleNav = useCallback(() => {
     if (!isNavCollapsed) {
       return
     }
     setIsNavOpen((current) => !current)
-  }
-
-  const closeNav = () => {
-    setIsNavOpen(false)
-  }
-
-  const selectTab = (tab: TabKey) => {
-    setActiveTab(tab)
-    closeNav()
-  }
+  }, [isNavCollapsed])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -239,6 +245,157 @@ function App() {
     { key: 'taskwatch', label: 'Taskwatch' },
     { key: 'reflection', label: 'Reflection' },
   ]
+  const swipeStateRef = useRef<{
+    pointerId: number | null
+    startX: number
+    startY: number
+    active: boolean
+    handled: boolean
+  }>({
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    active: false,
+    handled: false,
+  })
+  const SWIPE_ACTIVATION_DISTANCE = 16
+  const SWIPE_TRIGGER_DISTANCE = 72
+  const SWIPE_MAX_OFF_AXIS = 80
+
+  const cycleTab = useCallback(
+    (direction: 1 | -1) => {
+      const currentIndex = SWIPE_TAB_SEQUENCE.indexOf(activeTab)
+      if (currentIndex === -1) {
+        return
+      }
+      const length = SWIPE_TAB_SEQUENCE.length
+      let nextIndex = currentIndex + direction
+      if (nextIndex < 0) {
+        nextIndex = length - 1
+      } else if (nextIndex >= length) {
+        nextIndex = 0
+      }
+      const nextTab = SWIPE_TAB_SEQUENCE[nextIndex]
+      if (nextTab !== activeTab) {
+        selectTab(nextTab)
+      }
+    },
+    [activeTab, selectTab],
+  )
+
+  const handleSwipePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.pointerType !== 'touch') {
+        return
+      }
+      if (isNavOpen) {
+        return
+      }
+      const state = swipeStateRef.current
+      if (state.pointerId !== null) {
+        return
+      }
+      const target = event.target as HTMLElement | null
+      if (
+        target &&
+        target.closest?.(
+          'input, textarea, select, [contenteditable="true"], [data-disable-tab-swipe], .goal-task-input',
+        )
+      ) {
+        return
+      }
+      swipeStateRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        active: false,
+        handled: false,
+      }
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+    },
+    [isNavOpen],
+  )
+
+  const handleSwipePointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const state = swipeStateRef.current
+    if (event.pointerId !== state.pointerId || state.handled) {
+      return
+    }
+    const dx = event.clientX - state.startX
+    const dy = event.clientY - state.startY
+    if (!state.active) {
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SWIPE_ACTIVATION_DISTANCE) {
+        event.currentTarget.releasePointerCapture?.(event.pointerId)
+        swipeStateRef.current = {
+          pointerId: null,
+          startX: 0,
+          startY: 0,
+          active: false,
+          handled: true,
+        }
+        return
+      }
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_ACTIVATION_DISTANCE) {
+        state.active = true
+      }
+    }
+    if (state.active && Math.abs(dy) > SWIPE_MAX_OFF_AXIS) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
+      swipeStateRef.current = {
+        pointerId: null,
+        startX: 0,
+        startY: 0,
+        active: false,
+        handled: true,
+      }
+      return
+    }
+    if (state.active) {
+      event.preventDefault()
+    }
+  }, [])
+
+  const finalizeSwipe = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const state = swipeStateRef.current
+      if (event.pointerId !== state.pointerId) {
+        return
+      }
+      if (state.active && !state.handled) {
+        const dx = event.clientX - state.startX
+        if (Math.abs(dx) >= SWIPE_TRIGGER_DISTANCE) {
+          if (dx < 0) {
+            cycleTab(1)
+          } else {
+            cycleTab(-1)
+          }
+        }
+      }
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
+      swipeStateRef.current = {
+        pointerId: null,
+        startX: 0,
+        startY: 0,
+        active: false,
+        handled: false,
+      }
+    },
+    [cycleTab],
+  )
+
+  const handleSwipePointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      finalizeSwipe(event)
+    },
+    [finalizeSwipe],
+  )
+
+  const handleSwipePointerCancel = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      finalizeSwipe(event)
+    },
+    [finalizeSwipe],
+  )
 
   const topBarClassName = useMemo(
     () =>
@@ -349,7 +506,13 @@ function App() {
         ) : null}
       </header>
 
-      <main className={mainClassName}>
+      <main
+        className={mainClassName}
+        onPointerDown={handleSwipePointerDown}
+        onPointerMove={handleSwipePointerMove}
+        onPointerUp={handleSwipePointerUp}
+        onPointerCancel={handleSwipePointerCancel}
+      >
         <section
           id={TAB_PANEL_IDS.goals}
           role="tabpanel"
