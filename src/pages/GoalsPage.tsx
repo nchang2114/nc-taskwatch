@@ -2495,6 +2495,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         e.stopPropagation()
                                         onTaskTextClick(goal.id, b.id, task.id)
                                       }}
+                                      onPointerDown={(e) => {
+                                        // guard capture and drag vs edit/long-press
+                                        if (e.pointerType === 'touch') {
+                                          e.preventDefault()
+                                        }
+                                      }}
                                       onDoubleClick={(e) => {
                                         e.preventDefault()
                                         e.stopPropagation()
@@ -2511,7 +2517,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       }}
                                       aria-label="Edit task text"
                                     >
-                                      <span className="goal-task-text__inner">{highlightText(task.text, highlightTerm)}</span>
+                                      <span className="goal-task-text__inner" aria-hidden="true">
+                                        {highlightText(task.text, highlightTerm)}
+                                      </span>
                                     </button>
                                   )}
                                   <button
