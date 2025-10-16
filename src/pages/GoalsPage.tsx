@@ -12,6 +12,7 @@ import {
   setBucketSurface as apiSetBucketSurface,
   setGoalColor as apiSetGoalColor,
   setGoalSurface as apiSetGoalSurface,
+  setGoalStarred as apiSetGoalStarred,
   deleteBucketById as apiDeleteBucketById,
   deleteCompletedTasksInBucket as apiDeleteCompletedTasksInBucket,
   createTask as apiCreateTask,
@@ -290,6 +291,7 @@ export interface Goal {
   name: string
   color: string
   surfaceStyle?: GoalSurfaceStyle
+  starred: boolean
   customGradient?: {
     from: string
     to: string
@@ -313,6 +315,7 @@ const DEFAULT_GOALS: Goal[] = [
     name: 'Project X – End-to-end Demo',
     color: 'from-sky-500 to-indigo-500',
     surfaceStyle: 'glass',
+    starred: false,
     buckets: [
       {
         id: 'b_demo_1',
@@ -361,6 +364,7 @@ const DEFAULT_GOALS: Goal[] = [
     name: 'Finish PopDot Beta',
     color: 'from-fuchsia-500 to-purple-500',
     surfaceStyle: 'glass',
+    starred: false,
     buckets: [
       {
         id: 'b1',
@@ -400,6 +404,7 @@ const DEFAULT_GOALS: Goal[] = [
     name: 'Learn Japanese',
     color: 'from-emerald-500 to-cyan-500',
     surfaceStyle: 'glass',
+    starred: false,
     buckets: [
       {
         id: 'b4',
@@ -438,6 +443,7 @@ const DEFAULT_GOALS: Goal[] = [
     name: 'Stay Fit',
     color: 'from-lime-400 to-emerald-500',
     surfaceStyle: 'glass',
+    starred: false,
     buckets: [
       {
         id: 'b7',
@@ -476,6 +482,7 @@ const DEFAULT_GOAL_SEEDS: Parameters<typeof seedGoalsIfEmpty>[0] = DEFAULT_GOALS
   name: goal.name,
   color: goal.color,
   surfaceStyle: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+  starred: Boolean(goal.starred),
   buckets: goal.buckets.map((bucket) => ({
     name: bucket.name,
     favorite: bucket.favorite,
@@ -509,6 +516,7 @@ function reconcileGoalsWithSnapshot(snapshot: GoalSnapshot[], current: Goal[]): 
       name: goal.name,
       color: goal.color ?? existingGoal?.color ?? FALLBACK_GOAL_COLOR,
       surfaceStyle: goal.surfaceStyle,
+      starred: goal.starred ?? existingGoal?.starred ?? false,
       customGradient: existingGoal?.customGradient,
       buckets: goal.buckets.map((bucket) => {
         const existingBucket = existingGoal?.buckets.find((item) => item.id === bucket.id)
@@ -964,6 +972,8 @@ interface GoalRowProps {
   ) => void
   onOpenCustomizer: (goalId: string) => void
   activeCustomizerGoalId: string | null
+  isStarred: boolean
+  onToggleStarred: () => void
 }
 
 const GoalRow: React.FC<GoalRowProps> = ({
@@ -1024,6 +1034,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onReorderBuckets,
   onOpenCustomizer,
   activeCustomizerGoalId,
+  isStarred,
+  onToggleStarred,
 }) => {
   const [dragHover, setDragHover] = useState<
     | { bucketId: string; section: 'active' | 'completed'; index: number }
@@ -1746,7 +1758,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
       : null
 
   return (
-    <div className={classNames('goal-card', surfaceClass, isCustomizerOpen && 'goal-card--customizing')}>
+    <div className={classNames('goal-card', surfaceClass, isCustomizerOpen && 'goal-card--customizing', isStarred && 'goal-card--favorite')}>
       <div
         role="button"
         tabIndex={0}
@@ -1832,34 +1844,63 @@ const GoalRow: React.FC<GoalRowProps> = ({
             const titleSize = isLong ? 'text-sm sm:text-base md:text-lg' : 'text-base sm:text-lg md:text-xl'
             const inputSize = isLong ? 'text-sm sm:text-base md:text-lg' : 'text-base sm:text-lg md:text-xl'
             return (
-              <div className="min-w-0 flex-1">
-                {isRenaming ? (
-                  <input
-                    ref={renameInputRef}
-                    value={goalRenameValue ?? ''}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => onGoalRenameChange(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        onGoalRenameSubmit()
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault()
-                        onGoalRenameCancel()
-                      }
-                    }}
-                    onBlur={() => onGoalRenameSubmit()}
-                    placeholder="Rename goal"
-                    className={classNames(
-                      'w-full bg-transparent border border-white/15 focus:border-white/30 rounded-md px-2 py-1 font-semibold tracking-tight outline-none',
-                      inputSize,
+              <div className="min-w-0 flex-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  className={classNames('goal-favorite-toggle', isStarred && 'goal-favorite-toggle--active')}
+                  aria-pressed={isStarred}
+                  aria-label={isStarred ? 'Remove goal from favourites' : 'Add goal to favourites'}
+                  title={isStarred ? 'Unfavourite goal' : 'Favourite goal'}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onToggleStarred()
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onDragStart={(event) => event.preventDefault()}
+                  data-starred={isStarred ? 'true' : 'false'}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" className="goal-favorite-toggle__icon">
+                    {isStarred ? (
+                      <path d="M12 17.27 18.18 21 16.54 13.97 22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                    ) : (
+                      <path
+                        d="M12 17.27 18.18 21 16.54 13.97 22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                      />
                     )}
-                  />
-                ) : (
-                  <h3 className={classNames('min-w-0 whitespace-nowrap truncate font-semibold tracking-tight', titleSize)}>
-                    {highlightText(goal.name, highlightTerm)}
-                  </h3>
-                )}
+                  </svg>
+                </button>
+                <div className="min-w-0 flex-1">
+                  {isRenaming ? (
+                    <input
+                      ref={renameInputRef}
+                      value={goalRenameValue ?? ''}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => onGoalRenameChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          onGoalRenameSubmit()
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault()
+                          onGoalRenameCancel()
+                        }
+                      }}
+                      onBlur={() => onGoalRenameSubmit()}
+                      placeholder="Rename goal"
+                      className={classNames(
+                        'w-full bg-transparent border border-white/15 focus:border-white/30 rounded-md px-2 py-1 font-semibold tracking-tight outline-none',
+                        inputSize,
+                      )}
+                    />
+                  ) : (
+                    <h3 className={classNames('min-w-0 whitespace-nowrap truncate font-semibold tracking-tight', titleSize)}>
+                      {highlightText(goal.name, highlightTerm)}
+                    </h3>
+                  )}
+                </div>
               </div>
             )
           })()}
@@ -2975,6 +3016,21 @@ export default function GoalsPage(): ReactElement {
     }
     return DEFAULT_GOALS
   })
+  const toggleGoalStarred = useCallback((goalId: string) => {
+    setGoals((current) => {
+      const target = current.find((goal) => goal.id === goalId)
+      if (!target) {
+        return current
+      }
+      const nextStarred = !target.starred
+      apiSetGoalStarred(goalId, nextStarred).catch(() => {
+        setGoals((rollback) =>
+          rollback.map((goal) => (goal.id === goalId ? { ...goal, starred: target.starred } : goal)),
+        )
+      })
+      return current.map((goal) => (goal.id === goalId ? { ...goal, starred: nextStarred } : goal))
+    })
+  }, [setGoals])
   const skipNextPublishRef = useRef(false)
   const lastSnapshotSignatureRef = useRef<string | null>(null)
   useEffect(() => {
@@ -2999,6 +3055,7 @@ export default function GoalsPage(): ReactElement {
     })
     return unsubscribe
   }, [])
+
   // Goal rename state
   const [renamingGoalId, setRenamingGoalId] = useState<string | null>(null)
   const [goalRenameDraft, setGoalRenameDraft] = useState<string>('')
@@ -3074,6 +3131,7 @@ export default function GoalsPage(): ReactElement {
         if (!cancelled && result && Array.isArray(result.goals)) {
           const normalized = result.goals.map((goal: any) => ({
             ...goal,
+            starred: Boolean(goal.starred),
             surfaceStyle: normalizeSurfaceStyle(goal.surfaceStyle as string | null | undefined),
             buckets: Array.isArray(goal.buckets)
               ? goal.buckets.map((bucket: any) => ({
@@ -3572,7 +3630,7 @@ export default function GoalsPage(): ReactElement {
       .then((db) => {
         const id = db?.id ?? `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
         const surfaceStyle = normalizeSurfaceStyle((db?.card_surface as string | null | undefined) ?? 'glass')
-        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, surfaceStyle, buckets: [] }
+        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, surfaceStyle, starred: false, buckets: [] }
         setGoals((current) => [newGoal, ...current])
         setExpanded((current) => ({ ...current, [id]: true }))
         // Persist new goal at the top to match optimistic UI order
@@ -3582,7 +3640,7 @@ export default function GoalsPage(): ReactElement {
       })
       .catch(() => {
         const id = `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, surfaceStyle: 'glass', buckets: [] }
+        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, surfaceStyle: 'glass', starred: false, buckets: [] }
         setGoals((current) => [newGoal, ...current])
         setExpanded((current) => ({ ...current, [id]: true }))
       })
@@ -4631,6 +4689,8 @@ export default function GoalsPage(): ReactElement {
                   onReorderBuckets={reorderBuckets}
                   onOpenCustomizer={(goalId) => setActiveCustomizerGoalId(goalId)}
                   activeCustomizerGoalId={activeCustomizerGoalId}
+                  isStarred={Boolean(g.starred)}
+                  onToggleStarred={() => toggleGoalStarred(g.id)}
                 />
                 </li>
               ))}

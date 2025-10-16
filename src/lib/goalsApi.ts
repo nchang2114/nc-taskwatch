@@ -1,6 +1,13 @@
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 
-export type DbGoal = { id: string; name: string; color: string; sort_index: number; card_surface: string | null }
+export type DbGoal = {
+  id: string
+  name: string
+  color: string
+  sort_index: number
+  card_surface: string | null
+  starred: boolean
+}
 export type DbBucket = {
   id: string
   user_id: string
@@ -39,6 +46,7 @@ export type GoalSeed = {
   name: string
   color?: string | null
   surfaceStyle?: string | null
+  starred?: boolean
   buckets?: BucketSeed[]
 }
 
@@ -51,6 +59,7 @@ export async function fetchGoalsHierarchy(): Promise<
         name: string
         color: string
         surfaceStyle?: string | null
+        starred?: boolean
         buckets: Array<{
           id: string
           name: string
@@ -74,7 +83,7 @@ export async function fetchGoalsHierarchy(): Promise<
   // Goals
   const { data: goals, error: gErr } = await supabase
     .from('goals')
-    .select('id, name, color, sort_index, card_surface')
+    .select('id, name, color, sort_index, card_surface, starred')
     .order('sort_index', { ascending: true })
   if (gErr) return null
   if (!goals || goals.length === 0) return { goals: [] }
@@ -146,6 +155,7 @@ export async function fetchGoalsHierarchy(): Promise<
       id: g.id,
       name: g.name,
       color: g.color,
+      starred: Boolean((g as any).starred),
       surfaceStyle,
       buckets: (bucketsByGoal.get(g.id) ?? []).map((bucket) => ({
         ...bucket,
@@ -258,8 +268,8 @@ export async function createGoal(name: string, color: string, surface: string = 
   const sort_index = await nextSortIndex('goals')
   const { data, error } = await supabase
     .from('goals')
-    .insert([{ user_id: session.user.id, name, color, sort_index, card_surface: surface }])
-    .select('id, name, color, sort_index, card_surface')
+    .insert([{ user_id: session.user.id, name, color, sort_index, card_surface: surface, starred: false }])
+    .select('id, name, color, sort_index, card_surface, starred')
     .single()
   if (error) return null
   return data as DbGoal
@@ -275,6 +285,12 @@ export async function setGoalSurface(goalId: string, surface: string | null) {
   if (!supabase) return
   await ensureSingleUserSession()
   await supabase.from('goals').update({ card_surface: surface }).eq('id', goalId)
+}
+
+export async function setGoalStarred(goalId: string, starred: boolean) {
+  if (!supabase) return
+  await ensureSingleUserSession()
+  await supabase.from('goals').update({ starred }).eq('id', goalId)
 }
 
 export async function renameGoal(goalId: string, name: string) {
@@ -601,6 +617,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       color: goal.color ?? 'from-fuchsia-500 to-purple-500',
       sort_index: (index + 1) * STEP,
       card_surface: goal.surfaceStyle ?? 'glass',
+      starred: Boolean(goal.starred),
     }))
 
     const { data: insertedGoals, error: goalsError } = await supabase
