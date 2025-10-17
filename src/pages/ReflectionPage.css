@@ -14,7 +14,7 @@ html[data-theme='light'] {
   gap: clamp(2.5rem, 5vw, 3.5rem);
   padding-block: clamp(2.5rem, 6vw, 4rem);
   width: 100%;
-  max-width: min(1000px, 100%);
+  max-width: min(1140px, 100%);
   align-items: center;
 }
 

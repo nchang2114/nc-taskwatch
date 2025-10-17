@@ -1242,22 +1242,22 @@ export default function ReflectionPage() {
         className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`}
         aria-label="Session History"
       >
+        <button
+          type="button"
+          className="history-undo history-undo--floating"
+          onClick={handleUndoDelete}
+          disabled={deletedHistoryStack.length === 0}
+          aria-label="Undo last deleted session"
+        >
+          Undo
+        </button>
         <div className="history-section__header">
-          <div>
+          <div className="history-section__title">
             <h2 className="history-heading">Session History</h2>
             <p className="history-section__date">{dayLabel}</p>
           </div>
           <div className="history-section__controls">
             {dayEntryCount > 0 ? <span className="history-count">{dayEntryCount}</span> : null}
-            <button
-              type="button"
-              className="history-undo"
-              onClick={handleUndoDelete}
-              disabled={deletedHistoryStack.length === 0}
-              aria-label="Undo last deleted session"
-            >
-              Undo
-            </button>
           </div>
         </div>
 
@@ -1275,9 +1275,7 @@ export default function ReflectionPage() {
                 aria-hidden="true"
               />
             ) : null}
-            {daySegments.length === 0 ? (
-              <p className="history-timeline__empty">No sessions logged yet today. Start the timer to build your flow map.</p>
-            ) : null}
+            {daySegments.length === 0 ? <p className="history-timeline__empty">No sessions logged yet today</p> : null}
             {daySegments.map((segment) => {
               const isSelected = segment.entry.id === selectedHistoryId
               const isActiveSegment = segment.entry.id === 'active-session'

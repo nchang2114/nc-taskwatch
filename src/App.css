@@ -2276,11 +2276,12 @@ html[data-theme='light'] .nav-links--drawer {
 
 .history-section {
   width: 100%;
-  max-width: min(1020px, 100%);
+  max-width: min(1120px, 100%);
   display: flex;
   flex-direction: column;
-  gap: clamp(0.85rem, 2.2vw, 1.4rem);
-  padding: clamp(1.65rem, 4vw, 2.4rem);
+  gap: clamp(0.6rem, 1.8vw, 1rem);
+  padding: clamp(0.75rem, 2.2vw, 1.25rem);
+  position: relative;
   border-radius: clamp(16px, 3.4vw, 22px);
   border: 1px solid rgba(100, 122, 242, 0.36);
   background: linear-gradient(155deg, rgba(14, 18, 48, 0.92) 0%, rgba(10, 16, 40, 0.92) 58%, rgba(8, 14, 36, 0.94) 100%);
@@ -2294,9 +2295,15 @@ html[data-theme='light'] .nav-links--drawer {
 
 .history-section__header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.8rem;
+  flex-direction: column;
+  gap: clamp(0.45rem, 1.2vw, 0.75rem);
+  padding-right: clamp(3.6rem, 10vw, 5rem);
+}
+
+.history-section__title {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.2rem, 0.6vw, 0.35rem);
 }
 
 .history-section__controls {
@@ -2304,6 +2311,7 @@ html[data-theme='light'] .nav-links--drawer {
   align-items: center;
   justify-content: flex-end;
   gap: clamp(0.45rem, 1.6vw, 0.75rem);
+  align-self: flex-end;
 }
 
 .history-heading {
@@ -2354,6 +2362,13 @@ html[data-theme='light'] .nav-links--drawer {
   cursor: not-allowed;
 }
 
+.history-undo--floating {
+  position: absolute;
+  top: clamp(0.6rem, 2.4vw, 1.1rem);
+  right: clamp(0.75rem, 2.8vw, 1.35rem);
+  z-index: 2;
+}
+
 .history-undo:not(:disabled):hover {
   background: rgba(48, 62, 134, 0.8);
   border-color: rgba(134, 160, 255, 0.62);
@@ -2383,12 +2398,13 @@ html[data-theme='light'] .nav-links--drawer {
 }
 
 .history-timeline {
-  --history-timeline-row-height: clamp(2.4rem, 5.8vw, 3rem);
+  --history-timeline-row-height: clamp(1.6rem, 4vw, 2.1rem);
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: clamp(0.75rem, 1.8vw, 1.1rem);
-  padding-block: clamp(0.4rem, 1vw, 0.6rem);
+  gap: clamp(0.45rem, 1.2vw, 0.75rem);
+  padding-block: clamp(0.25rem, 0.6vw, 0.4rem);
+  overflow-y: hidden;
 }
 
 .history-timeline__bar {
@@ -2399,7 +2415,7 @@ html[data-theme='light'] .nav-links--drawer {
   border: 1px solid rgba(118, 142, 255, 0.32);
   background: linear-gradient(155deg, rgba(18, 24, 58, 0.82) 0%, rgba(12, 18, 48, 0.82) 100%);
   box-shadow: inset 0 1px 0 rgba(139, 132, 255, 0.18);
-  padding: clamp(0.5rem, 1.4vw, 0.75rem) clamp(0.75rem, 2.4vw, 1.1rem);
+  padding: clamp(0.35rem, 1vw, 0.5rem) clamp(0.7rem, 2.2vw, 1rem);
   overflow: visible;
 }
 
@@ -2677,8 +2693,9 @@ html[data-theme='light'] .nav-links--drawer {
 .history-timeline__axis {
   position: relative;
   width: 100%;
-  height: clamp(1.8rem, 4vw, 2.1rem);
-  padding-inline: clamp(0.75rem, 2.4vw, 1.1rem);
+  height: clamp(1.55rem, 3.8vw, 2.1rem);
+  padding-inline: clamp(1rem, 3vw, 1.6rem);
+  padding-block: clamp(0.25rem, 0.8vw, 0.45rem);
 }
 
 .history-timeline__tick {
@@ -2692,11 +2709,21 @@ html[data-theme='light'] .nav-links--drawer {
 }
 
 .history-timeline__tick--first {
-  align-items: center;
+  transform: translateX(0);
+  align-items: flex-start;
 }
 
 .history-timeline__tick--last {
-  align-items: center;
+  transform: translateX(-100%);
+  align-items: flex-end;
+}
+
+.history-timeline__tick--first .history-timeline__tick-label {
+  text-align: left;
+}
+
+.history-timeline__tick--last .history-timeline__tick-label {
+  text-align: right;
 }
 
 .history-timeline__tick-line {
@@ -2713,8 +2740,8 @@ html[data-theme='light'] .nav-links--drawer {
 .history-timeline__tick-label {
   display: block;
   text-align: center;
-  font-size: clamp(0.65rem, 1.2vw, 0.78rem);
-  letter-spacing: 0.08em;
+  font-size: clamp(0.55rem, 1vw, 0.7rem);
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: rgba(178, 190, 255, 0.7);
   white-space: nowrap;
@@ -2724,23 +2751,47 @@ html[data-theme='light'] .nav-links--drawer {
   visibility: hidden;
 }
 
+@media (max-width: 900px) {
+  .history-section {
+    max-width: min(100%, 96vw);
+    padding: clamp(0.7rem, 3.6vw, 1.1rem);
+    gap: clamp(0.5rem, 2.2vw, 0.85rem);
+  }
+
+  .history-section__header {
+    gap: clamp(0.4rem, 1.8vw, 0.65rem);
+    padding-right: clamp(3.1rem, 16vw, 4.4rem);
+  }
+
+  .history-undo--floating {
+    top: clamp(0.55rem, 3.2vw, 0.95rem);
+    right: clamp(0.7rem, 3.6vw, 1.2rem);
+  }
+
+  .history-timeline {
+    --history-timeline-row-height: clamp(1.7rem, 6.6vw, 2.2rem);
+  }
+
+  .history-timeline__tooltip {
+    min-width: clamp(220px, 65vw, 300px);
+  }
+}
+
 @media (max-width: 580px) {
   .history-section {
-    padding: clamp(1.1rem, 6vw, 1.5rem);
-    gap: clamp(0.75rem, 3vw, 1rem);
+    padding: clamp(0.65rem, 4.8vw, 1rem);
+    gap: clamp(0.45rem, 2.6vw, 0.7rem);
     border-radius: clamp(14px, 4vw, 18px);
   }
 
   .history-section__header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.6rem;
+    gap: clamp(0.35rem, 2vw, 0.55rem);
+    padding-right: clamp(2.8rem, 20vw, 3.8rem);
   }
 
-  .history-section__controls {
-    width: 100%;
-    justify-content: space-between;
-    gap: clamp(0.4rem, 2vw, 0.6rem);
+  .history-undo--floating {
+    top: clamp(0.5rem, 3.6vw, 0.85rem);
+    right: clamp(0.65rem, 4.6vw, 1.05rem);
   }
 
   .history-count {
@@ -2755,17 +2806,17 @@ html[data-theme='light'] .nav-links--drawer {
   }
 
   .history-timeline {
-    --history-timeline-row-height: clamp(2.6rem, 14vw, 3.1rem);
-    gap: clamp(0.55rem, 3vw, 0.85rem);
-    padding-block: clamp(0.3rem, 2vw, 0.45rem);
+    --history-timeline-row-height: clamp(2rem, 12vw, 2.4rem);
+    gap: clamp(0.35rem, 2.4vw, 0.6rem);
+    padding-block: clamp(0.2rem, 1.4vw, 0.35rem);
     overflow-x: auto;
-    overflow-y: visible;
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
   }
 
   .history-timeline__bar {
-    min-width: 560px;
-    padding: clamp(0.45rem, 3vw, 0.6rem) clamp(1.1rem, 8vw, 1.4rem);
+    min-width: min(560px, 100%);
+    padding: clamp(0.4rem, 2.6vw, 0.55rem) clamp(1rem, 7vw, 1.3rem);
     border-radius: clamp(12px, 4vw, 16px);
   }
 
@@ -2774,26 +2825,27 @@ html[data-theme='light'] .nav-links--drawer {
   }
 
   .history-timeline__axis {
-    min-width: 560px;
-    height: clamp(1.5rem, 8vw, 1.8rem);
-    padding-inline: clamp(0.95rem, 8vw, 1.35rem);
+    min-width: min(560px, 100%);
+    height: clamp(1.4rem, 7.8vw, 1.85rem);
+    padding-inline: clamp(1.05rem, 8vw, 1.6rem);
+    padding-block: clamp(0.2rem, 1.4vw, 0.4rem);
   }
 
   .history-timeline__tick {
-    gap: clamp(0.12rem, 1.4vw, 0.2rem);
+    gap: clamp(0.1rem, 1.2vw, 0.18rem);
   }
 
   .history-timeline__tick-label {
-    font-size: clamp(0.58rem, 3vw, 0.68rem);
-    letter-spacing: 0.06em;
+    font-size: clamp(0.5rem, 2.4vw, 0.62rem);
+    letter-spacing: 0.04em;
   }
 
   .history-timeline__tick-line {
-    height: clamp(0.65rem, 4vw, 0.9rem);
+    height: clamp(0.55rem, 3.4vw, 0.8rem);
   }
 
   .history-timeline__tick-line--major {
-    height: clamp(1.05rem, 6vw, 1.3rem);
+    height: clamp(0.9rem, 5vw, 1.1rem);
   }
 
   .history-timeline__tooltip {
