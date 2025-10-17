@@ -1256,9 +1256,6 @@ export default function ReflectionPage() {
             <h2 className="history-heading">Session History</h2>
             <p className="history-section__date">{dayLabel}</p>
           </div>
-          <div className="history-section__controls">
-            {dayEntryCount > 0 ? <span className="history-count">{dayEntryCount}</span> : null}
-          </div>
         </div>
 
         <div

@@ -2306,14 +2306,6 @@ html[data-theme='light'] .nav-links--drawer {
   gap: clamp(0.2rem, 0.6vw, 0.35rem);
 }
 
-.history-section__controls {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: clamp(0.45rem, 1.6vw, 0.75rem);
-  align-self: flex-end;
-}
-
 .history-heading {
   margin: 0;
   font-family: var(--font-display);
@@ -2323,21 +2315,6 @@ html[data-theme='light'] .nav-links--drawer {
   color: var(--text-primary);
 }
 
-.history-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: clamp(1.8rem, 5vw, 2.4rem);
-  padding: 0.15rem clamp(0.45rem, 1.4vw, 0.65rem);
-  border-radius: 999px;
-  background: linear-gradient(135deg, #35d4ff 0%, #8b84ff 100%);
-  color: #060a1d;
-  font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  font-size: clamp(0.72rem, 1.4vw, 0.84rem);
-  text-transform: uppercase;
-}
 
 .history-undo {
   display: inline-flex;
@@ -2404,7 +2381,7 @@ html[data-theme='light'] .nav-links--drawer {
   flex-direction: column;
   gap: clamp(0.45rem, 1.2vw, 0.75rem);
   padding-block: clamp(0.25rem, 0.6vw, 0.4rem);
-  overflow-y: hidden;
+  overflow: visible;
 }
 
 .history-timeline__bar {
@@ -2476,7 +2453,7 @@ html[data-theme='light'] .nav-links--drawer {
   opacity: 0;
   pointer-events: none;
   transition: opacity 140ms ease, transform 140ms ease;
-  z-index: 5;
+  z-index: 12;
 }
 
 .history-timeline__block:hover .history-timeline__tooltip,
@@ -2684,12 +2661,6 @@ html[data-theme='light'] .nav-links--drawer {
   outline-offset: 2px;
 }
 
-.history-timeline__block--active {
-  outline: 2px solid rgba(255, 255, 255, 0.75);
-  outline-offset: 2px;
-}
-
-
 .history-timeline__axis {
   position: relative;
   width: 100%;
@@ -2794,12 +2765,6 @@ html[data-theme='light'] .nav-links--drawer {
     right: clamp(0.65rem, 4.6vw, 1.05rem);
   }
 
-  .history-count {
-    min-width: auto;
-    padding-inline: clamp(0.45rem, 4vw, 0.7rem);
-    font-size: clamp(0.66rem, 3.4vw, 0.78rem);
-  }
-
   .history-undo {
     padding: clamp(0.28rem, 1.6vw, 0.4rem) clamp(0.55rem, 4vw, 0.8rem);
     font-size: clamp(0.62rem, 3.2vw, 0.78rem);
@@ -2810,7 +2775,7 @@ html[data-theme='light'] .nav-links--drawer {
     gap: clamp(0.35rem, 2.4vw, 0.6rem);
     padding-block: clamp(0.2rem, 1.4vw, 0.35rem);
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: visible;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -3108,11 +3073,6 @@ html[data-theme='light'] .history-section {
 
 html[data-theme='light'] .history-section--empty {
   background: linear-gradient(150deg, rgba(244, 248, 255, 0.94) 0%, rgba(230, 238, 255, 0.92) 60%, rgba(222, 232, 252, 0.92) 100%);
-}
-
-html[data-theme='light'] .history-count {
-  background: linear-gradient(135deg, #5c5bff 0%, #1fc8ff 100%);
-  color: #ffffff;
 }
 
 html[data-theme='light'] .history-undo {
