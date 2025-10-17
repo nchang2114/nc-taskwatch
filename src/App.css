@@ -1996,6 +1996,284 @@ html[data-theme='light'] .nav-links--drawer {
   margin-top: clamp(0.4rem, 1.6vw, 1rem);
 }
 
+.taskwatch-notes {
+  width: 100%;
+  max-width: min(720px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.85rem, 2.2vw, 1.4rem);
+  padding: clamp(1.5rem, 3.8vw, 2.2rem);
+  border-radius: clamp(16px, 3.4vw, 22px);
+  border: 1px solid rgba(118, 142, 255, 0.36);
+  background: linear-gradient(155deg, rgba(14, 18, 48, 0.9) 0%, rgba(10, 16, 40, 0.9) 58%, rgba(8, 14, 36, 0.92) 100%);
+  box-shadow: 0 32px 72px -36px rgba(2, 6, 24, 0.85);
+  backdrop-filter: blur(16px);
+}
+
+.taskwatch-notes__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: clamp(0.85rem, 2.4vw, 1.6rem);
+}
+
+.taskwatch-notes__heading {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 1vw, 0.55rem);
+}
+
+.taskwatch-notes__title {
+  margin: 0;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: clamp(1.05rem, 2.6vw, 1.35rem);
+  color: var(--text-primary);
+}
+
+.taskwatch-notes__subtitle {
+  margin: 0;
+  color: rgba(197, 207, 255, 0.72);
+  font-size: clamp(0.78rem, 1.6vw, 0.95rem);
+  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.taskwatch-notes__task {
+  font-weight: 600;
+  color: rgba(244, 246, 255, 0.92);
+}
+
+.taskwatch-notes__context {
+  font-size: clamp(0.7rem, 1.4vw, 0.82rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(162, 178, 244, 0.6);
+}
+
+.taskwatch-notes__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.3rem, 1vw, 0.45rem) clamp(0.75rem, 1.8vw, 1rem);
+  border-radius: 999px;
+  border: 1px solid rgba(120, 144, 255, 0.45);
+  background: rgba(26, 36, 92, 0.55);
+  color: rgba(198, 208, 255, 0.84);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  font-size: clamp(0.68rem, 1.3vw, 0.82rem);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.taskwatch-notes__clear:hover,
+.taskwatch-notes__clear:focus-visible {
+  background: rgba(52, 64, 140, 0.75);
+  border-color: rgba(150, 174, 255, 0.62);
+  color: #f4f7ff;
+}
+
+.taskwatch-notes__clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.taskwatch-notes__notes,
+.taskwatch-notes__subtasks {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.55rem, 1.4vw, 0.85rem);
+}
+
+.taskwatch-notes__label {
+  margin: 0;
+  font-size: clamp(0.68rem, 1.3vw, 0.82rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: rgba(180, 194, 255, 0.72);
+}
+
+.taskwatch-notes__textarea {
+  width: 100%;
+  min-height: clamp(5.2rem, 14vw, 6.5rem);
+  padding: clamp(0.65rem, 1.8vw, 0.9rem) clamp(0.8rem, 2vw, 1.1rem);
+  border-radius: clamp(14px, 3vw, 18px);
+  border: 1px solid rgba(126, 148, 255, 0.28);
+  background: rgba(16, 22, 56, 0.78);
+  color: rgba(238, 240, 255, 0.95);
+  font-size: clamp(0.85rem, 1.8vw, 1rem);
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.taskwatch-notes__textarea::placeholder {
+  color: rgba(176, 186, 242, 0.58);
+}
+
+.taskwatch-notes__textarea:focus {
+  outline: none;
+  border-color: rgba(158, 182, 255, 0.58);
+  box-shadow: 0 0 0 2px rgba(134, 154, 255, 0.28);
+}
+
+.taskwatch-notes__subtasks-header {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.45rem, 1.4vw, 0.8rem);
+}
+
+.taskwatch-notes__progress {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: clamp(0.68rem, 1.4vw, 0.8rem);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(196, 206, 255, 0.7);
+}
+
+.taskwatch-notes__add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.28rem, 1vw, 0.42rem) clamp(0.7rem, 1.8vw, 0.95rem);
+  border-radius: 999px;
+  border: 1px solid rgba(120, 146, 255, 0.42);
+  background: rgba(30, 40, 96, 0.6);
+  color: rgba(198, 210, 255, 0.88);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  font-size: clamp(0.68rem, 1.3vw, 0.82rem);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.taskwatch-notes__add:hover,
+.taskwatch-notes__add:focus-visible {
+  background: rgba(48, 60, 138, 0.82);
+  border-color: rgba(148, 172, 255, 0.62);
+  color: #f4f7ff;
+  transform: translateY(-1px);
+}
+
+.taskwatch-notes__add:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.taskwatch-notes__empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.45rem, 1.6vw, 0.65rem) clamp(0.8rem, 2.2vw, 1.2rem);
+  border-radius: 14px;
+  border: 1px dashed rgba(128, 150, 255, 0.45);
+  background: rgba(22, 30, 74, 0.54);
+  color: rgba(196, 206, 255, 0.7);
+  font-size: clamp(0.75rem, 1.6vw, 0.9rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.taskwatch-notes__empty:hover,
+.taskwatch-notes__empty:focus-visible {
+  border-color: rgba(154, 174, 255, 0.7);
+  background: rgba(48, 62, 138, 0.58);
+  color: rgba(240, 244, 255, 0.92);
+  transform: translateY(-1px);
+}
+
+.taskwatch-notes__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.55rem, 1.6vw, 0.85rem);
+}
+
+.taskwatch-notes__item {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.55rem, 1.6vw, 0.85rem);
+}
+
+.taskwatch-notes__subtask {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(0.55rem, 1.6vw, 0.85rem);
+  padding: clamp(0.45rem, 1.4vw, 0.65rem) clamp(0.65rem, 1.8vw, 0.95rem);
+  border-radius: clamp(12px, 2.4vw, 16px);
+  border: 1px solid rgba(122, 146, 255, 0.26);
+  background: rgba(14, 20, 52, 0.78);
+}
+
+.taskwatch-notes__checkbox {
+  width: clamp(1rem, 2.8vw, 1.2rem);
+  height: clamp(1rem, 2.8vw, 1.2rem);
+  border-radius: 0.4rem;
+  border: 1px solid rgba(138, 162, 255, 0.52);
+  background: rgba(12, 18, 46, 0.7);
+  accent-color: #7d8bff;
+  cursor: pointer;
+}
+
+.taskwatch-notes__input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: rgba(236, 240, 255, 0.94);
+  font-size: clamp(0.82rem, 1.6vw, 0.95rem);
+  line-height: 1.4;
+  padding: 0;
+}
+
+.taskwatch-notes__input::placeholder {
+  color: rgba(186, 196, 244, 0.6);
+}
+
+.taskwatch-notes__input:focus {
+  outline: none;
+}
+
+.taskwatch-notes__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(1.4rem, 3.2vw, 1.6rem);
+  height: clamp(1.4rem, 3.2vw, 1.6rem);
+  border-radius: 0.45rem;
+  border: none;
+  background: rgba(42, 52, 96, 0.55);
+  color: rgba(222, 232, 255, 0.75);
+  font-size: clamp(0.9rem, 2vw, 1rem);
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.taskwatch-notes__remove:hover,
+.taskwatch-notes__remove:focus-visible {
+  background: rgba(255, 82, 118, 0.22);
+  color: rgba(255, 158, 178, 0.95);
+  transform: translateY(-1px);
+}
+
+.taskwatch-notes__remove:focus-visible {
+  outline: 2px solid rgba(255, 158, 178, 0.6);
+  outline-offset: 2px;
+}
+
 .history-section {
   width: 100%;
   max-width: min(720px, 100%);
@@ -2380,6 +2658,115 @@ html[data-theme='light'] .history-entry__delete:hover {
   background: rgba(92, 91, 255, 0.18);
   border-color: rgba(92, 91, 255, 0.32);
   color: rgba(24, 30, 86, 0.9);
+}
+
+html[data-theme='light'] .taskwatch-notes {
+  border-color: rgba(134, 150, 238, 0.38);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 244, 255, 0.96) 62%, rgba(232, 238, 254, 0.96) 100%);
+  box-shadow: 0 26px 56px -32px rgba(94, 112, 180, 0.28);
+}
+
+html[data-theme='light'] .taskwatch-notes__subtitle {
+  color: rgba(64, 74, 132, 0.72);
+}
+
+html[data-theme='light'] .taskwatch-notes__task {
+  color: rgba(40, 48, 106, 0.9);
+}
+
+html[data-theme='light'] .taskwatch-notes__context {
+  color: rgba(84, 96, 152, 0.56);
+}
+
+html[data-theme='light'] .taskwatch-notes__clear {
+  border-color: rgba(142, 154, 226, 0.45);
+  background: rgba(214, 220, 255, 0.6);
+  color: rgba(42, 52, 108, 0.78);
+}
+
+html[data-theme='light'] .taskwatch-notes__clear:hover,
+html[data-theme='light'] .taskwatch-notes__clear:focus-visible {
+  background: rgba(180, 192, 250, 0.76);
+  border-color: rgba(132, 146, 224, 0.68);
+  color: rgba(24, 30, 82, 0.92);
+}
+
+html[data-theme='light'] .taskwatch-notes__label {
+  color: rgba(74, 86, 138, 0.68);
+}
+
+html[data-theme='light'] .taskwatch-notes__textarea {
+  border-color: rgba(150, 164, 234, 0.34);
+  background: rgba(250, 252, 255, 0.94);
+  color: rgba(42, 50, 108, 0.92);
+}
+
+html[data-theme='light'] .taskwatch-notes__textarea::placeholder {
+  color: rgba(110, 122, 176, 0.58);
+}
+
+html[data-theme='light'] .taskwatch-notes__textarea:focus {
+  border-color: rgba(134, 148, 226, 0.62);
+  box-shadow: 0 0 0 2px rgba(126, 140, 220, 0.26);
+}
+
+html[data-theme='light'] .taskwatch-notes__progress {
+  color: rgba(72, 84, 140, 0.64);
+}
+
+html[data-theme='light'] .taskwatch-notes__add {
+  border-color: rgba(150, 164, 234, 0.45);
+  background: rgba(212, 220, 255, 0.62);
+  color: rgba(44, 54, 110, 0.78);
+}
+
+html[data-theme='light'] .taskwatch-notes__add:hover,
+html[data-theme='light'] .taskwatch-notes__add:focus-visible {
+  background: rgba(184, 196, 248, 0.78);
+  border-color: rgba(132, 144, 220, 0.65);
+  color: rgba(26, 32, 84, 0.9);
+}
+
+html[data-theme='light'] .taskwatch-notes__empty {
+  border-color: rgba(156, 168, 236, 0.45);
+  background: rgba(226, 232, 255, 0.6);
+  color: rgba(72, 84, 140, 0.68);
+}
+
+html[data-theme='light'] .taskwatch-notes__empty:hover,
+html[data-theme='light'] .taskwatch-notes__empty:focus-visible {
+  border-color: rgba(138, 150, 224, 0.68);
+  background: rgba(198, 208, 244, 0.76);
+  color: rgba(38, 46, 104, 0.88);
+}
+
+html[data-theme='light'] .taskwatch-notes__subtask {
+  border-color: rgba(162, 176, 238, 0.32);
+  background: rgba(246, 248, 255, 0.94);
+}
+
+html[data-theme='light'] .taskwatch-notes__checkbox {
+  border-color: rgba(136, 150, 224, 0.5);
+  background: rgba(232, 236, 252, 0.86);
+}
+
+html[data-theme='light'] .taskwatch-notes__input {
+  color: rgba(46, 54, 108, 0.9);
+}
+
+html[data-theme='light'] .taskwatch-notes__input::placeholder {
+  color: rgba(108, 120, 172, 0.55);
+}
+
+html[data-theme='light'] .taskwatch-notes__remove {
+  background: rgba(214, 222, 255, 0.65);
+  color: rgba(72, 82, 134, 0.72);
+}
+
+html[data-theme='light'] .taskwatch-notes__remove:hover,
+html[data-theme='light'] .taskwatch-notes__remove:focus-visible {
+  background: rgba(255, 138, 156, 0.22);
+  color: rgba(182, 62, 86, 0.92);
 }
 
 html[data-theme='light'] .history-entry__delete:active {

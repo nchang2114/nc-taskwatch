@@ -2823,21 +2823,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       )}
                                       onPointerDown={(event) => event.stopPropagation()}
                                     >
-                                      <div className="goal-task-details__notes">
-                                        {trimmedNotesLength > 0 ? (
-                                          <p className="goal-task-details__label">Notes</p>
-                                        ) : null}
-                                        <textarea
-                                          id={notesFieldId}
-                                          className="goal-task-details__textarea"
-                                          value={notesValue}
-                                          onChange={(event) => handleTaskNotesChange(task.id, event.target.value)}
-                                          onPointerDown={(event) => event.stopPropagation()}
-                                          placeholder="Add a quick note..."
-                                          rows={3}
-                                          aria-label="Task notes"
-                                        />
-                                      </div>
                                       <div className="goal-task-details__subtasks">
                                         <div className="goal-task-details__subtasks-header">
                                           <button
@@ -2914,6 +2899,21 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                             Start a subtask
                                           </button>
                                         )}
+                                      </div>
+                                      <div className="goal-task-details__notes">
+                                        {trimmedNotesLength > 0 ? (
+                                          <p className="goal-task-details__label">Notes</p>
+                                        ) : null}
+                                        <textarea
+                                          id={notesFieldId}
+                                          className="goal-task-details__textarea"
+                                          value={notesValue}
+                                          onChange={(event) => handleTaskNotesChange(task.id, event.target.value)}
+                                          onPointerDown={(event) => event.stopPropagation()}
+                                          placeholder="Add a quick note..."
+                                          rows={3}
+                                          aria-label="Task notes"
+                                        />
                                       </div>
                                     </div>
                                   )}
@@ -3302,21 +3302,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           )}
                                           onPointerDown={(event) => event.stopPropagation()}
                                         >
-                                          <div className="goal-task-details__notes">
-                                            {trimmedNotesLength > 0 ? (
-                                              <p className="goal-task-details__label">Notes</p>
-                                            ) : null}
-                                            <textarea
-                                              id={notesFieldId}
-                                              className="goal-task-details__textarea"
-                                              value={notesValue}
-                                              onChange={(event) => handleTaskNotesChange(task.id, event.target.value)}
-                                              onPointerDown={(event) => event.stopPropagation()}
-                                              placeholder="Add a quick note..."
-                                              rows={3}
-                                              aria-label="Task notes"
-                                            />
-                                          </div>
                                           <div className="goal-task-details__subtasks">
                                             <div className="goal-task-details__subtasks-header">
                                               <button
@@ -3393,6 +3378,21 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                 Start a subtask
                                               </button>
                                             )}
+                                          </div>
+                                          <div className="goal-task-details__notes">
+                                            {trimmedNotesLength > 0 ? (
+                                              <p className="goal-task-details__label">Notes</p>
+                                            ) : null}
+                                            <textarea
+                                              id={notesFieldId}
+                                              className="goal-task-details__textarea"
+                                              value={notesValue}
+                                              onChange={(event) => handleTaskNotesChange(task.id, event.target.value)}
+                                              onPointerDown={(event) => event.stopPropagation()}
+                                              placeholder="Add a quick note..."
+                                              rows={3}
+                                              aria-label="Task notes"
+                                            />
                                           </div>
                                         </div>
                                       )}

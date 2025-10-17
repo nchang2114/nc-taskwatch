@@ -1,17 +1,4 @@
-import {
-  type ClipboardEvent,
-  type FocusEvent,
-  type FormEvent,
-  type ChangeEvent,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent,
-  type PointerEvent as ReactPointerEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { type ChangeEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import '../App.css'
 import {
   fetchGoalsHierarchy,
@@ -90,6 +77,7 @@ const CURRENT_TASK_STORAGE_KEY = 'nc-taskwatch-current-task'
 const CURRENT_TASK_SOURCE_KEY = 'nc-taskwatch-current-task-source'
 const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
+const NOTEBOOK_STORAGE_KEY = 'nc-taskwatch-notebook'
 const UNCATEGORISED_LABEL = 'Uncategorised'
 const MAX_TASK_STORAGE_LENGTH = 256
 const FOCUS_COMPLETION_RESET_DELAY_MS = 800
@@ -177,6 +165,104 @@ const makeHistoryId = () => {
   }
 
   return `entry-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+type NotebookSubtask = {
+  id: string
+  text: string
+  completed: boolean
+}
+
+type NotebookEntry = {
+  notes: string
+  subtasks: NotebookSubtask[]
+}
+
+type NotebookState = Record<string, NotebookEntry>
+
+const createNotebookEntry = (overrides?: Partial<NotebookEntry>): NotebookEntry => ({
+  notes: '',
+  subtasks: [],
+  ...overrides,
+})
+
+const sanitizeNotebookSubtasks = (value: unknown): NotebookSubtask[] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .map((item) => {
+      if (typeof item !== 'object' || item === null) {
+        return null
+      }
+      const candidate = item as Record<string, unknown>
+      const id = typeof candidate.id === 'string' ? candidate.id : null
+      if (!id) {
+        return null
+      }
+      const text = typeof candidate.text === 'string' ? candidate.text : ''
+      const completed = Boolean(candidate.completed)
+      return { id, text, completed }
+    })
+    .filter((item): item is NotebookSubtask => Boolean(item))
+}
+
+const sanitizeNotebookEntry = (value: unknown): NotebookEntry => {
+  if (typeof value !== 'object' || value === null) {
+    return createNotebookEntry()
+  }
+  const candidate = value as Record<string, unknown>
+  const notes = typeof candidate.notes === 'string' ? candidate.notes : ''
+  const subtasks = sanitizeNotebookSubtasks(candidate.subtasks)
+  return { notes, subtasks }
+}
+
+const sanitizeNotebookState = (value: unknown): NotebookState => {
+  if (typeof value !== 'object' || value === null) {
+    return {}
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+  const next: NotebookState = {}
+  entries.forEach(([key, entry]) => {
+    if (typeof key !== 'string') {
+      return
+    }
+    next[key] = sanitizeNotebookEntry(entry)
+  })
+  return next
+}
+
+const shouldPersistNotebookEntry = (entry: NotebookEntry): boolean =>
+  entry.notes.trim().length > 0 || entry.subtasks.length > 0
+
+const createNotebookSubtaskId = () => {
+  try {
+    if (typeof globalThis.crypto?.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID()
+    }
+  } catch {
+    // ignore
+  }
+  return `subtask-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+const computeNotebookKey = (focusSource: FocusSource | null, taskName: string): string => {
+  if (focusSource?.taskId) {
+    return `task:${focusSource.taskId}`
+  }
+  const trimmed = taskName.trim()
+  if (focusSource?.goalId) {
+    const goalPart = focusSource.goalId
+    const bucketPart = focusSource.bucketId ?? 'none'
+    if (trimmed.length > 0) {
+      return `source:${goalPart}:${bucketPart}:${trimmed.toLowerCase()}`
+    }
+    return `source:${goalPart}:${bucketPart}:scratch`
+  }
+  if (trimmed.length > 0) {
+    return `custom:${trimmed.toLowerCase()}`
+  }
+  return 'scratchpad'
 }
 
 const sanitizeHistory = (value: unknown): HistoryEntry[] => {
@@ -385,11 +471,24 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [isRunning, setIsRunning] = useState(false)
   const [isTimeHidden, setIsTimeHidden] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>(() => getStoredHistory())
-  const [deletedHistoryStack, setDeletedHistoryStack] = useState<{ entry: HistoryEntry; index: number }[]>([])
   const [currentTaskName, setCurrentTaskName] = useState<string>(initialTaskName)
   const [sessionStart, setSessionStart] = useState<number | null>(null)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
-  const historyTaskRefs = useRef(new Map<string, HTMLSpanElement>())
+  const [notebookState, setNotebookState] = useState<NotebookState>(() => {
+    if (typeof window === 'undefined') {
+      return {}
+    }
+    try {
+      const raw = window.localStorage.getItem(NOTEBOOK_STORAGE_KEY)
+      if (!raw) {
+        return {}
+      }
+      const parsed = JSON.parse(raw)
+      return sanitizeNotebookState(parsed)
+    } catch {
+      return {}
+    }
+  })
   const frameRef = useRef<number | null>(null)
   const lastTickRef = useRef<number | null>(null)
   const selectorButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -440,6 +539,17 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       console.warn('Failed to broadcast stopwatch history update', error)
     }
   }, [history])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    try {
+      window.localStorage.setItem(NOTEBOOK_STORAGE_KEY, JSON.stringify(notebookState))
+    } catch (error) {
+      console.warn('Failed to persist Taskwatch notebook state', error)
+    }
+  }, [notebookState])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -654,6 +764,134 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   const effectiveGoalName = focusSource?.goalName ?? activeFocusCandidate?.goalName ?? null
   const effectiveBucketName = focusSource?.bucketName ?? activeFocusCandidate?.bucketName ?? null
+  const notebookKey = useMemo(
+    () => computeNotebookKey(focusSource, normalizedCurrentTask),
+    [focusSource, normalizedCurrentTask],
+  )
+  const updateNotebookForKey = useCallback(
+    (key: string, updater: (entry: NotebookEntry) => NotebookEntry) => {
+      setNotebookState((current) => {
+        const previous = current[key] ?? createNotebookEntry()
+        const updated = sanitizeNotebookEntry(updater(previous))
+        if (!shouldPersistNotebookEntry(updated)) {
+          if (!current[key]) {
+            return current
+          }
+          const { [key]: _removed, ...rest } = current
+          return rest
+        }
+        const existing = current[key]
+        if (existing) {
+          const sameNotes = existing.notes === updated.notes
+          const sameLength = existing.subtasks.length === updated.subtasks.length
+          const sameSubtasks =
+            sameLength &&
+            existing.subtasks.every((subtask, index) => {
+              const candidate = updated.subtasks[index]
+              return (
+                candidate &&
+                candidate.id === subtask.id &&
+                candidate.text === subtask.text &&
+                candidate.completed === subtask.completed
+              )
+            })
+          if (sameNotes && sameSubtasks) {
+            return current
+          }
+        }
+        return { ...current, [key]: updated }
+      })
+    },
+    [],
+  )
+  const activeNotebookEntry = useMemo(
+    () => notebookState[notebookKey] ?? createNotebookEntry(),
+    [notebookState, notebookKey],
+  )
+  const notebookNotes = activeNotebookEntry.notes
+  const notebookSubtasks = activeNotebookEntry.subtasks
+  const completedNotebookSubtasks = useMemo(
+    () => notebookSubtasks.filter((subtask) => subtask.completed).length,
+    [notebookSubtasks],
+  )
+  const subtaskProgressLabel = notebookSubtasks.length > 0 ? `${completedNotebookSubtasks}/${notebookSubtasks.length}` : null
+  const hasNotebookContent = notebookNotes.trim().length > 0 || notebookSubtasks.length > 0
+  const notesFieldId = useMemo(() => {
+    const safeKey = notebookKey.replace(/[^a-z0-9-]/gi, '-') || 'scratchpad'
+    return `taskwatch-notes-${safeKey}`
+  }, [notebookKey])
+  const focusContextLabel = useMemo(() => {
+    const parts: string[] = []
+    if (effectiveGoalName) {
+      parts.push(effectiveGoalName)
+    }
+    if (effectiveBucketName) {
+      parts.push(effectiveBucketName)
+    }
+    if (parts.length === 0) {
+      return 'No linked goal'
+    }
+    return parts.join(' → ')
+  }, [effectiveGoalName, effectiveBucketName])
+  const handleNotebookNotesChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      const value = event.target.value
+      updateNotebookForKey(notebookKey, (entry) => (entry.notes === value ? entry : { ...entry, notes: value }))
+    },
+    [notebookKey, updateNotebookForKey],
+  )
+  const handleAddNotebookSubtask = useCallback(() => {
+    updateNotebookForKey(notebookKey, (entry) => ({
+      ...entry,
+      subtasks: [...entry.subtasks, { id: createNotebookSubtaskId(), text: '', completed: false }],
+    }))
+  }, [notebookKey, updateNotebookForKey])
+  const handleNotebookSubtaskTextChange = useCallback(
+    (subtaskId: string, value: string) => {
+      updateNotebookForKey(notebookKey, (entry) => {
+        const index = entry.subtasks.findIndex((item) => item.id === subtaskId)
+        if (index === -1) {
+          return entry
+        }
+        const nextSubtasks = entry.subtasks.map((item, idx) =>
+          idx === index ? { ...item, text: value } : item,
+        )
+        return { ...entry, subtasks: nextSubtasks }
+      })
+    },
+    [notebookKey, updateNotebookForKey],
+  )
+  const handleNotebookSubtaskToggle = useCallback(
+    (subtaskId: string) => {
+      updateNotebookForKey(notebookKey, (entry) => {
+        const index = entry.subtasks.findIndex((item) => item.id === subtaskId)
+        if (index === -1) {
+          return entry
+        }
+        const nextSubtasks = entry.subtasks.map((item, idx) =>
+          idx === index ? { ...item, completed: !item.completed } : item,
+        )
+        return { ...entry, subtasks: nextSubtasks }
+      })
+    },
+    [notebookKey, updateNotebookForKey],
+  )
+  const handleNotebookSubtaskRemove = useCallback(
+    (subtaskId: string) => {
+      updateNotebookForKey(notebookKey, (entry) => {
+        const nextSubtasks = entry.subtasks.filter((item) => item.id !== subtaskId)
+        if (nextSubtasks.length === entry.subtasks.length) {
+          return entry
+        }
+        return { ...entry, subtasks: nextSubtasks }
+      })
+    },
+    [notebookKey, updateNotebookForKey],
+  )
+  const handleNotebookClear = useCallback(() => {
+    updateNotebookForKey(notebookKey, () => createNotebookEntry())
+  }, [notebookKey, updateNotebookForKey])
+
 
   useEffect(() => {
     focusContextRef.current = {
@@ -1272,128 +1510,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     setIsTimeHidden((current) => !current)
   }, [])
 
-  const registerHistoryTaskRef = (id: string, node: HTMLSpanElement | null) => {
-    if (node) {
-      historyTaskRefs.current.set(id, node)
-      const entry = history.find((item) => item.id === id)
-      const text = entry?.taskName ?? ''
-      if (node.textContent !== text) {
-        node.textContent = text
-      }
-    } else {
-      historyTaskRefs.current.delete(id)
-    }
-  }
-
-  const handleHistoryTaskInput = (entryId: string) => (event: FormEvent<HTMLSpanElement>) => {
-    const node = historyTaskRefs.current.get(entryId)
-    if (!node) {
-      return
-    }
-
-    const raw = event.currentTarget.textContent ?? ''
-    const { value } = sanitizeEditableValue(node, raw, MAX_TASK_STORAGE_LENGTH)
-
-    setHistory((current) =>
-      current.map((entry) =>
-        entry.id === entryId && entry.taskName !== value ? { ...entry, taskName: value } : entry,
-      ),
-    )
-  }
-
-  const handleHistoryTaskBlur = (entryId: string) => (event: FocusEvent<HTMLSpanElement>) => {
-    const node = historyTaskRefs.current.get(entryId)
-    if (!node) {
-      return
-    }
-
-    const value = (event.currentTarget.textContent ?? '').replace(/\n+/g, ' ').trim()
-    const limited = value.slice(0, MAX_TASK_STORAGE_LENGTH)
-    const fallback = limited.length > 0 ? limited : 'New Task'
-
-    if (node.textContent !== fallback) {
-      node.textContent = fallback
-    }
-
-    setHistory((current) =>
-      current.map((entry) => (entry.id === entryId && entry.taskName !== fallback ? { ...entry, taskName: fallback } : entry)),
-    )
-  }
-
-  const handleHistoryTaskKeyDown = (event: ReactKeyboardEvent<HTMLSpanElement>) => {
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      event.currentTarget.blur()
-    } else if (event.key === 'Escape') {
-      event.preventDefault()
-      event.currentTarget.blur()
-    }
-  }
-
-  const handleHistoryTaskPaste = (entryId: string) => (event: ClipboardEvent<HTMLSpanElement>) => {
-    const node = historyTaskRefs.current.get(entryId)
-    if (!node) {
-      return
-    }
-
-    event.preventDefault()
-    const text = event.clipboardData?.getData('text/plain') ?? ''
-    const sanitized = text.replace(/\n+/g, ' ')
-
-    if (typeof window !== 'undefined') {
-      const selection = window.getSelection()
-      if (selection && selection.rangeCount > 0) {
-        selection.deleteFromDocument()
-        const range = selection.getRangeAt(0)
-        const textNode = document.createTextNode(sanitized)
-        range.insertNode(textNode)
-        range.setStartAfter(textNode)
-        range.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(range)
-      }
-    }
-
-    const { value } = sanitizeEditableValue(node, node.textContent ?? '', MAX_TASK_STORAGE_LENGTH)
-    setHistory((current) =>
-      current.map((entry) =>
-        entry.id === entryId && entry.taskName !== value ? { ...entry, taskName: value } : entry,
-      ),
-    )
-  }
-
-  const handleDeleteHistoryEntry = (entryId: string) => (event: MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-
-    const index = history.findIndex((entry) => entry.id === entryId)
-    if (index === -1) {
-      return
-    }
-
-    const entry = history[index]
-    setDeletedHistoryStack((stack) => [...stack, { entry, index }])
-    setHistory((current) => [...current.slice(0, index), ...current.slice(index + 1)])
-  }
-
-  const handleUndoDelete = () => {
-    if (deletedHistoryStack.length === 0) {
-      return
-    }
-
-    const { entry, index } = deletedHistoryStack[deletedHistoryStack.length - 1]
-    setDeletedHistoryStack((stack) => stack.slice(0, -1))
-    setHistory((current) => {
-      if (current.some((item) => item.id === entry.id)) {
-        return current
-      }
-      const next = [...current]
-      const insertIndex = Math.min(index, next.length)
-      next.splice(insertIndex, 0, entry)
-      return next
-    })
-  }
-
   const registerNewHistoryEntry = useCallback(
     (
       elapsedMs: number,
@@ -1484,7 +1600,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const formattedTime = useMemo(() => formatTime(elapsed), [elapsed])
   const formattedClock = useMemo(() => formatClockTime(currentTime), [currentTime])
   const clockDateTime = useMemo(() => new Date(currentTime).toISOString(), [currentTime])
-  const hasHistory = history.length > 0
   const baseTimeClass = elapsed >= 3600000 ? 'time-value--long' : ''
   const charCount = formattedTime.length
   let lengthClass = ''
@@ -1886,89 +2001,85 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         </div>
       </section>
 
-      <section
-        className={`history-section${hasHistory ? '' : ' history-section--empty'}`}
-        aria-label="History"
-      >
-        <div className="history-section__header">
-          <h2 className="history-heading">History</h2>
-          <div className="history-section__controls">
-            {hasHistory ? <span className="history-count">{history.length}</span> : null}
-            <button
-              type="button"
-              className="history-undo"
-              onClick={handleUndoDelete}
-              disabled={deletedHistoryStack.length === 0}
-              aria-label="Undo last deleted session"
-            >
-              Undo
-            </button>
+      <section className="taskwatch-notes" aria-label="Notes and subtasks">
+        <div className="taskwatch-notes__header">
+          <div className="taskwatch-notes__heading">
+            <h2 className="taskwatch-notes__title">Notes & Subtasks</h2>
+            <p className="taskwatch-notes__subtitle">
+              <span className="taskwatch-notes__task">{safeTaskName}</span>
+              <span className="taskwatch-notes__context">{focusContextLabel}</span>
+            </p>
           </div>
+          {hasNotebookContent ? (
+            <button type="button" className="taskwatch-notes__clear" onClick={handleNotebookClear}>
+              Clear
+            </button>
+          ) : null}
         </div>
 
-        {hasHistory ? (
-          <ol className="history-list">
-            {history.map((entry) => {
-              const dateRangeLabel = formatDateRange(entry.startedAt, entry.endedAt)
-              const goalLabel =
-                entry.goalName && entry.goalName.trim().length > 0 ? entry.goalName : UNCATEGORISED_LABEL
-              const bucketLabel =
-                entry.bucketName && entry.bucketName.trim().length > 0 ? entry.bucketName : UNCATEGORISED_LABEL
-              const hasBucketLabel = bucketLabel.length > 0
-              const pathAria =
-                hasBucketLabel && bucketLabel !== goalLabel
-                  ? `Goal ${goalLabel}, Bucket ${bucketLabel}`
-                  : `Goal ${goalLabel}`
-              return (
-                <li key={entry.id} className="history-entry">
-                  <div className="history-entry__top">
-                    <span
-                      className="history-entry__task"
-                      contentEditable
-                      suppressContentEditableWarning
-                      ref={(node) => registerHistoryTaskRef(entry.id, node)}
-                      onInput={handleHistoryTaskInput(entry.id)}
-                      onBlur={handleHistoryTaskBlur(entry.id)}
-                      onKeyDown={handleHistoryTaskKeyDown}
-                      onPaste={handleHistoryTaskPaste(entry.id)}
-                      role="textbox"
-                      tabIndex={0}
-                      aria-label={`Edit task name for session ${dateRangeLabel}`}
-                      spellCheck={false}
+        <div className="taskwatch-notes__subtasks">
+          <div className="taskwatch-notes__subtasks-header">
+            <p className="taskwatch-notes__label">Subtasks</p>
+            {subtaskProgressLabel ? (
+              <span className="taskwatch-notes__progress" aria-label={`Completed ${subtaskProgressLabel} subtasks`}>
+                {subtaskProgressLabel}
+              </span>
+            ) : null}
+            <button type="button" className="taskwatch-notes__add" onClick={handleAddNotebookSubtask}>
+              + Subtask
+            </button>
+          </div>
+          {notebookSubtasks.length === 0 ? (
+            <button type="button" className="taskwatch-notes__empty" onClick={handleAddNotebookSubtask}>
+              Start a subtask
+            </button>
+          ) : (
+            <ul className="taskwatch-notes__list">
+              {notebookSubtasks.map((subtask) => (
+                <li key={subtask.id} className="taskwatch-notes__item">
+                  <label className="taskwatch-notes__subtask">
+                    <input
+                      type="checkbox"
+                      className="taskwatch-notes__checkbox"
+                      checked={subtask.completed}
+                      onChange={() => handleNotebookSubtaskToggle(subtask.id)}
+                      aria-label={subtask.text.trim().length > 0 ? `Mark "${subtask.text}" complete` : 'Toggle subtask'}
                     />
-                    <span className="history-entry__duration">{formatTime(entry.elapsed)}</span>
-                  </div>
-                  <div className="history-entry__footer">
-                    <div className="history-entry__footer-meta">
-                      <div className="history-entry__trail" aria-label={pathAria}>
-                        <span className="history-entry__trail-goal">{goalLabel}</span>
-                        {hasBucketLabel ? (
-                          <>
-                            <span className="history-entry__trail-separator" aria-hidden="true">
-                              →
-                            </span>
-                            <span className="history-entry__trail-bucket">{bucketLabel}</span>
-                          </>
-                        ) : null}
-                      </div>
-                      <div className="history-entry__meta">{dateRangeLabel}</div>
-                    </div>
-                    <button
-                      type="button"
-                      className="history-entry__delete"
-                      onClick={handleDeleteHistoryEntry(entry.id)}
-                      aria-label={`Delete session ${dateRangeLabel}`}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                    <input
+                      type="text"
+                      className="taskwatch-notes__input"
+                      value={subtask.text}
+                      onChange={(event) => handleNotebookSubtaskTextChange(subtask.id, event.target.value)}
+                      placeholder="Describe subtask"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="taskwatch-notes__remove"
+                    onClick={() => handleNotebookSubtaskRemove(subtask.id)}
+                    aria-label="Remove subtask"
+                  >
+                    ×
+                  </button>
                 </li>
-              )
-            })}
-          </ol>
-        ) : (
-          <p className="history-empty">No sessions yet. Start the stopwatch to build your timeline.</p>
-        )}
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="taskwatch-notes__notes">
+          <label className="taskwatch-notes__label" htmlFor={notesFieldId}>
+            Notes
+          </label>
+          <textarea
+            id={notesFieldId}
+            className="taskwatch-notes__textarea"
+            value={notebookNotes}
+            onChange={handleNotebookNotesChange}
+            placeholder="Capture quick ideas, wins, or blockers while you work..."
+            rows={4}
+          />
+        </div>
       </section>
 
       <p className="meta meta-note">Built with React + Vite for seamless desktop and mobile use.</p>

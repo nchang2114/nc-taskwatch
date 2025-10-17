@@ -1,4 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type FocusEvent,
+  type FormEvent,
+  type MouseEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import './ReflectionPage.css'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
 
@@ -24,6 +35,74 @@ const RANGE_DEFS: Record<ReflectionRangeKey, RangeDefinition> = {
 }
 
 const RANGE_KEYS: ReflectionRangeKey[] = ['24h', '48h', '7d']
+
+const MAX_TASK_STORAGE_LENGTH = 256
+
+const sanitizeEditableValue = (
+  element: HTMLSpanElement,
+  rawValue: string,
+  maxLength: number,
+) => {
+  const sanitized = rawValue.replace(/\n+/g, ' ')
+  const limited = sanitized.slice(0, maxLength)
+  const previous = element.textContent ?? ''
+  const changed = previous !== limited
+
+  let caretOffset: number | null = null
+  if (typeof window !== 'undefined') {
+    const selection = window.getSelection()
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0)
+      if (range && element.contains(range.endContainer)) {
+        const preRange = range.cloneRange()
+        preRange.selectNodeContents(element)
+        try {
+          preRange.setEnd(range.endContainer, range.endOffset)
+          caretOffset = preRange.toString().length
+        } catch {
+          caretOffset = null
+        }
+      }
+    }
+  }
+
+  if (changed) {
+    element.textContent = limited
+
+    if (caretOffset !== null && typeof window !== 'undefined') {
+      const selection = window.getSelection()
+      if (selection) {
+        const range = document.createRange()
+        const targetOffset = Math.min(caretOffset, element.textContent?.length ?? 0)
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+        let remaining = targetOffset
+        let node: Node | null = null
+        let positioned = false
+        while ((node = walker.nextNode())) {
+          const length = node.textContent?.length ?? 0
+          if (remaining <= length) {
+            range.setStart(node, Math.max(0, remaining))
+            positioned = true
+            break
+          }
+          remaining -= length
+        }
+
+        if (!positioned) {
+          range.selectNodeContents(element)
+          range.collapse(false)
+        } else {
+          range.collapse(true)
+        }
+
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+    }
+  }
+
+  return { value: limited, changed }
+}
 
 type HistoryEntry = {
   id: string
@@ -187,6 +266,58 @@ const getPaletteColorForLabel = (label: string) => {
   const hash = Math.abs(hashString(label))
   const index = hash % CHART_COLORS.length
   return CHART_COLORS[index]
+}
+
+const formatDatePart = (timestamp: number) => {
+  const date = new Date(timestamp)
+  const day = date.getDate()
+  const month = date.toLocaleString(undefined, { month: 'short' })
+  const year = date.getFullYear()
+  const hours24 = date.getHours()
+  const minutes = date.getMinutes().toString().padStart(2, '0')
+  const period = hours24 >= 12 ? 'PM' : 'AM'
+  const hours12 = hours24 % 12 || 12
+  return {
+    dateLabel: `${day}/${month}/${year}`,
+    timeLabel: `${hours12}:${minutes}${period}`,
+  }
+}
+
+const formatDateRange = (start: number, end: number) => {
+  const startPart = formatDatePart(start)
+  const endPart = formatDatePart(end)
+
+  if (startPart.dateLabel === endPart.dateLabel) {
+    return `${startPart.dateLabel} ${startPart.timeLabel}-${endPart.timeLabel}`
+  }
+
+  return `${startPart.dateLabel} ${startPart.timeLabel} - ${endPart.dateLabel} ${endPart.timeLabel}`
+}
+
+const formatTime = (milliseconds: number) => {
+  const totalMs = Math.max(0, Math.floor(milliseconds))
+  const days = Math.floor(totalMs / 86_400_000)
+  const hours = Math.floor((totalMs % 86_400_000) / 3_600_000)
+  const minutes = Math.floor((totalMs % 3_600_000) / 60_000)
+  const seconds = Math.floor((totalMs % 60_000) / 1_000)
+  const centiseconds = Math.floor((totalMs % 1_000) / 10)
+
+  const segments: string[] = []
+
+  if (days > 0) {
+    segments.push(`${days}D`)
+    segments.push(hours.toString().padStart(2, '0'))
+  } else if (hours > 0) {
+    segments.push(hours.toString().padStart(2, '0'))
+  }
+
+  segments.push(minutes.toString().padStart(2, '0'))
+  segments.push(seconds.toString().padStart(2, '0'))
+
+  const timeCore = segments.join(':')
+  const fraction = centiseconds.toString().padStart(2, '0')
+
+  return `${timeCore}.${fraction}`
 }
 
 const PIE_VIEWBOX_SIZE = 200
@@ -659,10 +790,42 @@ const computeRangeOverview = (
 export default function ReflectionPage() {
   const [activeRange, setActiveRange] = useState<ReflectionRangeKey>('24h')
   const [history, setHistory] = useState<HistoryEntry[]>(() => readStoredHistory())
+  const [deletedHistoryStack, setDeletedHistoryStack] = useState<{ entry: HistoryEntry; index: number }[]>([])
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(() => readStoredActiveSession())
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [journal, setJournal] = useState('')
+  const historyTaskRefs = useRef(new Map<string, HTMLSpanElement>())
+
+  const persistHistory = useCallback((next: HistoryEntry[]) => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    try {
+      window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next))
+    } catch (error) {
+      console.warn('Failed to persist history from Reflection', error)
+    }
+    try {
+      const event = new CustomEvent(HISTORY_EVENT_NAME, { detail: next })
+      window.dispatchEvent(event)
+    } catch (error) {
+      console.warn('Failed to broadcast history update from Reflection', error)
+    }
+  }, [])
+
+  const updateHistory = useCallback(
+    (updater: (current: HistoryEntry[]) => HistoryEntry[]) => {
+      setHistory((current) => {
+        const next = updater(current)
+        if (next !== current) {
+          persistHistory(next)
+        }
+        return next
+      })
+    },
+    [persistHistory],
+  )
 
   const goalLookup = useMemo(() => createGoalTaskMap(goalsSnapshot), [goalsSnapshot])
   const goalColorLookup = useMemo(() => createGoalColorMap(goalsSnapshot), [goalsSnapshot])
@@ -684,6 +847,141 @@ export default function ReflectionPage() {
     return map
   }, [goalLookup, goalColorLookup, activeSession])
 
+  const registerHistoryTaskRef = useCallback(
+    (id: string, node: HTMLSpanElement | null) => {
+      if (node) {
+        historyTaskRefs.current.set(id, node)
+        const entry = history.find((item) => item.id === id)
+        const text = entry?.taskName ?? ''
+        if (node.textContent !== text) {
+          node.textContent = text
+        }
+      } else {
+        historyTaskRefs.current.delete(id)
+      }
+    },
+    [history],
+  )
+
+  const handleHistoryTaskInput = useCallback(
+    (entryId: string) => (event: FormEvent<HTMLSpanElement>) => {
+      const node = historyTaskRefs.current.get(entryId)
+      if (!node) {
+        return
+      }
+      const raw = event.currentTarget.textContent ?? ''
+      const { value } = sanitizeEditableValue(node, raw, MAX_TASK_STORAGE_LENGTH)
+      updateHistory((current) =>
+        current.map((entry) =>
+          entry.id === entryId && entry.taskName !== value ? { ...entry, taskName: value } : entry,
+        ),
+      )
+    },
+    [updateHistory],
+  )
+
+  const handleHistoryTaskBlur = useCallback(
+    (entryId: string) => (event: FocusEvent<HTMLSpanElement>) => {
+      const node = historyTaskRefs.current.get(entryId)
+      if (!node) {
+        return
+      }
+      const value = (event.currentTarget.textContent ?? '').replace(/\n+/g, ' ').trim()
+      const limited = value.slice(0, MAX_TASK_STORAGE_LENGTH)
+      const fallback = limited.length > 0 ? limited : 'New Task'
+      if (node.textContent !== fallback) {
+        node.textContent = fallback
+      }
+      updateHistory((current) =>
+        current.map((entry) =>
+          entry.id === entryId && entry.taskName !== fallback ? { ...entry, taskName: fallback } : entry,
+        ),
+      )
+    },
+    [updateHistory],
+  )
+
+  const handleHistoryTaskKeyDown = useCallback((event: ReactKeyboardEvent<HTMLSpanElement>) => {
+    if (event.key === 'Enter' || event.key === 'Escape') {
+      event.preventDefault()
+      event.currentTarget.blur()
+    }
+  }, [])
+
+  const handleHistoryTaskPaste = useCallback(
+    (entryId: string) => (event: ClipboardEvent<HTMLSpanElement>) => {
+      const node = historyTaskRefs.current.get(entryId)
+      if (!node) {
+        return
+      }
+      event.preventDefault()
+      const text = event.clipboardData?.getData('text/plain') ?? ''
+      const sanitized = text.replace(/\n+/g, ' ')
+      if (typeof window !== 'undefined') {
+        const selection = window.getSelection()
+        if (selection && selection.rangeCount > 0) {
+          selection.deleteFromDocument()
+          const range = selection.getRangeAt(0)
+          const textNode = document.createTextNode(sanitized)
+          range.insertNode(textNode)
+          range.setStartAfter(textNode)
+          range.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(range)
+        }
+      }
+      const { value } = sanitizeEditableValue(node, node.textContent ?? '', MAX_TASK_STORAGE_LENGTH)
+      updateHistory((current) =>
+        current.map((entry) =>
+          entry.id === entryId && entry.taskName !== value ? { ...entry, taskName: value } : entry,
+        ),
+      )
+    },
+    [updateHistory],
+  )
+
+  const handleDeleteHistoryEntry = useCallback(
+    (entryId: string) => (event: MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      const index = history.findIndex((entry) => entry.id === entryId)
+      if (index === -1) {
+        return
+      }
+      const entry = history[index]
+      setDeletedHistoryStack((stack) => [...stack, { entry, index }])
+      updateHistory((current) => [...current.slice(0, index), ...current.slice(index + 1)])
+    },
+    [history, updateHistory],
+  )
+
+  const handleUndoDelete = useCallback(() => {
+    if (deletedHistoryStack.length === 0) {
+      return
+    }
+    const { entry, index } = deletedHistoryStack[deletedHistoryStack.length - 1]
+    setDeletedHistoryStack((stack) => stack.slice(0, -1))
+    updateHistory((current) => {
+      if (current.some((item) => item.id === entry.id)) {
+        return current
+      }
+      const next = [...current]
+      const insertIndex = Math.min(index, next.length)
+      next.splice(insertIndex, 0, entry)
+      return next
+    })
+  }, [deletedHistoryStack, updateHistory])
+
+  useEffect(() => {
+    historyTaskRefs.current.forEach((node, id) => {
+      const entry = history.find((item) => item.id === id)
+      const text = entry?.taskName ?? ''
+      if (node.textContent !== text) {
+        node.textContent = text
+      }
+    })
+  }, [history])
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
@@ -691,6 +989,7 @@ export default function ReflectionPage() {
     const handleStorage = (event: StorageEvent) => {
       if (event.key === HISTORY_STORAGE_KEY) {
         setHistory(readStoredHistory())
+        setDeletedHistoryStack([])
         return
       }
       if (event.key === CURRENT_SESSION_STORAGE_KEY) {
@@ -702,8 +1001,10 @@ export default function ReflectionPage() {
       const detail = sanitizeHistory(custom.detail)
       if (detail.length > 0 || Array.isArray(custom.detail)) {
         setHistory(detail)
+        setDeletedHistoryStack([])
       } else {
         setHistory(readStoredHistory())
+        setDeletedHistoryStack([])
       }
     }
     const handleSessionBroadcast = (event: Event) => {
@@ -818,6 +1119,7 @@ export default function ReflectionPage() {
   )
   const unloggedMs = useMemo(() => Math.max(windowMs - loggedMs, 0), [windowMs, loggedMs])
   const tabPanelId = 'reflection-range-panel'
+  const hasHistory = history.length > 0
 
   return (
     <section className="site-main__inner reflection-page" aria-label="Reflection">
@@ -825,6 +1127,89 @@ export default function ReflectionPage() {
         <h1 className="reflection-title">Reflection</h1>
         <p className="reflection-subtitle">Review your progress and capture insights to guide tomorrow.</p>
       </div>
+
+      <section
+        className={`history-section${hasHistory ? '' : ' history-section--empty'}`}
+        aria-label="Session History"
+      >
+        <div className="history-section__header">
+          <h2 className="history-heading">Session History</h2>
+          <div className="history-section__controls">
+            {hasHistory ? <span className="history-count">{history.length}</span> : null}
+            <button
+              type="button"
+              className="history-undo"
+              onClick={handleUndoDelete}
+              disabled={deletedHistoryStack.length === 0}
+              aria-label="Undo last deleted session"
+            >
+              Undo
+            </button>
+          </div>
+        </div>
+
+        {hasHistory ? (
+          <ol className="history-list">
+            {history.map((entry) => {
+              const dateRangeLabel = formatDateRange(entry.startedAt, entry.endedAt)
+              const goalLabel = entry.goalName && entry.goalName.trim().length > 0 ? entry.goalName : UNCATEGORISED_LABEL
+              const bucketLabel = entry.bucketName && entry.bucketName.trim().length > 0 ? entry.bucketName : UNCATEGORISED_LABEL
+              const hasBucketLabel = bucketLabel.length > 0
+              const pathAria =
+                hasBucketLabel && bucketLabel !== goalLabel
+                  ? `Goal ${goalLabel}, Bucket ${bucketLabel}`
+                  : `Goal ${goalLabel}`
+              return (
+                <li key={entry.id} className="history-entry">
+                  <div className="history-entry__top">
+                    <span
+                      className="history-entry__task"
+                      contentEditable
+                      suppressContentEditableWarning
+                      ref={(node) => registerHistoryTaskRef(entry.id, node)}
+                      onInput={handleHistoryTaskInput(entry.id)}
+                      onBlur={handleHistoryTaskBlur(entry.id)}
+                      onKeyDown={handleHistoryTaskKeyDown}
+                      onPaste={handleHistoryTaskPaste(entry.id)}
+                      role="textbox"
+                      tabIndex={0}
+                      aria-label={`Edit task name for session ${dateRangeLabel}`}
+                      spellCheck={false}
+                    />
+                    <span className="history-entry__duration">{formatTime(entry.elapsed)}</span>
+                  </div>
+                  <div className="history-entry__footer">
+                    <div className="history-entry__footer-meta">
+                      <div className="history-entry__trail" aria-label={pathAria}>
+                        <span className="history-entry__trail-goal">{goalLabel}</span>
+                        {hasBucketLabel ? (
+                          <>
+                            <span className="history-entry__trail-separator" aria-hidden="true">
+                              →
+                            </span>
+                            <span className="history-entry__trail-bucket">{bucketLabel}</span>
+                          </>
+                        ) : null}
+                      </div>
+                      <div className="history-entry__meta">{dateRangeLabel}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="history-entry__delete"
+                      onClick={handleDeleteHistoryEntry(entry.id)}
+                      aria-label={`Delete session ${dateRangeLabel}`}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+        ) : (
+          <p className="history-empty">No sessions logged yet. Wrap up a focus session to build your timeline.</p>
+        )}
+      </section>
 
       <section className="reflection-section reflection-section--overview">
         <h2 className="reflection-section__title">Time Overview</h2>
