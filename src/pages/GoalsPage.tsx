@@ -79,6 +79,131 @@ export interface TaskItem {
   priority?: boolean
 }
 
+type TaskSubtask = {
+  id: string
+  text: string
+  completed: boolean
+}
+
+type TaskDetails = {
+  notes: string
+  subtasks: TaskSubtask[]
+  expanded: boolean
+}
+
+type TaskDetailsState = Record<string, TaskDetails>
+
+const createTaskDetails = (overrides?: Partial<TaskDetails>): TaskDetails => ({
+  notes: '',
+  subtasks: [],
+  expanded: false,
+  ...overrides,
+})
+
+const TASK_DETAILS_STORAGE_KEY = 'nc-taskwatch-task-details-v1'
+
+const sanitizeSubtasks = (value: unknown): TaskSubtask[] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .map((item) => {
+      if (typeof item !== 'object' || item === null) {
+        return null
+      }
+      const candidate = item as Record<string, unknown>
+      const id = typeof candidate.id === 'string' ? candidate.id : null
+      if (!id) {
+        return null
+      }
+      const text = typeof candidate.text === 'string' ? candidate.text : ''
+      const completed = Boolean(candidate.completed)
+      return { id, text, completed }
+    })
+    .filter((item): item is TaskSubtask => Boolean(item))
+}
+
+const sanitizeTaskDetailsState = (value: unknown): TaskDetailsState => {
+  if (typeof value !== 'object' || value === null) {
+    return {}
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+  const next: TaskDetailsState = {}
+  entries.forEach(([taskId, details]) => {
+    if (typeof taskId !== 'string') {
+      return
+    }
+    if (typeof details !== 'object' || details === null) {
+      return
+    }
+    const candidate = details as Record<string, unknown>
+    const notes = typeof candidate.notes === 'string' ? candidate.notes : ''
+    const subtasks = sanitizeSubtasks(candidate.subtasks)
+    const expanded = Boolean(candidate.expanded)
+    next[taskId] = { notes, subtasks, expanded }
+  })
+  return next
+}
+
+const readStoredTaskDetails = (): TaskDetailsState => {
+  if (typeof window === 'undefined') {
+    return {}
+  }
+  try {
+    const raw = window.localStorage.getItem(TASK_DETAILS_STORAGE_KEY)
+    if (!raw) {
+      return {}
+    }
+    const parsed = JSON.parse(raw)
+    return sanitizeTaskDetailsState(parsed)
+  } catch {
+    return {}
+  }
+}
+
+const areTaskDetailsEqual = (a: TaskDetails, b: TaskDetails): boolean => {
+  if (a.notes !== b.notes || a.expanded !== b.expanded) {
+    return false
+  }
+  if (a.subtasks.length !== b.subtasks.length) {
+    return false
+  }
+  for (let index = 0; index < a.subtasks.length; index += 1) {
+    const left = a.subtasks[index]
+    const right = b.subtasks[index]
+    if (!right) {
+      return false
+    }
+    if (left.id !== right.id || left.text !== right.text || left.completed !== right.completed) {
+      return false
+    }
+  }
+  return true
+}
+
+const shouldPersistTaskDetails = (details: TaskDetails): boolean => {
+  if (details.expanded) {
+    return true
+  }
+  if (details.notes.trim().length > 0) {
+    return true
+  }
+  return details.subtasks.length > 0
+}
+
+const createSubtaskId = () => {
+  try {
+    if (typeof globalThis.crypto?.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID()
+    }
+  } catch {
+    // fall back to timestamp-based id below
+  }
+  return `subtask-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+const SHOW_TASK_DETAILS = false as const
+
 type FocusPromptTarget = {
   goalId: string
   bucketId: string
@@ -922,6 +1047,13 @@ interface GoalRowProps {
   onToggleBucketExpanded: (bucketId: string) => void
   completedCollapsed: Record<string, boolean>
   onToggleCompletedCollapsed: (bucketId: string) => void
+  taskDetails: TaskDetailsState
+  handleToggleTaskDetails: (taskId: string) => void
+  handleTaskNotesChange: (taskId: string, value: string) => void
+  handleAddSubtask: (taskId: string) => void
+  handleSubtaskTextChange: (taskId: string, subtaskId: string, value: string) => void
+  handleToggleSubtaskCompleted: (taskId: string, subtaskId: string) => void
+  handleRemoveSubtask: (taskId: string, subtaskId: string) => void
   taskDrafts: Record<string, string>
   onStartTaskDraft: (goalId: string, bucketId: string) => void
   onTaskDraftChange: (goalId: string, bucketId: string, value: string) => void
@@ -1003,6 +1135,13 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onToggleBucketExpanded,
   completedCollapsed,
   onToggleCompletedCollapsed,
+  taskDetails,
+  handleToggleTaskDetails,
+  handleTaskNotesChange,
+  handleAddSubtask,
+  handleSubtaskTextChange,
+  handleToggleSubtaskCompleted,
+  handleRemoveSubtask,
   taskDrafts,
   onStartTaskDraft,
   onTaskDraftChange,
@@ -2304,6 +2443,20 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                   : task.difficulty === 'red'
                                   ? 'goal-task-row--diff-red'
                                   : ''
+                              const showDetails = SHOW_TASK_DETAILS
+                              const details = showDetails ? taskDetails[task.id] : undefined
+                              const notesValue = showDetails ? details?.notes ?? '' : ''
+                              const subtasks = showDetails ? details?.subtasks ?? [] : []
+                              const trimmedNotesLength = showDetails ? notesValue.trim().length : 0
+                              const completedSubtasks = showDetails
+                                ? subtasks.filter((subtask) => subtask.completed).length
+                                : 0
+                              const hasSubtasks = showDetails ? subtasks.length > 0 : false
+                              const subtaskProgressLabel =
+                                showDetails && hasSubtasks ? `${completedSubtasks}/${subtasks.length}` : null
+                              const isDetailsOpen = showDetails && Boolean(details?.expanded)
+                              const hasDetailsContent = showDetails && (trimmedNotesLength > 0 || hasSubtasks)
+                              const notesFieldId = `task-notes-${task.id}`
                               const focusPromptKey = makeTaskFocusKey(goal.id, b.id, task.id)
                               const isFocusPromptActive =
                                 !isEditing &&
@@ -2325,6 +2478,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       task.priority && 'goal-task-row--priority',
                                       isEditing && 'goal-task-row--draft',
                                       completingMap[completingKey(b.id, task.id)] && 'goal-task-row--completing',
+                                      showDetails && isDetailsOpen && 'goal-task-row--expanded',
+                                      showDetails && hasDetailsContent && 'goal-task-row--has-details',
                                     )}
                                     draggable
                                   onDragStart={(e) => {
@@ -2391,6 +2546,35 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       e.dataTransfer.dropEffect = 'move'
                                     }}
                                   >
+                                  {showDetails && (
+                                    <button
+                                      type="button"
+                                      className={classNames(
+                                        'goal-task-toggle',
+                                        isDetailsOpen && 'goal-task-toggle--open',
+                                        hasDetailsContent && 'goal-task-toggle--active',
+                                      )}
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        handleToggleTaskDetails(task.id)
+                                      }}
+                                      onPointerDown={(event) => {
+                                        event.stopPropagation()
+                                      }}
+                                      aria-label={
+                                        isDetailsOpen
+                                          ? 'Hide notes and subtasks'
+                                          : hasDetailsContent
+                                          ? 'Show notes and subtasks'
+                                          : 'Add notes or subtasks'
+                                      }
+                                      aria-expanded={isDetailsOpen}
+                                    >
+                                      <svg viewBox="0 0 24 24" className="goal-task-toggle__icon" aria-hidden="true">
+                                        <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     className="goal-task-marker goal-task-marker--action"
@@ -2631,6 +2815,108 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     aria-label="Set task difficulty"
                                     title="Tap to cycle difficulty • Hold ~300ms for Priority"
                                   />
+                                  {showDetails && isDetailsOpen && (
+                                    <div
+                                      className={classNames(
+                                        'goal-task-details',
+                                        isDetailsOpen && 'goal-task-details--open',
+                                      )}
+                                      onPointerDown={(event) => event.stopPropagation()}
+                                    >
+                                      <div className="goal-task-details__notes">
+                                        {trimmedNotesLength > 0 ? (
+                                          <p className="goal-task-details__label">Notes</p>
+                                        ) : null}
+                                        <textarea
+                                          id={notesFieldId}
+                                          className="goal-task-details__textarea"
+                                          value={notesValue}
+                                          onChange={(event) => handleTaskNotesChange(task.id, event.target.value)}
+                                          onPointerDown={(event) => event.stopPropagation()}
+                                          placeholder="Add a quick note..."
+                                          rows={3}
+                                          aria-label="Task notes"
+                                        />
+                                      </div>
+                                      <div className="goal-task-details__subtasks">
+                                        <div className="goal-task-details__subtasks-header">
+                                          <button
+                                            type="button"
+                                            className="goal-task-details__add"
+                                            onClick={(event) => {
+                                              event.stopPropagation()
+                                              handleAddSubtask(task.id)
+                                            }}
+                                            onPointerDown={(event) => event.stopPropagation()}
+                                          >
+                                            + Subtask
+                                          </button>
+                                          {subtaskProgressLabel ? (
+                                            <span
+                                              className="goal-task-details__progress"
+                                              aria-label={`Subtasks complete ${completedSubtasks} of ${subtasks.length}`}
+                                            >
+                                              {subtaskProgressLabel}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        {hasSubtasks ? (
+                                          <ul className="goal-task-details__subtask-list">
+                                            {subtasks.map((subtask) => (
+                                              <li key={subtask.id} className="goal-task-details__subtask">
+                                                <label className="goal-task-details__subtask-item">
+                                                  <input
+                                                    type="checkbox"
+                                                    className="goal-task-details__checkbox"
+                                                    checked={subtask.completed}
+                                                    onChange={(event) => {
+                                                      event.stopPropagation()
+                                                      handleToggleSubtaskCompleted(task.id, subtask.id)
+                                                    }}
+                                                    onPointerDown={(event) => event.stopPropagation()}
+                                                  />
+                                                  <input
+                                                    type="text"
+                                                    className="goal-task-details__subtask-input"
+                                                    value={subtask.text}
+                                                    onChange={(event) =>
+                                                      handleSubtaskTextChange(task.id, subtask.id, event.target.value)
+                                                    }
+                                                    onPointerDown={(event) => event.stopPropagation()}
+                                                    placeholder="Describe subtask"
+                                                  />
+                                                </label>
+                                                <button
+                                                  type="button"
+                                                  className="goal-task-details__remove"
+                                                  onClick={(event) => {
+                                                    event.stopPropagation()
+                                                    handleRemoveSubtask(task.id, subtask.id)
+                                                  }}
+                                                  onPointerDown={(event) => event.stopPropagation()}
+                                                  aria-label="Remove subtask"
+                                                >
+                                                  ×
+                                                </button>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="goal-task-details__empty-add"
+                                            onClick={(event) => {
+                                              event.stopPropagation()
+                                              handleAddSubtask(task.id)
+                                            }}
+                                            onPointerDown={(event) => event.stopPropagation()}
+                                          >
+                                            Start a subtask
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
                                 </li>
                                 {!isEditing && isFocusPromptActive ? (
                                   <li
@@ -2734,6 +3020,20 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       : task.difficulty === 'red'
                                       ? 'goal-task-row--diff-red'
                                       : ''
+                                  const showDetails = SHOW_TASK_DETAILS
+                                  const details = showDetails ? taskDetails[task.id] : undefined
+                                  const notesValue = showDetails ? details?.notes ?? '' : ''
+                                  const subtasks = showDetails ? details?.subtasks ?? [] : []
+                                  const trimmedNotesLength = showDetails ? notesValue.trim().length : 0
+                                  const completedSubtasks = showDetails
+                                    ? subtasks.filter((subtask) => subtask.completed).length
+                                    : 0
+                                  const hasSubtasks = showDetails ? subtasks.length > 0 : false
+                                  const subtaskProgressLabel =
+                                    showDetails && hasSubtasks ? `${completedSubtasks}/${subtasks.length}` : null
+                                  const isDetailsOpen = showDetails && Boolean(details?.expanded)
+                                  const hasDetailsContent = showDetails && (trimmedNotesLength > 0 || hasSubtasks)
+                                  const notesFieldId = `task-notes-${task.id}`
                                   const focusPromptKey = makeTaskFocusKey(goal.id, b.id, task.id)
                                   const isFocusPromptActive =
                                     !isEditing &&
@@ -2755,6 +3055,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           task.priority && 'goal-task-row--priority',
                                           isEditing && 'goal-task-row--draft',
                                           isFocusPromptActive && 'goal-task-row--focus-prompt',
+                                          showDetails && isDetailsOpen && 'goal-task-row--expanded',
+                                          showDetails && hasDetailsContent && 'goal-task-row--has-details',
                                         )}
                                         draggable
                                         onDragStart={(e) => {
@@ -2814,6 +3116,35 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           e.dataTransfer.dropEffect = 'move'
                                         }}
                                       >
+                                      {showDetails && (
+                                        <button
+                                          type="button"
+                                          className={classNames(
+                                            'goal-task-toggle',
+                                            isDetailsOpen && 'goal-task-toggle--open',
+                                            hasDetailsContent && 'goal-task-toggle--active',
+                                          )}
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            handleToggleTaskDetails(task.id)
+                                          }}
+                                          onPointerDown={(event) => {
+                                            event.stopPropagation()
+                                          }}
+                                          aria-label={
+                                            isDetailsOpen
+                                              ? 'Hide notes and subtasks'
+                                              : hasDetailsContent
+                                              ? 'Show notes and subtasks'
+                                              : 'Add notes or subtasks'
+                                          }
+                                          aria-expanded={isDetailsOpen}
+                                        >
+                                          <svg viewBox="0 0 24 24" className="goal-task-toggle__icon" aria-hidden="true">
+                                            <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                          </svg>
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         className="goal-task-marker goal-task-marker--completed"
@@ -2963,6 +3294,108 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         aria-label="Set task difficulty"
                                         title="Tap to cycle difficulty • Hold ~300ms for Priority"
                                       />
+                                      {showDetails && isDetailsOpen && (
+                                        <div
+                                          className={classNames(
+                                            'goal-task-details',
+                                            isDetailsOpen && 'goal-task-details--open',
+                                          )}
+                                          onPointerDown={(event) => event.stopPropagation()}
+                                        >
+                                          <div className="goal-task-details__notes">
+                                            {trimmedNotesLength > 0 ? (
+                                              <p className="goal-task-details__label">Notes</p>
+                                            ) : null}
+                                            <textarea
+                                              id={notesFieldId}
+                                              className="goal-task-details__textarea"
+                                              value={notesValue}
+                                              onChange={(event) => handleTaskNotesChange(task.id, event.target.value)}
+                                              onPointerDown={(event) => event.stopPropagation()}
+                                              placeholder="Add a quick note..."
+                                              rows={3}
+                                              aria-label="Task notes"
+                                            />
+                                          </div>
+                                          <div className="goal-task-details__subtasks">
+                                            <div className="goal-task-details__subtasks-header">
+                                              <button
+                                                type="button"
+                                                className="goal-task-details__add"
+                                                onClick={(event) => {
+                                                  event.stopPropagation()
+                                                  handleAddSubtask(task.id)
+                                                }}
+                                                onPointerDown={(event) => event.stopPropagation()}
+                                              >
+                                                + Subtask
+                                              </button>
+                                              {subtaskProgressLabel ? (
+                                                <span
+                                                  className="goal-task-details__progress"
+                                                  aria-label={`Subtasks complete ${completedSubtasks} of ${subtasks.length}`}
+                                                >
+                                                  {subtaskProgressLabel}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                            {hasSubtasks ? (
+                                              <ul className="goal-task-details__subtask-list">
+                                                {subtasks.map((subtask) => (
+                                                  <li key={subtask.id} className="goal-task-details__subtask">
+                                                    <label className="goal-task-details__subtask-item">
+                                                      <input
+                                                        type="checkbox"
+                                                        className="goal-task-details__checkbox"
+                                                        checked={subtask.completed}
+                                                        onChange={(event) => {
+                                                          event.stopPropagation()
+                                                          handleToggleSubtaskCompleted(task.id, subtask.id)
+                                                        }}
+                                                        onPointerDown={(event) => event.stopPropagation()}
+                                                      />
+                                                      <input
+                                                        type="text"
+                                                        className="goal-task-details__subtask-input"
+                                                        value={subtask.text}
+                                                        onChange={(event) =>
+                                                          handleSubtaskTextChange(task.id, subtask.id, event.target.value)
+                                                        }
+                                                        onPointerDown={(event) => event.stopPropagation()}
+                                                        placeholder="Describe subtask"
+                                                      />
+                                                    </label>
+                                                    <button
+                                                      type="button"
+                                                      className="goal-task-details__remove"
+                                                      onClick={(event) => {
+                                                        event.stopPropagation()
+                                                        handleRemoveSubtask(task.id, subtask.id)
+                                                      }}
+                                                      onPointerDown={(event) => event.stopPropagation()}
+                                                      aria-label="Remove subtask"
+                                                    >
+                                                      ×
+                                                    </button>
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            ) : (
+                                              <button
+                                                type="button"
+                                                className="goal-task-details__empty-add"
+                                                onClick={(event) => {
+                                                  event.stopPropagation()
+                                                  handleAddSubtask(task.id)
+                                                }}
+                                                onPointerDown={(event) => event.stopPropagation()}
+                                              >
+                                                Start a subtask
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
                                     </li>
                                     {!isEditing && isFocusPromptActive ? (
                                       <li
@@ -3098,6 +3531,159 @@ export default function GoalsPage(): ReactElement {
   const [customGradient, setCustomGradient] = useState({ start: '#6366f1', end: '#ec4899', angle: 135 })
   const goalModalInputRef = useRef<HTMLInputElement | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [taskDetails, setTaskDetails] = useState<TaskDetailsState>(() => readStoredTaskDetails())
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    try {
+      window.localStorage.setItem(TASK_DETAILS_STORAGE_KEY, JSON.stringify(taskDetails))
+    } catch {
+      // Ignore quota or storage errors silently
+    }
+  }, [taskDetails])
+
+  useEffect(() => {
+    const validTaskIds = new Set<string>()
+    goals.forEach((goal) => {
+      goal.buckets.forEach((bucket) => {
+        bucket.tasks.forEach((task) => {
+          validTaskIds.add(task.id)
+        })
+      })
+    })
+    setTaskDetails((current) => {
+      let changed = false
+      const next: TaskDetailsState = {}
+      Object.entries(current).forEach(([taskId, details]) => {
+        if (validTaskIds.has(taskId)) {
+          next[taskId] = details
+        } else {
+          changed = true
+        }
+      })
+      return changed ? next : current
+    })
+  }, [goals])
+
+  const updateTaskDetails = useCallback(
+    (taskId: string, transform: (current: TaskDetails) => TaskDetails) => {
+      setTaskDetails((current) => {
+        const previous = current[taskId] ?? createTaskDetails()
+        const transformed = transform(previous)
+        const base = transformed === previous ? previous : transformed
+        const normalized: TaskDetails = {
+          notes: typeof base.notes === 'string' ? base.notes : '',
+          expanded: Boolean(base.expanded),
+          subtasks: Array.isArray(base.subtasks) ? base.subtasks : [],
+        }
+        if (!shouldPersistTaskDetails(normalized)) {
+          if (!current[taskId]) {
+            return current
+          }
+          const { [taskId]: _removed, ...rest } = current
+          return rest
+        }
+        const existing = current[taskId]
+        if (existing && areTaskDetailsEqual(existing, normalized)) {
+          return current
+        }
+        return { ...current, [taskId]: normalized }
+      })
+    },
+    [],
+  )
+
+  const handleToggleTaskDetails = useCallback(
+    (taskId: string) => {
+      updateTaskDetails(taskId, (current) => ({
+        ...current,
+        expanded: !current.expanded,
+      }))
+    },
+    [updateTaskDetails],
+  )
+
+  const handleTaskNotesChange = useCallback(
+    (taskId: string, value: string) => {
+      updateTaskDetails(taskId, (current) => {
+        if (current.notes === value) {
+          return current
+        }
+        return {
+          ...current,
+          notes: value,
+        }
+      })
+    },
+    [updateTaskDetails],
+  )
+
+  const handleAddSubtask = useCallback(
+    (taskId: string) => {
+      updateTaskDetails(taskId, (current) => ({
+        ...current,
+        expanded: true,
+        subtasks: [...current.subtasks, { id: createSubtaskId(), text: '', completed: false }],
+      }))
+    },
+    [updateTaskDetails],
+  )
+
+  const handleSubtaskTextChange = useCallback(
+    (taskId: string, subtaskId: string, value: string) => {
+      updateTaskDetails(taskId, (current) => {
+        const index = current.subtasks.findIndex((item) => item.id === subtaskId)
+        if (index === -1) {
+          return current
+        }
+        const nextSubtasks = current.subtasks.map((item, idx) =>
+          idx === index ? { ...item, text: value } : item,
+        )
+        return {
+          ...current,
+          subtasks: nextSubtasks,
+        }
+      })
+    },
+    [updateTaskDetails],
+  )
+
+  const handleToggleSubtaskCompleted = useCallback(
+    (taskId: string, subtaskId: string) => {
+      updateTaskDetails(taskId, (current) => {
+        const index = current.subtasks.findIndex((item) => item.id === subtaskId)
+        if (index === -1) {
+          return current
+        }
+        const nextSubtasks = current.subtasks.map((item, idx) =>
+          idx === index ? { ...item, completed: !item.completed } : item,
+        )
+        return {
+          ...current,
+          subtasks: nextSubtasks,
+        }
+      })
+    },
+    [updateTaskDetails],
+  )
+
+  const handleRemoveSubtask = useCallback(
+    (taskId: string, subtaskId: string) => {
+      updateTaskDetails(taskId, (current) => {
+        const nextSubtasks = current.subtasks.filter((item) => item.id !== subtaskId)
+        if (nextSubtasks.length === current.subtasks.length) {
+          return current
+        }
+        return {
+          ...current,
+          subtasks: nextSubtasks,
+        }
+      })
+    },
+    [updateTaskDetails],
+  )
   const [nextGoalGradientIndex, setNextGoalGradientIndex] = useState(() => DEFAULT_GOALS.length % GOAL_GRADIENTS.length)
   const [activeCustomizerGoalId, setActiveCustomizerGoalId] = useState<string | null>(null)
   const customizerDialogRef = useRef<HTMLDivElement | null>(null)
@@ -4652,6 +5238,13 @@ export default function GoalsPage(): ReactElement {
                   onToggleBucketExpanded={toggleBucketExpanded}
                   completedCollapsed={completedCollapsed}
                   onToggleCompletedCollapsed={toggleCompletedSection}
+                  taskDetails={taskDetails}
+                  handleToggleTaskDetails={handleToggleTaskDetails}
+                  handleTaskNotesChange={handleTaskNotesChange}
+                  handleAddSubtask={handleAddSubtask}
+                  handleSubtaskTextChange={handleSubtaskTextChange}
+                  handleToggleSubtaskCompleted={handleToggleSubtaskCompleted}
+                  handleRemoveSubtask={handleRemoveSubtask}
                   taskDrafts={taskDrafts}
                   onStartTaskDraft={startTaskDraft}
                   onTaskDraftChange={handleTaskDraftChange}
