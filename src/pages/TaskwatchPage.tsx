@@ -1,4 +1,14 @@
-import { type ChangeEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import '../App.css'
 import {
   fetchGoalsHierarchy,
@@ -78,7 +88,6 @@ const CURRENT_TASK_SOURCE_KEY = 'nc-taskwatch-current-task-source'
 const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 const NOTEBOOK_STORAGE_KEY = 'nc-taskwatch-notebook'
-const UNCATEGORISED_LABEL = 'Uncategorised'
 const MAX_TASK_STORAGE_LENGTH = 256
 const FOCUS_COMPLETION_RESET_DELAY_MS = 800
 const PRIORITY_HOLD_MS = 300
@@ -87,72 +96,6 @@ declare global {
   interface Window {
     __ncSetElapsed?: (ms: number) => void
   }
-}
-
-const sanitizeEditableValue = (
-  element: HTMLSpanElement,
-  rawValue: string,
-  maxLength: number,
-) => {
-  const sanitized = rawValue.replace(/\n+/g, ' ')
-  const limited = sanitized.slice(0, maxLength)
-  const previous = element.textContent ?? ''
-  const changed = previous !== limited
-
-  let caretOffset: number | null = null
-  if (typeof window !== 'undefined') {
-    const selection = window.getSelection()
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0)
-      if (range && element.contains(range.endContainer)) {
-        const preRange = range.cloneRange()
-        preRange.selectNodeContents(element)
-        try {
-          preRange.setEnd(range.endContainer, range.endOffset)
-          caretOffset = preRange.toString().length
-        } catch (error) {
-          caretOffset = null
-        }
-      }
-    }
-  }
-
-  if (changed) {
-    element.textContent = limited
-
-    if (caretOffset !== null && typeof window !== 'undefined') {
-      const selection = window.getSelection()
-      if (selection) {
-        const range = document.createRange()
-        const targetOffset = Math.min(caretOffset, element.textContent?.length ?? 0)
-        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
-        let remaining = targetOffset
-        let node: Node | null = null
-        let positioned = false
-        while ((node = walker.nextNode())) {
-          const length = node.textContent?.length ?? 0
-          if (remaining <= length) {
-            range.setStart(node, Math.max(0, remaining))
-            positioned = true
-            break
-          }
-          remaining -= length
-        }
-
-        if (!positioned) {
-          range.selectNodeContents(element)
-          range.collapse(false)
-        } else {
-          range.collapse(true)
-        }
-
-        selection.removeAllRanges()
-        selection.addRange(range)
-      }
-    }
-  }
-
-  return { value: limited, changed }
 }
 
 const makeHistoryId = () => {
@@ -419,35 +362,6 @@ const formatTime = (milliseconds: number) => {
   const fraction = centiseconds.toString().padStart(2, '0')
 
   return `${timeCore}.${fraction}`
-}
-
-const formatDatePart = (timestamp: number) => {
-  const date = new Date(timestamp)
-  const day = date.getDate()
-  const month = date.getMonth() + 1
-  const year = date.getFullYear()
-
-  const hours24 = date.getHours()
-  const minutes = date.getMinutes()
-  const period = hours24 >= 12 ? 'pm' : 'am'
-  const hours12 = hours24 % 12 || 12
-  const minuteString = minutes.toString().padStart(2, '0')
-
-  return {
-    dateLabel: `${day}/${month}/${year}`,
-    timeLabel: `${hours12}:${minuteString}${period}`,
-  }
-}
-
-const formatDateRange = (start: number, end: number) => {
-  const startPart = formatDatePart(start)
-  const endPart = formatDatePart(end)
-
-  if (startPart.dateLabel === endPart.dateLabel) {
-    return `${startPart.dateLabel} ${startPart.timeLabel}-${endPart.timeLabel}`
-  }
-
-  return `${startPart.dateLabel} ${startPart.timeLabel} - ${endPart.dateLabel} ${endPart.timeLabel}`
 }
 
 const formatClockTime = (timestamp: number) => {
