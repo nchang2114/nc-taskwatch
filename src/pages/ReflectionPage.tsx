@@ -1219,9 +1219,11 @@ export default function ReflectionPage() {
   const timelineRowCount = daySegments.length > 0 ? daySegments.reduce((max, segment) => Math.max(max, segment.lane), 0) + 1 : 1
   const timelineStyle = useMemo(() => ({ '--history-timeline-rows': timelineRowCount } as CSSProperties), [timelineRowCount])
   const timelineTicks = useMemo(() => {
-    const incrementHours = 2
-    const count = Math.floor(24 / incrementHours)
-    return Array.from({ length: count + 1 }, (_, index) => index * incrementHours)
+    const ticks: Array<{ hour: number; showLabel: boolean }> = []
+    for (let hour = 0; hour <= 24; hour += 1) {
+      ticks.push({ hour, showLabel: hour % 3 === 0 })
+    }
+    return ticks
   }, [])
   const dayEntryCount = daySegments.length
   const dayLabel = useMemo(() => {
@@ -1440,9 +1442,10 @@ export default function ReflectionPage() {
             })}
           </div>
           <div className="history-timeline__axis">
-            {timelineTicks.map((hour, index) => {
+            {timelineTicks.map((tick, index) => {
               const isFirstTick = index === 0
               const isLastTick = index === timelineTicks.length - 1
+              const { hour, showLabel } = tick
               const tickClassName = [
                 'history-timeline__tick',
                 isFirstTick ? 'history-timeline__tick--first' : '',
@@ -1456,8 +1459,15 @@ export default function ReflectionPage() {
                   className={tickClassName}
                   style={{ left: `${(hour / 24) * 100}%` }}
                 >
-                  <span className="history-timeline__tick-line" />
-                  <span className="history-timeline__tick-label">{formatHourLabel(hour)}</span>
+                  <span
+                    className={`history-timeline__tick-line${showLabel ? ' history-timeline__tick-line--major' : ''}`}
+                  />
+                  <span
+                    className={`history-timeline__tick-label${showLabel ? '' : ' history-timeline__tick-label--hidden'}`}
+                    aria-hidden={!showLabel}
+                  >
+                    {formatHourLabel(hour)}
+                  </span>
                 </div>
               )
             })}

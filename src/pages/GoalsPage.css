@@ -1269,7 +1269,6 @@ html[data-theme='light'] .goal-task-row {
 }
 
 html[data-theme='light'] .goal-task-marker,
-html[data-theme='light'] .goal-task-marker,
 html[data-theme='light'] .goal-task-marker--action {
   border-color: rgba(128, 146, 238, 0.38);
 }
