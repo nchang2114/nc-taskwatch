@@ -202,7 +202,7 @@ const createSubtaskId = () => {
   return `subtask-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-const SHOW_TASK_DETAILS = false as const
+const SHOW_TASK_DETAILS = true as const
 
 type FocusPromptTarget = {
   goalId: string
