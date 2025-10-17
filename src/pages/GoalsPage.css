@@ -984,7 +984,11 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 .goal-task-marker--completed .goal-task-check {
   width: 0.75rem;
   height: 0.75rem;
-  color: rgba(10, 85, 44, 0.95);
+  color: #00d601;
+}
+.goal-task-marker--completed .goal-task-check path {
+  stroke-width: 2.2;
+  vector-effect: non-scaling-stroke;
 }
 
 .goal-task-focus-row {
@@ -1033,7 +1037,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 .goal-task-marker--action .goal-task-check { opacity: 0; transition: opacity 140ms ease; }
 .goal-task-marker--action .goal-task-check path {
   /* Crisp, opaque green tick */
-  stroke: rgb(134, 239, 172);
+  stroke: #00d601;
   stroke-width: 2.2;
   vector-effect: non-scaling-stroke;
   stroke-dasharray: 22;
@@ -1265,6 +1269,7 @@ html[data-theme='light'] .goal-task-row {
 }
 
 html[data-theme='light'] .goal-task-marker,
+html[data-theme='light'] .goal-task-marker,
 html[data-theme='light'] .goal-task-marker--action {
   border-color: rgba(128, 146, 238, 0.38);
 }
@@ -1273,6 +1278,13 @@ html[data-theme='light'] .goal-task-marker--completed {
   border-color: rgba(60, 144, 110, 0.7);
   background: rgba(134, 239, 172, 0.2);
   color: rgba(34, 124, 84, 0.85);
+}
+
+html[data-theme='light'] .goal-task-marker--completed .goal-task-check {
+  color: #00d601;
+}
+html[data-theme='light'] .goal-task-marker--completed .goal-task-check path {
+  stroke-width: 2.2;
 }
 
 html[data-theme='light'] .goal-task-toggle {
@@ -1395,8 +1407,8 @@ html[data-theme='light'] .goal-task-focus__button:focus-visible {
 
 html[data-theme='light'] .goal-task-marker--action:hover,
 html[data-theme='light'] .goal-task-marker--action:focus-visible {
-  background: rgba(92, 91, 255, 0.16);
-  border-color: rgba(92, 91, 255, 0.38);
+  background: rgba(226, 233, 255, 0.98);
+  border-color: rgba(62, 80, 204, 0.82);
 }
 
 html[data-theme='light'] .goal-task-row--completed {
