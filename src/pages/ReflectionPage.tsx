@@ -4,11 +4,10 @@ import {
   useMemo,
   useRef,
   useState,
-  type ClipboardEvent,
-  type FocusEvent,
-  type FormEvent,
+  type ChangeEvent,
+  type CSSProperties,
+  type KeyboardEvent,
   type MouseEvent,
-  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import './ReflectionPage.css'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
@@ -36,74 +35,6 @@ const RANGE_DEFS: Record<ReflectionRangeKey, RangeDefinition> = {
 
 const RANGE_KEYS: ReflectionRangeKey[] = ['24h', '48h', '7d']
 
-const MAX_TASK_STORAGE_LENGTH = 256
-
-const sanitizeEditableValue = (
-  element: HTMLSpanElement,
-  rawValue: string,
-  maxLength: number,
-) => {
-  const sanitized = rawValue.replace(/\n+/g, ' ')
-  const limited = sanitized.slice(0, maxLength)
-  const previous = element.textContent ?? ''
-  const changed = previous !== limited
-
-  let caretOffset: number | null = null
-  if (typeof window !== 'undefined') {
-    const selection = window.getSelection()
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0)
-      if (range && element.contains(range.endContainer)) {
-        const preRange = range.cloneRange()
-        preRange.selectNodeContents(element)
-        try {
-          preRange.setEnd(range.endContainer, range.endOffset)
-          caretOffset = preRange.toString().length
-        } catch {
-          caretOffset = null
-        }
-      }
-    }
-  }
-
-  if (changed) {
-    element.textContent = limited
-
-    if (caretOffset !== null && typeof window !== 'undefined') {
-      const selection = window.getSelection()
-      if (selection) {
-        const range = document.createRange()
-        const targetOffset = Math.min(caretOffset, element.textContent?.length ?? 0)
-        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
-        let remaining = targetOffset
-        let node: Node | null = null
-        let positioned = false
-        while ((node = walker.nextNode())) {
-          const length = node.textContent?.length ?? 0
-          if (remaining <= length) {
-            range.setStart(node, Math.max(0, remaining))
-            positioned = true
-            break
-          }
-          remaining -= length
-        }
-
-        if (!positioned) {
-          range.selectNodeContents(element)
-          range.collapse(false)
-        } else {
-          range.collapse(true)
-        }
-
-        selection.removeAllRanges()
-        selection.addRange(range)
-      }
-    }
-  }
-
-  return { value: limited, changed }
-}
-
 type HistoryEntry = {
   id: string
   taskName: string
@@ -112,6 +43,12 @@ type HistoryEntry = {
   endedAt: number
   goalName: string | null
   bucketName: string | null
+}
+
+type HistoryDraftState = {
+  taskName: string
+  goalName: string
+  bucketName: string
 }
 
 type GoalGradientInfo = {
@@ -252,6 +189,31 @@ const formatDuration = (ms: number) => {
   return minutes > 0 ? `${days}d ${remainingHours}h` : `${days}d ${remainingHours}h`
 }
 
+const formatTimeOfDay = (timestamp: number) => {
+  const date = new Date(timestamp)
+  const hours24 = date.getHours()
+  const minutes = date.getMinutes().toString().padStart(2, '0')
+  const period = hours24 >= 12 ? 'PM' : 'AM'
+  const hours12 = hours24 % 12 || 12
+  return `${hours12}:${minutes}${period}`
+}
+
+const formatHourLabel = (hour24: number) => {
+  const normalized = ((hour24 % 24) + 24) % 24
+  if (normalized === 0) {
+    return '12 AM'
+  }
+  if (normalized === 12) {
+    return '12 PM'
+  }
+  if (normalized < 12) {
+    return `${normalized} AM`
+  }
+  return `${normalized - 12} PM`
+}
+
+const DAY_DURATION_MS = 24 * 60 * 60 * 1000
+
 const hashString = (value: string) => {
   let hash = 0
   for (let index = 0; index < value.length; index += 1) {
@@ -292,32 +254,6 @@ const formatDateRange = (start: number, end: number) => {
   }
 
   return `${startPart.dateLabel} ${startPart.timeLabel} - ${endPart.dateLabel} ${endPart.timeLabel}`
-}
-
-const formatTime = (milliseconds: number) => {
-  const totalMs = Math.max(0, Math.floor(milliseconds))
-  const days = Math.floor(totalMs / 86_400_000)
-  const hours = Math.floor((totalMs % 86_400_000) / 3_600_000)
-  const minutes = Math.floor((totalMs % 3_600_000) / 60_000)
-  const seconds = Math.floor((totalMs % 60_000) / 1_000)
-  const centiseconds = Math.floor((totalMs % 1_000) / 10)
-
-  const segments: string[] = []
-
-  if (days > 0) {
-    segments.push(`${days}D`)
-    segments.push(hours.toString().padStart(2, '0'))
-  } else if (hours > 0) {
-    segments.push(hours.toString().padStart(2, '0'))
-  }
-
-  segments.push(minutes.toString().padStart(2, '0'))
-  segments.push(seconds.toString().padStart(2, '0'))
-
-  const timeCore = segments.join(':')
-  const fraction = centiseconds.toString().padStart(2, '0')
-
-  return `${timeCore}.${fraction}`
 }
 
 const PIE_VIEWBOX_SIZE = 200
@@ -795,7 +731,10 @@ export default function ReflectionPage() {
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(() => readStoredActiveSession())
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [journal, setJournal] = useState('')
-  const historyTaskRefs = useRef(new Map<string, HTMLSpanElement>())
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
+  const [historyDraft, setHistoryDraft] = useState<HistoryDraftState>({ taskName: '', goalName: '', bucketName: '' })
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
+  const timelineRef = useRef<HTMLDivElement | null>(null)
 
   const persistHistory = useCallback((next: HistoryEntry[]) => {
     if (typeof window === 'undefined') {
@@ -847,98 +786,36 @@ export default function ReflectionPage() {
     return map
   }, [goalLookup, goalColorLookup, activeSession])
 
-  const registerHistoryTaskRef = useCallback(
-    (id: string, node: HTMLSpanElement | null) => {
-      if (node) {
-        historyTaskRefs.current.set(id, node)
-        const entry = history.find((item) => item.id === id)
-        const text = entry?.taskName ?? ''
-        if (node.textContent !== text) {
-          node.textContent = text
-        }
-      } else {
-        historyTaskRefs.current.delete(id)
-      }
-    },
-    [history],
-  )
-
-  const handleHistoryTaskInput = useCallback(
-    (entryId: string) => (event: FormEvent<HTMLSpanElement>) => {
-      const node = historyTaskRefs.current.get(entryId)
-      if (!node) {
-        return
-      }
-      const raw = event.currentTarget.textContent ?? ''
-      const { value } = sanitizeEditableValue(node, raw, MAX_TASK_STORAGE_LENGTH)
-      updateHistory((current) =>
-        current.map((entry) =>
-          entry.id === entryId && entry.taskName !== value ? { ...entry, taskName: value } : entry,
-        ),
-      )
-    },
-    [updateHistory],
-  )
-
-  const handleHistoryTaskBlur = useCallback(
-    (entryId: string) => (event: FocusEvent<HTMLSpanElement>) => {
-      const node = historyTaskRefs.current.get(entryId)
-      if (!node) {
-        return
-      }
-      const value = (event.currentTarget.textContent ?? '').replace(/\n+/g, ' ').trim()
-      const limited = value.slice(0, MAX_TASK_STORAGE_LENGTH)
-      const fallback = limited.length > 0 ? limited : 'New Task'
-      if (node.textContent !== fallback) {
-        node.textContent = fallback
-      }
-      updateHistory((current) =>
-        current.map((entry) =>
-          entry.id === entryId && entry.taskName !== fallback ? { ...entry, taskName: fallback } : entry,
-        ),
-      )
-    },
-    [updateHistory],
-  )
-
-  const handleHistoryTaskKeyDown = useCallback((event: ReactKeyboardEvent<HTMLSpanElement>) => {
-    if (event.key === 'Enter' || event.key === 'Escape') {
-      event.preventDefault()
-      event.currentTarget.blur()
+  const selectedHistoryEntry = useMemo(() => {
+    if (!selectedHistoryId) {
+      return null
     }
-  }, [])
+    const match = history.find((entry) => entry.id === selectedHistoryId)
+    return match ?? null
+  }, [history, selectedHistoryId])
 
-  const handleHistoryTaskPaste = useCallback(
-    (entryId: string) => (event: ClipboardEvent<HTMLSpanElement>) => {
-      const node = historyTaskRefs.current.get(entryId)
-      if (!node) {
-        return
-      }
-      event.preventDefault()
-      const text = event.clipboardData?.getData('text/plain') ?? ''
-      const sanitized = text.replace(/\n+/g, ' ')
-      if (typeof window !== 'undefined') {
-        const selection = window.getSelection()
-        if (selection && selection.rangeCount > 0) {
-          selection.deleteFromDocument()
-          const range = selection.getRangeAt(0)
-          const textNode = document.createTextNode(sanitized)
-          range.insertNode(textNode)
-          range.setStartAfter(textNode)
-          range.collapse(true)
-          selection.removeAllRanges()
-          selection.addRange(range)
-        }
-      }
-      const { value } = sanitizeEditableValue(node, node.textContent ?? '', MAX_TASK_STORAGE_LENGTH)
-      updateHistory((current) =>
-        current.map((entry) =>
-          entry.id === entryId && entry.taskName !== value ? { ...entry, taskName: value } : entry,
-        ),
-      )
-    },
-    [updateHistory],
-  )
+  useEffect(() => {
+    if (!selectedHistoryEntry) {
+      setEditingHistoryId(null)
+      return
+    }
+    setHistoryDraft({
+      taskName: selectedHistoryEntry.taskName,
+      goalName: selectedHistoryEntry.goalName ?? '',
+      bucketName: selectedHistoryEntry.bucketName ?? '',
+    })
+    setEditingHistoryId(null)
+  }, [selectedHistoryEntry])
+
+  useEffect(() => {
+    if (!editingHistoryId) {
+      return
+    }
+    if (!selectedHistoryEntry || editingHistoryId !== selectedHistoryEntry.id) {
+      setEditingHistoryId(null)
+      return
+    }
+  }, [editingHistoryId, selectedHistoryEntry])
 
   const handleDeleteHistoryEntry = useCallback(
     (entryId: string) => (event: MouseEvent<HTMLButtonElement>) => {
@@ -972,15 +849,152 @@ export default function ReflectionPage() {
     })
   }, [deletedHistoryStack, updateHistory])
 
-  useEffect(() => {
-    historyTaskRefs.current.forEach((node, id) => {
-      const entry = history.find((item) => item.id === id)
-      const text = entry?.taskName ?? ''
-      if (node.textContent !== text) {
-        node.textContent = text
+  const handleSelectHistorySegment = useCallback(
+    (entry: HistoryEntry) => {
+      if (selectedHistoryId !== entry.id) {
+        setHistoryDraft({
+          taskName: entry.taskName,
+          goalName: entry.goalName ?? '',
+          bucketName: entry.bucketName ?? '',
+        })
       }
+      setSelectedHistoryId(entry.id)
+      setEditingHistoryId(null)
+    },
+    [selectedHistoryId],
+  )
+
+  const handleHistoryFieldChange = useCallback(
+    (field: keyof HistoryDraftState) => (event: ChangeEvent<HTMLInputElement>) => {
+      const { value } = event.target
+      setHistoryDraft((draft) => ({ ...draft, [field]: value }))
+    },
+    [],
+  )
+
+  const commitHistoryDraft = useCallback(() => {
+    if (!selectedHistoryEntry) {
+      return
+    }
+    const nextTaskName = historyDraft.taskName.trim()
+    const nextGoalName = historyDraft.goalName.trim()
+    const nextBucketName = historyDraft.bucketName.trim()
+    updateHistory((current) => {
+      const index = current.findIndex((entry) => entry.id === selectedHistoryEntry.id)
+      if (index === -1) {
+        return current
+      }
+      const target = current[index]
+      if (
+        target.taskName === nextTaskName &&
+        (target.goalName ?? '') === nextGoalName &&
+        (target.bucketName ?? '') === nextBucketName
+      ) {
+        return current
+      }
+      const next = [...current]
+      next[index] = {
+        ...target,
+        taskName: nextTaskName,
+        goalName: nextGoalName.length > 0 ? nextGoalName : null,
+        bucketName: nextBucketName.length > 0 ? nextBucketName : null,
+      }
+      return next
     })
-  }, [history])
+    setHistoryDraft({
+      taskName: nextTaskName,
+      goalName: nextGoalName,
+      bucketName: nextBucketName,
+    })
+    setEditingHistoryId(null)
+  }, [historyDraft, selectedHistoryEntry, updateHistory])
+
+  const handleHistoryFieldKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        commitHistoryDraft()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        if (selectedHistoryEntry) {
+          setHistoryDraft({
+            taskName: selectedHistoryEntry.taskName,
+            goalName: selectedHistoryEntry.goalName ?? '',
+            bucketName: selectedHistoryEntry.bucketName ?? '',
+          })
+        }
+        setEditingHistoryId(null)
+      }
+    },
+    [commitHistoryDraft, selectedHistoryEntry],
+  )
+
+  const handleCancelHistoryEdit = useCallback(() => {
+    if (selectedHistoryEntry) {
+      setHistoryDraft({
+        taskName: selectedHistoryEntry.taskName,
+        goalName: selectedHistoryEntry.goalName ?? '',
+        bucketName: selectedHistoryEntry.bucketName ?? '',
+      })
+    } else {
+      setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+    }
+    setEditingHistoryId(null)
+  }, [selectedHistoryEntry])
+
+  const handleSaveHistoryDraft = useCallback(() => {
+    commitHistoryDraft()
+  }, [commitHistoryDraft])
+
+  const handleStartEditingHistoryEntry = useCallback((entry: HistoryEntry) => {
+    setEditingHistoryId(entry.id)
+    setHistoryDraft({
+      taskName: entry.taskName,
+      goalName: entry.goalName ?? '',
+      bucketName: entry.bucketName ?? '',
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!selectedHistoryId) {
+      return
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const timelineEl = timelineRef.current
+      const targetNode = event.target as Node | null
+      if (timelineEl && targetNode && timelineEl.contains(targetNode)) {
+        return
+      }
+      handleCancelHistoryEdit()
+      setSelectedHistoryId(null)
+      setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [handleCancelHistoryEdit, selectedHistoryId, timelineRef])
+
+  const handleTimelineBlockKeyDown = useCallback(
+    (entry: HistoryEntry) => (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        handleSelectHistorySegment(entry)
+      } else if (event.key === 'Escape' && selectedHistoryId === entry.id) {
+        event.preventDefault()
+        setSelectedHistoryId(null)
+        setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+        setEditingHistoryId(null)
+      }
+    },
+    [handleSelectHistorySegment, selectedHistoryId],
+  )
+
+  const handleTimelineBackgroundClick = useCallback(() => {
+    setSelectedHistoryId(null)
+    setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+    setEditingHistoryId(null)
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1084,6 +1098,17 @@ export default function ReflectionPage() {
     return [activeEntry, ...filteredHistory]
   }, [history, activeSession, nowTick])
 
+  useEffect(() => {
+    if (!selectedHistoryId) {
+      return
+    }
+    const exists = effectiveHistory.some((entry) => entry.id === selectedHistoryId)
+    if (!exists) {
+      setSelectedHistoryId(null)
+      setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+    }
+  }, [effectiveHistory, selectedHistoryId])
+
   const { segments, windowMs, loggedMs } = useMemo(
     () => computeRangeOverview(effectiveHistory, activeRange, enhancedGoalLookup, goalColorLookup),
     [effectiveHistory, activeRange, enhancedGoalLookup, goalColorLookup, nowTick],
@@ -1119,7 +1144,90 @@ export default function ReflectionPage() {
   )
   const unloggedMs = useMemo(() => Math.max(windowMs - loggedMs, 0), [windowMs, loggedMs])
   const tabPanelId = 'reflection-range-panel'
-  const hasHistory = history.length > 0
+  const dayStart = useMemo(() => {
+    const date = new Date(nowTick)
+    date.setHours(0, 0, 0, 0)
+    return date.getTime()
+  }, [nowTick])
+  const dayEnd = dayStart + DAY_DURATION_MS
+  const currentTimePercent = useMemo(() => {
+    if (nowTick < dayStart || nowTick > dayEnd) {
+      return null
+    }
+    const raw = ((nowTick - dayStart) / DAY_DURATION_MS) * 100
+    return Math.min(Math.max(raw, 0), 100)
+  }, [nowTick, dayStart, dayEnd])
+  const daySegments = useMemo(() => {
+    const entries = effectiveHistory
+      .map((entry) => {
+        const start = Math.max(entry.startedAt, dayStart)
+        const end = Math.min(entry.endedAt, dayEnd)
+        if (end <= start) {
+          return null
+        }
+        return { entry, start, end }
+      })
+      .filter((segment): segment is { entry: HistoryEntry; start: number; end: number } => Boolean(segment))
+
+    entries.sort((a, b) => a.start - b.start)
+    const lanes: number[] = []
+    return entries.map(({ entry, start, end }) => {
+      let lane = lanes.findIndex((laneEnd) => start >= laneEnd - 1000)
+      if (lane === -1) {
+        lane = lanes.length
+        lanes.push(end)
+      } else {
+        lanes[lane] = end
+      }
+      const left = ((start - dayStart) / DAY_DURATION_MS) * 100
+      const rawWidth = ((end - start) / DAY_DURATION_MS) * 100
+      const safeLeft = Math.min(Math.max(left, 0), 100)
+      const maxWidth = Math.max(100 - safeLeft, 0)
+      const widthPercent = Math.min(Math.max(rawWidth, 0.8), maxWidth)
+      const labelSource = entry.goalName?.trim().length ? entry.goalName! : entry.taskName
+      const metadata = resolveGoalMetadata(entry, enhancedGoalLookup, goalColorLookup)
+      const gradientCss = metadata.colorInfo?.gradient?.css
+      const solidColor = metadata.colorInfo?.solidColor
+      const fallbackLabel =
+        labelSource && labelSource.trim().length > 0 ? labelSource : metadata.label ?? 'Session'
+      const color =
+        gradientCss ?? solidColor ?? getPaletteColorForLabel(fallbackLabel && fallbackLabel.trim().length > 0 ? fallbackLabel : 'Session')
+      const goalLabel = metadata.label
+      const bucketLabel = entry.bucketName && entry.bucketName.trim().length > 0 ? entry.bucketName : ''
+      const originalRangeLabel = formatDateRange(entry.startedAt, entry.endedAt)
+      const tooltipTask =
+        entry.taskName.trim().length > 0 ? entry.taskName : goalLabel !== UNCATEGORISED_LABEL ? goalLabel : 'Focus Session'
+      return {
+        id: entry.id,
+        entry,
+        start,
+        end,
+        lane,
+        leftPercent: safeLeft,
+        widthPercent,
+        color,
+        gradientCss,
+        colorInfo: metadata.colorInfo,
+        goalLabel,
+        bucketLabel,
+        deletable: entry.id !== 'active-session',
+        originalRangeLabel,
+        tooltipTask,
+      }
+    })
+  }, [effectiveHistory, dayStart, dayEnd, enhancedGoalLookup, goalColorLookup])
+  const timelineRowCount = daySegments.length > 0 ? daySegments.reduce((max, segment) => Math.max(max, segment.lane), 0) + 1 : 1
+  const timelineStyle = useMemo(() => ({ '--history-timeline-rows': timelineRowCount } as CSSProperties), [timelineRowCount])
+  const timelineTicks = useMemo(() => {
+    const incrementHours = 2
+    const count = Math.floor(24 / incrementHours)
+    return Array.from({ length: count + 1 }, (_, index) => index * incrementHours)
+  }, [])
+  const dayEntryCount = daySegments.length
+  const dayLabel = useMemo(() => {
+    const date = new Date(dayStart)
+    return date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
+  }, [dayStart])
 
   return (
     <section className="site-main__inner reflection-page" aria-label="Reflection">
@@ -1129,13 +1237,16 @@ export default function ReflectionPage() {
       </div>
 
       <section
-        className={`history-section${hasHistory ? '' : ' history-section--empty'}`}
+        className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`}
         aria-label="Session History"
       >
         <div className="history-section__header">
-          <h2 className="history-heading">Session History</h2>
+          <div>
+            <h2 className="history-heading">Session History</h2>
+            <p className="history-section__date">{dayLabel}</p>
+          </div>
           <div className="history-section__controls">
-            {hasHistory ? <span className="history-count">{history.length}</span> : null}
+            {dayEntryCount > 0 ? <span className="history-count">{dayEntryCount}</span> : null}
             <button
               type="button"
               className="history-undo"
@@ -1148,67 +1259,210 @@ export default function ReflectionPage() {
           </div>
         </div>
 
-        {hasHistory ? (
-          <ol className="history-list">
-            {history.map((entry) => {
-              const dateRangeLabel = formatDateRange(entry.startedAt, entry.endedAt)
-              const goalLabel = entry.goalName && entry.goalName.trim().length > 0 ? entry.goalName : UNCATEGORISED_LABEL
-              const bucketLabel = entry.bucketName && entry.bucketName.trim().length > 0 ? entry.bucketName : UNCATEGORISED_LABEL
-              const hasBucketLabel = bucketLabel.length > 0
-              const pathAria =
-                hasBucketLabel && bucketLabel !== goalLabel
-                  ? `Goal ${goalLabel}, Bucket ${bucketLabel}`
-                  : `Goal ${goalLabel}`
+        <div
+          className="history-timeline"
+          style={timelineStyle}
+          ref={timelineRef}
+          onClick={handleTimelineBackgroundClick}
+        >
+          <div className="history-timeline__bar">
+            {typeof currentTimePercent === 'number' ? (
+              <div
+                className="history-timeline__current-time"
+                style={{ left: `${currentTimePercent}%` }}
+                aria-hidden="true"
+              />
+            ) : null}
+            {daySegments.length === 0 ? (
+              <p className="history-timeline__empty">No sessions logged yet today. Start the timer to build your flow map.</p>
+            ) : null}
+            {daySegments.map((segment) => {
+              const isSelected = segment.entry.id === selectedHistoryId
+              const isActiveSegment = segment.entry.id === 'active-session'
+              const isEditing = editingHistoryId === segment.entry.id
+              const isActiveSessionSegment = segment.entry.id === 'active-session'
+              const trimmedTaskDraft = historyDraft.taskName.trim()
+              const displayTask = isSelected
+                ? trimmedTaskDraft.length > 0
+                  ? trimmedTaskDraft
+                  : segment.tooltipTask
+                : segment.tooltipTask
+              const trimmedGoalDraft = historyDraft.goalName.trim()
+              const displayGoal = isSelected
+                ? trimmedGoalDraft.length > 0
+                  ? trimmedGoalDraft
+                  : segment.goalLabel
+                : segment.goalLabel
+              const trimmedBucketDraft = historyDraft.bucketName.trim()
+              const displayBucket = isSelected
+                ? trimmedBucketDraft.length > 0
+                  ? trimmedBucketDraft
+                  : segment.bucketLabel
+                : segment.bucketLabel
+              const tooltipClassName = `history-timeline__tooltip${isSelected ? ' history-timeline__tooltip--pinned' : ''}`
               return (
-                <li key={entry.id} className="history-entry">
-                  <div className="history-entry__top">
-                    <span
-                      className="history-entry__task"
-                      contentEditable
-                      suppressContentEditableWarning
-                      ref={(node) => registerHistoryTaskRef(entry.id, node)}
-                      onInput={handleHistoryTaskInput(entry.id)}
-                      onBlur={handleHistoryTaskBlur(entry.id)}
-                      onKeyDown={handleHistoryTaskKeyDown}
-                      onPaste={handleHistoryTaskPaste(entry.id)}
-                      role="textbox"
-                      tabIndex={0}
-                      aria-label={`Edit task name for session ${dateRangeLabel}`}
-                      spellCheck={false}
-                    />
-                    <span className="history-entry__duration">{formatTime(entry.elapsed)}</span>
-                  </div>
-                  <div className="history-entry__footer">
-                    <div className="history-entry__footer-meta">
-                      <div className="history-entry__trail" aria-label={pathAria}>
-                        <span className="history-entry__trail-goal">{goalLabel}</span>
-                        {hasBucketLabel ? (
-                          <>
-                            <span className="history-entry__trail-separator" aria-hidden="true">
-                              →
-                            </span>
-                            <span className="history-entry__trail-bucket">{bucketLabel}</span>
-                          </>
-                        ) : null}
-                      </div>
-                      <div className="history-entry__meta">{dateRangeLabel}</div>
+                <div
+                  key={`${segment.id}-${segment.start}-${segment.end}`}
+                  className={`history-timeline__block${isActiveSegment ? ' history-timeline__block--active' : ''}${
+                    isSelected ? ' history-timeline__block--selected' : ''
+                  }`}
+                  style={{
+                    left: `${segment.leftPercent}%`,
+                    width: `${segment.widthPercent}%`,
+                    top: `calc(${segment.lane} * var(--history-timeline-row-height))`,
+                    background: segment.gradientCss ?? segment.color,
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-pressed={isSelected}
+                  aria-label={`${segment.tooltipTask} from ${formatTimeOfDay(segment.start)} to ${formatTimeOfDay(segment.end)}`}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleSelectHistorySegment(segment.entry)
+                  }}
+                  onKeyDown={handleTimelineBlockKeyDown(segment.entry)}
+                >
+                  <div
+                    className={tooltipClassName}
+                    role="presentation"
+                    onClick={(event) => event.stopPropagation()}
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    <div className="history-timeline__tooltip-content">
+                      <p className="history-timeline__tooltip-task">{displayTask}</p>
+                      <p className="history-timeline__tooltip-time">
+                        {formatTimeOfDay(segment.start)} — {formatTimeOfDay(segment.end)}
+                      </p>
+                      <p className="history-timeline__tooltip-meta">
+                        {displayGoal}
+                        {displayBucket && displayBucket !== displayGoal ? ` → ${displayBucket}` : ''}
+                      </p>
+                      <p className="history-timeline__tooltip-duration">{formatDuration(segment.end - segment.start)}</p>
+                      {isSelected ? (
+                        <>
+                          {isEditing ? (
+                            <>
+                              <div className="history-timeline__tooltip-form">
+                                <label className="history-timeline__field">
+                                  <span className="history-timeline__field-text">Session name</span>
+                                  <input
+                                    className="history-timeline__field-input"
+                                    type="text"
+                                    value={historyDraft.taskName}
+                                    placeholder={segment.tooltipTask}
+                                    onChange={handleHistoryFieldChange('taskName')}
+                                    onKeyDown={handleHistoryFieldKeyDown}
+                                  />
+                                </label>
+                                <div className="history-timeline__field-group">
+                                  <label className="history-timeline__field">
+                                    <span className="history-timeline__field-text">Goal</span>
+                                    <input
+                                      className="history-timeline__field-input"
+                                      type="text"
+                                      value={historyDraft.goalName}
+                                      placeholder={segment.goalLabel}
+                                      onChange={handleHistoryFieldChange('goalName')}
+                                      onKeyDown={handleHistoryFieldKeyDown}
+                                    />
+                                  </label>
+                                  <label className="history-timeline__field">
+                                    <span className="history-timeline__field-text">Bucket</span>
+                                    <input
+                                      className="history-timeline__field-input"
+                                      type="text"
+                                      value={historyDraft.bucketName}
+                                      placeholder={segment.bucketLabel || 'Optional'}
+                                      onChange={handleHistoryFieldChange('bucketName')}
+                                      onKeyDown={handleHistoryFieldKeyDown}
+                                    />
+                                  </label>
+                                </div>
+                              </div>
+                              <div className="history-timeline__actions">
+                                <button
+                                  type="button"
+                                  className="history-timeline__action-button history-timeline__action-button--primary"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    handleSaveHistoryDraft()
+                                  }}
+                                >
+                                  Save changes
+                                </button>
+                                <button
+                                  type="button"
+                                  className="history-timeline__action-button"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    handleCancelHistoryEdit()
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="history-timeline__actions">
+                              <button
+                                type="button"
+                                className="history-timeline__action-button history-timeline__action-button--primary"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  if (!isActiveSessionSegment) {
+                                    handleStartEditingHistoryEntry(segment.entry)
+                                  }
+                                }}
+                                disabled={isActiveSessionSegment}
+                              >
+                                Edit details
+                              </button>
+                            </div>
+                          )}
+                          {isActiveSessionSegment ? (
+                            <p className="history-timeline__tooltip-note">Active session updates live; finish to edit details.</p>
+                          ) : null}
+                        </>
+                      ) : null}
+                      {segment.deletable ? (
+                        <button
+                          type="button"
+                          className="history-timeline__tooltip-delete"
+                          onClick={handleDeleteHistoryEntry(segment.entry.id)}
+                        >
+                          Delete session
+                        </button>
+                      ) : null}
                     </div>
-                    <button
-                      type="button"
-                      className="history-entry__delete"
-                      onClick={handleDeleteHistoryEntry(entry.id)}
-                      aria-label={`Delete session ${dateRangeLabel}`}
-                    >
-                      Delete
-                    </button>
                   </div>
-                </li>
+                </div>
               )
             })}
-          </ol>
-        ) : (
-          <p className="history-empty">No sessions logged yet. Wrap up a focus session to build your timeline.</p>
-        )}
+          </div>
+          <div className="history-timeline__axis">
+            {timelineTicks.map((hour, index) => {
+              const isFirstTick = index === 0
+              const isLastTick = index === timelineTicks.length - 1
+              const tickClassName = [
+                'history-timeline__tick',
+                isFirstTick ? 'history-timeline__tick--first' : '',
+                isLastTick ? 'history-timeline__tick--last' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
+              return (
+                <div
+                  key={`tick-${hour}`}
+                  className={tickClassName}
+                  style={{ left: `${(hour / 24) * 100}%` }}
+                >
+                  <span className="history-timeline__tick-line" />
+                  <span className="history-timeline__tick-label">{formatHourLabel(hour)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </section>
 
       <section className="reflection-section reflection-section--overview">

@@ -14,8 +14,8 @@ html[data-theme='light'] {
   gap: clamp(2.5rem, 5vw, 3.5rem);
   padding-block: clamp(2.5rem, 6vw, 4rem);
   width: 100%;
-  max-width: min(1000px, 100%);   /* widened container */
-  align-items: stretch;          /* make all children expand */
+  max-width: min(1000px, 100%);
+  align-items: center;
 }
 
 /* --- Intro --- */
@@ -55,6 +55,7 @@ html[data-theme='light'] {
   flex-direction: column;
   gap: clamp(1.25rem, 2.5vw, 1.5rem);
   width: 100%;
+  align-items: center;
 }
 
 .reflection-section__title {
@@ -64,6 +65,7 @@ html[data-theme='light'] {
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text-primary);
+  text-align: center;
 }
 
 .reflection-section__desc {
@@ -72,10 +74,18 @@ html[data-theme='light'] {
   color: var(--text-secondary);
   line-height: 1.5;
   width: 100%;
+  text-align: center;
 }
 
 .reflection-section--overview {
   gap: clamp(1.5rem, 3vw, 2rem);
+  align-items: stretch;
+}
+
+.reflection-section--overview .reflection-section__title,
+.reflection-section--overview .reflection-section__desc {
+  text-align: left;
+  align-self: flex-start;
 }
 
 .reflection-tabs {
@@ -138,6 +148,7 @@ html[data-theme='light'] .reflection-tab--active {
   grid-template-columns: minmax(220px, 1fr) minmax(180px, 1fr);
   align-items: center;
   gap: clamp(1.5rem, 3vw, 2.4rem);
+  justify-items: center;
 }
 
 @media (max-width: 720px) {
@@ -224,6 +235,7 @@ html[data-theme='light'] .reflection-pie__center {
   flex-direction: column;
   gap: 0.75rem;
   width: 100%;
+  max-width: clamp(220px, 42vw, 300px);
 }
 
 .reflection-legend__item {
