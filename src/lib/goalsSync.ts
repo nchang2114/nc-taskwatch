@@ -115,11 +115,18 @@ export const publishGoalsSnapshot = (snapshot: GoalSnapshot[]) => {
   } catch {
     // Ignore storage errors (e.g., quota exceeded, restricted environments)
   }
-  try {
-    const event = new CustomEvent<GoalSnapshot[]>(EVENT_NAME, { detail: snapshot })
-    window.dispatchEvent(event)
-  } catch {
-    // CustomEvent may fail in very old browsers; ignore silently
+  const dispatch = () => {
+    try {
+      const event = new CustomEvent<GoalSnapshot[]>(EVENT_NAME, { detail: snapshot })
+      window.dispatchEvent(event)
+    } catch {
+      // CustomEvent may fail in very old browsers; ignore silently
+    }
+  }
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(dispatch)
+  } else {
+    setTimeout(dispatch, 0)
   }
 }
 

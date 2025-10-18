@@ -878,6 +878,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   border: 1px solid rgba(142, 164, 255, 0.5);
   background: rgba(18, 24, 60, 0.6);
   accent-color: #7d8bff;
+  cursor: pointer;
 }
 
 .goal-task-details__subtask-input {
@@ -1054,8 +1055,8 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 
 /* Default hidden check for action marker; drawn during completion */
 .goal-task-marker--action .goal-task-check {
-  opacity: 0 !important;
-  transition: opacity 140ms ease;
+  opacity: 0;
+  transition: opacity 180ms ease;
 }
 .goal-task-marker--action .goal-task-check path {
   stroke: #00d601;
@@ -1063,7 +1064,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   vector-effect: non-scaling-stroke;
   stroke-dasharray: 22;
   stroke-dashoffset: 22;
-  /* No transition here - animated via keyframes when completing */
+  transition: stroke-dashoffset 220ms cubic-bezier(0.16, 0.64, 0.4, 1), stroke 160ms ease;
   will-change: stroke-dashoffset;
 }
 
