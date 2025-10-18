@@ -9,6 +9,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from 'react'
 import './ReflectionPage.css'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
@@ -104,6 +105,46 @@ const UNCATEGORISED_GRADIENT = {
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
 
 type GoalLookup = Map<string, { goalName: string; colorInfo?: GoalColorInfo }>
+
+type DragKind = 'move' | 'resize-start' | 'resize-end'
+
+type DragState = {
+  entryId: string
+  type: DragKind
+  pointerId: number
+  rectWidth: number
+  startX: number
+  initialStart: number
+  initialEnd: number
+  dayStart: number
+  dayEnd: number
+  minDurationMs: number
+  hasMoved: boolean
+}
+
+type DragPreview = {
+  entryId: string
+  startedAt: number
+  endedAt: number
+}
+
+type TimelineSegment = {
+  id: string
+  entry: HistoryEntry
+  start: number
+  end: number
+  lane: number
+  leftPercent: number
+  widthPercent: number
+  color: string
+  gradientCss?: string
+  colorInfo?: GoalColorInfo
+  goalLabel: string
+  bucketLabel: string
+  deletable: boolean
+  originalRangeLabel: string
+  tooltipTask: string
+}
 
 const sanitizeHistory = (value: unknown): HistoryEntry[] => {
   if (!Array.isArray(value)) {
@@ -201,6 +242,8 @@ const formatHourLabel = (hour24: number) => {
 
 const MINUTE_MS = 60 * 1000
 const DAY_DURATION_MS = 24 * 60 * 60 * 1000
+const DRAG_DETECTION_THRESHOLD_PX = 3
+const MIN_SESSION_DURATION_DRAG_MS = MINUTE_MS
 
 const formatTimeInputValue = (timestamp: number | null): string => {
   if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
@@ -807,8 +850,22 @@ export default function ReflectionPage() {
   })
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement | null>(null)
+  const timelineBarRef = useRef<HTMLDivElement | null>(null)
   const activeTooltipRef = useRef<HTMLDivElement | null>(null)
   const [activeTooltipOffsets, setActiveTooltipOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const dragStateRef = useRef<DragState | null>(null)
+  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null)
+  const dragPreviewRef = useRef<DragPreview | null>(null)
+  const dragPreventClickRef = useRef(false)
+  const selectedHistoryIdRef = useRef<string | null>(selectedHistoryId)
+
+  useEffect(() => {
+    dragPreviewRef.current = dragPreview
+  }, [dragPreview])
+
+  useEffect(() => {
+    selectedHistoryIdRef.current = selectedHistoryId
+  }, [selectedHistoryId])
 
   const updateActiveTooltipOffsets = useCallback(() => {
     if (typeof window === 'undefined') {
@@ -1488,14 +1545,26 @@ export default function ReflectionPage() {
     return Math.min(Math.max(raw, 0), 100)
   }, [nowTick, dayStart, dayEnd])
   const daySegments = useMemo(() => {
+    const preview = dragPreview
     const entries = effectiveHistory
       .map((entry) => {
-        const start = Math.max(entry.startedAt, dayStart)
-        const end = Math.min(entry.endedAt, dayEnd)
+        const isPreviewed = preview && preview.entryId === entry.id
+        const startedAt = isPreviewed ? preview.startedAt : entry.startedAt
+        const endedAt = isPreviewed ? preview.endedAt : entry.endedAt
+        const previewedEntry = isPreviewed
+          ? {
+              ...entry,
+              startedAt,
+              endedAt,
+              elapsed: Math.max(endedAt - startedAt, 1),
+            }
+          : entry
+        const start = Math.max(previewedEntry.startedAt, dayStart)
+        const end = Math.min(previewedEntry.endedAt, dayEnd)
         if (end <= start) {
           return null
         }
-        return { entry, start, end }
+        return { entry: previewedEntry, start, end }
       })
       .filter((segment): segment is { entry: HistoryEntry; start: number; end: number } => Boolean(segment))
 
@@ -1545,7 +1614,7 @@ export default function ReflectionPage() {
         tooltipTask,
       }
     })
-  }, [effectiveHistory, dayStart, dayEnd, enhancedGoalLookup, goalColorLookup])
+  }, [effectiveHistory, dayStart, dayEnd, enhancedGoalLookup, goalColorLookup, dragPreview])
   const timelineRowCount = daySegments.length > 0 ? daySegments.reduce((max, segment) => Math.max(max, segment.lane), 0) + 1 : 1
   const showCurrentTimeIndicator = typeof currentTimePercent === 'number' && editingHistoryId === null
   const timelineStyle = useMemo(() => ({ '--history-timeline-rows': timelineRowCount } as CSSProperties), [timelineRowCount])
@@ -1563,6 +1632,202 @@ export default function ReflectionPage() {
     const date = new Date(dayStart)
     return date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
   }, [dayStart])
+
+  const handleWindowPointerMove = useCallback(
+    (event: PointerEvent) => {
+      const state = dragStateRef.current
+      if (!state || event.pointerId !== state.pointerId || state.rectWidth <= 0) {
+        return
+      }
+
+      const deltaPx = event.clientX - state.startX
+      const deltaMsRaw = (deltaPx / state.rectWidth) * DAY_DURATION_MS
+      if (!Number.isFinite(deltaMsRaw)) {
+        return
+      }
+      const deltaMinutes = Math.round(deltaMsRaw / MINUTE_MS)
+      const deltaMs = deltaMinutes * MINUTE_MS
+
+      let nextStart = state.initialStart
+      let nextEnd = state.initialEnd
+
+      if (state.type === 'move') {
+        nextStart = state.initialStart + deltaMs
+        nextEnd = state.initialEnd + deltaMs
+
+        const overflowLeft = state.dayStart - nextStart
+        if (overflowLeft > 0) {
+          nextStart += overflowLeft
+          nextEnd += overflowLeft
+        }
+        const overflowRight = nextEnd - state.dayEnd
+        if (overflowRight > 0) {
+          nextStart -= overflowRight
+          nextEnd -= overflowRight
+        }
+      } else if (state.type === 'resize-start') {
+        nextStart = state.initialStart + deltaMs
+        const maxStart = state.initialEnd - state.minDurationMs
+        if (nextStart > maxStart) {
+          nextStart = maxStart
+        }
+        if (nextStart < state.dayStart) {
+          nextStart = state.dayStart
+        }
+        nextEnd = state.initialEnd
+      } else {
+        nextEnd = state.initialEnd + deltaMs
+        const minEnd = state.initialStart + state.minDurationMs
+        if (nextEnd < minEnd) {
+          nextEnd = minEnd
+        }
+        if (nextEnd > state.dayEnd) {
+          nextEnd = state.dayEnd
+        }
+        nextStart = state.initialStart
+      }
+
+      if (nextEnd - nextStart < state.minDurationMs) {
+        if (state.type === 'resize-start') {
+          nextStart = nextEnd - state.minDurationMs
+        } else {
+          nextEnd = nextStart + state.minDurationMs
+        }
+      }
+
+      nextStart = Math.max(state.dayStart, Math.min(nextStart, state.dayEnd - state.minDurationMs))
+      nextEnd = Math.min(state.dayEnd, Math.max(nextEnd, state.dayStart + state.minDurationMs))
+
+      const movedEnough = Math.abs(deltaPx) >= DRAG_DETECTION_THRESHOLD_PX
+      if (movedEnough && !state.hasMoved) {
+        state.hasMoved = true
+        dragPreventClickRef.current = true
+      }
+
+      if (!state.hasMoved) {
+        return
+      }
+
+      event.preventDefault()
+
+      const nextStartRounded = Math.round(nextStart)
+      const nextEndRounded = Math.round(nextEnd)
+      const currentPreview = dragPreviewRef.current
+      if (
+        currentPreview &&
+        currentPreview.entryId === state.entryId &&
+        currentPreview.startedAt === nextStartRounded &&
+        currentPreview.endedAt === nextEndRounded
+      ) {
+        return
+      }
+
+      const nextPreview = { entryId: state.entryId, startedAt: nextStartRounded, endedAt: nextEndRounded }
+      dragPreviewRef.current = nextPreview
+      setDragPreview(nextPreview)
+    },
+    [],
+  )
+
+  const handleWindowPointerUp = useCallback(
+    (event: PointerEvent) => {
+      const state = dragStateRef.current
+      if (!state || event.pointerId !== state.pointerId) {
+        return
+      }
+
+      window.removeEventListener('pointermove', handleWindowPointerMove)
+      window.removeEventListener('pointerup', handleWindowPointerUp)
+      window.removeEventListener('pointercancel', handleWindowPointerUp)
+
+      const preview = dragPreviewRef.current
+      if (state.hasMoved && preview && preview.entryId === state.entryId) {
+        updateHistory((current) => {
+          const index = current.findIndex((entry) => entry.id === preview.entryId)
+          if (index === -1) {
+            return current
+          }
+          const target = current[index]
+          if (target.startedAt === preview.startedAt && target.endedAt === preview.endedAt) {
+            return current
+          }
+          const next = [...current]
+          next[index] = {
+            ...target,
+            startedAt: preview.startedAt,
+            endedAt: preview.endedAt,
+            elapsed: Math.max(preview.endedAt - preview.startedAt, 1),
+          }
+          return next
+        })
+        if (selectedHistoryIdRef.current === state.entryId) {
+          setHistoryDraft((draft) => ({
+            ...draft,
+            startedAt: preview.startedAt,
+            endedAt: preview.endedAt,
+          }))
+        }
+      }
+
+      dragStateRef.current = null
+      dragPreviewRef.current = null
+      setDragPreview(null)
+      dragPreventClickRef.current = state.hasMoved
+    },
+    [handleWindowPointerMove, setHistoryDraft, updateHistory],
+  )
+
+  useEffect(
+    () => () => {
+      window.removeEventListener('pointermove', handleWindowPointerMove)
+      window.removeEventListener('pointerup', handleWindowPointerUp)
+      window.removeEventListener('pointercancel', handleWindowPointerUp)
+    },
+    [handleWindowPointerMove, handleWindowPointerUp],
+  )
+
+  const startDrag = useCallback(
+    (event: ReactPointerEvent<HTMLElement>, segment: TimelineSegment, type: DragKind) => {
+      if (segment.entry.id === 'active-session') {
+        return
+      }
+      if (event.button !== 0) {
+        return
+      }
+      if (dragStateRef.current) {
+        return
+      }
+      const bar = timelineBarRef.current
+      if (!bar) {
+        return
+      }
+      const rect = bar.getBoundingClientRect()
+      if (!rect || rect.width <= 0) {
+        return
+      }
+      dragStateRef.current = {
+        entryId: segment.entry.id,
+        type,
+        pointerId: event.pointerId,
+        rectWidth: rect.width,
+        startX: event.clientX,
+        initialStart: segment.entry.startedAt,
+        initialEnd: segment.entry.endedAt,
+        dayStart,
+        dayEnd,
+        minDurationMs: MIN_SESSION_DURATION_DRAG_MS,
+        hasMoved: false,
+      }
+      dragPreventClickRef.current = false
+      dragPreviewRef.current = null
+      setDragPreview(null)
+      event.stopPropagation()
+      window.addEventListener('pointermove', handleWindowPointerMove)
+      window.addEventListener('pointerup', handleWindowPointerUp)
+      window.addEventListener('pointercancel', handleWindowPointerUp)
+    },
+    [dayStart, dayEnd, handleWindowPointerMove, handleWindowPointerUp],
+  )
 
   return (
     <section className="site-main__inner reflection-page" aria-label="Reflection">
@@ -1607,7 +1872,7 @@ export default function ReflectionPage() {
           ref={timelineRef}
           onClick={handleTimelineBackgroundClick}
         >
-          <div className="history-timeline__bar">
+          <div className="history-timeline__bar" ref={timelineBarRef}>
             {showCurrentTimeIndicator ? (
               <div
                 className="history-timeline__current-time"
@@ -1621,6 +1886,7 @@ export default function ReflectionPage() {
               const isActiveSegment = segment.entry.id === 'active-session'
               const isEditing = editingHistoryId === segment.entry.id
               const isActiveSessionSegment = segment.entry.id === 'active-session'
+              const isDragging = dragPreview?.entryId === segment.entry.id
               const trimmedTaskDraft = historyDraft.taskName.trim()
               const displayTask = isSelected
                 ? trimmedTaskDraft.length > 0
@@ -1699,6 +1965,23 @@ export default function ReflectionPage() {
                   return { ...draft, endedAt: baseStart + normalizedMinutes * MINUTE_MS }
                 })
               }
+              const handleBlockPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+                startDrag(event, segment, 'move')
+              }
+              const handleResizeStartPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+                startDrag(event, segment, 'resize-start')
+              }
+              const handleResizeEndPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+                startDrag(event, segment, 'resize-end')
+              }
+              const blockClassName = [
+                'history-timeline__block',
+                isActiveSegment ? 'history-timeline__block--active' : '',
+                isSelected ? 'history-timeline__block--selected' : '',
+                isDragging ? 'history-timeline__block--dragging' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
               const isAnchoredTooltip = segment.entry.id === anchoredTooltipId
               const tooltipClassName = `history-timeline__tooltip${isSelected ? ' history-timeline__tooltip--pinned' : ''}${
                 isEditing ? ' history-timeline__tooltip--editing' : ''
@@ -1874,6 +2157,7 @@ export default function ReflectionPage() {
                   }
                   onClick={(event) => event.stopPropagation()}
                   onMouseDown={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
                 >
                   {tooltipContent}
                 </div>
@@ -1881,9 +2165,7 @@ export default function ReflectionPage() {
               return (
                 <div
                   key={`${segment.id}-${segment.start}-${segment.end}`}
-                  className={`history-timeline__block${isActiveSegment ? ' history-timeline__block--active' : ''}${
-                    isSelected ? ' history-timeline__block--selected' : ''
-                  }`}
+                  className={blockClassName}
                   style={{
                     left: `${segment.leftPercent}%`,
                     width: `${segment.widthPercent}%`,
@@ -1894,8 +2176,13 @@ export default function ReflectionPage() {
                   role="button"
                   aria-pressed={isSelected}
                   aria-label={`${segment.tooltipTask} from ${formatTimeOfDay(resolvedStartedAt)} to ${formatTimeOfDay(resolvedEndedAt)}`}
+                  onPointerDown={handleBlockPointerDown}
                   onClick={(event) => {
                     event.stopPropagation()
+                    if (dragPreventClickRef.current) {
+                      dragPreventClickRef.current = false
+                      return
+                    }
                     handleSelectHistorySegment(segment.entry)
                   }}
                   onMouseEnter={() =>
@@ -1910,6 +2197,18 @@ export default function ReflectionPage() {
                   }
                   onKeyDown={handleTimelineBlockKeyDown(segment.entry)}
                 >
+                  <div
+                    className="history-timeline__block-handle history-timeline__block-handle--start"
+                    role="presentation"
+                    aria-hidden="true"
+                    onPointerDown={handleResizeStartPointerDown}
+                  />
+                  <div
+                    className="history-timeline__block-handle history-timeline__block-handle--end"
+                    role="presentation"
+                    aria-hidden="true"
+                    onPointerDown={handleResizeEndPointerDown}
+                  />
                   {inlineTooltip}
                 </div>
               )

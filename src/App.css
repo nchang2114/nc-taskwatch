@@ -2432,10 +2432,12 @@ html[data-theme='light'] .nav-links--drawer {
     0 14px 28px rgba(10, 12, 36, 0.34),
     0 0 0 1.25px rgba(8, 12, 32, 0.55) inset;
   overflow: visible;
-  cursor: pointer;
+  cursor: grab;
   transition: box-shadow 160ms ease, transform 160ms ease, outline 160ms ease;
   z-index: 1;
   backdrop-filter: saturate(110%);
+  user-select: none;
+  touch-action: pan-y;
 }
 
 .history-timeline__block:hover,
@@ -2452,6 +2454,53 @@ html[data-theme='light'] .nav-links--drawer {
 .history-timeline__block--selected {
   box-shadow: 0 22px 42px rgba(10, 12, 36, 0.5), 0 0 0 2px rgba(182, 198, 255, 0.85);
   z-index: 3;
+}
+
+.history-timeline__block--dragging {
+  cursor: grabbing;
+  z-index: 4;
+  box-shadow: 0 26px 52px rgba(10, 12, 36, 0.55), 0 0 0 2px rgba(188, 204, 255, 0.9);
+}
+
+.history-timeline__block-handle {
+  position: absolute;
+  top: 50%;
+  width: clamp(0.45rem, 1vw, 0.6rem);
+  height: calc(100% + clamp(0.4rem, 1vw, 0.6rem));
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ew-resize;
+  touch-action: none;
+  opacity: 0;
+  transition: opacity 140ms ease;
+  pointer-events: auto;
+}
+
+.history-timeline__block:hover .history-timeline__block-handle,
+.history-timeline__block--selected .history-timeline__block-handle,
+.history-timeline__block--dragging .history-timeline__block-handle {
+  opacity: 1;
+}
+
+.history-timeline__block-handle::after {
+  content: '';
+  width: clamp(2px, 0.3vw, 3px);
+  height: 60%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(8, 12, 32, 0.35);
+}
+
+.history-timeline__block-handle--start {
+  left: 0;
+  transform: translate(-50%, -50%);
+}
+
+.history-timeline__block-handle--end {
+  right: 0;
+  transform: translate(50%, -50%);
 }
 
 .history-timeline__tooltip {
@@ -3279,6 +3328,15 @@ html[data-theme='light'] .history-timeline__block {
 
 html[data-theme='light'] .history-timeline__block--selected {
   box-shadow: 0 18px 34px rgba(120, 136, 200, 0.32), 0 0 0 2px rgba(118, 132, 220, 0.6);
+}
+
+html[data-theme='light'] .history-timeline__block--dragging {
+  box-shadow: 0 22px 40px rgba(120, 136, 200, 0.38), 0 0 0 2px rgba(128, 140, 228, 0.82);
+}
+
+html[data-theme='light'] .history-timeline__block-handle::after {
+  background: rgba(46, 54, 108, 0.72);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
 }
 
 html[data-theme='light'] .history-timeline__block-task {
