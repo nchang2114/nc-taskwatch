@@ -408,6 +408,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const selectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const selectorPopoverRef = useRef<HTMLDivElement | null>(null)
   const focusTaskContainerRef = useRef<HTMLDivElement | null>(null)
+  const focusCompleteButtonRef = useRef<HTMLButtonElement | null>(null)
   const focusCompletionTimeoutRef = useRef<number | null>(null)
   const focusPriorityHoldTimerRef = useRef<number | null>(null)
   const focusPriorityHoldTriggeredRef = useRef(false)
@@ -1269,6 +1270,27 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     }
   }, [clearPriorityHoldTimer])
 
+  useEffect(() => {
+    const button = focusCompleteButtonRef.current
+    if (!button) {
+      return
+    }
+    const path = button.querySelector('.goal-task-check path') as SVGPathElement | null
+    if (!path) {
+      return
+    }
+    try {
+      const length = path.getTotalLength()
+      if (Number.isFinite(length) && length > 0) {
+        const dash = `${length}`
+        path.style.strokeDasharray = dash
+        path.style.strokeDashoffset = dash
+      }
+    } catch {
+      // ignore measurement errors; fallback styles remain
+    }
+  }, [activeFocusCandidate?.taskId, focusSource?.taskId, normalizedCurrentTask, isCompletingFocus])
+
   const handleCompleteFocus = async () => {
     const taskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
     const bucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
@@ -1543,6 +1565,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             'goal-task-row',
             focusDiffClass,
             focusPriority ? 'goal-task-row--priority' : '',
+            isCompletingFocus ? 'goal-task-row--completing' : '',
             isSelectorOpen ? 'focus-task--open' : '',
             isDefaultTask ? 'focus-task--empty' : '',
           ]
@@ -1555,14 +1578,13 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             className={[
               'goal-task-marker',
               'goal-task-marker--action',
-              'focus-task__complete',
-              isCompletingFocus ? 'focus-task__complete--animating' : '',
             ]
               .filter(Boolean)
               .join(' ')}
             onClick={handleCompleteFocus}
             disabled={!canCompleteFocus}
             aria-label="Mark focus task complete"
+            ref={focusCompleteButtonRef}
           >
             <svg viewBox="0 0 24 24" className="goal-task-check" aria-hidden="true">
               <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -1954,7 +1976,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                   <label className="taskwatch-notes__subtask">
                     <input
                       type="checkbox"
-                      className="taskwatch-notes__checkbox"
+                      className="taskwatch-notes__checkbox goal-task-details__checkbox"
                       checked={subtask.completed}
                       onChange={() => handleNotebookSubtaskToggle(subtask.id)}
                       aria-label={subtask.text.trim().length > 0 ? `Mark "${subtask.text}" complete` : 'Toggle subtask'}

@@ -686,142 +686,6 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible {
   opacity: 0.9;
 }
 
-.focus-task__complete {
-  width: clamp(2.2rem, 3.8vw, 2.6rem);
-  height: clamp(2.2rem, 3.8vw, 2.6rem);
-  border-radius: 0.85rem;
-  border: 1px solid rgba(118, 142, 255, 0.4);
-  background: rgba(18, 26, 60, 0.48);
-  color: rgba(134, 239, 172, 0.92);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  position: relative;
-  overflow: visible;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease, color 160ms ease;
-}
-
-.focus-task__complete {
-  background: rgba(22, 180, 120, 0.16);
-  border-color: rgba(22, 120, 64, 0.88);
-}
-
-.focus-task__complete .goal-task-check {
-  width: 1.1rem;
-  height: 1.1rem;
-  opacity: 0;
-  transition: opacity 140ms ease;
-  color: rgba(10, 85, 44, 0.98);
-}
-
-.focus-task__complete .goal-task-check path {
-  stroke: rgba(34, 197, 94, 1);
-  stroke-width: 2.2;
-  vector-effect: non-scaling-stroke;
-  stroke-dasharray: 22;
-  stroke-dashoffset: 22;
-  animation: none;
-}
-
-.focus-task__complete--animating {
-  animation: goal-marker-pop 300ms cubic-bezier(0.18, 0.9, 0.24, 1.15) forwards;
-}
-
-.focus-task__complete--animating::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  border-radius: 1px;
-  transform: translate(-50%, -50%) scale(0.6);
-  opacity: 0;
-  pointer-events: none;
-  box-shadow:
-    -16px -4px 0 0 #22d3ee,
-     14px -6px 0 0 #a78bfa,
-     -6px -16px 0 0 #f59e0b,
-      8px  16px 0 0 #10b981,
-     12px  10px 0 0 #60a5fa,
-    -14px  10px 0 0 #ef4444;
-  animation: goal-confetti-pop 680ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.focus-task__complete--animating .goal-task-check {
-  opacity: 1;
-}
-
-.focus-task__complete--animating .goal-task-check path {
-  animation: focus-check-draw 380ms cubic-bezier(0.22, 1, 0.36, 1) 100ms forwards;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .has-hover .focus-task__complete:hover .goal-task-check,
-  .has-hover .focus-task__complete:focus-visible .goal-task-check {
-    opacity: 1;
-  }
-
-  .has-hover .focus-task__complete:hover .goal-task-check path,
-  .has-hover .focus-task__complete:focus-visible .goal-task-check path {
-    animation: focus-check-draw 380ms cubic-bezier(0.22, 1, 0.36, 1) 60ms forwards;
-  }
-}
-
-@keyframes focus-check-draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes goal-marker-pop {
-  0% {
-    transform: scale(0.94);
-  }
-  50% {
-    transform: scale(1.18);
-  }
-  100% {
-    transform: scale(1.02);
-  }
-}
-
-@keyframes goal-confetti-pop {
-  0% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(0.6) rotate(-6deg);
-  }
-  65% {
-    opacity: 0.28;
-    transform: translate(-50%, -50%) scale(1.25) rotate(6deg);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(1.4) rotate(10deg);
-  }
-}
-
-.focus-task__complete:focus-visible {
-  outline: 2px solid rgba(134, 239, 172, 0.68);
-  outline-offset: 2px;
-}
-
-.focus-task__complete:hover {
-  border-color: rgba(134, 239, 172, 0.68);
-  background: rgba(24, 34, 72, 0.6);
-}
-
-.focus-task__complete:active {
-  transform: scale(0.96);
-}
-
-.focus-task__complete:disabled {
-  opacity: 0.45;
-  cursor: default;
-  transform: none;
-}
-
 .focus-task__body {
   flex: 1;
   display: flex;
@@ -1232,17 +1096,6 @@ html[data-theme='light'] .surface-task--frost {
   --surface-shadow: 0 12px 22px -18px rgba(86, 196, 230, 0.16);
   --surface-bg-hover: linear-gradient(135deg, rgba(174, 233, 255, 0.2), rgba(154, 224, 255, 0.12));
   --surface-border-hover: rgba(124, 222, 255, 0.24);
-}
-
-html[data-theme='light'] .focus-task__complete {
-  border: 1px solid rgba(92, 91, 255, 0.28);
-  background: rgba(235, 241, 255, 0.96);
-  color: rgba(16, 185, 129, 0.8);
-}
-
-html[data-theme='light'] .focus-task__complete:hover {
-  border-color: rgba(16, 185, 129, 0.72);
-  background: rgba(220, 232, 255, 0.98);
 }
 
 .stopwatch-heading {
@@ -2220,12 +2073,6 @@ html[data-theme='light'] .nav-links--drawer {
 }
 
 .taskwatch-notes__checkbox {
-  width: clamp(1rem, 2.8vw, 1.2rem);
-  height: clamp(1rem, 2.8vw, 1.2rem);
-  border-radius: 0.4rem;
-  border: 1px solid rgba(138, 162, 255, 0.52);
-  background: rgba(12, 18, 46, 0.7);
-  accent-color: #7d8bff;
   cursor: pointer;
 }
 
@@ -3532,11 +3379,6 @@ html[data-theme='light'] .taskwatch-notes__empty:focus-visible {
 html[data-theme='light'] .taskwatch-notes__subtask {
   border-color: rgba(162, 176, 238, 0.32);
   background: rgba(246, 248, 255, 0.94);
-}
-
-html[data-theme='light'] .taskwatch-notes__checkbox {
-  border-color: rgba(136, 150, 224, 0.5);
-  background: rgba(232, 236, 252, 0.86);
 }
 
 html[data-theme='light'] .taskwatch-notes__input {
