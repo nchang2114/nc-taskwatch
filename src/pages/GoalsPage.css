@@ -972,6 +972,12 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   position: relative;
 }
 
+.goal-task-marker--action[aria-disabled='true'],
+.goal-task-marker--action.goal-task-marker--action-disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
 .goal-task-marker--action:hover,
 .goal-task-marker--action:focus-visible {
   background: rgba(132, 156, 255, 0.22);
@@ -1062,8 +1068,9 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   stroke: #00d601;
   stroke-width: 2.2;
   vector-effect: non-scaling-stroke;
-  stroke-dasharray: 22;
-  stroke-dashoffset: 22;
+  --goal-check-length: 22;
+  stroke-dasharray: var(--goal-check-length);
+  stroke-dashoffset: var(--goal-check-length);
   transition: stroke-dashoffset 220ms cubic-bezier(0.16, 0.64, 0.4, 1), stroke 160ms ease;
   will-change: stroke-dashoffset;
 }

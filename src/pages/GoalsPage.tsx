@@ -2591,8 +2591,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           const length = checkPath.getTotalLength()
                                           if (Number.isFinite(length) && length > 0) {
                                             const dash = `${length}`
-                                            checkPath.style.strokeDasharray = dash
-                                            checkPath.style.strokeDashoffset = dash
+                                            checkPath.style.removeProperty('stroke-dasharray')
+                                            checkPath.style.removeProperty('stroke-dashoffset')
+                                            checkPath.style.setProperty('--goal-check-length', dash)
                                             console.log('[Goals] Prepared tick animation', {
                                               bucketId: b.id,
                                               taskId: task.id,

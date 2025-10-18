@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react'
 import '../App.css'
+import './GoalsPage.css'
 import {
   fetchGoalsHierarchy,
   setTaskCompletedAndResort,
@@ -1283,8 +1284,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       const length = path.getTotalLength()
       if (Number.isFinite(length) && length > 0) {
         const dash = `${length}`
-        path.style.strokeDasharray = dash
-        path.style.strokeDashoffset = dash
+        path.style.removeProperty('stroke-dasharray')
+        path.style.removeProperty('stroke-dashoffset')
+        path.style.setProperty('--goal-check-length', dash)
       }
     } catch {
       // ignore measurement errors; fallback styles remain
@@ -1292,6 +1294,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   }, [activeFocusCandidate?.taskId, focusSource?.taskId, normalizedCurrentTask, isCompletingFocus])
 
   const handleCompleteFocus = async () => {
+    if (!canCompleteFocus) {
+      return
+    }
     const taskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
     const bucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
     const goalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
@@ -1578,11 +1583,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             className={[
               'goal-task-marker',
               'goal-task-marker--action',
+              !canCompleteFocus ? 'goal-task-marker--action-disabled' : '',
             ]
               .filter(Boolean)
               .join(' ')}
             onClick={handleCompleteFocus}
-            disabled={!canCompleteFocus}
+            aria-disabled={!canCompleteFocus}
             aria-label="Mark focus task complete"
             ref={focusCompleteButtonRef}
           >
