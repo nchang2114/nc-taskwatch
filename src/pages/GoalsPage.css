@@ -647,6 +647,13 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
     transition: none !important;
     animation: none !important;
   }
+  /* Ensure completion ticks still resolve their final state when motion is reduced */
+  .goal-task-row--completing .goal-task-marker--action .goal-task-check {
+    opacity: 1 !important;
+  }
+  .goal-task-row--completing .goal-task-marker--action .goal-task-check path {
+    stroke-dashoffset: 0 !important;
+  }
 }
 
 .goal-task-row {
