@@ -78,31 +78,15 @@ type PieSegment = {
   isUnlogged?: boolean
 }
 
-type PieGradientStop = {
-  offset: string
-  color: string
-  opacity?: number
-}
-
-type PieGradient = {
-  id: string
-  type: 'linear' | 'radial'
-  stops: PieGradientStop[]
-  x1?: number
-  y1?: number
-  x2?: number
-  y2?: number
-  cx?: number
-  cy?: number
-  r?: number
-}
-
 type PieArc = {
   id: string
   color: string
   path: string
   fill: string
-  gradient?: PieGradient
+  startAngle: number
+  endAngle: number
+  baseColor: string
+  colorInfo?: GoalColorInfo
   isUnlogged?: boolean
 }
 
@@ -251,6 +235,74 @@ const resolveTimestamp = (value: number | null | undefined, fallback: number): n
     return value
   }
   return fallback
+}
+
+const LOOP_SEGMENT_TARGET_COUNT = 180
+
+const sampleLoopGradientColor = (
+  colorInfo: GoalColorInfo | undefined,
+  fallback: string,
+  ratio: number,
+): string => {
+  const normalizedFallback = normalizeHexColor(fallback) ?? fallback
+  if (!colorInfo) {
+    return normalizedFallback
+  }
+  if (colorInfo.gradient) {
+    const start = normalizeHexColor(colorInfo.gradient.start) ?? colorInfo.gradient.start
+    const end = normalizeHexColor(colorInfo.gradient.end) ?? colorInfo.gradient.end
+    if (start && end) {
+      const t = ((ratio % 1) + 1) % 1
+      if (t <= 0.5) {
+        return mixHexColors(start, end, t / 0.5)
+      }
+      return mixHexColors(end, start, (t - 0.5) / 0.5)
+    }
+  }
+  if (colorInfo.solidColor) {
+    return colorInfo.solidColor
+  }
+  return normalizedFallback
+}
+
+type LoopSlice = {
+  key: string
+  path: string
+  color: string
+}
+
+const buildArcLoopSlices = (arc: PieArc): LoopSlice[] => {
+  if (arc.isUnlogged) {
+    return [
+      {
+        key: `${arc.id}-full`,
+        path: describeDonutSlice(arc.startAngle, arc.endAngle),
+        color: arc.fill,
+      },
+    ]
+  }
+  const span = Math.max(arc.endAngle - arc.startAngle, 0)
+  if (span <= 0) {
+    return []
+  }
+  const sliceCount = Math.max(1, Math.ceil((span / 360) * LOOP_SEGMENT_TARGET_COUNT))
+  const limitedCount = Math.min(sliceCount, LOOP_SEGMENT_TARGET_COUNT)
+  const stepAngle = span / limitedCount
+  const slices: LoopSlice[] = []
+  for (let index = 0; index < limitedCount; index += 1) {
+    const subStartAngle = arc.startAngle + stepAngle * index
+    const subEndAngle = index === limitedCount - 1 ? arc.endAngle : subStartAngle + stepAngle
+    const midAngle = subStartAngle + (subEndAngle - subStartAngle) / 2
+    const ratio = midAngle / 360
+    const baseColor = sampleLoopGradientColor(arc.colorInfo, arc.baseColor, ratio)
+    const color = mixHexColors(baseColor, '#ffffff', 0.06)
+    slices.push({
+      key: `${arc.id}-slice-${index}`,
+      path: describeDonutSlice(subStartAngle, subEndAngle),
+      color,
+    })
+  }
+  return slices
 }
 
 const makeHistoryId = () => {
@@ -437,41 +489,6 @@ const resolveGoalColorInfo = (value: string | undefined): GoalColorInfo | undefi
   }
 }
 
-const createGradientForSegment = (
-  segmentId: string,
-  colorInfo: GoalColorInfo | undefined,
-  startAngle: number,
-  endAngle: number,
-): PieGradient | null => {
-  const gradientSource = colorInfo?.gradient
-  const baseStart = gradientSource?.start ?? colorInfo?.solidColor
-  if (!baseStart) {
-    return null
-  }
-  const baseEnd = gradientSource?.end ?? baseStart
-  const midAngle = startAngle + (endAngle - startAngle) / 2
-  const outerPoint = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_RADIUS, midAngle)
-  const innerPoint = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_INNER_RADIUS, midAngle)
-
-  const highlight = mixHexColors(baseStart, '#ffffff', 0.42)
-  const midTone = mixHexColors(baseEnd, '#ffffff', 0.18)
-  const shadow = mixHexColors(baseEnd, '#020617', 0.55)
-
-  return {
-    id: `pie-grad-${segmentId}`,
-    type: 'linear',
-    x1: outerPoint.x,
-    y1: outerPoint.y,
-    x2: innerPoint.x,
-    y2: innerPoint.y,
-    stops: [
-      { offset: '0%', color: applyAlphaToHex(highlight, 0.6) },
-      { offset: '55%', color: applyAlphaToHex(midTone, 0.45) },
-      { offset: '100%', color: applyAlphaToHex(shadow, 0.7) },
-    ],
-  }
-}
-
 const describeFullDonut = () => {
   const outerStart = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_RADIUS, 0)
   const outerOpposite = polarToCartesian(PIE_CENTER, PIE_CENTER, PIE_RADIUS, 180)
@@ -546,21 +563,19 @@ const createPieArcs = (segments: PieSegment[], windowMs: number): PieArc[] => {
 
     const startAngle = startRatio * 360
     const endAngle = Math.min(startAngle + sweepRatio * 360, 360)
-    const gradient = createGradientForSegment(segment.id, segment.colorInfo, startAngle, endAngle)
     const normalizedBase = normalizeHexColor(segment.baseColor)
     const fallbackFill = normalizedBase ? applyAlphaToHex(normalizedBase, 0.58) : segment.baseColor
     const isUnlogged = Boolean(segment.isUnlogged)
-    const fillValue = isUnlogged
-      ? 'var(--reflection-chart-unlogged-soft)'
-      : gradient
-        ? `url(#${gradient.id})`
-        : fallbackFill
+    const fillValue = isUnlogged ? 'var(--reflection-chart-unlogged-soft)' : fallbackFill
     arcs.push({
       id: segment.id,
       color: segment.swatch,
       path: describeDonutSlice(startAngle, endAngle),
       fill: fillValue,
-      gradient: !isUnlogged && gradient ? gradient : undefined,
+      startAngle,
+      endAngle,
+      baseColor: segment.baseColor,
+      colorInfo: segment.colorInfo,
       isUnlogged,
     })
   }
@@ -1457,10 +1472,6 @@ export default function ReflectionPage() {
     return base
   }, [loggedSegments, windowMs, loggedMs, unloggedFraction])
   const pieArcs = useMemo(() => createPieArcs(segments, windowMs), [segments, windowMs])
-  const pieGradients = useMemo(
-    () => pieArcs.flatMap((arc) => (arc.gradient ? [arc.gradient] : [])),
-    [pieArcs],
-  )
   const unloggedMs = useMemo(() => Math.max(windowMs - loggedMs, 0), [windowMs, loggedMs])
   const tabPanelId = 'reflection-range-panel'
   const dayStart = useMemo(() => {
@@ -1975,50 +1986,6 @@ export default function ReflectionPage() {
               aria-hidden="true"
               focusable="false"
             >
-              {pieGradients.length > 0 ? (
-                <defs>
-                  {pieGradients.map((gradient) =>
-                    gradient.type === 'linear' ? (
-                      <linearGradient
-                        key={gradient.id}
-                        id={gradient.id}
-                        x1={gradient.x1}
-                        y1={gradient.y1}
-                        x2={gradient.x2}
-                        y2={gradient.y2}
-                        gradientUnits="userSpaceOnUse"
-                      >
-                        {gradient.stops.map((stop, index) => (
-                          <stop
-                            key={`${gradient.id}-stop-${index}`}
-                            offset={stop.offset}
-                            stopColor={stop.color}
-                            stopOpacity={typeof stop.opacity === 'number' ? stop.opacity : undefined}
-                          />
-                        ))}
-                      </linearGradient>
-                    ) : (
-                      <radialGradient
-                        key={gradient.id}
-                        id={gradient.id}
-                        cx={gradient.cx}
-                        cy={gradient.cy}
-                        r={gradient.r}
-                        gradientUnits="userSpaceOnUse"
-                      >
-                        {gradient.stops.map((stop, index) => (
-                          <stop
-                            key={`${gradient.id}-stop-${index}`}
-                            offset={stop.offset}
-                            stopColor={stop.color}
-                            stopOpacity={typeof stop.opacity === 'number' ? stop.opacity : undefined}
-                          />
-                        ))}
-                      </radialGradient>
-                    ),
-                  )}
-                </defs>
-              ) : null}
               {pieArcs.length === 0 ? (
                 <path
                   className="reflection-pie__slice reflection-pie__slice--unlogged"
@@ -2032,18 +1999,32 @@ export default function ReflectionPage() {
                 />
               ) : (
                 pieArcs.map((arc) => {
-                  const className = arc.isUnlogged
-                    ? 'reflection-pie__slice reflection-pie__slice--unlogged'
-                    : 'reflection-pie__slice'
+                  if (arc.isUnlogged) {
+                    return (
+                      <path
+                        key={arc.id}
+                        className="reflection-pie__slice reflection-pie__slice--unlogged"
+                        d={arc.path}
+                        fill={arc.fill}
+                        fillRule="evenodd"
+                        clipRule="evenodd"
+                      />
+                    )
+                  }
+                  const slices = buildArcLoopSlices(arc)
                   return (
-                    <path
-                      key={arc.id}
-                      className={className}
-                      d={arc.path}
-                      fill={arc.fill}
-                      fillRule="evenodd"
-                      clipRule="evenodd"
-                    />
+                    <g key={arc.id}>
+                      {slices.map((slice) => (
+                        <path
+                          key={slice.key}
+                          className="reflection-pie__slice"
+                          d={slice.path}
+                          fill={slice.color}
+                          fillRule="evenodd"
+                          clipRule="evenodd"
+                        />
+                      ))}
+                    </g>
                   )
                 })
               )}
