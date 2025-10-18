@@ -2,6 +2,7 @@ import {
   type ChangeEvent,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -1271,12 +1272,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     }
   }, [clearPriorityHoldTimer])
 
-  const prepareFocusCheckAnimation = useCallback(() => {
-    const button = focusCompleteButtonRef.current
-    if (!button) {
+  const prepareFocusCheckAnimation = useCallback((marker?: HTMLElement | null) => {
+    const host = marker ?? focusCompleteButtonRef.current
+    if (!host) {
       return
     }
-    const path = button.querySelector('.goal-task-check path') as SVGPathElement | null
+    const path = host.querySelector('.goal-task-check path') as SVGPathElement | null
     if (!path) {
       return
     }
@@ -1297,11 +1298,18 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     prepareFocusCheckAnimation()
   }, [prepareFocusCheckAnimation, activeFocusCandidate?.taskId, focusSource?.taskId, normalizedCurrentTask])
 
-  const handleCompleteFocus = async () => {
+  const handleCompleteFocus = async (
+    event?: ReactPointerEvent<HTMLButtonElement> | ReactMouseEvent<HTMLButtonElement>,
+  ) => {
     if (!canCompleteFocus) {
       return
     }
-    prepareFocusCheckAnimation()
+    const marker = event?.currentTarget
+    if (marker) {
+      prepareFocusCheckAnimation(marker)
+    } else {
+      prepareFocusCheckAnimation()
+    }
     const taskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
     const bucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
     const goalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
@@ -1592,9 +1600,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
               .filter(Boolean)
               .join(' ')}
             onClick={handleCompleteFocus}
-            onPointerDown={() => {
+            onPointerDown={(event) => {
               if (canCompleteFocus) {
-                prepareFocusCheckAnimation()
+                prepareFocusCheckAnimation(event.currentTarget)
+              }
+            }}
+            onTouchStart={(event) => {
+              if (canCompleteFocus) {
+                prepareFocusCheckAnimation(event.currentTarget)
               }
             }}
             aria-disabled={!canCompleteFocus}
