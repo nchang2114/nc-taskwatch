@@ -7,10 +7,12 @@ import {
   useState,
   type ChangeEvent,
   type CSSProperties,
+  type HTMLAttributes,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import { createPortal } from 'react-dom'
 import './ReflectionPage.css'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
 
@@ -2142,10 +2144,17 @@ export default function ReflectionPage() {
                   ) : null}
                 </div>
               )
+              const tooltipCommonProps: HTMLAttributes<HTMLDivElement> = {
+                className: tooltipClassName,
+                role: 'presentation',
+                onClick: (event) => event.stopPropagation(),
+                onMouseDown: (event) => event.stopPropagation(),
+                onPointerDown: (event) => event.stopPropagation(),
+              }
+
               const inlineTooltip = (
                 <div
-                  className={tooltipClassName}
-                  role="presentation"
+                  {...tooltipCommonProps}
                   ref={isAnchoredTooltip && !isEditing ? setActiveTooltipNode : null}
                   style={
                     isAnchoredTooltip && !isEditing
@@ -2155,13 +2164,19 @@ export default function ReflectionPage() {
                         } as CSSProperties)
                       : undefined
                   }
-                  onClick={(event) => event.stopPropagation()}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onPointerDown={(event) => event.stopPropagation()}
                 >
                   {tooltipContent}
                 </div>
               )
+
+              const renderedTooltip =
+                isEditing && typeof document !== 'undefined'
+                  ? createPortal(
+                      <div {...tooltipCommonProps}>{tooltipContent}</div>,
+                      document.body,
+                    )
+                  : inlineTooltip
+
               return (
                 <div
                   key={`${segment.id}-${segment.start}-${segment.end}`}
@@ -2209,7 +2224,7 @@ export default function ReflectionPage() {
                     aria-hidden="true"
                     onPointerDown={handleResizeEndPointerDown}
                   />
-                  {inlineTooltip}
+                  {renderedTooltip}
                 </div>
               )
             })}
