@@ -1059,18 +1059,13 @@ export default function ReflectionPage() {
 
   const handleSelectHistorySegment = useCallback(
     (entry: HistoryEntry) => {
-      if (selectedHistoryId === entry.id) {
-        setSelectedHistoryId(null)
-        setEditingHistoryId(null)
-        setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
-        setHoveredHistoryId((current) => (current === entry.id ? null : current))
-        return
+      if (selectedHistoryId !== entry.id) {
+        setHistoryDraft({
+          taskName: entry.taskName,
+          goalName: entry.goalName ?? '',
+          bucketName: entry.bucketName ?? '',
+        })
       }
-      setHistoryDraft({
-        taskName: entry.taskName,
-        goalName: entry.goalName ?? '',
-        bucketName: entry.bucketName ?? '',
-      })
       setSelectedHistoryId(entry.id)
       setEditingHistoryId(null)
     },
@@ -1209,6 +1204,9 @@ export default function ReflectionPage() {
 
   const handleTimelineBlockKeyDown = useCallback(
     (entry: HistoryEntry) => (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.target !== event.currentTarget) {
+        return
+      }
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault()
         handleSelectHistorySegment(entry)
