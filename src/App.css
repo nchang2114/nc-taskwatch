@@ -2493,6 +2493,57 @@ html[data-theme='light'] .nav-links--drawer {
   pointer-events: auto;
 }
 
+.history-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1rem, 4vw, 1.6rem);
+  z-index: 40;
+}
+
+.history-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 10, 28, 0.58);
+  backdrop-filter: blur(10px);
+}
+
+.history-overlay__panel {
+  position: relative;
+  width: min(520px, calc(100% - clamp(2rem, 10vw, 3rem)));
+  max-height: calc(100% - clamp(2rem, 10vw, 3rem));
+  overflow-y: auto;
+  border-radius: clamp(0.95rem, 3.4vw, 1.15rem);
+  box-shadow: 0 38px 80px rgba(6, 8, 30, 0.55);
+}
+
+.history-overlay__panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.history-overlay__panel::-webkit-scrollbar-thumb {
+  background: rgba(92, 112, 188, 0.4);
+  border-radius: 999px;
+}
+
+.history-overlay__panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.history-timeline__tooltip--overlay {
+  position: static;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  min-width: auto;
+  width: 100%;
+  padding: clamp(0.9rem, 3vw, 1.2rem) clamp(1rem, 3.6vw, 1.4rem);
+  border-radius: inherit;
+  box-shadow: none;
+}
+
 .history-timeline__tooltip-content {
   display: flex;
   flex-direction: column;
@@ -2729,8 +2780,10 @@ html[data-theme='light'] .nav-links--drawer {
   background: rgba(180, 194, 255, 0.4);
 }
 .history-timeline__tick-line--major {
-  height: clamp(0.95rem, 2.2vw, 1.1rem);
-  background: rgba(220, 230, 255, 0.65);
+  height: clamp(1.25rem, 3vw, 1.55rem);
+  width: clamp(1.6px, 0.6vw, 2.5px);
+  background: rgba(225, 236, 255, 0.9);
+  box-shadow: 0 12px 24px rgba(90, 106, 220, 0.22);
 }
 
 .history-timeline__tick-label {
@@ -2796,17 +2849,12 @@ html[data-theme='light'] .nav-links--drawer {
   }
 
   .history-timeline {
-    --history-timeline-row-height: clamp(2rem, 12vw, 2.4rem);
     gap: clamp(0.35rem, 2.4vw, 0.6rem);
     padding-block: clamp(0.2rem, 1.4vw, 0.35rem);
-    overflow-x: auto;
-    overflow-y: visible;
-    -webkit-overflow-scrolling: touch;
   }
 
   .history-timeline__bar {
-    min-width: min(560px, 100%);
-    padding: clamp(0.4rem, 2.6vw, 0.55rem) clamp(1rem, 7vw, 1.3rem);
+    padding: clamp(0.4rem, 2.6vw, 0.55rem) clamp(0.85rem, 6vw, 1.1rem);
     border-radius: clamp(12px, 4vw, 16px);
   }
 
@@ -2815,7 +2863,6 @@ html[data-theme='light'] .nav-links--drawer {
   }
 
   .history-timeline__axis {
-    min-width: min(560px, 100%);
     height: clamp(1.4rem, 7.8vw, 1.85rem);
     padding-inline: clamp(1.05rem, 8vw, 1.6rem);
     padding-block: clamp(0.2rem, 1.4vw, 0.4rem);
@@ -2835,8 +2882,8 @@ html[data-theme='light'] .nav-links--drawer {
   }
 
   .history-timeline__tick-line--major {
-    height: clamp(1.05rem, 7vw, 1.35rem);
-    width: clamp(1.4px, 1vw, 2.2px);
+    height: clamp(1.1rem, 8vw, 1.45rem);
+    width: clamp(1.6px, 1.2vw, 2.4px);
   }
 
   .history-timeline__tooltip {
@@ -2845,37 +2892,13 @@ html[data-theme='light'] .nav-links--drawer {
     padding: clamp(0.5rem, 3vw, 0.7rem);
   }
 
-  .history-mobile-overlay {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: clamp(0.75rem, 6vw, 1.4rem);
-    z-index: 30;
+  .history-overlay {
+    padding: clamp(0.75rem, 6vw, 1.2rem);
   }
 
-  .history-mobile-overlay::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: rgba(4, 6, 20, 0.58);
-    backdrop-filter: blur(6px);
-    z-index: 0;
-  }
-
-  .history-mobile-overlay > .history-timeline__tooltip {
-    position: relative;
-    left: auto;
-    bottom: auto;
-    transform: none !important;
-    width: min(420px, calc(100vw - clamp(1.4rem, 8vw, 2.2rem)));
-    max-height: calc(100vh - clamp(2rem, 12vw, 3rem));
-    overflow-y: auto;
-    padding: clamp(0.75rem, 4vw, 1.1rem);
-    border-radius: clamp(0.9rem, 4vw, 1.2rem);
-    box-shadow: 0 28px 52px rgba(6, 8, 32, 0.65);
-    z-index: 1;
+  .history-overlay__panel {
+    width: calc(100% - clamp(1.4rem, 12vw, 2.4rem));
+    max-height: calc(100% - clamp(1.6rem, 14vw, 2.8rem));
   }
 
   .history-timeline__tooltip-content {
@@ -3158,8 +3181,12 @@ html[data-theme='light'] .history-controls__button--primary:not(:disabled):hover
   color: #fff;
 }
 
-html[data-theme='light'] .history-mobile-overlay::before {
-  background: rgba(36, 48, 84, 0.32);
+html[data-theme='light'] .history-overlay__backdrop {
+  background: rgba(228, 234, 255, 0.55);
+}
+
+html[data-theme='light'] .history-overlay__panel {
+  box-shadow: 0 32px 72px rgba(94, 112, 180, 0.35);
 }
 
 html[data-theme='light'] .history-entry {
