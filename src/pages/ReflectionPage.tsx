@@ -1059,13 +1059,18 @@ export default function ReflectionPage() {
 
   const handleSelectHistorySegment = useCallback(
     (entry: HistoryEntry) => {
-      if (selectedHistoryId !== entry.id) {
-        setHistoryDraft({
-          taskName: entry.taskName,
-          goalName: entry.goalName ?? '',
-          bucketName: entry.bucketName ?? '',
-        })
+      if (selectedHistoryId === entry.id) {
+        setSelectedHistoryId(null)
+        setEditingHistoryId(null)
+        setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+        setHoveredHistoryId((current) => (current === entry.id ? null : current))
+        return
       }
+      setHistoryDraft({
+        taskName: entry.taskName,
+        goalName: entry.goalName ?? '',
+        bucketName: entry.bucketName ?? '',
+      })
       setSelectedHistoryId(entry.id)
       setEditingHistoryId(null)
     },
