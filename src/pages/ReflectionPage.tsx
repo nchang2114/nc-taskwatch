@@ -2025,43 +2025,45 @@ export default function ReflectionPage() {
         <p className="reflection-subtitle">Review your progress and capture insights to guide tomorrow.</p>
       </div>
 
-      <section
-        className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`}
-        aria-label="Session History"
-      >
-        <div className="history-controls history-controls--floating">
-          <button
-            type="button"
-            className="history-controls__button"
-            onClick={handleUndoDelete}
-            disabled={deletedHistoryStack.length === 0}
-            aria-label="Undo last deleted session"
-          >
-            Undo
-          </button>
-          <button
-            type="button"
-            className="history-controls__button history-controls__button--primary"
-            onClick={handleAddHistoryEntry}
-            aria-label="Add a new history session"
-          >
-            Add history
-          </button>
-        </div>
-        <div className="history-section__header">
-          <div className="history-section__title">
-            <h2 className="history-heading">Session History</h2>
-            <p className="history-section__date">{dayLabel}</p>
-          </div>
+      <div className="history-block">
+        <div className="history-section__heading">
+          <h2 className="reflection-section__title">Session History</h2>
+          <p className="history-section__desc">
+            Review today’s focus sessions, fine-tune their timing, and capture what made each block productive.
+          </p>
         </div>
 
-        <div
-          className="history-timeline"
-          style={timelineStyle}
-          ref={timelineRef}
-          onClick={handleTimelineBackgroundClick}
-        >
-          <div className="history-timeline__bar" ref={timelineBarRef}>
+        <section className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`} aria-label="Session History">
+          <div className="history-controls history-controls--floating">
+            <button
+              type="button"
+              className="history-controls__button"
+              onClick={handleUndoDelete}
+              disabled={deletedHistoryStack.length === 0}
+              aria-label="Undo last deleted session"
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              className="history-controls__button history-controls__button--primary"
+              onClick={handleAddHistoryEntry}
+              aria-label="Add a new history session"
+            >
+              Add history
+            </button>
+          </div>
+          <div className="history-section__header">
+            <h3 className="history-section__date">{dayLabel}</h3>
+          </div>
+
+          <div
+            className="history-timeline"
+            style={timelineStyle}
+            ref={timelineRef}
+            onClick={handleTimelineBackgroundClick}
+          >
+            <div className="history-timeline__bar" ref={timelineBarRef}>
             {showCurrentTimeIndicator ? (
               <div
                 className="history-timeline__current-time"
@@ -2449,6 +2451,7 @@ export default function ReflectionPage() {
           </div>
         </div>
       </section>
+    </div>
 
       <section className="reflection-section reflection-section--overview">
         <h2 className="reflection-section__title">Time Overview</h2>
