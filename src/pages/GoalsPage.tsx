@@ -3477,6 +3477,7 @@ export default function GoalsPage(): ReactElement {
     publishGoalsSnapshot(snapshot)
   }, [goals])
   useEffect(() => {
+    let cancelled = false
     const unsubscribe = subscribeToGoalsSnapshot((snapshot) => {
       const signature = computeSnapshotSignature(snapshot)
       if (lastSnapshotSignatureRef.current === signature) {
@@ -3484,9 +3485,24 @@ export default function GoalsPage(): ReactElement {
       }
       skipNextPublishRef.current = true
       lastSnapshotSignatureRef.current = signature
-      setGoals((current) => reconcileGoalsWithSnapshot(snapshot, current))
+      const run = () => {
+        if (cancelled) {
+          return
+        }
+        setGoals((current) => reconcileGoalsWithSnapshot(snapshot, current))
+      }
+      if (typeof queueMicrotask === 'function') {
+        queueMicrotask(run)
+      } else {
+        Promise.resolve().then(run).catch(() => {
+          // ignore
+        })
+      }
     })
-    return unsubscribe
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [])
 
   // Goal rename state
