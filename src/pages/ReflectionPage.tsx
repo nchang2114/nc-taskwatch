@@ -57,11 +57,17 @@ type HistoryDraftState = {
   endedAt: number | null
 }
 
+type GradientStop = {
+  position: number
+  color: string
+}
+
 type GoalGradientInfo = {
   start: string
   end: string
   angle?: number
   css: string
+  stops: GradientStop[]
 }
 
 type GoalColorInfo = {
@@ -98,12 +104,17 @@ const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
 const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 const UNCATEGORISED_LABEL = 'Uncategorised'
-const UNCATEGORISED_GRADIENT = {
+const UNCATEGORISED_GRADIENT: GoalGradientInfo = {
   css: 'linear-gradient(135deg, #94a3b8 0%, #64748b 45%, #1e293b 100%)',
   start: '#94a3b8',
   end: '#1e293b',
   angle: 135,
-} satisfies GoalGradientInfo
+  stops: [
+    { color: '#94a3b8', position: 0 },
+    { color: '#64748b', position: 0.45 },
+    { color: '#1e293b', position: 1 },
+  ],
+}
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
 
 type GoalLookup = Map<string, { goalName: string; colorInfo?: GoalColorInfo }>
@@ -282,27 +293,29 @@ const resolveTimestamp = (value: number | null | undefined, fallback: number): n
   return fallback
 }
 
-const sampleLoopGradientColor = (
+const sampleGradientColor = (
   colorInfo: GoalColorInfo | undefined,
   fallback: string,
   ratio: number,
 ): string => {
   const normalizedFallback = normalizeHexColor(fallback) ?? fallback
-  if (!colorInfo) {
-    return normalizedFallback
-  }
-  if (colorInfo.gradient) {
-    const start = normalizeHexColor(colorInfo.gradient.start) ?? colorInfo.gradient.start
-    const end = normalizeHexColor(colorInfo.gradient.end) ?? colorInfo.gradient.end
-    if (start && end) {
-      const t = ((ratio % 1) + 1) % 1
-      if (t <= 0.5) {
-        return mixHexColors(start, end, t / 0.5)
+  const gradient = colorInfo?.gradient
+  if (gradient && gradient.stops.length >= 2) {
+    const t = clamp01(ratio)
+    const stops = gradient.stops
+    let previous = stops[0]
+    for (let index = 1; index < stops.length; index += 1) {
+      const current = stops[index]
+      if (t <= current.position) {
+        const span = current.position - previous.position
+        const local = span <= 0 ? 0 : clamp01((t - previous.position) / span)
+        return mixHexColors(previous.color, current.color, local)
       }
-      return mixHexColors(end, start, (t - 0.5) / 0.5)
+      previous = current
     }
+    return stops[stops.length - 1].color
   }
-  if (colorInfo.solidColor) {
+  if (colorInfo?.solidColor) {
     return colorInfo.solidColor
   }
   return normalizedFallback
@@ -313,6 +326,10 @@ type LoopSlice = {
   path: string
   color: string
 }
+
+const GRADIENT_SLICE_DEGREES = 1
+const GRADIENT_MIN_SLICES = 16
+const GRADIENT_MAX_SLICES = 720
 
 const buildArcLoopSlices = (arc: PieArc): LoopSlice[] => {
   if (arc.isUnlogged) {
@@ -328,17 +345,33 @@ const buildArcLoopSlices = (arc: PieArc): LoopSlice[] => {
   if (span <= 0) {
     return []
   }
-  const midAngle = arc.startAngle + span / 2
-  const ratio = midAngle / 360
-  const baseColor = sampleLoopGradientColor(arc.colorInfo, arc.baseColor, ratio)
-  const color = mixHexColors(baseColor, '#ffffff', 0.06)
-  return [
-    {
-      key: `${arc.id}-slice`,
-      path: describeDonutSlice(arc.startAngle, arc.endAngle),
+  const gradient = arc.colorInfo?.gradient
+  const sliceCount = gradient
+    ? Math.min(
+        GRADIENT_MAX_SLICES,
+        Math.max(
+          GRADIENT_MIN_SLICES,
+          Math.ceil(span / Math.max(GRADIENT_SLICE_DEGREES, ARC_EPSILON)),
+        ),
+      )
+    : 1
+  const slices: LoopSlice[] = []
+  for (let index = 0; index < sliceCount; index += 1) {
+    const sliceStart = arc.startAngle + (span * index) / sliceCount
+    const sliceEnd = index === sliceCount - 1 ? arc.endAngle : arc.startAngle + (span * (index + 1)) / sliceCount
+    if (sliceEnd - sliceStart <= ARC_EPSILON) {
+      continue
+    }
+    const midAngle = sliceStart + (sliceEnd - sliceStart) / 2
+    const localRatio = span <= 0 ? 0 : clamp01((midAngle - arc.startAngle) / span)
+    const color = sampleGradientColor(arc.colorInfo, arc.baseColor, localRatio)
+    slices.push({
+      key: `${arc.id}-slice-${index}`,
+      path: describeDonutSlice(sliceStart, sliceEnd),
       color,
-    },
-  ]
+    })
+  }
+  return slices
 }
 
 const makeHistoryId = () => {
@@ -471,6 +504,158 @@ const PRESET_GOAL_GRADIENTS: Record<string, string> = {
   'from-amber-400 to-orange-500': 'linear-gradient(135deg, #fbbf24 0%, #fb923c 45%, #f97316 100%)',
 }
 
+const splitGradientArgs = (value: string): string[] => {
+  const result: string[] = []
+  let current = ''
+  let depth = 0
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index]
+    if (char === '(') {
+      depth += 1
+      current += char
+    } else if (char === ')') {
+      depth = Math.max(0, depth - 1)
+      current += char
+    } else if (char === ',' && depth === 0) {
+      if (current.trim().length > 0) {
+        result.push(current.trim())
+      }
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  if (current.trim().length > 0) {
+    result.push(current.trim())
+  }
+  return result
+}
+
+type PartialGradientStop = {
+  color: string
+  position?: number
+}
+
+const parseGradientStopToken = (token: string): PartialGradientStop | null => {
+  const trimmed = token.trim()
+  if (trimmed.length === 0) {
+    return null
+  }
+  const parts = trimmed.split(/\s+/)
+  if (parts.length === 0) {
+    return null
+  }
+  const color = normalizeHexColor(parts[0])
+  if (!color) {
+    return null
+  }
+  let position: number | undefined
+  for (let index = 1; index < parts.length; index += 1) {
+    const part = parts[index]
+    const match = part.match(/^(-?\d+(?:\.\d+)?)%$/)
+    if (match) {
+      position = clamp01(Number.parseFloat(match[1]) / 100)
+      break
+    }
+  }
+  return { color, position }
+}
+
+const normalizeGradientStops = (stops: PartialGradientStop[]): GradientStop[] => {
+  if (stops.length < 2) {
+    return []
+  }
+  const working = stops.map((stop) => ({ ...stop }))
+  if (working[0].position === undefined) {
+    working[0].position = 0
+  }
+  if (working[working.length - 1].position === undefined) {
+    working[working.length - 1].position = 1
+  }
+  let lastDefinedIndex = 0
+  for (let index = 1; index < working.length; index += 1) {
+    const stop = working[index]
+    if (stop.position !== undefined) {
+      const startPos = clamp01(working[lastDefinedIndex].position ?? 0)
+      const endPos = clamp01(stop.position)
+      const gap = index - lastDefinedIndex
+      if (gap > 1) {
+        const step = (endPos - startPos) / gap
+        for (let offset = 1; offset < gap; offset += 1) {
+          const target = working[lastDefinedIndex + offset]
+          target.position = clamp01(startPos + step * offset)
+        }
+      }
+      stop.position = endPos
+      lastDefinedIndex = index
+    }
+  }
+  for (let index = 0; index < working.length; index += 1) {
+    if (working[index].position !== undefined) {
+      continue
+    }
+    const prevIndex = Math.max(0, index - 1)
+    let nextIndex = index + 1
+    while (nextIndex < working.length && working[nextIndex].position === undefined) {
+      nextIndex += 1
+    }
+    const prevPos = clamp01(working[prevIndex].position ?? 0)
+    const nextPos = nextIndex < working.length ? clamp01(working[nextIndex].position ?? prevPos) : prevPos
+    const span = nextIndex - prevIndex
+    if (span <= 0) {
+      working[index].position = prevPos
+    } else {
+      const relativeIndex = index - prevIndex
+      working[index].position = clamp01(prevPos + ((nextPos - prevPos) * relativeIndex) / span)
+    }
+  }
+  return working
+    .map<GradientStop>((stop) => ({
+      color: stop.color,
+      position: clamp01(stop.position ?? 0),
+    }))
+    .sort((a, b) => a.position - b.position)
+}
+
+const parseGoalGradient = (gradient: string): GoalGradientInfo | null => {
+  const trimmed = gradient.trim()
+  if (!trimmed.toLowerCase().startsWith('linear-gradient')) {
+    return null
+  }
+  const openIndex = trimmed.indexOf('(')
+  const closeIndex = trimmed.lastIndexOf(')')
+  if (openIndex === -1 || closeIndex === -1 || closeIndex <= openIndex + 1) {
+    return null
+  }
+  const inner = trimmed.slice(openIndex + 1, closeIndex)
+  const args = splitGradientArgs(inner)
+  if (args.length < 2) {
+    return null
+  }
+  let angle: number | undefined
+  let stopStartIndex = 0
+  const angleMatch = args[0].match(/^(-?\d+(?:\.\d+)?)deg$/i)
+  if (angleMatch) {
+    angle = Number.parseFloat(angleMatch[1])
+    stopStartIndex = 1
+  }
+  const stopTokens = args.slice(stopStartIndex)
+  const partialStops = stopTokens
+    .map((token) => parseGradientStopToken(token))
+    .filter((stop): stop is PartialGradientStop => Boolean(stop))
+  const stops = normalizeGradientStops(partialStops)
+  if (stops.length < 2) {
+    return null
+  }
+  return {
+    css: gradient,
+    start: stops[0].color,
+    end: stops[stops.length - 1].color,
+    angle,
+    stops,
+  }
+}
+
 const extractGradientColors = (gradient: string): { start: string; end: string; angle?: number } | null => {
   const matches = gradient.match(/#(?:[0-9a-fA-F]{3}){1,2}/g)
   if (!matches || matches.length === 0) {
@@ -510,17 +695,28 @@ const resolveGoalColorInfo = (value: string | undefined): GoalColorInfo | undefi
     return undefined
   }
 
-  const parsed = extractGradientColors(gradientString)
-  if (!parsed) {
+  const parsed = parseGoalGradient(gradientString)
+  if (parsed) {
+    return {
+      gradient: parsed,
+    }
+  }
+
+  const fallback = extractGradientColors(gradientString)
+  if (!fallback) {
     return undefined
   }
 
   return {
     gradient: {
       css: gradientString,
-      start: parsed.start,
-      end: parsed.end,
-      angle: parsed.angle,
+      start: fallback.start,
+      end: fallback.end,
+      angle: fallback.angle,
+      stops: [
+        { color: fallback.start, position: 0 },
+        { color: fallback.end, position: 1 },
+      ],
     },
   }
 }
