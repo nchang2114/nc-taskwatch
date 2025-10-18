@@ -972,8 +972,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   position: relative;
 }
 
-.goal-task-marker--action[aria-disabled='true'],
-.goal-task-marker--action.goal-task-marker--action-disabled {
+.goal-task-marker--action[aria-disabled='true'] {
   cursor: default;
   opacity: 0.65;
 }

@@ -1271,7 +1271,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     }
   }, [clearPriorityHoldTimer])
 
-  useEffect(() => {
+  const prepareFocusCheckAnimation = useCallback(() => {
     const button = focusCompleteButtonRef.current
     if (!button) {
       return
@@ -1291,12 +1291,17 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     } catch {
       // ignore measurement errors; fallback styles remain
     }
-  }, [activeFocusCandidate?.taskId, focusSource?.taskId, normalizedCurrentTask, isCompletingFocus])
+  }, [])
+
+  useEffect(() => {
+    prepareFocusCheckAnimation()
+  }, [prepareFocusCheckAnimation, activeFocusCandidate?.taskId, focusSource?.taskId, normalizedCurrentTask])
 
   const handleCompleteFocus = async () => {
     if (!canCompleteFocus) {
       return
     }
+    prepareFocusCheckAnimation()
     const taskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
     const bucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
     const goalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
@@ -1583,7 +1588,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             className={[
               'goal-task-marker',
               'goal-task-marker--action',
-              !canCompleteFocus ? 'goal-task-marker--action-disabled' : '',
             ]
               .filter(Boolean)
               .join(' ')}
