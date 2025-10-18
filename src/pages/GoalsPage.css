@@ -1053,16 +1053,16 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 }
 
 /* Default hidden check for action marker; drawn during completion */
-.goal-task-marker--action .goal-task-check { opacity: 0; transition: opacity 140ms ease; }
+.goal-task-marker--action .goal-task-check { opacity: 0; transition: opacity 160ms ease; }
 .goal-task-marker--action .goal-task-check path {
   /* Crisp, opaque green tick */
   stroke: #00d601;
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 26;
-  stroke-dashoffset: 26;
-  transition: stroke-dashoffset 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  stroke-dasharray: 32;
+  stroke-dashoffset: 32;
+  transition: stroke-dashoffset 260ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: stroke-dashoffset;
 }
 /* Hover preview of tick (animate in/out) — desktops only */

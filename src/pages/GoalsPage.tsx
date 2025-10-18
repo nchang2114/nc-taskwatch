@@ -1203,6 +1203,54 @@ const GoalRow: React.FC<GoalRowProps> = ({
     if (el) taskRowRefs.current.set(taskId, el)
     else taskRowRefs.current.delete(taskId)
   }
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const activeKeys = Object.entries(completingMap)
+      .filter(([, active]) => active)
+      .map(([key]) => key)
+    if (activeKeys.length === 0) {
+      return
+    }
+    activeKeys.forEach((key) => {
+      const parts = key.split(':')
+      const taskId = parts[1]
+      if (!taskId) {
+        return
+      }
+      const row = taskRowRefs.current.get(taskId)
+      if (!row) {
+        return
+      }
+      const path = row.querySelector<SVGPathElement>('.goal-task-marker--action .goal-task-check path')
+      if (!path) {
+        return
+      }
+      try {
+        const length = path.getTotalLength()
+        const dash = Number.isFinite(length) && length > 0 ? length : 32
+        path.style.strokeDasharray = `${dash}`
+        path.style.strokeDashoffset = `${dash}`
+        path.style.transition = 'stroke-dashoffset 260ms cubic-bezier(0.22, 1, 0.36, 1)'
+        // Force style flush before animating
+        void path.getBoundingClientRect()
+        const trigger = () => {
+          if (!row.contains(path)) {
+            return
+          }
+          path.style.strokeDashoffset = '0'
+        }
+        if (typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(() => window.requestAnimationFrame(trigger))
+        } else {
+          window.setTimeout(trigger, 16)
+        }
+      } catch {
+        // ignore measurement errors
+      }
+    })
+  }, [completingMap])
   const flipStartRectsRef = useRef(new Map<string, DOMRect>())
   const prepareFlipForTask = (taskId: string) => {
     const el = taskRowRefs.current.get(taskId)
