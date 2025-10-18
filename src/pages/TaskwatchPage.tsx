@@ -1614,7 +1614,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             aria-label="Mark focus task complete"
             ref={focusCompleteButtonRef}
           >
-            <svg viewBox="0 0 24 24" className="goal-task-check" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="24" height="24" className="goal-task-check" aria-hidden="true">
               <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
