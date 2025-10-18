@@ -2835,13 +2835,39 @@ html[data-theme='light'] .nav-links--drawer {
   }
 
   .history-timeline__tick-line--major {
-    height: clamp(0.9rem, 5vw, 1.1rem);
+    height: clamp(1.05rem, 7vw, 1.35rem);
+    width: clamp(1.4px, 1vw, 2.2px);
   }
 
   .history-timeline__tooltip {
     min-width: min(260px, calc(100vw - 2.6rem));
     max-width: calc(100vw - 2.6rem);
     padding: clamp(0.5rem, 3vw, 0.7rem);
+  }
+
+  .history-timeline__tooltip--pinned {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    bottom: auto;
+    transform: translate(-50%, -50%) !important;
+    width: min(420px, calc(100vw - clamp(1.4rem, 8vw, 2.2rem)));
+    max-height: calc(100vh - clamp(2rem, 12vw, 3rem));
+    overflow-y: auto;
+    padding: clamp(0.75rem, 4vw, 1.1rem);
+    border-radius: clamp(0.9rem, 4vw, 1.2rem);
+    z-index: 32;
+    box-shadow: 0 28px 52px rgba(6, 8, 32, 0.65);
+  }
+
+  .history-timeline__tooltip--pinned::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 6, 20, 0.58);
+    backdrop-filter: blur(6px);
+    z-index: -1;
+    pointer-events: none;
   }
 
   .history-timeline__tooltip-content {
