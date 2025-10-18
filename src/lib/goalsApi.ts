@@ -529,9 +529,6 @@ export async function setTaskCompletedAndResort(taskId: string, bucketId: string
 
   const sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed })
   const updates: Partial<DbTask> = { completed, sort_index }
-  if (completed) {
-    updates.priority = false
-  }
 
   const completionRows = await updateTaskWithGuard(taskId, bucketId, updates, 'id, completed')
   const persisted = completionRows[0]

@@ -1356,7 +1356,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
               return task
             }
             mutated = true
-            return { ...task, completed: true, priority: false }
+            return { ...task, completed: true }
           })
           if (!mutated) {
             return { ...bucket, tasks: updatedTasks }
