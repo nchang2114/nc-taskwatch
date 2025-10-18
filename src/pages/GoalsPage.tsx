@@ -1203,6 +1203,18 @@ const GoalRow: React.FC<GoalRowProps> = ({
     if (el) taskRowRefs.current.set(taskId, el)
     else taskRowRefs.current.delete(taskId)
   }
+  const tickAnimationRefs = useRef<Map<string, number>>(new Map())
+  useEffect(
+    () => () => {
+      tickAnimationRefs.current.forEach((id) => {
+        if (typeof cancelAnimationFrame === 'function') {
+          cancelAnimationFrame(id)
+        }
+      })
+      tickAnimationRefs.current.clear()
+    },
+    [],
+  )
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
@@ -1230,21 +1242,47 @@ const GoalRow: React.FC<GoalRowProps> = ({
       try {
         const length = path.getTotalLength()
         const dash = Number.isFinite(length) && length > 0 ? length : 32
+        const existingId = tickAnimationRefs.current.get(key)
+        if (existingId !== undefined && typeof cancelAnimationFrame === 'function') {
+          cancelAnimationFrame(existingId)
+          tickAnimationRefs.current.delete(key)
+        }
+        path.style.transition = 'none'
         path.style.strokeDasharray = `${dash}`
         path.style.strokeDashoffset = `${dash}`
-        path.style.transition = 'stroke-dashoffset 260ms cubic-bezier(0.22, 1, 0.36, 1)'
-        // Force style flush before animating
+        path.style.visibility = 'visible'
         void path.getBoundingClientRect()
-        const trigger = () => {
+        const duration = 280
+        const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now()
+        const animate = (now: number) => {
           if (!row.contains(path)) {
+            tickAnimationRefs.current.delete(key)
+            return
+          }
+          const elapsed = now - startTime
+          const progress = Math.min(Math.max(elapsed / duration, 0), 1)
+          const offset = dash * (1 - progress)
+          path.style.strokeDashoffset = `${offset}`
+          if (progress < 1) {
+            const nextId = requestAnimationFrame(animate)
+            tickAnimationRefs.current.set(key, nextId)
             return
           }
           path.style.strokeDashoffset = '0'
+          path.style.transition = ''
+          tickAnimationRefs.current.delete(key)
         }
-        if (typeof window.requestAnimationFrame === 'function') {
-          window.requestAnimationFrame(() => window.requestAnimationFrame(trigger))
+        if (typeof requestAnimationFrame === 'function') {
+          const id = requestAnimationFrame(animate)
+          tickAnimationRefs.current.set(key, id)
         } else {
-          window.setTimeout(trigger, 16)
+          const interval = window.setInterval(() => {
+            const now = Date.now()
+            animate(now)
+            if (!tickAnimationRefs.current.has(key)) {
+              window.clearInterval(interval)
+            }
+          }, 16)
         }
       } catch {
         // ignore measurement errors
