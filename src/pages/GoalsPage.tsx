@@ -2582,6 +2582,23 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       e.stopPropagation()
                                       const key = completingKey(b.id, task.id)
                                       if (completingMap[key]) return
+
+                                      // Ensure the SVG check path uses its exact length so stroke animation works on mobile.
+                                      try {
+                                        const marker = e.currentTarget as HTMLElement
+                                        const checkPath = marker.querySelector('.goal-task-check path') as SVGPathElement | null
+                                        if (checkPath) {
+                                          const length = checkPath.getTotalLength()
+                                          if (Number.isFinite(length) && length > 0) {
+                                            const dash = `${length}`
+                                            checkPath.style.strokeDasharray = dash
+                                            checkPath.style.strokeDashoffset = dash
+                                          }
+                                        }
+                                      } catch {
+                                        // Ignore measurement errors; CSS defaults remain as fallback.
+                                      }
+
                                       // Compute per-line strike overlay for sequential left→right wipe
                                       let overlayTotal = 600
                                       let rowTotalMs = 1600
