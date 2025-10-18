@@ -1054,7 +1054,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 
 /* Default hidden check for action marker; drawn during completion */
 .goal-task-marker--action .goal-task-check {
-  opacity: 0;
+  opacity: 0 !important;
   transition: opacity 140ms ease;
 }
 .goal-task-marker--action .goal-task-check path {
@@ -1069,7 +1069,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 
 /* Animation during completion */
 .goal-task-row--completing .goal-task-marker--action .goal-task-check {
-  opacity: 1;
+  opacity: 1 !important;
 }
 .goal-task-row--completing .goal-task-marker--action .goal-task-check path {
   animation: goal-check-draw 380ms cubic-bezier(0.22, 1, 0.36, 1) 100ms forwards;

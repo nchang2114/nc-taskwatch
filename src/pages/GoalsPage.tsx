@@ -2593,9 +2593,27 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                             const dash = `${length}`
                                             checkPath.style.strokeDasharray = dash
                                             checkPath.style.strokeDashoffset = dash
+                                            console.log('[Goals] Prepared tick animation', {
+                                              bucketId: b.id,
+                                              taskId: task.id,
+                                              length,
+                                              dash,
+                                            })
+                                          } else {
+                                            console.log('[Goals] Tick path length not finite', {
+                                              bucketId: b.id,
+                                              taskId: task.id,
+                                              length,
+                                            })
                                           }
+                                        } else {
+                                          console.log('[Goals] Tick path not found for task', {
+                                            bucketId: b.id,
+                                            taskId: task.id,
+                                          })
                                         }
-                                      } catch {
+                                      } catch (err) {
+                                        console.warn('[Goals] Failed to prepare tick path', err)
                                         // Ignore measurement errors; CSS defaults remain as fallback.
                                       }
 
@@ -2680,7 +2698,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     }}
                                     aria-label="Mark task complete"
                                   >
-                                    <svg viewBox="0 0 24 24" className="goal-task-check" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="24" height="24" className="goal-task-check" aria-hidden="true">
                                       <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
                                   </button>
@@ -3162,16 +3180,16 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           </svg>
                                         </button>
                                       )}
-                                      <button
-                                        type="button"
-                                        className="goal-task-marker goal-task-marker--completed"
-                                        onClick={() => onToggleTaskComplete(b.id, task.id)}
-                                        aria-label="Mark task incomplete"
-                                      >
-                                        <svg viewBox="0 0 24 24" className="goal-task-check" aria-hidden="true">
-                                          <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                      </button>
+                                  <button
+                                    type="button"
+                                    className="goal-task-marker goal-task-marker--completed"
+                                    onClick={() => onToggleTaskComplete(b.id, task.id)}
+                                    aria-label="Mark task incomplete"
+                                  >
+                                    <svg viewBox="0 0 24 24" width="24" height="24" className="goal-task-check" aria-hidden="true">
+                                      <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  </button>
                                       {isEditing ? (
                                         <span
                                           className="goal-task-input"
