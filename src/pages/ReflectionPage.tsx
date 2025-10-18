@@ -853,6 +853,75 @@ export default function ReflectionPage() {
     return map
   }, [goalLookup, goalColorLookup, activeSession])
 
+  const goalOptions = useMemo(() => {
+    const set = new Set<string>()
+    goalsSnapshot.forEach((goal) => {
+      const trimmed = goal.name?.trim()
+      if (trimmed) {
+        set.add(trimmed)
+      }
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+  }, [goalsSnapshot])
+
+  const bucketOptionsByGoal = useMemo(() => {
+    const map = new Map<string, string[]>()
+    goalsSnapshot.forEach((goal) => {
+      const goalName = goal.name?.trim()
+      if (!goalName) {
+        return
+      }
+      const bucketNames = goal.buckets
+        .map((bucket) => bucket.name?.trim())
+        .filter((name): name is string => Boolean(name))
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+      if (bucketNames.length > 0) {
+        map.set(goalName, bucketNames)
+      }
+    })
+    return map
+  }, [goalsSnapshot])
+
+  const allBucketOptions = useMemo(() => {
+    const set = new Set<string>()
+    goalsSnapshot.forEach((goal) => {
+      goal.buckets.forEach((bucket) => {
+        const trimmed = bucket.name?.trim()
+        if (trimmed) {
+          set.add(trimmed)
+        }
+      })
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+  }, [goalsSnapshot])
+
+  const trimmedDraftGoal = historyDraft.goalName.trim()
+  const trimmedDraftBucket = historyDraft.bucketName.trim()
+
+  const availableBucketOptions = useMemo(() => {
+    if (trimmedDraftGoal.length > 0) {
+      const match = bucketOptionsByGoal.get(trimmedDraftGoal)
+      if (match && match.length > 0) {
+        return match
+      }
+    }
+    return allBucketOptions
+  }, [trimmedDraftGoal, bucketOptionsByGoal, allBucketOptions])
+
+  const resolvedGoalOptions = useMemo(() => {
+    if (trimmedDraftGoal.length > 0 && !goalOptions.includes(trimmedDraftGoal)) {
+      return [trimmedDraftGoal, ...goalOptions]
+    }
+    return goalOptions
+  }, [goalOptions, trimmedDraftGoal])
+
+  const resolvedBucketOptions = useMemo(() => {
+    if (trimmedDraftBucket.length > 0 && !availableBucketOptions.includes(trimmedDraftBucket)) {
+      return [trimmedDraftBucket, ...availableBucketOptions]
+    }
+    return availableBucketOptions
+  }, [availableBucketOptions, trimmedDraftBucket])
+
   const selectedHistoryEntry = useMemo(() => {
     if (!selectedHistoryId) {
       return null
@@ -1004,7 +1073,7 @@ export default function ReflectionPage() {
   )
 
   const handleHistoryFieldChange = useCallback(
-    (field: keyof HistoryDraftState) => (event: ChangeEvent<HTMLInputElement>) => {
+    (field: keyof HistoryDraftState) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { value } = event.target
       setHistoryDraft((draft) => ({ ...draft, [field]: value }))
     },
@@ -1114,6 +1183,24 @@ export default function ReflectionPage() {
       document.removeEventListener('pointerdown', handlePointerDown)
     }
   }, [handleCancelHistoryEdit, selectedHistoryId, timelineRef])
+
+  useEffect(() => {
+    const goalName = historyDraft.goalName.trim()
+    const bucketName = historyDraft.bucketName.trim()
+    if (goalName.length === 0 || bucketName.length === 0) {
+      return
+    }
+    const allowedBuckets = bucketOptionsByGoal.get(goalName)
+    if (!allowedBuckets || allowedBuckets.includes(bucketName)) {
+      return
+    }
+    setHistoryDraft((draft) => {
+      if (draft.bucketName.trim().length === 0) {
+        return draft
+      }
+      return { ...draft, bucketName: '' }
+    })
+  }, [historyDraft.goalName, historyDraft.bucketName, bucketOptionsByGoal])
 
   const handleTimelineBlockKeyDown = useCallback(
     (entry: HistoryEntry) => (event: KeyboardEvent<HTMLDivElement>) => {
@@ -1358,6 +1445,7 @@ export default function ReflectionPage() {
     })
   }, [effectiveHistory, dayStart, dayEnd, enhancedGoalLookup, goalColorLookup])
   const timelineRowCount = daySegments.length > 0 ? daySegments.reduce((max, segment) => Math.max(max, segment.lane), 0) + 1 : 1
+  const showCurrentTimeIndicator = typeof currentTimePercent === 'number' && editingHistoryId === null
   const timelineStyle = useMemo(() => ({ '--history-timeline-rows': timelineRowCount } as CSSProperties), [timelineRowCount])
   const timelineTicks = useMemo(() => {
     const ticks: Array<{ hour: number; showLabel: boolean }> = []
@@ -1418,7 +1506,7 @@ export default function ReflectionPage() {
           onClick={handleTimelineBackgroundClick}
         >
           <div className="history-timeline__bar">
-            {typeof currentTimePercent === 'number' ? (
+            {showCurrentTimeIndicator ? (
               <div
                 className="history-timeline__current-time"
                 style={{ left: `${currentTimePercent}%` }}
@@ -1450,7 +1538,9 @@ export default function ReflectionPage() {
                   : segment.bucketLabel
                 : segment.bucketLabel
               const isAnchoredTooltip = segment.entry.id === anchoredTooltipId
-              const tooltipClassName = `history-timeline__tooltip${isSelected ? ' history-timeline__tooltip--pinned' : ''}`
+              const tooltipClassName = `history-timeline__tooltip${isSelected ? ' history-timeline__tooltip--pinned' : ''}${
+                isEditing ? ' history-timeline__tooltip--editing' : ''
+              }`
               const overlayTitleId = `history-tooltip-title-${segment.id}`
               const tooltipContent = (
                 <div className="history-timeline__tooltip-content">
@@ -1484,25 +1574,34 @@ export default function ReflectionPage() {
                             <div className="history-timeline__field-group">
                               <label className="history-timeline__field">
                                 <span className="history-timeline__field-text">Goal</span>
-                                <input
-                                  className="history-timeline__field-input"
-                                  type="text"
+                                <select
+                                  className="history-timeline__field-input history-timeline__field-input--select"
                                   value={historyDraft.goalName}
-                                  placeholder={segment.goalLabel}
                                   onChange={handleHistoryFieldChange('goalName')}
-                                  onKeyDown={handleHistoryFieldKeyDown}
-                                />
+                                >
+                                  <option value="">No goal</option>
+                                  {resolvedGoalOptions.map((option) => (
+                                    <option key={`goal-option-${option}`} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
+                                </select>
                               </label>
                               <label className="history-timeline__field">
                                 <span className="history-timeline__field-text">Bucket</span>
-                                <input
-                                  className="history-timeline__field-input"
-                                  type="text"
+                                <select
+                                  className="history-timeline__field-input history-timeline__field-input--select"
                                   value={historyDraft.bucketName}
-                                  placeholder={segment.bucketLabel || 'Optional'}
                                   onChange={handleHistoryFieldChange('bucketName')}
-                                  onKeyDown={handleHistoryFieldKeyDown}
-                                />
+                                  disabled={availableBucketOptions.length === 0}
+                                >
+                                  <option value="">No bucket</option>
+                                  {resolvedBucketOptions.map((option) => (
+                                    <option key={`bucket-option-${option}`} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
+                                </select>
                               </label>
                             </div>
                           </div>
@@ -1566,9 +1665,9 @@ export default function ReflectionPage() {
                 <div
                   className={tooltipClassName}
                   role="presentation"
-                  ref={isAnchoredTooltip ? setActiveTooltipNode : null}
+                  ref={isAnchoredTooltip && !isEditing ? setActiveTooltipNode : null}
                   style={
-                    isAnchoredTooltip
+                    isAnchoredTooltip && !isEditing
                       ? ({
                           '--history-tooltip-shift-x': `${activeTooltipOffsets.x}px`,
                           '--history-tooltip-shift-y': `${activeTooltipOffsets.y}px`,
