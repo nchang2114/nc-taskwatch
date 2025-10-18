@@ -50,6 +50,8 @@ type HistoryDraftState = {
   taskName: string
   goalName: string
   bucketName: string
+  startedAt: number | null
+  endedAt: number | null
 }
 
 type GoalGradientInfo = {
@@ -213,7 +215,43 @@ const formatHourLabel = (hour24: number) => {
   return `${normalized - 12} PM`
 }
 
+const MINUTE_MS = 60 * 1000
 const DAY_DURATION_MS = 24 * 60 * 60 * 1000
+
+const formatTimeInputValue = (timestamp: number | null): string => {
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
+    return ''
+  }
+  const date = new Date(timestamp)
+  const hours = date.getHours().toString().padStart(2, '0')
+  const minutes = date.getMinutes().toString().padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
+const applyTimeToTimestamp = (reference: number, timeValue: string): number | null => {
+  if (!Number.isFinite(reference) || typeof timeValue !== 'string') {
+    return null
+  }
+  const [hoursStr, minutesStr] = timeValue.split(':')
+  if (hoursStr === undefined || minutesStr === undefined) {
+    return null
+  }
+  const hours = Number(hoursStr)
+  const minutes = Number(minutesStr)
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return null
+  }
+  const base = new Date(reference)
+  base.setHours(hours, minutes, 0, 0)
+  return base.getTime()
+}
+
+const resolveTimestamp = (value: number | null | undefined, fallback: number): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  return fallback
+}
 
 const makeHistoryId = () => {
   try {
@@ -745,7 +783,13 @@ export default function ReflectionPage() {
   const [journal, setJournal] = useState('')
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
   const [hoveredHistoryId, setHoveredHistoryId] = useState<string | null>(null)
-  const [historyDraft, setHistoryDraft] = useState<HistoryDraftState>({ taskName: '', goalName: '', bucketName: '' })
+  const [historyDraft, setHistoryDraft] = useState<HistoryDraftState>({
+    taskName: '',
+    goalName: '',
+    bucketName: '',
+    startedAt: null,
+    endedAt: null,
+  })
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement | null>(null)
   const activeTooltipRef = useRef<HTMLDivElement | null>(null)
@@ -939,6 +983,8 @@ export default function ReflectionPage() {
       taskName: selectedHistoryEntry.taskName,
       goalName: selectedHistoryEntry.goalName ?? '',
       bucketName: selectedHistoryEntry.bucketName ?? '',
+      startedAt: selectedHistoryEntry.startedAt,
+      endedAt: selectedHistoryEntry.endedAt,
     })
     setEditingHistoryId(null)
   }, [selectedHistoryEntry])
@@ -1007,7 +1053,7 @@ export default function ReflectionPage() {
       if (selectedHistoryId === entryId) {
         setSelectedHistoryId(null)
         setEditingHistoryId(null)
-        setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+        setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
       }
       updateHistory((current) => [...current.slice(0, index), ...current.slice(index + 1)])
     },
@@ -1054,18 +1100,31 @@ export default function ReflectionPage() {
     setHoveredHistoryId(null)
     setSelectedHistoryId(entry.id)
     setEditingHistoryId(entry.id)
-    setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+    setHistoryDraft({
+      taskName: '',
+      goalName: '',
+      bucketName: '',
+      startedAt,
+      endedAt,
+    })
   }, [updateHistory])
 
   const handleSelectHistorySegment = useCallback(
     (entry: HistoryEntry) => {
-      if (selectedHistoryId !== entry.id) {
-        setHistoryDraft({
-          taskName: entry.taskName,
-          goalName: entry.goalName ?? '',
-          bucketName: entry.bucketName ?? '',
-        })
+      if (selectedHistoryId === entry.id) {
+        setSelectedHistoryId(null)
+        setEditingHistoryId(null)
+        setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
+        setHoveredHistoryId((current) => (current === entry.id ? null : current))
+        return
       }
+      setHistoryDraft({
+        taskName: entry.taskName,
+        goalName: entry.goalName ?? '',
+        bucketName: entry.bucketName ?? '',
+        startedAt: entry.startedAt,
+        endedAt: entry.endedAt,
+      })
       setSelectedHistoryId(entry.id)
       setEditingHistoryId(null)
     },
@@ -1073,7 +1132,7 @@ export default function ReflectionPage() {
   )
 
   const handleHistoryFieldChange = useCallback(
-    (field: keyof HistoryDraftState) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    (field: 'taskName' | 'goalName' | 'bucketName') => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { value } = event.target
       setHistoryDraft((draft) => ({ ...draft, [field]: value }))
     },
@@ -1087,6 +1146,22 @@ export default function ReflectionPage() {
     const nextTaskName = historyDraft.taskName.trim()
     const nextGoalName = historyDraft.goalName.trim()
     const nextBucketName = historyDraft.bucketName.trim()
+    const draftStartedAt = historyDraft.startedAt ?? selectedHistoryEntry.startedAt
+    const draftEndedAt = historyDraft.endedAt ?? selectedHistoryEntry.endedAt
+    let nextStartedAt = Number.isFinite(draftStartedAt) ? draftStartedAt : selectedHistoryEntry.startedAt
+    let nextEndedAt = Number.isFinite(draftEndedAt) ? draftEndedAt : selectedHistoryEntry.endedAt
+    if (!Number.isFinite(nextStartedAt)) {
+      nextStartedAt = selectedHistoryEntry.startedAt
+    }
+    if (!Number.isFinite(nextEndedAt)) {
+      nextEndedAt = selectedHistoryEntry.endedAt
+    }
+    while (nextEndedAt <= nextStartedAt) {
+      nextEndedAt += DAY_DURATION_MS
+    }
+    const nextElapsed = Math.max(nextEndedAt - nextStartedAt, 1)
+    const normalizedGoalName = nextGoalName
+    const normalizedBucketName = nextBucketName
     updateHistory((current) => {
       const index = current.findIndex((entry) => entry.id === selectedHistoryEntry.id)
       if (index === -1) {
@@ -1095,8 +1170,10 @@ export default function ReflectionPage() {
       const target = current[index]
       if (
         target.taskName === nextTaskName &&
-        (target.goalName ?? '') === nextGoalName &&
-        (target.bucketName ?? '') === nextBucketName
+        (target.goalName ?? '') === normalizedGoalName &&
+        (target.bucketName ?? '') === normalizedBucketName &&
+        target.startedAt === nextStartedAt &&
+        target.endedAt === nextEndedAt
       ) {
         return current
       }
@@ -1104,15 +1181,20 @@ export default function ReflectionPage() {
       next[index] = {
         ...target,
         taskName: nextTaskName,
-        goalName: nextGoalName.length > 0 ? nextGoalName : null,
-        bucketName: nextBucketName.length > 0 ? nextBucketName : null,
+        goalName: normalizedGoalName.length > 0 ? normalizedGoalName : null,
+        bucketName: normalizedBucketName.length > 0 ? normalizedBucketName : null,
+        startedAt: nextStartedAt,
+        endedAt: nextEndedAt,
+        elapsed: nextElapsed,
       }
       return next
     })
     setHistoryDraft({
       taskName: nextTaskName,
-      goalName: nextGoalName,
-      bucketName: nextBucketName,
+      goalName: normalizedGoalName,
+      bucketName: normalizedBucketName,
+      startedAt: nextStartedAt,
+      endedAt: nextEndedAt,
     })
     setEditingHistoryId(null)
   }, [historyDraft, selectedHistoryEntry, updateHistory])
@@ -1129,6 +1211,8 @@ export default function ReflectionPage() {
             taskName: selectedHistoryEntry.taskName,
             goalName: selectedHistoryEntry.goalName ?? '',
             bucketName: selectedHistoryEntry.bucketName ?? '',
+            startedAt: selectedHistoryEntry.startedAt,
+            endedAt: selectedHistoryEntry.endedAt,
           })
         }
         setEditingHistoryId(null)
@@ -1143,9 +1227,11 @@ export default function ReflectionPage() {
         taskName: selectedHistoryEntry.taskName,
         goalName: selectedHistoryEntry.goalName ?? '',
         bucketName: selectedHistoryEntry.bucketName ?? '',
+        startedAt: selectedHistoryEntry.startedAt,
+        endedAt: selectedHistoryEntry.endedAt,
       })
     } else {
-      setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+      setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
     }
     setEditingHistoryId(null)
   }, [selectedHistoryEntry])
@@ -1160,6 +1246,8 @@ export default function ReflectionPage() {
       taskName: entry.taskName,
       goalName: entry.goalName ?? '',
       bucketName: entry.bucketName ?? '',
+      startedAt: entry.startedAt,
+      endedAt: entry.endedAt,
     })
   }, [])
 
@@ -1175,7 +1263,7 @@ export default function ReflectionPage() {
       }
       handleCancelHistoryEdit()
       setSelectedHistoryId(null)
-      setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+      setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
       setHoveredHistoryId(null)
     }
     document.addEventListener('pointerdown', handlePointerDown)
@@ -1213,7 +1301,7 @@ export default function ReflectionPage() {
       } else if (event.key === 'Escape' && selectedHistoryId === entry.id) {
         event.preventDefault()
         setSelectedHistoryId(null)
-        setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+        setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
         setEditingHistoryId(null)
       }
     },
@@ -1222,7 +1310,7 @@ export default function ReflectionPage() {
 
   const handleTimelineBackgroundClick = useCallback(() => {
     setSelectedHistoryId(null)
-    setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+    setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
     setEditingHistoryId(null)
     setHoveredHistoryId(null)
   }, [])
@@ -1336,7 +1424,7 @@ export default function ReflectionPage() {
     const exists = effectiveHistory.some((entry) => entry.id === selectedHistoryId)
     if (!exists) {
       setSelectedHistoryId(null)
-      setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+      setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
     }
   }, [effectiveHistory, selectedHistoryId])
 
@@ -1540,6 +1628,66 @@ export default function ReflectionPage() {
                   ? trimmedBucketDraft
                   : segment.bucketLabel
                 : segment.bucketLabel
+              const baseStartedAt = segment.entry.startedAt
+              const baseEndedAt = segment.entry.endedAt
+              const resolvedStartedAt = isSelected ? resolveTimestamp(historyDraft.startedAt, baseStartedAt) : baseStartedAt
+              const resolvedEndedAt = isSelected ? resolveTimestamp(historyDraft.endedAt, baseEndedAt) : baseEndedAt
+              const resolvedDurationMs = Math.max(resolvedEndedAt - resolvedStartedAt, 0)
+              const startTimeInputValue = formatTimeInputValue(resolvedStartedAt)
+              const endTimeInputValue = formatTimeInputValue(resolvedEndedAt)
+              const durationMinutesValue = Math.max(1, Math.round(resolvedDurationMs / MINUTE_MS)).toString()
+              const handleStartTimeInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+                const { value } = event.target
+                setHistoryDraft((draft) => {
+                  if (!isEditing || selectedHistoryId !== segment.entry.id) {
+                    return draft
+                  }
+                  if (value.trim().length === 0) {
+                    return { ...draft, startedAt: null }
+                  }
+                  const reference = resolveTimestamp(draft.startedAt, baseStartedAt)
+                  const parsed = applyTimeToTimestamp(reference, value)
+                  if (parsed === null) {
+                    return draft
+                  }
+                  return { ...draft, startedAt: parsed }
+                })
+              }
+              const handleEndTimeInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+                const { value } = event.target
+                setHistoryDraft((draft) => {
+                  if (!isEditing || selectedHistoryId !== segment.entry.id) {
+                    return draft
+                  }
+                  if (value.trim().length === 0) {
+                    return { ...draft, endedAt: null }
+                  }
+                  const reference = resolveTimestamp(draft.endedAt, baseEndedAt)
+                  const parsed = applyTimeToTimestamp(reference, value)
+                  if (parsed === null) {
+                    return draft
+                  }
+                  return { ...draft, endedAt: parsed }
+                })
+              }
+              const handleDurationInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+                const value = event.target.value
+                setHistoryDraft((draft) => {
+                  if (!isEditing || selectedHistoryId !== segment.entry.id) {
+                    return draft
+                  }
+                  if (value.trim().length === 0) {
+                    return draft
+                  }
+                  const minutes = Number(value)
+                  if (!Number.isFinite(minutes) || minutes <= 0) {
+                    return draft
+                  }
+                  const normalizedMinutes = Math.max(1, Math.round(minutes))
+                  const baseStart = resolveTimestamp(draft.startedAt, baseStartedAt)
+                  return { ...draft, endedAt: baseStart + normalizedMinutes * MINUTE_MS }
+                })
+              }
               const isAnchoredTooltip = segment.entry.id === anchoredTooltipId
               const tooltipClassName = `history-timeline__tooltip${isSelected ? ' history-timeline__tooltip--pinned' : ''}${
                 isEditing ? ' history-timeline__tooltip--editing' : ''
@@ -1551,13 +1699,13 @@ export default function ReflectionPage() {
                     {displayTask}
                   </p>
                   <p className="history-timeline__tooltip-time">
-                    {formatTimeOfDay(segment.start)} — {formatTimeOfDay(segment.end)}
+                    {formatTimeOfDay(resolvedStartedAt)} — {formatTimeOfDay(resolvedEndedAt)}
                   </p>
                   <p className="history-timeline__tooltip-meta">
                     {displayGoal}
                     {displayBucket && displayBucket !== displayGoal ? ` → ${displayBucket}` : ''}
                   </p>
-                  <p className="history-timeline__tooltip-duration">{formatDuration(segment.end - segment.start)}</p>
+                  <p className="history-timeline__tooltip-duration">{formatDuration(resolvedDurationMs)}</p>
                   {isSelected ? (
                     <>
                       {isEditing ? (
@@ -1574,6 +1722,42 @@ export default function ReflectionPage() {
                                 onKeyDown={handleHistoryFieldKeyDown}
                               />
                             </label>
+                            <div className="history-timeline__field-group">
+                              <label className="history-timeline__field">
+                                <span className="history-timeline__field-text">Start time</span>
+                                <input
+                                  className="history-timeline__field-input"
+                                  type="time"
+                                  step={60}
+                                  value={startTimeInputValue}
+                                  onChange={handleStartTimeInputChange}
+                                  onKeyDown={handleHistoryFieldKeyDown}
+                                />
+                              </label>
+                              <label className="history-timeline__field">
+                                <span className="history-timeline__field-text">End time</span>
+                                <input
+                                  className="history-timeline__field-input"
+                                  type="time"
+                                  step={60}
+                                  value={endTimeInputValue}
+                                  onChange={handleEndTimeInputChange}
+                                  onKeyDown={handleHistoryFieldKeyDown}
+                                />
+                              </label>
+                              <label className="history-timeline__field">
+                                <span className="history-timeline__field-text">Duration (minutes)</span>
+                                <input
+                                  className="history-timeline__field-input"
+                                  type="number"
+                                  min={1}
+                                  inputMode="numeric"
+                                  value={durationMinutesValue}
+                                  onChange={handleDurationInputChange}
+                                  onKeyDown={handleHistoryFieldKeyDown}
+                                />
+                              </label>
+                            </div>
                             <div className="history-timeline__field-group">
                               <label className="history-timeline__field">
                                 <span className="history-timeline__field-text">Goal</span>
@@ -1698,7 +1882,7 @@ export default function ReflectionPage() {
                   tabIndex={0}
                   role="button"
                   aria-pressed={isSelected}
-                  aria-label={`${segment.tooltipTask} from ${formatTimeOfDay(segment.start)} to ${formatTimeOfDay(segment.end)}`}
+                  aria-label={`${segment.tooltipTask} from ${formatTimeOfDay(resolvedStartedAt)} to ${formatTimeOfDay(resolvedEndedAt)}`}
                   onClick={(event) => {
                     event.stopPropagation()
                     handleSelectHistorySegment(segment.entry)
