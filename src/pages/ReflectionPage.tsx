@@ -9,7 +9,9 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
+  type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import './ReflectionPage.css'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
 
@@ -747,6 +749,9 @@ export default function ReflectionPage() {
   const [hoveredHistoryId, setHoveredHistoryId] = useState<string | null>(null)
   const [historyDraft, setHistoryDraft] = useState<HistoryDraftState>({ taskName: '', goalName: '', bucketName: '' })
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 580px)').matches : false,
+  )
   const timelineRef = useRef<HTMLDivElement | null>(null)
   const activeTooltipRef = useRef<HTMLDivElement | null>(null)
   const [activeTooltipOffsets, setActiveTooltipOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -789,6 +794,23 @@ export default function ReflectionPage() {
       }
       return { x: shiftX, y: shiftY }
     })
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const query = window.matchMedia('(max-width: 580px)')
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsMobileViewport(event.matches)
+    }
+    setIsMobileViewport(query.matches)
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', handleChange)
+      return () => query.removeEventListener('change', handleChange)
+    }
+    query.addListener(handleChange)
+    return () => query.removeListener(handleChange)
   }, [])
 
   const setActiveTooltipNode = useCallback(
@@ -889,7 +911,7 @@ export default function ReflectionPage() {
       return
     }
     const activeTooltipId = hoveredHistoryId ?? selectedHistoryId
-    if (!activeTooltipId) {
+    if (!activeTooltipId || isMobileViewport) {
       setActiveTooltipOffsets((prev) => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
       return
     }
@@ -922,7 +944,7 @@ export default function ReflectionPage() {
       window.removeEventListener('scroll', handleUpdate, true)
       timelineEl?.removeEventListener('scroll', handleUpdate)
     }
-  }, [hoveredHistoryId, selectedHistoryId, updateActiveTooltipOffsets])
+  }, [hoveredHistoryId, selectedHistoryId, updateActiveTooltipOffsets, isMobileViewport])
 
   const handleDeleteHistoryEntry = useCallback(
     (entryId: string) => (event: MouseEvent<HTMLButtonElement>) => {
@@ -1374,6 +1396,8 @@ export default function ReflectionPage() {
     return date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
   }, [dayStart])
 
+  let mobileTooltipPortal: ReactNode = null
+
   return (
     <section className="site-main__inner reflection-page" aria-label="Reflection">
       <div className="reflection-intro">
@@ -1451,6 +1475,149 @@ export default function ReflectionPage() {
                 : segment.bucketLabel
               const isAnchoredTooltip = segment.entry.id === anchoredTooltipId
               const tooltipClassName = `history-timeline__tooltip${isSelected ? ' history-timeline__tooltip--pinned' : ''}`
+              const shouldPortalTooltip = isAnchoredTooltip && isMobileViewport && typeof document !== 'undefined'
+              const tooltipStyle =
+                isAnchoredTooltip && !isMobileViewport
+                  ? ({
+                      '--history-tooltip-shift-x': `${activeTooltipOffsets.x}px`,
+                      '--history-tooltip-shift-y': `${activeTooltipOffsets.y}px`,
+                    } as CSSProperties)
+                  : undefined
+              const tooltipInner = (
+                <div
+                  className={tooltipClassName}
+                  role="presentation"
+                  ref={isAnchoredTooltip ? setActiveTooltipNode : null}
+                  style={tooltipStyle}
+                  onClick={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onMouseDown={(event) => event.stopPropagation()}
+                >
+                  <div className="history-timeline__tooltip-content">
+                    <p className="history-timeline__tooltip-task">{displayTask}</p>
+                    <p className="history-timeline__tooltip-time">
+                      {formatTimeOfDay(segment.start)} — {formatTimeOfDay(segment.end)}
+                    </p>
+                    <p className="history-timeline__tooltip-meta">
+                      {displayGoal}
+                      {displayBucket && displayBucket !== displayGoal ? ` → ${displayBucket}` : ''}
+                    </p>
+                    <p className="history-timeline__tooltip-duration">{formatDuration(segment.end - segment.start)}</p>
+                    {isSelected ? (
+                      <>
+                        {isEditing ? (
+                          <>
+                            <div className="history-timeline__tooltip-form">
+                              <label className="history-timeline__field">
+                                <span className="history-timeline__field-text">Session name</span>
+                                <input
+                                  className="history-timeline__field-input"
+                                  type="text"
+                                  value={historyDraft.taskName}
+                                  placeholder={segment.tooltipTask}
+                                  onChange={handleHistoryFieldChange('taskName')}
+                                  onKeyDown={handleHistoryFieldKeyDown}
+                                />
+                              </label>
+                              <div className="history-timeline__field-group">
+                                <label className="history-timeline__field">
+                                  <span className="history-timeline__field-text">Goal</span>
+                                  <input
+                                    className="history-timeline__field-input"
+                                    type="text"
+                                    value={historyDraft.goalName}
+                                    placeholder={segment.goalLabel}
+                                    onChange={handleHistoryFieldChange('goalName')}
+                                    onKeyDown={handleHistoryFieldKeyDown}
+                                  />
+                                </label>
+                                <label className="history-timeline__field">
+                                  <span className="history-timeline__field-text">Bucket</span>
+                                  <input
+                                    className="history-timeline__field-input"
+                                    type="text"
+                                    value={historyDraft.bucketName}
+                                    placeholder={segment.bucketLabel || 'Optional'}
+                                    onChange={handleHistoryFieldChange('bucketName')}
+                                    onKeyDown={handleHistoryFieldKeyDown}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                            <div className="history-timeline__actions">
+                              <button
+                                type="button"
+                                className="history-timeline__action-button history-timeline__action-button--primary"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleSaveHistoryDraft()
+                                }}
+                              >
+                                Save changes
+                              </button>
+                              <button
+                                type="button"
+                                className="history-timeline__action-button"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleCancelHistoryEdit()
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="history-timeline__actions">
+                            <button
+                              type="button"
+                              className="history-timeline__action-button history-timeline__action-button--primary"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                if (!isActiveSessionSegment) {
+                                  handleStartEditingHistoryEntry(segment.entry)
+                                }
+                              }}
+                              disabled={isActiveSessionSegment}
+                            >
+                              Edit details
+                            </button>
+                          </div>
+                        )}
+                        {isActiveSessionSegment ? (
+                          <p className="history-timeline__tooltip-note">Active session updates live; finish to edit details.</p>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {segment.deletable ? (
+                      <button
+                        type="button"
+                        className="history-timeline__tooltip-delete"
+                        onClick={handleDeleteHistoryEntry(segment.entry.id)}
+                      >
+                        Delete session
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              )
+              if (shouldPortalTooltip && typeof document !== 'undefined') {
+                mobileTooltipPortal = createPortal(
+                  <div
+                    className="history-mobile-overlay"
+                    role="presentation"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      handleTimelineBackgroundClick()
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    {tooltipInner}
+                  </div>,
+                  document.body,
+                )
+              }
               return (
                 <div
                   key={`${segment.id}-${segment.start}-${segment.end}`}
@@ -1483,132 +1650,12 @@ export default function ReflectionPage() {
                   }
                   onKeyDown={handleTimelineBlockKeyDown(segment.entry)}
                 >
-                  <div
-                    className={tooltipClassName}
-                    role="presentation"
-                    ref={isAnchoredTooltip ? setActiveTooltipNode : null}
-                    style={
-                      isAnchoredTooltip
-                        ? ({
-                            '--history-tooltip-shift-x': `${activeTooltipOffsets.x}px`,
-                            '--history-tooltip-shift-y': `${activeTooltipOffsets.y}px`,
-                          } as CSSProperties)
-                        : undefined
-                    }
-                    onClick={(event) => event.stopPropagation()}
-                    onMouseDown={(event) => event.stopPropagation()}
-                  >
-                    <div className="history-timeline__tooltip-content">
-                      <p className="history-timeline__tooltip-task">{displayTask}</p>
-                      <p className="history-timeline__tooltip-time">
-                        {formatTimeOfDay(segment.start)} — {formatTimeOfDay(segment.end)}
-                      </p>
-                      <p className="history-timeline__tooltip-meta">
-                        {displayGoal}
-                        {displayBucket && displayBucket !== displayGoal ? ` → ${displayBucket}` : ''}
-                      </p>
-                      <p className="history-timeline__tooltip-duration">{formatDuration(segment.end - segment.start)}</p>
-                      {isSelected ? (
-                        <>
-                          {isEditing ? (
-                            <>
-                              <div className="history-timeline__tooltip-form">
-                                <label className="history-timeline__field">
-                                  <span className="history-timeline__field-text">Session name</span>
-                                  <input
-                                    className="history-timeline__field-input"
-                                    type="text"
-                                    value={historyDraft.taskName}
-                                    placeholder={segment.tooltipTask}
-                                    onChange={handleHistoryFieldChange('taskName')}
-                                    onKeyDown={handleHistoryFieldKeyDown}
-                                  />
-                                </label>
-                                <div className="history-timeline__field-group">
-                                  <label className="history-timeline__field">
-                                    <span className="history-timeline__field-text">Goal</span>
-                                    <input
-                                      className="history-timeline__field-input"
-                                      type="text"
-                                      value={historyDraft.goalName}
-                                      placeholder={segment.goalLabel}
-                                      onChange={handleHistoryFieldChange('goalName')}
-                                      onKeyDown={handleHistoryFieldKeyDown}
-                                    />
-                                  </label>
-                                  <label className="history-timeline__field">
-                                    <span className="history-timeline__field-text">Bucket</span>
-                                    <input
-                                      className="history-timeline__field-input"
-                                      type="text"
-                                      value={historyDraft.bucketName}
-                                      placeholder={segment.bucketLabel || 'Optional'}
-                                      onChange={handleHistoryFieldChange('bucketName')}
-                                      onKeyDown={handleHistoryFieldKeyDown}
-                                    />
-                                  </label>
-                                </div>
-                              </div>
-                              <div className="history-timeline__actions">
-                                <button
-                                  type="button"
-                                  className="history-timeline__action-button history-timeline__action-button--primary"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    handleSaveHistoryDraft()
-                                  }}
-                                >
-                                  Save changes
-                                </button>
-                                <button
-                                  type="button"
-                                  className="history-timeline__action-button"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    handleCancelHistoryEdit()
-                                  }}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="history-timeline__actions">
-                              <button
-                                type="button"
-                                className="history-timeline__action-button history-timeline__action-button--primary"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  if (!isActiveSessionSegment) {
-                                    handleStartEditingHistoryEntry(segment.entry)
-                                  }
-                                }}
-                                disabled={isActiveSessionSegment}
-                              >
-                                Edit details
-                              </button>
-                            </div>
-                          )}
-                          {isActiveSessionSegment ? (
-                            <p className="history-timeline__tooltip-note">Active session updates live; finish to edit details.</p>
-                          ) : null}
-                        </>
-                      ) : null}
-                      {segment.deletable ? (
-                        <button
-                          type="button"
-                          className="history-timeline__tooltip-delete"
-                          onClick={handleDeleteHistoryEntry(segment.entry.id)}
-                        >
-                          Delete session
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
+                  {shouldPortalTooltip ? null : tooltipInner}
                 </div>
               )
             })}
           </div>
+          {mobileTooltipPortal}
           <div className="history-timeline__axis">
             {timelineTicks.map((tick, index) => {
               const isFirstTick = index === 0
