@@ -1053,40 +1053,48 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 }
 
 /* Default hidden check for action marker; drawn during completion */
-.goal-task-marker--action .goal-task-check { opacity: 0; transition: opacity 140ms ease; }
+.goal-task-marker--action .goal-task-check {
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
 .goal-task-marker--action .goal-task-check path {
-  /* Crisp, opaque green tick */
   stroke: #00d601;
   stroke-width: 2.2;
   vector-effect: non-scaling-stroke;
-  stroke-dasharray: 26;
-  stroke-dashoffset: 26;
-  transition: stroke-dashoffset 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  stroke-dasharray: 22;
+  stroke-dashoffset: 22;
+  /* No transition here - animated via keyframes when completing */
   will-change: stroke-dashoffset;
 }
-/* Hover preview of tick (animate in/out) — desktops only */
+
+/* Animation during completion */
+.goal-task-row--completing .goal-task-marker--action .goal-task-check {
+  opacity: 1;
+}
+.goal-task-row--completing .goal-task-marker--action .goal-task-check path {
+  animation: goal-check-draw 380ms cubic-bezier(0.22, 1, 0.36, 1) 100ms forwards;
+}
+
+@keyframes goal-check-draw {
+  from {
+    stroke-dashoffset: 22;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Hover preview of tick (show only, no animation) – desktops only */
 @media (hover: hover) and (pointer: fine) {
   .has-hover .goal-task-marker--action:hover .goal-task-check,
-  .has-hover .goal-task-marker--action:focus-visible .goal-task-check { opacity: 1; }
+  .has-hover .goal-task-marker--action:focus-visible .goal-task-check {
+    opacity: 1;
+  }
   .has-hover .goal-task-marker--action:hover .goal-task-check path,
-  .has-hover .goal-task-marker--action:focus-visible .goal-task-check path { stroke-dashoffset: 0; }
+  .has-hover .goal-task-marker--action:focus-visible .goal-task-check path {
+    stroke-dashoffset: 0;
+  }
 }
-
-/* Completion animation: row pulse/slide, marker fills + check draws, subtle burst */
-.goal-task-row--completing {
-  /* Duration is tunable per-row via --row-complete-dur (set in JS) */
-  animation: goal-row-complete var(--row-complete-dur, 1600ms) cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  will-change: transform, opacity;
-}
-.goal-task-row--completing .goal-task-marker--action {
-  animation: goal-marker-pop 300ms cubic-bezier(0.18, 0.9, 0.24, 1.15) forwards;
-}
-.goal-task-row--completing .goal-task-marker--action .goal-task-check { opacity: 1; }
-.goal-task-row--completing .goal-task-marker--action .goal-task-check path {
-  stroke-dashoffset: 0;
-}
-.goal-task-row--completing .goal-task-marker--action::after { display: none; }
-
 /* Sparkle dots around marker */
 /* Confetti only on click (during completing state) */
 .goal-task-row--completing .goal-task-marker--action::before {
