@@ -1592,6 +1592,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
               .filter(Boolean)
               .join(' ')}
             onClick={handleCompleteFocus}
+            onPointerDown={() => {
+              if (canCompleteFocus) {
+                prepareFocusCheckAnimation()
+              }
+            }}
             aria-disabled={!canCompleteFocus}
             aria-label="Mark focus task complete"
             ref={focusCompleteButtonRef}
