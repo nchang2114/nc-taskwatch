@@ -2316,7 +2316,20 @@ html[data-theme='light'] .nav-links--drawer {
 }
 
 
-.history-undo {
+.history-controls {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.4rem, 1.2vw, 0.6rem);
+}
+
+.history-controls--floating {
+  position: absolute;
+  top: clamp(0.6rem, 2.4vw, 1.1rem);
+  right: clamp(0.75rem, 2.8vw, 1.35rem);
+  z-index: 2;
+}
+
+.history-controls__button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2334,27 +2347,33 @@ html[data-theme='light'] .nav-links--drawer {
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
 }
 
-.history-undo:disabled {
+.history-controls__button:disabled {
   opacity: 0.42;
   cursor: not-allowed;
 }
 
-.history-undo--floating {
-  position: absolute;
-  top: clamp(0.6rem, 2.4vw, 1.1rem);
-  right: clamp(0.75rem, 2.8vw, 1.35rem);
-  z-index: 2;
-}
-
-.history-undo:not(:disabled):hover {
+.history-controls__button:not(:disabled):hover {
   background: rgba(48, 62, 134, 0.8);
   border-color: rgba(134, 160, 255, 0.62);
   color: #f4f7ff;
 }
 
-.history-undo:focus-visible {
+.history-controls__button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+}
+
+.history-controls__button--primary {
+  background: linear-gradient(135deg, rgba(102, 118, 242, 0.92), rgba(54, 84, 236, 0.92));
+  border-color: rgba(150, 168, 255, 0.6);
+  color: #fff;
+  box-shadow: 0 14px 30px -14px rgba(70, 90, 220, 0.65);
+}
+
+.history-controls__button--primary:not(:disabled):hover {
+  background: linear-gradient(135deg, rgba(128, 144, 255, 0.96), rgba(64, 96, 246, 0.96));
+  border-color: rgba(186, 198, 255, 0.75);
+  color: #fff;
 }
 
 .history-list {
@@ -2740,7 +2759,7 @@ html[data-theme='light'] .nav-links--drawer {
     padding-right: clamp(3.1rem, 16vw, 4.4rem);
   }
 
-  .history-undo--floating {
+  .history-controls--floating {
     top: clamp(0.55rem, 3.2vw, 0.95rem);
     right: clamp(0.7rem, 3.6vw, 1.2rem);
   }
@@ -2766,12 +2785,12 @@ html[data-theme='light'] .nav-links--drawer {
     padding-right: clamp(2.8rem, 20vw, 3.8rem);
   }
 
-  .history-undo--floating {
+  .history-controls--floating {
     top: clamp(0.5rem, 3.6vw, 0.85rem);
     right: clamp(0.65rem, 4.6vw, 1.05rem);
   }
 
-  .history-undo {
+  .history-controls__button {
     padding: clamp(0.28rem, 1.6vw, 0.4rem) clamp(0.55rem, 4vw, 0.8rem);
     font-size: clamp(0.62rem, 3.2vw, 0.78rem);
   }
@@ -3081,16 +3100,28 @@ html[data-theme='light'] .history-section--empty {
   background: linear-gradient(150deg, rgba(244, 248, 255, 0.94) 0%, rgba(230, 238, 255, 0.92) 60%, rgba(222, 232, 252, 0.92) 100%);
 }
 
-html[data-theme='light'] .history-undo {
+html[data-theme='light'] .history-controls__button {
   background: rgba(92, 91, 255, 0.12);
   border-color: rgba(92, 91, 255, 0.26);
   color: rgba(36, 46, 102, 0.88);
 }
 
-html[data-theme='light'] .history-undo:not(:disabled):hover {
+html[data-theme='light'] .history-controls__button:not(:disabled):hover {
   background: rgba(92, 91, 255, 0.2);
   border-color: rgba(92, 91, 255, 0.36);
   color: rgba(26, 34, 82, 0.94);
+}
+
+html[data-theme='light'] .history-controls__button--primary {
+  background: linear-gradient(135deg, rgba(128, 138, 255, 0.92), rgba(64, 120, 246, 0.92));
+  border-color: rgba(144, 162, 255, 0.6);
+  color: #fff;
+}
+
+html[data-theme='light'] .history-controls__button--primary:not(:disabled):hover {
+  background: linear-gradient(135deg, rgba(146, 156, 255, 0.96), rgba(88, 140, 252, 0.96));
+  border-color: rgba(168, 182, 255, 0.75);
+  color: #fff;
 }
 
 html[data-theme='light'] .history-entry {

@@ -215,6 +215,17 @@ const formatHourLabel = (hour24: number) => {
 
 const DAY_DURATION_MS = 24 * 60 * 60 * 1000
 
+const makeHistoryId = () => {
+  try {
+    if (typeof globalThis.crypto?.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID()
+    }
+  } catch (error) {
+    console.warn('Failed to generate UUID for history entry, falling back to timestamp-based id', error)
+  }
+  return `history-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 const hashString = (value: string) => {
   let hash = 0
   for (let index = 0; index < value.length; index += 1) {
@@ -923,9 +934,15 @@ export default function ReflectionPage() {
       }
       const entry = history[index]
       setDeletedHistoryStack((stack) => [...stack, { entry, index }])
+      setHoveredHistoryId((current) => (current === entryId ? null : current))
+      if (selectedHistoryId === entryId) {
+        setSelectedHistoryId(null)
+        setEditingHistoryId(null)
+        setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+      }
       updateHistory((current) => [...current.slice(0, index), ...current.slice(index + 1)])
     },
-    [history, updateHistory],
+    [history, selectedHistoryId, updateHistory],
   )
 
   const handleUndoDelete = useCallback(() => {
@@ -944,6 +961,32 @@ export default function ReflectionPage() {
       return next
     })
   }, [deletedHistoryStack, updateHistory])
+
+  const handleAddHistoryEntry = useCallback(() => {
+    const now = Date.now()
+    const defaultDuration = 30 * 60 * 1000
+    const endedAt = now
+    const startedAt = Math.max(endedAt - defaultDuration, 0)
+    const elapsed = Math.max(endedAt - startedAt, 1)
+    const entry: HistoryEntry = {
+      id: makeHistoryId(),
+      taskName: '',
+      goalName: null,
+      bucketName: null,
+      elapsed,
+      startedAt,
+      endedAt,
+    }
+    updateHistory((current) => {
+      const next = [...current, entry]
+      next.sort((a, b) => a.startedAt - b.startedAt)
+      return next
+    })
+    setHoveredHistoryId(null)
+    setSelectedHistoryId(entry.id)
+    setEditingHistoryId(entry.id)
+    setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+  }, [updateHistory])
 
   const handleSelectHistorySegment = useCallback(
     (entry: HistoryEntry) => {
@@ -1064,6 +1107,7 @@ export default function ReflectionPage() {
       handleCancelHistoryEdit()
       setSelectedHistoryId(null)
       setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
+      setHoveredHistoryId(null)
     }
     document.addEventListener('pointerdown', handlePointerDown)
     return () => {
@@ -1090,6 +1134,7 @@ export default function ReflectionPage() {
     setSelectedHistoryId(null)
     setHistoryDraft({ taskName: '', goalName: '', bucketName: '' })
     setEditingHistoryId(null)
+    setHoveredHistoryId(null)
   }, [])
 
   useEffect(() => {
@@ -1340,15 +1385,25 @@ export default function ReflectionPage() {
         className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`}
         aria-label="Session History"
       >
-        <button
-          type="button"
-          className="history-undo history-undo--floating"
-          onClick={handleUndoDelete}
-          disabled={deletedHistoryStack.length === 0}
-          aria-label="Undo last deleted session"
-        >
-          Undo
-        </button>
+        <div className="history-controls history-controls--floating">
+          <button
+            type="button"
+            className="history-controls__button"
+            onClick={handleUndoDelete}
+            disabled={deletedHistoryStack.length === 0}
+            aria-label="Undo last deleted session"
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="history-controls__button history-controls__button--primary"
+            onClick={handleAddHistoryEntry}
+            aria-label="Add a new history session"
+          >
+            Add history
+          </button>
+        </div>
         <div className="history-section__header">
           <div className="history-section__title">
             <h2 className="history-heading">Session History</h2>
