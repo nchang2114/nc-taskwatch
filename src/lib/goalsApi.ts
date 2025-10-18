@@ -427,6 +427,20 @@ export async function deleteCompletedTasksInBucket(bucketId: string) {
   await supabase.from('tasks').delete().eq('bucket_id', bucketId).eq('completed', true)
 }
 
+export async function deleteTaskById(taskId: string, bucketId: string) {
+  if (!supabase) throw new Error('Supabase client unavailable')
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) {
+    throw new Error('[goalsApi] Missing Supabase session for task deletion')
+  }
+  await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', taskId)
+    .eq('bucket_id', bucketId)
+    .eq('user_id', session.user.id)
+}
+
 // ---------- Tasks ----------
 export async function createTask(bucketId: string, text: string) {
   if (!supabase) throw new Error('Supabase client unavailable')

@@ -15,6 +15,7 @@ import {
   setGoalStarred as apiSetGoalStarred,
   deleteBucketById as apiDeleteBucketById,
   deleteCompletedTasksInBucket as apiDeleteCompletedTasksInBucket,
+  deleteTaskById as apiDeleteTaskById,
   createTask as apiCreateTask,
   updateTaskText as apiUpdateTaskText,
   setTaskDifficulty as apiSetTaskDifficulty,
@@ -1072,6 +1073,9 @@ interface GoalRowProps {
   onToggleTaskComplete: (bucketId: string, taskId: string) => void
   onCycleTaskDifficulty: (bucketId: string, taskId: string) => void
   onToggleTaskPriority: (bucketId: string, taskId: string) => void
+  revealedDeleteTaskKey: string | null
+  onRevealDeleteTask: (key: string | null) => void
+  onDeleteCompletedTask: (goalId: string, bucketId: string, taskId: string) => void
   // Editing existing task text
   editingTasks: Record<string, string>
   onStartTaskEdit: (
@@ -1160,6 +1164,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onToggleTaskComplete,
   onCycleTaskDifficulty,
   onToggleTaskPriority,
+  revealedDeleteTaskKey,
+  onRevealDeleteTask,
+  onDeleteCompletedTask,
   editingTasks,
   onStartTaskEdit,
   onTaskEditChange,
@@ -2483,6 +2490,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     )}
                                     draggable
                                   onDragStart={(e) => {
+                                    onRevealDeleteTask(null)
                                     e.dataTransfer.setData('text/plain', task.id)
                                     e.dataTransfer.effectAllowed = 'move'
                                     const row = e.currentTarget as HTMLElement
@@ -2546,6 +2554,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       e.dataTransfer.dropEffect = 'move'
                                     }}
                                   >
+                                  <div className="goal-task-row__content">
                                   {showDetails && (
                                     <button
                                       type="button"
@@ -2580,6 +2589,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     className="goal-task-marker goal-task-marker--action"
                                     onClick={(e) => {
                                       e.stopPropagation()
+                                      onRevealDeleteTask(null)
                                       const key = completingKey(b.id, task.id)
                                       if (completingMap[key]) return
 
@@ -2953,6 +2963,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       </div>
                                     </div>
                                   )}
+                                </div>
                                 </li>
                                 {!isEditing && isFocusPromptActive ? (
                                   <li
@@ -3077,6 +3088,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     focusPromptTarget.goalId === goal.id &&
                                     focusPromptTarget.bucketId === b.id &&
                                     focusPromptTarget.taskId === task.id
+                                  const deleteKey = focusPromptKey
+                                  const isDeleteRevealed = revealedDeleteTaskKey === deleteKey
                                   
                                   return (
                                     <React.Fragment key={`${task.id}-cwrap`}>
@@ -3085,6 +3098,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         ref={(el) => registerTaskRowRef(task.id, el)}
                                         key={task.id}
                                         data-focus-prompt-key={focusPromptKey}
+                                        data-delete-key={deleteKey}
                                         className={classNames(
                                           'goal-task-row goal-task-row--completed',
                                           diffClass,
@@ -3093,9 +3107,16 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           isFocusPromptActive && 'goal-task-row--focus-prompt',
                                           showDetails && isDetailsOpen && 'goal-task-row--expanded',
                                           showDetails && hasDetailsContent && 'goal-task-row--has-details',
+                                          isDeleteRevealed && 'goal-task-row--delete-revealed',
                                         )}
                                         draggable
+                                        onContextMenu={(event) => {
+                                          event.preventDefault()
+                                          event.stopPropagation()
+                                          onRevealDeleteTask(isDeleteRevealed ? null : deleteKey)
+                                        }}
                                         onDragStart={(e) => {
+                                          onRevealDeleteTask(null)
                                           e.dataTransfer.setData('text/plain', task.id)
                                           e.dataTransfer.effectAllowed = 'move'
                                           const row = e.currentTarget as HTMLElement
@@ -3152,6 +3173,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           e.dataTransfer.dropEffect = 'move'
                                         }}
                                       >
+                                      <div className="goal-task-row__content">
                                       {showDetails && (
                                         <button
                                           type="button"
@@ -3184,7 +3206,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                   <button
                                     type="button"
                                     className="goal-task-marker goal-task-marker--completed"
-                                    onClick={() => onToggleTaskComplete(b.id, task.id)}
+                                    onClick={() => {
+                                      onRevealDeleteTask(null)
+                                      onToggleTaskComplete(b.id, task.id)
+                                    }}
                                     aria-label="Mark task incomplete"
                                   >
                                     <svg viewBox="0 0 24 24" width="24" height="24" className="goal-task-check" aria-hidden="true">
@@ -3240,11 +3265,11 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         <button
                                           type="button"
                                           className="goal-task-text goal-task-text--button"
-                                      onClick={(e) => {
+                                        onClick={(e) => {
                                         e.stopPropagation()
                                         onTaskTextClick(goal.id, b.id, task.id)
                                       }}
-                                      onDoubleClick={(e) => {
+                                        onDoubleClick={(e) => {
                                         e.preventDefault()
                                         e.stopPropagation()
                                         const container = e.currentTarget.querySelector('.goal-task-text__inner') as HTMLElement | null
@@ -3432,7 +3457,31 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           </div>
                                         </div>
                                       )}
-                                    </li>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="goal-task-row__delete"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    onRevealDeleteTask(null)
+                                    onDeleteCompletedTask(goal.id, b.id, task.id)
+                                  }}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  aria-label="Delete task permanently"
+                                  title="Delete task"
+                                >
+                                  <svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-row__delete-icon">
+                                    <path
+                                      d="M9 4h6l1 2h4v2H4V6h4l1-2Zm1 5v9m4-9v9m-6 0h8a1 1 0 0 0 1-1V8H7v9a1 1 0 0 0 1 1Z"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="1.6"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                </button>
+                                </li>
                                     {!isEditing && isFocusPromptActive ? (
                                       <li
                                         key={`${task.id}-focus`}
@@ -3576,6 +3625,37 @@ export default function GoalsPage(): ReactElement {
   const taskEditRefs = useRef(new Map<string, HTMLSpanElement>())
   const submittingEdits = useRef(new Set<string>())
   const [focusPromptTarget, setFocusPromptTarget] = useState<FocusPromptTarget | null>(null)
+  const [revealedDeleteTaskKey, setRevealedDeleteTaskKey] = useState<string | null>(null)
+  useEffect(() => {
+    if (!revealedDeleteTaskKey || typeof window === 'undefined') {
+      return
+    }
+    if (typeof document !== 'undefined') {
+      const host = document.querySelector<HTMLElement>(`[data-delete-key=\"${revealedDeleteTaskKey}\"]`)
+      if (!host) {
+        setRevealedDeleteTaskKey(null)
+        return
+      }
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null
+      const key = target?.closest<HTMLElement>('[data-delete-key]')?.dataset.deleteKey ?? null
+      if (key !== revealedDeleteTaskKey) {
+        setRevealedDeleteTaskKey(null)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setRevealedDeleteTaskKey(null)
+      }
+    }
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [revealedDeleteTaskKey, goals])
   const focusPromptKeyRef = useRef<string | null>(null)
   const [isCreateGoalOpen, setIsCreateGoalOpen] = useState(false)
   const [goalNameInput, setGoalNameInput] = useState('')
@@ -4045,6 +4125,9 @@ export default function GoalsPage(): ReactElement {
   }
 
   const deleteCompletedTasks = (goalId: string, bucketId: string) => {
+    if (revealedDeleteTaskKey && revealedDeleteTaskKey.startsWith(`${goalId}__${bucketId}__`)) {
+      setRevealedDeleteTaskKey(null)
+    }
     setGoals((gs) =>
       gs.map((g) =>
         g.id === goalId
@@ -4586,6 +4669,13 @@ export default function GoalsPage(): ReactElement {
   )
 
   const toggleTaskCompletion = (goalId: string, bucketId: string, taskId: string) => {
+    setRevealedDeleteTaskKey((current) => {
+      if (!current) {
+        return current
+      }
+      const key = makeTaskFocusKey(goalId, bucketId, taskId)
+      return current === key ? null : current
+    })
     const previousGoals = goals.map((goal) => ({
       ...goal,
       buckets: goal.buckets.map((bucket) => ({
@@ -4922,6 +5012,43 @@ export default function GoalsPage(): ReactElement {
   const handleTaskEditCancel = (taskId: string) => {
     submittingEdits.current.delete(taskId)
     removeTaskEdit(taskId)
+  }
+
+  const deleteCompletedTask = (goalId: string, bucketId: string, taskId: string) => {
+    const deleteKey = makeTaskFocusKey(goalId, bucketId, taskId)
+    setRevealedDeleteTaskKey((current) => (current === deleteKey ? null : current))
+    const targetTask = goals
+      .find((goal) => goal.id === goalId)
+      ?.buckets.find((bucket) => bucket.id === bucketId)
+      ?.tasks.find((task) => task.id === taskId)
+    if (!targetTask || !targetTask.completed) {
+      return
+    }
+    setGoals((gs) =>
+      gs.map((g) =>
+        g.id === goalId
+          ? {
+              ...g,
+              buckets: g.buckets.map((b) =>
+                b.id === bucketId ? { ...b, tasks: b.tasks.filter((t) => t.id !== taskId) } : b,
+              ),
+            }
+          : g,
+      ),
+    )
+    setTaskDetails((current) => {
+      if (!current[taskId]) return current
+      const { [taskId]: _removed, ...rest } = current
+      return rest
+    })
+    removeTaskEdit(taskId)
+    taskEditRefs.current.delete(taskId)
+    setFocusPromptTarget((current) =>
+      current && current.goalId === goalId && current.bucketId === bucketId && current.taskId === taskId ? null : current,
+    )
+    apiDeleteTaskById(taskId, bucketId).catch((error) => {
+      console.warn('[GoalsPage] Failed to delete task', error)
+    })
   }
 
   const toggleCompletedSection = (bucketId: string) => {
@@ -5315,6 +5442,9 @@ export default function GoalsPage(): ReactElement {
                   onToggleTaskComplete={(bucketId, taskId) => toggleTaskCompletion(g.id, bucketId, taskId)}
                   onCycleTaskDifficulty={(bucketId, taskId) => cycleTaskDifficulty(g.id, bucketId, taskId)}
                   onToggleTaskPriority={(bucketId, taskId) => toggleTaskPriority(g.id, bucketId, taskId)}
+                  revealedDeleteTaskKey={revealedDeleteTaskKey}
+                  onRevealDeleteTask={setRevealedDeleteTaskKey}
+                  onDeleteCompletedTask={deleteCompletedTask}
                   editingTasks={taskEdits}
                   onStartTaskEdit={(goalId, bucketId, taskId, initial, options) =>
                     startTaskEdit(goalId, bucketId, taskId, initial, options)
