@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -732,9 +733,64 @@ export default function ReflectionPage() {
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [journal, setJournal] = useState('')
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
+  const [hoveredHistoryId, setHoveredHistoryId] = useState<string | null>(null)
   const [historyDraft, setHistoryDraft] = useState<HistoryDraftState>({ taskName: '', goalName: '', bucketName: '' })
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement | null>(null)
+  const activeTooltipRef = useRef<HTMLDivElement | null>(null)
+  const [activeTooltipOffsets, setActiveTooltipOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+
+  const updateActiveTooltipOffsets = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const tooltipEl = activeTooltipRef.current
+    if (!tooltipEl) {
+      setActiveTooltipOffsets((prev) => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
+      return
+    }
+
+    const rect = tooltipEl.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const padding = 16
+
+    let shiftX = 0
+    if (rect.left < padding) {
+      shiftX = padding - rect.left
+    } else if (rect.right > viewportWidth - padding) {
+      shiftX = viewportWidth - padding - rect.right
+    }
+
+    let shiftY = 0
+    if (rect.top < padding) {
+      shiftY = padding - rect.top
+    } else {
+      const overflowBottom = rect.bottom - (viewportHeight - padding)
+      if (overflowBottom > 0) {
+        shiftY = -overflowBottom
+      }
+    }
+
+    setActiveTooltipOffsets((prev) => {
+      if (prev.x === shiftX && prev.y === shiftY) {
+        return prev
+      }
+      return { x: shiftX, y: shiftY }
+    })
+  }, [])
+
+  const setActiveTooltipNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      activeTooltipRef.current = node
+      if (!node) {
+        setActiveTooltipOffsets((prev) => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
+        return
+      }
+      updateActiveTooltipOffsets()
+    },
+    [updateActiveTooltipOffsets],
+  )
 
   const persistHistory = useCallback((next: HistoryEntry[]) => {
     if (typeof window === 'undefined') {
@@ -816,6 +872,46 @@ export default function ReflectionPage() {
       return
     }
   }, [editingHistoryId, selectedHistoryEntry])
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const activeTooltipId = hoveredHistoryId ?? selectedHistoryId
+    if (!activeTooltipId) {
+      setActiveTooltipOffsets((prev) => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
+      return
+    }
+    const tooltipEl = activeTooltipRef.current
+    if (!tooltipEl) {
+      setActiveTooltipOffsets((prev) => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
+      return
+    }
+
+    const handleUpdate = () => {
+      updateActiveTooltipOffsets()
+    }
+
+    handleUpdate()
+
+    let resizeObserver: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => handleUpdate())
+      resizeObserver.observe(tooltipEl)
+    }
+
+    window.addEventListener('resize', handleUpdate)
+    window.addEventListener('scroll', handleUpdate, true)
+    const timelineEl = timelineRef.current
+    timelineEl?.addEventListener('scroll', handleUpdate)
+
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', handleUpdate)
+      window.removeEventListener('scroll', handleUpdate, true)
+      timelineEl?.removeEventListener('scroll', handleUpdate)
+    }
+  }, [hoveredHistoryId, selectedHistoryId, updateActiveTooltipOffsets])
 
   const handleDeleteHistoryEntry = useCallback(
     (entryId: string) => (event: MouseEvent<HTMLButtonElement>) => {
@@ -1221,10 +1317,12 @@ export default function ReflectionPage() {
   const timelineTicks = useMemo(() => {
     const ticks: Array<{ hour: number; showLabel: boolean }> = []
     for (let hour = 0; hour <= 24; hour += 1) {
-      ticks.push({ hour, showLabel: hour % 3 === 0 })
+      const isLabeledTick = hour % 6 === 0 && hour < 24
+      ticks.push({ hour, showLabel: isLabeledTick })
     }
     return ticks
   }, [])
+  const anchoredTooltipId = hoveredHistoryId ?? selectedHistoryId
   const dayEntryCount = daySegments.length
   const dayLabel = useMemo(() => {
     const date = new Date(dayStart)
@@ -1296,6 +1394,7 @@ export default function ReflectionPage() {
                   ? trimmedBucketDraft
                   : segment.bucketLabel
                 : segment.bucketLabel
+              const isAnchoredTooltip = segment.entry.id === anchoredTooltipId
               const tooltipClassName = `history-timeline__tooltip${isSelected ? ' history-timeline__tooltip--pinned' : ''}`
               return (
                 <div
@@ -1317,11 +1416,30 @@ export default function ReflectionPage() {
                     event.stopPropagation()
                     handleSelectHistorySegment(segment.entry)
                   }}
+                  onMouseEnter={() =>
+                    setHoveredHistoryId((current) => (current === segment.entry.id ? current : segment.entry.id))
+                  }
+                  onMouseLeave={() =>
+                    setHoveredHistoryId((current) => (current === segment.entry.id ? null : current))
+                  }
+                  onFocus={() => setHoveredHistoryId(segment.entry.id)}
+                  onBlur={() =>
+                    setHoveredHistoryId((current) => (current === segment.entry.id ? null : current))
+                  }
                   onKeyDown={handleTimelineBlockKeyDown(segment.entry)}
                 >
                   <div
                     className={tooltipClassName}
                     role="presentation"
+                    ref={isAnchoredTooltip ? setActiveTooltipNode : null}
+                    style={
+                      isAnchoredTooltip
+                        ? ({
+                            '--history-tooltip-shift-x': `${activeTooltipOffsets.x}px`,
+                            '--history-tooltip-shift-y': `${activeTooltipOffsets.y}px`,
+                          } as CSSProperties)
+                        : undefined
+                    }
                     onClick={(event) => event.stopPropagation()}
                     onMouseDown={(event) => event.stopPropagation()}
                   >

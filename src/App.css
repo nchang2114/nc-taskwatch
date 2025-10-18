@@ -2439,7 +2439,13 @@ html[data-theme='light'] .nav-links--drawer {
   position: absolute;
   left: 50%;
   bottom: calc(100% + clamp(0.35rem, 1vw, 0.55rem));
-  transform: translate(-50%, 8px);
+  --history-tooltip-shift-x: 0px;
+  --history-tooltip-shift-y: 0px;
+  --history-tooltip-base-y: 8px;
+  transform: translate(
+    calc(-50% + var(--history-tooltip-shift-x)),
+    calc(var(--history-tooltip-base-y) + var(--history-tooltip-shift-y))
+  );
   background: rgba(6, 10, 28, 0.92);
   border: 1px solid rgba(138, 150, 236, 0.4);
   border-radius: clamp(0.6rem, 1.4vw, 0.8rem);
@@ -2459,12 +2465,12 @@ html[data-theme='light'] .nav-links--drawer {
 .history-timeline__block:hover .history-timeline__tooltip,
 .history-timeline__block:focus-visible .history-timeline__tooltip {
   opacity: 1;
-  transform: translate(-50%, 0);
+  --history-tooltip-base-y: 0px;
 }
 
 .history-timeline__tooltip--pinned {
   opacity: 1;
-  transform: translate(-50%, 0);
+  --history-tooltip-base-y: 0px;
   pointer-events: auto;
 }
 
