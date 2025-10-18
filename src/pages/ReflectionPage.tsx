@@ -282,8 +282,6 @@ const resolveTimestamp = (value: number | null | undefined, fallback: number): n
   return fallback
 }
 
-const LOOP_SEGMENT_TARGET_COUNT = 180
-
 const sampleLoopGradientColor = (
   colorInfo: GoalColorInfo | undefined,
   fallback: string,
@@ -330,24 +328,17 @@ const buildArcLoopSlices = (arc: PieArc): LoopSlice[] => {
   if (span <= 0) {
     return []
   }
-  const sliceCount = Math.max(1, Math.ceil((span / 360) * LOOP_SEGMENT_TARGET_COUNT))
-  const limitedCount = Math.min(sliceCount, LOOP_SEGMENT_TARGET_COUNT)
-  const stepAngle = span / limitedCount
-  const slices: LoopSlice[] = []
-  for (let index = 0; index < limitedCount; index += 1) {
-    const subStartAngle = arc.startAngle + stepAngle * index
-    const subEndAngle = index === limitedCount - 1 ? arc.endAngle : subStartAngle + stepAngle
-    const midAngle = subStartAngle + (subEndAngle - subStartAngle) / 2
-    const ratio = midAngle / 360
-    const baseColor = sampleLoopGradientColor(arc.colorInfo, arc.baseColor, ratio)
-    const color = mixHexColors(baseColor, '#ffffff', 0.06)
-    slices.push({
-      key: `${arc.id}-slice-${index}`,
-      path: describeDonutSlice(subStartAngle, subEndAngle),
+  const midAngle = arc.startAngle + span / 2
+  const ratio = midAngle / 360
+  const baseColor = sampleLoopGradientColor(arc.colorInfo, arc.baseColor, ratio)
+  const color = mixHexColors(baseColor, '#ffffff', 0.06)
+  return [
+    {
+      key: `${arc.id}-slice`,
+      path: describeDonutSlice(arc.startAngle, arc.endAngle),
       color,
-    })
-  }
-  return slices
+    },
+  ]
 }
 
 const makeHistoryId = () => {
