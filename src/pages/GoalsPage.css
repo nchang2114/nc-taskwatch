@@ -382,8 +382,9 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: clamp(0.35rem, 1.4vw, 0.6rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.35rem, 1.4vw, 0.55rem);
 }
 
 .life-routines-card__task {
@@ -394,7 +395,9 @@ html[data-theme='light'] .goal-favorite-toggle--active {
 }
 
 .life-routines-card__task-button {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.16rem;
   width: 100%;
   padding: clamp(0.45rem, 1.5vw, 0.65rem) clamp(0.58rem, 1.7vw, 0.8rem);
@@ -411,8 +414,20 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   border-radius: 0.5rem;
 }
 
-.life-routines-card__focus {
-  margin-top: clamp(0.3rem, 1.2vw, 0.45rem);
+.life-routines-card__focus-row {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.life-routines-card__task + .life-routines-card__focus-row {
+  margin-top: 0.1rem;
+}
+
+.life-routines-card__focus-row .goal-task-focus {
+  margin-top: 0.05rem;
+  margin-right: clamp(0.58rem, 1.7vw, 0.8rem);
 }
 
 .life-routines-card__task-title {

@@ -5848,40 +5848,59 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
               </button>
               {lifeRoutinesExpanded ? (
                 <ul id="life-routines-body" className="life-routines-card__tasks">
-                  {LIFE_ROUTINE_TASKS.map((task) => (
-                    <li key={task.id} className="life-routines-card__task">
-                      <button
-                        type="button"
-                        className="life-routines-card__task-button"
-                        onClick={() => toggleLifeRoutineFocusPrompt(task.id)}
-                      >
-                        <span className="life-routines-card__task-title">
-                          {highlightText(task.title, normalizedSearch)}
-                        </span>
-                        <span className="life-routines-card__task-blurb">
-                          {highlightText(task.blurb, normalizedSearch)}
-                        </span>
-                      </button>
-                      {focusPromptTarget &&
+                  {LIFE_ROUTINE_TASKS.map((task) => {
+                    const focusKey = makeTaskFocusKey(
+                      LIFE_ROUTINES_GOAL_ID,
+                      LIFE_ROUTINES_BUCKET_ID,
+                      task.id,
+                    )
+                    const isPromptActive =
+                      focusPromptTarget &&
                       focusPromptTarget.goalId === LIFE_ROUTINES_GOAL_ID &&
                       focusPromptTarget.bucketId === LIFE_ROUTINES_BUCKET_ID &&
-                      focusPromptTarget.taskId === task.id ? (
-                        <div className="life-routines-card__focus goal-task-focus">
+                      focusPromptTarget.taskId === task.id
+                    return (
+                      <React.Fragment key={task.id}>
+                        <li
+                          className="life-routines-card__task"
+                          data-focus-prompt-key={isPromptActive ? focusKey : undefined}
+                        >
                           <button
                             type="button"
-                            className="goal-task-focus__button"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              handleLifeRoutineFocus(task.id, task.title)
-                              dismissFocusPrompt()
-                            }}
+                            className="life-routines-card__task-button"
+                            onClick={() => toggleLifeRoutineFocusPrompt(task.id)}
                           >
-                            Start Focus
+                            <span className="life-routines-card__task-title">
+                              {highlightText(task.title, normalizedSearch)}
+                            </span>
+                            <span className="life-routines-card__task-blurb">
+                              {highlightText(task.blurb, normalizedSearch)}
+                            </span>
                           </button>
-                        </div>
-                      ) : null}
-                    </li>
-                  ))}
+                        </li>
+                        {isPromptActive ? (
+                          <li
+                            className="goal-task-focus-row life-routines-card__focus-row"
+                            data-focus-prompt-key={focusKey}
+                          >
+                            <div className="goal-task-focus">
+                              <button
+                                type="button"
+                                className="goal-task-focus__button"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleLifeRoutineFocus(task.id, task.title)
+                                  dismissFocusPrompt()
+                                }}
+                              >
+                                Start Focus
+                              </button>
+                            </div>
+                          </li>
+                        ) : null}
+                      </React.Fragment>
+                    )
+                  })}
                 </ul>
               ) : null}
             </section>
