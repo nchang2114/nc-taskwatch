@@ -109,12 +109,19 @@ const LIFE_ROUTINES_TAGLINE = 'A steady cadence for your everyday wellbeing.'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
 const LIFE_ROUTINES_BUCKET_ID = 'life-routines'
 const LIFE_ROUTINES_SURFACE: GoalSurfaceStyle = 'linen'
-const LIFE_ROUTINE_TASKS = [
+
+type LifeRoutineTask = {
+  id: string
+  title: string
+  blurb: string
+}
+
+const LIFE_ROUTINE_TASKS: readonly LifeRoutineTask[] = [
   { id: 'life-sleep', title: 'Sleep', blurb: 'Protect 7–9 hours and wind down with intention.' },
   { id: 'life-eat', title: 'Eat', blurb: 'Plan balanced meals and pause to truly refuel.' },
   { id: 'life-meditate', title: 'Meditate', blurb: 'Give your mind 10 minutes of quiet focus.' },
   { id: 'life-socials', title: 'Socials', blurb: 'Reach out, share a laugh, or check in with someone.' },
-] as const
+]
 
 const sanitizeSubtasks = (value: unknown): TaskSubtask[] => {
   if (!Array.isArray(value)) {
@@ -3730,6 +3737,93 @@ export default function GoalsPage(): ReactElement {
   const taskEditRefs = useRef(new Map<string, HTMLSpanElement>())
   const submittingEdits = useRef(new Set<string>())
   const [lifeRoutinesExpanded, setLifeRoutinesExpanded] = useState(false)
+  const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineTask[]>(() =>
+    LIFE_ROUTINE_TASKS.map((task) => ({ ...task })),
+  )
+  const [lifeRoutineMenuOpenId, setLifeRoutineMenuOpenId] = useState<string | null>(null)
+  const lifeRoutineMenuRef = useRef<HTMLDivElement | null>(null)
+  const lifeRoutineMenuAnchorRef = useRef<HTMLButtonElement | null>(null)
+  const [lifeRoutineMenuPosition, setLifeRoutineMenuPosition] = useState({ left: 0, top: 0 })
+  const [lifeRoutineMenuPositionReady, setLifeRoutineMenuPositionReady] = useState(false)
+  const [renamingLifeRoutineId, setRenamingLifeRoutineId] = useState<string | null>(null)
+  const [lifeRoutineRenameDraft, setLifeRoutineRenameDraft] = useState('')
+  const lifeRoutineRenameInputRef = useRef<HTMLInputElement | null>(null)
+
+  const updateLifeRoutineMenuPosition = useCallback(() => {
+    const anchor = lifeRoutineMenuAnchorRef.current
+    const menuEl = lifeRoutineMenuRef.current
+    if (!anchor || !menuEl) {
+      return
+    }
+    const triggerRect = anchor.getBoundingClientRect()
+    const menuRect = menuEl.getBoundingClientRect()
+    const spacing = 12
+    let top = triggerRect.bottom + spacing
+    let left = triggerRect.right - menuRect.width
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    if (left + menuRect.width > viewportWidth - spacing) {
+      left = Math.max(spacing, viewportWidth - spacing - menuRect.width)
+    }
+    if (left < spacing) {
+      left = spacing
+    }
+    if (top + menuRect.height > viewportHeight - spacing) {
+      top = Math.max(spacing, triggerRect.top - spacing - menuRect.height)
+    }
+    if (top < spacing) {
+      top = spacing
+    }
+    setLifeRoutineMenuPosition((prev) => {
+      if (Math.abs(prev.left - left) < 0.5 && Math.abs(prev.top - top) < 0.5) {
+        return prev
+      }
+      return { left, top }
+    })
+    setLifeRoutineMenuPositionReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!lifeRoutineMenuOpenId) {
+      setLifeRoutineMenuPositionReady(false)
+      return
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setLifeRoutineMenuOpenId(null)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    setLifeRoutineMenuPositionReady(false)
+    const raf = window.requestAnimationFrame(() => {
+      updateLifeRoutineMenuPosition()
+    })
+    const handleRelayout = () => updateLifeRoutineMenuPosition()
+    window.addEventListener('resize', handleRelayout)
+    window.addEventListener('scroll', handleRelayout, true)
+    return () => {
+      window.cancelAnimationFrame(raf)
+      document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', handleRelayout)
+      window.removeEventListener('scroll', handleRelayout, true)
+    }
+  }, [lifeRoutineMenuOpenId, updateLifeRoutineMenuPosition])
+
+  useEffect(() => {
+    if (!lifeRoutineMenuOpenId) {
+      lifeRoutineMenuAnchorRef.current = null
+    }
+  }, [lifeRoutineMenuOpenId])
+
+  useEffect(() => {
+    if (renamingLifeRoutineId && lifeRoutineRenameInputRef.current) {
+      const el = lifeRoutineRenameInputRef.current
+      const len = el.value.length
+      el.focus()
+      el.setSelectionRange(len, len)
+    }
+  }, [renamingLifeRoutineId])
+
   const [focusPromptTarget, setFocusPromptTarget] = useState<FocusPromptTarget | null>(null)
   const [revealedDeleteTaskKey, setRevealedDeleteTaskKey] = useState<string | null>(null)
   const [managingArchivedGoalId, setManagingArchivedGoalId] = useState<string | null>(null)
@@ -4235,6 +4329,48 @@ export default function GoalsPage(): ReactElement {
   const cancelBucketRename = () => {
     setRenamingBucketId(null)
     setBucketRenameDraft('')
+  }
+
+  const startLifeRoutineRename = (routineId: string, initial: string) => {
+    setRenamingLifeRoutineId(routineId)
+    setLifeRoutineRenameDraft(initial)
+  }
+  const handleLifeRoutineRenameChange = (value: string) => setLifeRoutineRenameDraft(value)
+  const submitLifeRoutineRename = () => {
+    if (!renamingLifeRoutineId) {
+      return
+    }
+    const next = lifeRoutineRenameDraft.trim()
+    if (next.length > 0) {
+      setLifeRoutineTasks((current) =>
+        current.map((task) => (task.id === renamingLifeRoutineId ? { ...task, title: next } : task)),
+      )
+    }
+    setRenamingLifeRoutineId(null)
+    setLifeRoutineRenameDraft('')
+  }
+  const cancelLifeRoutineRename = () => {
+    setRenamingLifeRoutineId(null)
+    setLifeRoutineRenameDraft('')
+  }
+  const deleteLifeRoutine = (routineId: string) => {
+    setLifeRoutineTasks((current) => current.filter((task) => task.id !== routineId))
+    setLifeRoutineMenuOpenId((current) => (current === routineId ? null : current))
+    if (renamingLifeRoutineId === routineId) {
+      setRenamingLifeRoutineId(null)
+      setLifeRoutineRenameDraft('')
+    }
+    setFocusPromptTarget((current) => {
+      if (
+        current &&
+        current.goalId === LIFE_ROUTINES_GOAL_ID &&
+        current.bucketId === LIFE_ROUTINES_BUCKET_ID &&
+        current.taskId === routineId
+      ) {
+        return null
+      }
+      return current
+    })
   }
 
   const archiveGoal = (goalId: string) => {
@@ -4758,12 +4894,19 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     if (LIFE_ROUTINES_NAME.toLowerCase().includes(needle)) {
       return true
     }
-    return LIFE_ROUTINE_TASKS.some((task) => {
+    return lifeRoutineTasks.some((task) => {
       const titleMatch = task.title.toLowerCase().includes(needle)
       const blurbMatch = task.blurb.toLowerCase().includes(needle)
       return titleMatch || blurbMatch
     })
-  }, [normalizedSearch])
+  }, [lifeRoutineTasks, normalizedSearch])
+
+  const activeLifeRoutine = useMemo(() => {
+    if (!lifeRoutineMenuOpenId) {
+      return null
+    }
+    return lifeRoutineTasks.find((task) => task.id === lifeRoutineMenuOpenId) ?? null
+  }, [lifeRoutineMenuOpenId, lifeRoutineTasks])
 
   const filteredGoals = useMemo(() => {
     if (!normalizedSearch) {
@@ -5753,6 +5896,57 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     apiSetGoalSortIndex(goalId, adjustedTo).catch(() => {})
   }
 
+  const lifeRoutineMenuPortal =
+    lifeRoutineMenuOpenId && activeLifeRoutine && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="goal-menu-overlay"
+            role="presentation"
+            onMouseDown={(event) => {
+              event.stopPropagation()
+              setLifeRoutineMenuOpenId(null)
+            }}
+          >
+            <div
+              ref={lifeRoutineMenuRef}
+              className="goal-menu goal-menu--floating min-w-[180px] rounded-md border p-1 shadow-lg"
+              style={{
+                top: `${lifeRoutineMenuPosition.top}px`,
+                left: `${lifeRoutineMenuPosition.left}px`,
+                visibility: lifeRoutineMenuPositionReady ? 'visible' : 'hidden',
+              }}
+              role="menu"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="goal-menu__item"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setLifeRoutineMenuOpenId(null)
+                  startLifeRoutineRename(activeLifeRoutine.id, activeLifeRoutine.title)
+                }}
+              >
+                Rename routine
+              </button>
+              <div className="goal-menu__divider" />
+              <button
+                type="button"
+                className="goal-menu__item goal-menu__item--danger"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setLifeRoutineMenuOpenId(null)
+                  deleteLifeRoutine(activeLifeRoutine.id)
+                }}
+              >
+                Delete routine
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null
+
   const customizerPortal =
     activeCustomizerGoal && typeof document !== 'undefined'
       ? createPortal(
@@ -5848,7 +6042,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
               </button>
               {lifeRoutinesExpanded ? (
                 <ul id="life-routines-body" className="life-routines-card__tasks">
-                  {LIFE_ROUTINE_TASKS.map((task) => {
+                  {lifeRoutineTasks.map((task) => {
                     const focusKey = makeTaskFocusKey(
                       LIFE_ROUTINES_GOAL_ID,
                       LIFE_ROUTINES_BUCKET_ID,
@@ -5859,24 +6053,81 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                       focusPromptTarget.goalId === LIFE_ROUTINES_GOAL_ID &&
                       focusPromptTarget.bucketId === LIFE_ROUTINES_BUCKET_ID &&
                       focusPromptTarget.taskId === task.id
+                    const isRenamingRoutine = renamingLifeRoutineId === task.id
                     return (
                       <React.Fragment key={task.id}>
                         <li
                           className="life-routines-card__task"
                           data-focus-prompt-key={isPromptActive ? focusKey : undefined}
                         >
-                          <button
-                            type="button"
-                            className="life-routines-card__task-button"
-                            onClick={() => toggleLifeRoutineFocusPrompt(task.id)}
-                          >
-                            <span className="life-routines-card__task-title">
-                              {highlightText(task.title, normalizedSearch)}
-                            </span>
-                            <span className="life-routines-card__task-blurb">
-                              {highlightText(task.blurb, normalizedSearch)}
-                            </span>
-                          </button>
+                          <div className="life-routines-card__task-inner">
+                            {isRenamingRoutine ? (
+                              <div className="life-routines-card__task-editor">
+                                <input
+                                  ref={lifeRoutineRenameInputRef}
+                                  value={lifeRoutineRenameDraft}
+                                  onChange={(event) => handleLifeRoutineRenameChange(event.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                      event.preventDefault()
+                                      submitLifeRoutineRename()
+                                    } else if (event.key === 'Escape') {
+                                      event.preventDefault()
+                                      cancelLifeRoutineRename()
+                                    }
+                                  }}
+                                  onBlur={() => submitLifeRoutineRename()}
+                                  className="life-routines-card__task-rename"
+                                  placeholder="Rename routine"
+                                />
+                                <span className="life-routines-card__task-blurb">
+                                  {highlightText(task.blurb, normalizedSearch)}
+                                </span>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="life-routines-card__task-button"
+                                onClick={() => toggleLifeRoutineFocusPrompt(task.id)}
+                              >
+                                <span className="life-routines-card__task-title">
+                                  {highlightText(task.title, normalizedSearch)}
+                                </span>
+                                <span className="life-routines-card__task-blurb">
+                                  {highlightText(task.blurb, normalizedSearch)}
+                                </span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40 transition life-routines-card__task-menu-button"
+                              aria-haspopup="menu"
+                              aria-label="Routine actions"
+                              aria-expanded={lifeRoutineMenuOpenId === task.id}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                const button = event.currentTarget as HTMLButtonElement
+                                const isClosing = lifeRoutineMenuOpenId === task.id
+                                setLifeRoutineMenuOpenId((current) => {
+                                  if (current === task.id) {
+                                    lifeRoutineMenuAnchorRef.current = null
+                                    return null
+                                  }
+                                  lifeRoutineMenuAnchorRef.current = button
+                                  return task.id
+                                })
+                                if (!isClosing) {
+                                  setLifeRoutineMenuPositionReady(false)
+                                }
+                              }}
+                            >
+                              <svg className="w-4.5 h-4.5 goal-kebab-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <circle cx="12" cy="6" r="1.6" />
+                                <circle cx="12" cy="12" r="1.6" />
+                                <circle cx="12" cy="18" r="1.6" />
+                              </svg>
+                            </button>
+                          </div>
                         </li>
                         {isPromptActive ? (
                           <li
@@ -6183,6 +6434,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
         <div className="absolute -bottom-28 -right-24 h-80 w-80 bg-indigo-500 blur-3xl rounded-full mix-blend-screen" />
       </div>
 
+      {lifeRoutineMenuPortal}
       {customizerPortal}
 
       {archivedManagerGoal && (
