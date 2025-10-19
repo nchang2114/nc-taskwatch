@@ -10,6 +10,7 @@ import {
   renameBucket as apiRenameBucket,
   setBucketFavorite as apiSetBucketFavorite,
   setBucketSurface as apiSetBucketSurface,
+  setBucketArchived as apiSetBucketArchived,
   setGoalColor as apiSetGoalColor,
   setGoalSurface as apiSetGoalSurface,
   setGoalStarred as apiSetGoalStarred,
@@ -408,6 +409,7 @@ export interface Bucket {
   id: string
   name: string
   favorite: boolean
+  archived: boolean
   tasks: TaskItem[]
   surfaceStyle?: BucketSurfaceStyle
 }
@@ -447,6 +449,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b_demo_1',
         name: 'Planning',
         favorite: true,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't_demo_1', text: 'Scope v1 features', completed: false, difficulty: 'green' },
@@ -458,6 +461,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b_demo_2',
         name: 'Build',
         favorite: true,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't_demo_4', text: 'Auth flow', completed: false, difficulty: 'yellow' },
@@ -469,6 +473,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b_demo_3',
         name: 'Polish',
         favorite: false,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't_demo_7', text: 'Empty states', completed: false, difficulty: 'green' },
@@ -480,6 +485,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b_demo_4',
         name: 'QA',
         favorite: false,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [],
       },
@@ -496,6 +502,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b1',
         name: 'Coding',
         favorite: true,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't1', text: 'Chest spawn logic', completed: false },
@@ -507,6 +514,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b2',
         name: 'Testing',
         favorite: true,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't4', text: 'Challenge balance', completed: false },
@@ -517,6 +525,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b3',
         name: 'Art/Polish',
         favorite: false,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't6', text: 'Shop UI polish', completed: false },
@@ -536,6 +545,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b4',
         name: 'Flashcards',
         favorite: true,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't8', text: 'N5 verbs', completed: false },
@@ -546,6 +556,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b5',
         name: 'Listening',
         favorite: true,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't10', text: 'NHK Easy', completed: false },
@@ -556,6 +567,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b6',
         name: 'Speaking',
         favorite: false,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't12', text: 'HelloTalk 10m', completed: false },
@@ -575,6 +587,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b7',
         name: 'Gym',
         favorite: true,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't14', text: 'Push day', completed: false },
@@ -585,6 +598,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b8',
         name: 'Cooking',
         favorite: true,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't16', text: 'Prep lunches', completed: false },
@@ -595,6 +609,7 @@ const DEFAULT_GOALS: Goal[] = [
         id: 'b9',
         name: 'Sleep',
         favorite: true,
+        archived: false,
         surfaceStyle: 'glass',
         tasks: [
           { id: 't18', text: 'Lights out 11pm', completed: false },
@@ -612,6 +627,7 @@ const DEFAULT_GOAL_SEEDS: Parameters<typeof seedGoalsIfEmpty>[0] = DEFAULT_GOALS
   buckets: goal.buckets.map((bucket) => ({
     name: bucket.name,
     favorite: bucket.favorite,
+    archived: bucket.archived,
     surfaceStyle: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
     tasks: bucket.tasks.map((task) => ({
       text: task.text,
@@ -650,6 +666,7 @@ function reconcileGoalsWithSnapshot(snapshot: GoalSnapshot[], current: Goal[]): 
           id: bucket.id,
           name: bucket.name,
           favorite: bucket.favorite,
+          archived: bucket.archived ?? existingBucket?.archived ?? false,
           surfaceStyle: bucket.surfaceStyle,
           tasks: bucket.tasks.map((task) => {
             const existingTask = existingBucket?.tasks.find((item) => item.id === task.id)
@@ -1041,6 +1058,9 @@ interface GoalRowProps {
   onBucketRenameSubmit: () => void
   onBucketRenameCancel: () => void
   onDeleteBucket: (bucketId: string) => void
+  onArchiveBucket: (bucketId: string) => void
+  archivedBucketCount: number
+  onManageArchivedBuckets: () => void
   onDeleteCompletedTasks: (bucketId: string) => void
   onToggleBucketFavorite: (bucketId: string) => void
   onUpdateBucketSurface: (goalId: string, bucketId: string, surface: BucketSurfaceStyle) => void
@@ -1101,11 +1121,7 @@ interface GoalRowProps {
     fromIndex: number,
     toIndex: number,
   ) => void
-  onReorderBuckets: (
-    goalId: string,
-    fromIndex: number,
-    toIndex: number,
-  ) => void
+  onReorderBuckets: (bucketId: string, toIndex: number) => void
   onOpenCustomizer: (goalId: string) => void
   activeCustomizerGoalId: string | null
   isStarred: boolean
@@ -1132,6 +1148,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onBucketRenameSubmit,
   onBucketRenameCancel,
   onDeleteBucket,
+  onArchiveBucket,
+  archivedBucketCount,
+  onManageArchivedBuckets,
   onDeleteCompletedTasks,
   onToggleBucketFavorite,
   onUpdateBucketSurface,
@@ -1195,6 +1214,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   const [bucketHoverIndex, setBucketHoverIndex] = useState<number | null>(null)
   const [bucketLineTop, setBucketLineTop] = useState<number | null>(null)
   const bucketDragCloneRef = useRef<HTMLElement | null>(null)
+  const activeBuckets = useMemo(() => goal.buckets.filter((bucket) => !bucket.archived), [goal.buckets])
   // Transient animation state for task completion (active → completed)
   const [completingMap, setCompletingMap] = useState<Record<string, boolean>>({})
   const completingKey = (bucketId: string, taskId: string) => `${bucketId}:${taskId}`
@@ -1479,8 +1499,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
     const top = Math.round(clamped * 2) / 2
     return { index: best.index, top }
   }
-  const totalTasks = goal.buckets.reduce((acc, bucket) => acc + bucket.tasks.length, 0)
-  const completedTasksCount = goal.buckets.reduce(
+  const totalTasks = activeBuckets.reduce((acc, bucket) => acc + bucket.tasks.length, 0)
+  const completedTasksCount = activeBuckets.reduce(
     (acc, bucket) => acc + bucket.tasks.filter((task) => task.completed).length,
     0,
   )
@@ -1764,6 +1784,17 @@ const GoalRow: React.FC<GoalRowProps> = ({
               >
                 Rename
               </button>
+              <button
+                type="button"
+                className="goal-menu__item"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMenuOpen(false)
+                  onManageArchivedBuckets()
+                }}
+              >
+                Manage archived buckets{archivedBucketCount > 0 ? ` (${archivedBucketCount})` : ''}
+              </button>
               <div className="goal-menu__divider" />
               <button
                 type="button"
@@ -1787,8 +1818,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
     if (!bucketMenuOpenId) {
       return null
     }
-    return goal.buckets.find((bucket) => bucket.id === bucketMenuOpenId) ?? null
-  }, [goal.buckets, bucketMenuOpenId])
+    return activeBuckets.find((bucket) => bucket.id === bucketMenuOpenId) ?? null
+  }, [activeBuckets, bucketMenuOpenId])
 
   const activeBucketCompletedCount = activeBucketForMenu
     ? activeBucketForMenu.tasks.filter((task) => task.completed).length
@@ -1838,6 +1869,17 @@ const GoalRow: React.FC<GoalRowProps> = ({
                 }}
               >
                 Rename
+              </button>
+              <button
+                type="button"
+                className="goal-menu__item"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setBucketMenuOpenId(null)
+                  onArchiveBucket(activeBucketForMenu.id)
+                }}
+              >
+                Archive bucket
               </button>
               <button
                 type="button"
@@ -2114,9 +2156,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
                 if (info.goalId !== goal.id) return
                 e.preventDefault()
                 const fromIndex = info.index
-                const toIndex = bucketHoverIndex ?? fromIndex
+                const toIndex = bucketHoverIndex ?? activeBuckets.length
                 if (fromIndex !== toIndex) {
-                  onReorderBuckets(goal.id, fromIndex, toIndex)
+                  onReorderBuckets(info.bucketId, toIndex)
                 }
                 // Restore all buckets that were originally open at drag start
                 if (info.openIds && info.openIds.length > 0) {
@@ -2163,7 +2205,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                   </div>
                 </li>
               )}
-              {goal.buckets.map((b, index) => {
+              {activeBuckets.map((b, index) => {
                 const isBucketOpen = bucketExpanded[b.id] ?? false
                 const activeTasks = b.tasks.filter((task) => !task.completed)
                 const completedTasks = b.tasks.filter((task) => task.completed)
@@ -2194,7 +2236,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                         bucketDragCloneRef.current = clone
                         try { e.dataTransfer.setDragImage(clone, 16, 0) } catch {}
                         // Snapshot which buckets in this goal were open BEFORE any state changes
-                        const openIds = goal.buckets.filter((bx) => bucketExpanded[bx.id]).map((bx) => bx.id)
+                        const openIds = activeBuckets.filter((bx) => bucketExpanded[bx.id]).map((bx) => bx.id)
                         ;(window as any).__dragBucketInfo = { goalId: goal.id, index, bucketId: b.id, wasOpen: isBucketOpen, openIds }
                         // Defer state changes (collapse buckets + source) until next frames so the browser captures drag image
                         const scheduleCollapse = () => {
@@ -3626,6 +3668,7 @@ export default function GoalsPage(): ReactElement {
   const submittingEdits = useRef(new Set<string>())
   const [focusPromptTarget, setFocusPromptTarget] = useState<FocusPromptTarget | null>(null)
   const [revealedDeleteTaskKey, setRevealedDeleteTaskKey] = useState<string | null>(null)
+  const [managingArchivedGoalId, setManagingArchivedGoalId] = useState<string | null>(null)
   useEffect(() => {
     if (!revealedDeleteTaskKey || typeof window === 'undefined') {
       return
@@ -3698,6 +3741,16 @@ export default function GoalsPage(): ReactElement {
       return changed ? next : current
     })
   }, [goals])
+
+  useEffect(() => {
+    if (!managingArchivedGoalId) {
+      return
+    }
+    const exists = goals.some((goal) => goal.id === managingArchivedGoalId)
+    if (!exists) {
+      setManagingArchivedGoalId(null)
+    }
+  }, [goals, managingArchivedGoalId])
 
   const updateTaskDetails = useCallback(
     (taskId: string, transform: (current: TaskDetails) => TaskDetails) => {
@@ -3819,6 +3872,7 @@ export default function GoalsPage(): ReactElement {
   const [nextGoalGradientIndex, setNextGoalGradientIndex] = useState(() => DEFAULT_GOALS.length % GOAL_GRADIENTS.length)
   const [activeCustomizerGoalId, setActiveCustomizerGoalId] = useState<string | null>(null)
   const customizerDialogRef = useRef<HTMLDivElement | null>(null)
+  const archivedManagerDialogRef = useRef<HTMLDivElement | null>(null)
   const customGradientPreview = useMemo(
     () => `linear-gradient(${customGradient.angle}deg, ${customGradient.start} 0%, ${customGradient.end} 100%)`,
     [customGradient],
@@ -3834,6 +3888,14 @@ export default function GoalsPage(): ReactElement {
   const activeCustomizerGoal = useMemo(
     () => goals.find((goal) => goal.id === activeCustomizerGoalId) ?? null,
     [goals, activeCustomizerGoalId],
+  )
+  const archivedManagerGoal = useMemo(
+    () => goals.find((goal) => goal.id === managingArchivedGoalId) ?? null,
+    [goals, managingArchivedGoalId],
+  )
+  const archivedBucketsForManager = useMemo(
+    () => (archivedManagerGoal ? archivedManagerGoal.buckets.filter((bucket) => bucket.archived) : []),
+    [archivedManagerGoal],
   )
   // On first load, attempt to hydrate from Supabase (single-user session).
   useEffect(() => {
@@ -3854,6 +3916,7 @@ export default function GoalsPage(): ReactElement {
             buckets: Array.isArray(goal.buckets)
               ? goal.buckets.map((bucket: any) => ({
                   ...bucket,
+                  archived: Boolean(bucket.archived),
                   surfaceStyle: normalizeBucketSurfaceStyle(bucket.surfaceStyle as string | null | undefined),
                 }))
               : [],
@@ -3961,6 +4024,35 @@ export default function GoalsPage(): ReactElement {
       window.cancelAnimationFrame(frame)
     }
   }, [activeCustomizerGoalId])
+
+  useEffect(() => {
+    if (!archivedManagerGoal) {
+      return
+    }
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeArchivedManager()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    const frame = window.requestAnimationFrame(() => {
+      const dialog = archivedManagerDialogRef.current
+      if (!dialog) {
+        return
+      }
+      const focusTarget = dialog.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      focusTarget?.focus()
+    })
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      window.cancelAnimationFrame(frame)
+    }
+  }, [archivedManagerGoal])
 
   const closeCustomizer = useCallback(() => setActiveCustomizerGoalId(null), [])
 
@@ -4124,6 +4216,95 @@ export default function GoalsPage(): ReactElement {
     apiDeleteBucketById(bucketId).catch(() => {})
   }
 
+  const archiveBucket = (goalId: string, bucketId: string) => {
+    let archivedInsertIndex: number | null = null
+    setGoals((gs) =>
+      gs.map((g) => {
+        if (g.id !== goalId) {
+          return g
+        }
+        const currentIndex = g.buckets.findIndex((bucket) => bucket.id === bucketId)
+        if (currentIndex === -1) {
+          return g
+        }
+        const nextBuckets = g.buckets.slice()
+        const [removed] = nextBuckets.splice(currentIndex, 1)
+        if (!removed) {
+          return g
+        }
+        const updatedBucket: Bucket = { ...removed, archived: true }
+        const firstArchivedIndex = nextBuckets.findIndex((bucket) => bucket.archived)
+        const insertIndex = firstArchivedIndex === -1 ? nextBuckets.length : firstArchivedIndex
+        archivedInsertIndex = insertIndex
+        nextBuckets.splice(insertIndex, 0, updatedBucket)
+        return { ...g, buckets: nextBuckets }
+      }),
+    )
+    setBucketExpanded((prev) => ({ ...prev, [bucketId]: false }))
+    setCompletedCollapsed((prev) => ({ ...prev, [bucketId]: true }))
+    setTaskDrafts((prev) => {
+      if (prev[bucketId] === undefined) {
+        return prev
+      }
+      const { [bucketId]: _removed, ...rest } = prev
+      return rest
+    })
+    setFocusPromptTarget((current) =>
+      current && current.goalId === goalId && current.bucketId === bucketId ? null : current,
+    )
+    setRevealedDeleteTaskKey((current) =>
+      current && current.startsWith(`${goalId}__${bucketId}__`) ? null : current,
+    )
+    if (renamingBucketId === bucketId) {
+      setRenamingBucketId(null)
+      setBucketRenameDraft('')
+    }
+    apiSetBucketArchived(bucketId, true).catch(() => {})
+    if (archivedInsertIndex !== null) {
+      apiSetBucketSortIndex(goalId, bucketId, archivedInsertIndex).catch(() => {})
+    }
+  }
+
+  const unarchiveBucket = (goalId: string, bucketId: string) => {
+    let restoredIndex: number | null = null
+    setGoals((gs) =>
+      gs.map((g) => {
+        if (g.id !== goalId) {
+          return g
+        }
+        const currentIndex = g.buckets.findIndex((bucket) => bucket.id === bucketId)
+        if (currentIndex === -1) {
+          return g
+        }
+        const nextBuckets = g.buckets.slice()
+        const [removed] = nextBuckets.splice(currentIndex, 1)
+        if (!removed) {
+          return g
+        }
+        const updatedBucket: Bucket = { ...removed, archived: false }
+        const firstArchivedIndex = nextBuckets.findIndex((bucket) => bucket.archived)
+        const insertIndex = firstArchivedIndex === -1 ? nextBuckets.length : firstArchivedIndex
+        restoredIndex = insertIndex
+        nextBuckets.splice(insertIndex, 0, updatedBucket)
+        return { ...g, buckets: nextBuckets }
+      }),
+    )
+    setBucketExpanded((prev) => ({ ...prev, [bucketId]: false }))
+    setCompletedCollapsed((prev) => ({ ...prev, [bucketId]: true }))
+    apiSetBucketArchived(bucketId, false).catch(() => {})
+    if (restoredIndex !== null) {
+      apiSetBucketSortIndex(goalId, bucketId, restoredIndex).catch(() => {})
+    }
+  }
+
+  const openArchivedManager = (goalId: string) => {
+    setManagingArchivedGoalId(goalId)
+  }
+
+  const closeArchivedManager = () => {
+    setManagingArchivedGoalId(null)
+  }
+
   const deleteCompletedTasks = (goalId: string, bucketId: string) => {
     if (revealedDeleteTaskKey && revealedDeleteTaskKey.startsWith(`${goalId}__${bucketId}__`)) {
       setRevealedDeleteTaskKey(null)
@@ -4226,7 +4407,7 @@ export default function GoalsPage(): ReactElement {
       .then((db) => {
         const newBucketId = db?.id ?? `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
         const surface = normalizeBucketSurfaceStyle((db as any)?.buckets_card_style ?? 'glass')
-        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, surfaceStyle: surface, tasks: [] }
+        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, archived: false, surfaceStyle: surface, tasks: [] }
         setGoals((gs) =>
           gs.map((g) =>
             g.id === goalId
@@ -4246,7 +4427,7 @@ export default function GoalsPage(): ReactElement {
       })
       .catch(() => {
         const newBucketId = `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, surfaceStyle: 'glass', tasks: [] }
+        const newBucket: Bucket = { id: newBucketId, name: trimmed, favorite: false, archived: false, surfaceStyle: 'glass', tasks: [] }
         setGoals((gs) =>
           gs.map((g) => (g.id === goalId ? { ...g, buckets: [newBucket, ...g.buckets] } : g)),
         )
@@ -4377,7 +4558,7 @@ export default function GoalsPage(): ReactElement {
         if (goal.name.toLowerCase().includes(normalizedSearch)) {
           return true
         }
-        return goal.buckets.some((bucket) => {
+        return goal.buckets.filter((bucket) => !bucket.archived).some((bucket) => {
           if (bucket.name.toLowerCase().includes(normalizedSearch)) {
             return true
           }
@@ -5125,30 +5306,44 @@ export default function GoalsPage(): ReactElement {
     }
   }
 
-  // Reorder buckets within a goal
-  const reorderBuckets = (
-    goalId: string,
-    fromIndex: number,
-    toIndex: number,
-  ) => {
-    // Determine moved bucket id
-    const goal = goals.find((g) => g.id === goalId)
-    const movedBucketId = goal?.buckets?.[fromIndex]?.id
+  // Reorder buckets within a goal (active buckets only; archived stay at the end)
+  const reorderBuckets = (goalId: string, bucketId: string, toIndex: number) => {
+    let persistedIndex: number | null = null
     setGoals((gs) =>
       gs.map((g) => {
         if (g.id !== goalId) return g
-        const list = g.buckets
-        if (fromIndex < 0 || fromIndex >= list.length || toIndex < 0 || toIndex > list.length) {
+        const currentIndex = g.buckets.findIndex((bucket) => bucket.id === bucketId)
+        if (currentIndex === -1) {
           return g
         }
-        const next = list.slice()
-        const [moved] = next.splice(fromIndex, 1)
-        next.splice(toIndex, 0, moved)
-        return { ...g, buckets: next }
+        const nextBuckets = g.buckets.slice()
+        const [removed] = nextBuckets.splice(currentIndex, 1)
+        if (!removed) {
+          return g
+        }
+        if (removed.archived) {
+          nextBuckets.splice(currentIndex, 0, removed)
+          return g
+        }
+        const activeBuckets = nextBuckets.filter((bucket) => !bucket.archived)
+        const clampedIndex = Math.max(0, Math.min(toIndex, activeBuckets.length))
+        if (clampedIndex >= activeBuckets.length) {
+          const firstArchivedIndex = nextBuckets.findIndex((bucket) => bucket.archived)
+          const insertIndex = firstArchivedIndex === -1 ? nextBuckets.length : firstArchivedIndex
+          nextBuckets.splice(insertIndex, 0, removed)
+          persistedIndex = insertIndex
+        } else {
+          const targetId = activeBuckets[clampedIndex].id
+          const targetIndex = nextBuckets.findIndex((bucket) => bucket.id === targetId)
+          const insertIndex = targetIndex === -1 ? nextBuckets.length : targetIndex
+          nextBuckets.splice(insertIndex, 0, removed)
+          persistedIndex = insertIndex
+        }
+        return { ...g, buckets: nextBuckets }
       }),
     )
-    if (movedBucketId) {
-      apiSetBucketSortIndex(goalId, movedBucketId, toIndex).catch(() => {})
+    if (persistedIndex !== null) {
+      apiSetBucketSortIndex(goalId, bucketId, persistedIndex).catch(() => {})
     }
   }
 
@@ -5402,70 +5597,73 @@ export default function GoalsPage(): ReactElement {
                     onStartGoalRename={(goalId, initial) => startGoalRename(goalId, initial)}
                     onGoalRenameChange={(value) => handleGoalRenameChange(value)}
                     onGoalRenameSubmit={() => submitGoalRename()}
-                  onGoalRenameCancel={() => cancelGoalRename()}
-                  renamingBucketId={renamingBucketId}
-                  bucketRenameValue={bucketRenameDraft}
-                  onStartBucketRename={(goalId, bucketId, initial) => startBucketRename(goalId, bucketId, initial)}
-                  onBucketRenameChange={(value) => handleBucketRenameChange(value)}
-                  onBucketRenameSubmit={() => submitBucketRename()}
-                  onBucketRenameCancel={() => cancelBucketRename()}
-                  onDeleteBucket={(bucketId) => deleteBucket(g.id, bucketId)}
-                  onDeleteCompletedTasks={(bucketId) => deleteCompletedTasks(g.id, bucketId)}
-                  onToggleBucketFavorite={(bucketId) => toggleBucketFavorite(g.id, bucketId)}
-                  onUpdateBucketSurface={(goalId, bucketId, surface) => updateBucketSurface(goalId, bucketId, surface)}
-                  bucketExpanded={bucketExpanded}
-                  onToggleBucketExpanded={toggleBucketExpanded}
-                  completedCollapsed={completedCollapsed}
-                  onToggleCompletedCollapsed={toggleCompletedSection}
-                  taskDetails={taskDetails}
-                  handleToggleTaskDetails={handleToggleTaskDetails}
-                  handleTaskNotesChange={handleTaskNotesChange}
-                  handleAddSubtask={handleAddSubtask}
-                  handleSubtaskTextChange={handleSubtaskTextChange}
-                  handleToggleSubtaskCompleted={handleToggleSubtaskCompleted}
-                  handleRemoveSubtask={handleRemoveSubtask}
-                  taskDrafts={taskDrafts}
-                  onStartTaskDraft={startTaskDraft}
-                  onTaskDraftChange={handleTaskDraftChange}
-                  onTaskDraftSubmit={handleTaskDraftSubmit}
-                  onTaskDraftBlur={handleTaskDraftBlur}
-                  onTaskDraftCancel={handleTaskDraftCancel}
-                  registerTaskDraftRef={registerTaskDraftRef}
-                  bucketDraftValue={bucketDrafts[g.id]}
-                  onStartBucketDraft={startBucketDraft}
-                  onBucketDraftChange={handleBucketDraftChange}
-                  onBucketDraftSubmit={handleBucketDraftSubmit}
-                  onBucketDraftBlur={handleBucketDraftBlur}
-                  onBucketDraftCancel={handleBucketDraftCancel}
-                  registerBucketDraftRef={registerBucketDraftRef}
-                  highlightTerm={normalizedSearch}
-                  onToggleTaskComplete={(bucketId, taskId) => toggleTaskCompletion(g.id, bucketId, taskId)}
-                  onCycleTaskDifficulty={(bucketId, taskId) => cycleTaskDifficulty(g.id, bucketId, taskId)}
-                  onToggleTaskPriority={(bucketId, taskId) => toggleTaskPriority(g.id, bucketId, taskId)}
-                  revealedDeleteTaskKey={revealedDeleteTaskKey}
-                  onRevealDeleteTask={setRevealedDeleteTaskKey}
-                  onDeleteCompletedTask={deleteCompletedTask}
-                  editingTasks={taskEdits}
-                  onStartTaskEdit={(goalId, bucketId, taskId, initial, options) =>
-                    startTaskEdit(goalId, bucketId, taskId, initial, options)
-                  }
-                  onTaskEditChange={handleTaskEditChange}
-                  onTaskEditSubmit={(goalId, bucketId, taskId) => handleTaskEditSubmit(goalId, bucketId, taskId)}
-                  onTaskEditBlur={(goalId, bucketId, taskId) => handleTaskEditBlur(goalId, bucketId, taskId)}
-                  onTaskEditCancel={(taskId) => handleTaskEditCancel(taskId)}
-                  registerTaskEditRef={registerTaskEditRef}
-                  focusPromptTarget={focusPromptTarget}
-                  onTaskTextClick={handleTaskTextClick}
-                  onDismissFocusPrompt={dismissFocusPrompt}
-                  onStartFocusTask={handleStartFocusTask}
-                  onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
-                    reorderTasks(goalId, bucketId, section, fromIndex, toIndex)
-                  }
-                  onReorderBuckets={reorderBuckets}
-                  onOpenCustomizer={(goalId) => setActiveCustomizerGoalId(goalId)}
-                  activeCustomizerGoalId={activeCustomizerGoalId}
-                  isStarred={Boolean(g.starred)}
-                  onToggleStarred={() => toggleGoalStarred(g.id)}
+                    onGoalRenameCancel={() => cancelGoalRename()}
+                    renamingBucketId={renamingBucketId}
+                    bucketRenameValue={bucketRenameDraft}
+                    onStartBucketRename={(goalId, bucketId, initial) => startBucketRename(goalId, bucketId, initial)}
+                    onBucketRenameChange={(value) => handleBucketRenameChange(value)}
+                    onBucketRenameSubmit={() => submitBucketRename()}
+                    onBucketRenameCancel={() => cancelBucketRename()}
+                    onDeleteBucket={(bucketId) => deleteBucket(g.id, bucketId)}
+                    onArchiveBucket={(bucketId) => archiveBucket(g.id, bucketId)}
+                    archivedBucketCount={g.buckets.filter((bucket) => bucket.archived).length}
+                    onManageArchivedBuckets={() => openArchivedManager(g.id)}
+                    onDeleteCompletedTasks={(bucketId) => deleteCompletedTasks(g.id, bucketId)}
+                    onToggleBucketFavorite={(bucketId) => toggleBucketFavorite(g.id, bucketId)}
+                    onUpdateBucketSurface={(goalId, bucketId, surface) => updateBucketSurface(goalId, bucketId, surface)}
+                    bucketExpanded={bucketExpanded}
+                    onToggleBucketExpanded={toggleBucketExpanded}
+                    completedCollapsed={completedCollapsed}
+                    onToggleCompletedCollapsed={toggleCompletedSection}
+                    taskDetails={taskDetails}
+                    handleToggleTaskDetails={handleToggleTaskDetails}
+                    handleTaskNotesChange={handleTaskNotesChange}
+                    handleAddSubtask={handleAddSubtask}
+                    handleSubtaskTextChange={handleSubtaskTextChange}
+                    handleToggleSubtaskCompleted={handleToggleSubtaskCompleted}
+                    handleRemoveSubtask={handleRemoveSubtask}
+                    taskDrafts={taskDrafts}
+                    onStartTaskDraft={startTaskDraft}
+                    onTaskDraftChange={handleTaskDraftChange}
+                    onTaskDraftSubmit={handleTaskDraftSubmit}
+                    onTaskDraftBlur={handleTaskDraftBlur}
+                    onTaskDraftCancel={handleTaskDraftCancel}
+                    registerTaskDraftRef={registerTaskDraftRef}
+                    bucketDraftValue={bucketDrafts[g.id]}
+                    onStartBucketDraft={startBucketDraft}
+                    onBucketDraftChange={handleBucketDraftChange}
+                    onBucketDraftSubmit={handleBucketDraftSubmit}
+                    onBucketDraftBlur={handleBucketDraftBlur}
+                    onBucketDraftCancel={handleBucketDraftCancel}
+                    registerBucketDraftRef={registerBucketDraftRef}
+                    highlightTerm={normalizedSearch}
+                    onToggleTaskComplete={(bucketId, taskId) => toggleTaskCompletion(g.id, bucketId, taskId)}
+                    onCycleTaskDifficulty={(bucketId, taskId) => cycleTaskDifficulty(g.id, bucketId, taskId)}
+                    onToggleTaskPriority={(bucketId, taskId) => toggleTaskPriority(g.id, bucketId, taskId)}
+                    revealedDeleteTaskKey={revealedDeleteTaskKey}
+                    onRevealDeleteTask={setRevealedDeleteTaskKey}
+                    onDeleteCompletedTask={deleteCompletedTask}
+                    editingTasks={taskEdits}
+                    onStartTaskEdit={(goalId, bucketId, taskId, initial, options) =>
+                      startTaskEdit(goalId, bucketId, taskId, initial, options)
+                    }
+                    onTaskEditChange={handleTaskEditChange}
+                    onTaskEditSubmit={(goalId, bucketId, taskId) => handleTaskEditSubmit(goalId, bucketId, taskId)}
+                    onTaskEditBlur={(goalId, bucketId, taskId) => handleTaskEditBlur(goalId, bucketId, taskId)}
+                    onTaskEditCancel={(taskId) => handleTaskEditCancel(taskId)}
+                    registerTaskEditRef={registerTaskEditRef}
+                    focusPromptTarget={focusPromptTarget}
+                    onTaskTextClick={handleTaskTextClick}
+                    onDismissFocusPrompt={dismissFocusPrompt}
+                    onStartFocusTask={handleStartFocusTask}
+                    onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
+                      reorderTasks(goalId, bucketId, section, fromIndex, toIndex)
+                    }
+                    onReorderBuckets={(bucketId, toIndex) => reorderBuckets(g.id, bucketId, toIndex)}
+                    onOpenCustomizer={(goalId) => setActiveCustomizerGoalId(goalId)}
+                    activeCustomizerGoalId={activeCustomizerGoalId}
+                    isStarred={Boolean(g.starred)}
+                    onToggleStarred={() => toggleGoalStarred(g.id)}
                 />
                 </li>
               ))}
@@ -5480,6 +5678,63 @@ export default function GoalsPage(): ReactElement {
       </div>
 
       {customizerPortal}
+
+      {archivedManagerGoal && (
+        <div className="goal-modal-backdrop" role="presentation" onClick={closeArchivedManager}>
+          <div
+            ref={archivedManagerDialogRef}
+            className="goal-modal goal-modal--archived"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="archived-buckets-title"
+            aria-describedby="archived-buckets-description"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="goal-modal__header">
+              <h2 id="archived-buckets-title">Archived buckets</h2>
+              <p id="archived-buckets-description">
+                Restore buckets back to {archivedManagerGoal.name}.
+              </p>
+            </header>
+            <div className="goal-modal__body goal-archive-body">
+              {archivedBucketsForManager.length === 0 ? (
+                <p className="goal-archive-empty">No archived buckets yet. Archive one from the Task Bank menu to see it here.</p>
+              ) : (
+                <ul className="goal-archive-list">
+                  {archivedBucketsForManager.map((bucket) => {
+                    const activeTasks = bucket.tasks.filter((task) => !task.completed).length
+                    const completedTasks = bucket.tasks.filter((task) => task.completed).length
+                    return (
+                      <li key={bucket.id} className="goal-archive-item">
+                        <div className="goal-archive-info">
+                          <p className="goal-archive-name">{bucket.name}</p>
+                          <p className="goal-archive-meta">
+                            {activeTasks} active · {completedTasks} completed
+                          </p>
+                        </div>
+                        <div className="goal-archive-actions">
+                          <button
+                            type="button"
+                            className="goal-archive-restore"
+                            onClick={() => unarchiveBucket(archivedManagerGoal.id, bucket.id)}
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+            <footer className="goal-modal__footer">
+              <button type="button" className="goal-modal__button goal-modal__button--muted" onClick={closeArchivedManager}>
+                Close
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
 
       {isCreateGoalOpen && (
         <div className="goal-modal-backdrop" role="presentation" onClick={closeCreateGoal}>

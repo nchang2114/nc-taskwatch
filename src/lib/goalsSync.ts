@@ -16,6 +16,7 @@ export type GoalBucketSnapshot = {
   id: string
   name: string
   favorite: boolean
+  archived: boolean
   surfaceStyle: SurfaceStyle
   tasks: GoalTaskSnapshot[]
 }
@@ -76,8 +77,9 @@ const coerceBuckets = (value: unknown): GoalBucketSnapshot[] => {
       }
       const favorite = Boolean(candidate.favorite)
       const surfaceStyle = ensureSurfaceStyle(candidate.surfaceStyle, DEFAULT_SURFACE_STYLE)
+      const archived = Boolean(candidate.archived)
       const tasks = coerceTasks(candidate.tasks)
-      return { id, name, favorite, surfaceStyle, tasks }
+      return { id, name, favorite, archived, surfaceStyle, tasks }
     })
     .filter((bucket): bucket is GoalBucketSnapshot => Boolean(bucket))
 }

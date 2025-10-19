@@ -651,7 +651,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const focusCandidates = useMemo<FocusCandidate[]>(() => {
     const candidates: FocusCandidate[] = []
     goalsSnapshot.forEach((goal) => {
-      goal.buckets.forEach((bucket) => {
+      goal.buckets
+        .filter((bucket) => !bucket.archived)
+        .forEach((bucket) => {
         bucket.tasks.forEach((task) => {
           candidates.push({
             goalId: goal.id,
@@ -667,7 +669,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
           })
         })
-      })
+        })
     })
     return candidates
   }, [goalsSnapshot])
@@ -853,6 +855,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         return null
       }
       const bucket = current.bucketId ? goal.buckets.find((b) => b.id === current.bucketId) : null
+      if (bucket && bucket.archived) {
+        return null
+      }
       if (current.bucketId && !bucket) {
         return null
       }
@@ -981,7 +986,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     })
     setExpandedBuckets((current) => {
       const validBucketIds = new Set(
-        goalsSnapshot.flatMap((goal) => goal.buckets.map((bucket) => bucket.id)),
+        goalsSnapshot.flatMap((goal) =>
+          goal.buckets.filter((bucket) => !bucket.archived).map((bucket) => bucket.id),
+        ),
       )
       const next = new Set<string>()
       current.forEach((id) => {
@@ -1914,7 +1921,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                         </button>
                         {goalExpanded ? (
                           <ul className="task-selector__buckets">
-                            {goal.buckets.map((bucket) => {
+                            {goal.buckets
+                              .filter((bucket) => !bucket.archived)
+                              .map((bucket) => {
                               const bucketExpanded = expandedBuckets.has(bucket.id)
                               const activeTasks = bucket.tasks.filter((task) => !task.completed)
                               const completedTasks = bucket.tasks.filter((task) => task.completed)
@@ -2182,60 +2191,74 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             className="snapback-panel"
             ref={snapbackDialogRef}
             tabIndex={-1}
+            role="document"
             onClick={(event) => event.stopPropagation()}
           >
-            <button type="button" className="snapback-panel__close" onClick={handleCloseSnapback} aria-label="Close snapback panel">
-              ×
-            </button>
-            <h2 className="snapback-panel__title" id="snapback-title">
-              Snap Back Check-in
-            </h2>
-            <p className="snapback-panel__lead">What pulled you off track?</p>
+            <div className="snapback-panel__header">
+              <div className="snapback-panel__heading">
+                <h2 className="snapback-panel__title" id="snapback-title">
+                  Snap back to focus
+                </h2>
+                <p className="snapback-panel__lead">Capture what happened and line up your next move.</p>
+              </div>
+              <button type="button" className="snapback-panel__close" onClick={handleCloseSnapback} aria-label="Close snapback panel">
+                ×
+              </button>
+            </div>
+
             <div className="snapback-panel__context">
               <span className="snapback-panel__context-label">Current focus</span>
               <span className="snapback-panel__context-task">{safeTaskName}</span>
               {focusContextLabel ? <span className="snapback-panel__context-meta">{focusContextLabel}</span> : null}
             </div>
-            <div className="snapback-panel__section">
-              <div className="snapback-panel__chips" role="group" aria-label="Select a reason">
-                {SNAPBACK_REASONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    className={`snapback-option${snapbackReason === option.id ? ' snapback-option--active' : ''}`}
-                    aria-pressed={snapbackReason === option.id}
-                    onClick={() => setSnapbackReason(option.id)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-              <label className="snapback-panel__label">
-                <span className="snapback-panel__label-text">Add a quick note (optional)</span>
-                <textarea
-                  className="snapback-panel__textarea"
-                  value={snapbackNote}
-                  onChange={(event) => setSnapbackNote(event.target.value.slice(0, MAX_TASK_STORAGE_LENGTH))}
-                  placeholder="Jot what happened or what you tried instead"
-                  rows={3}
-                />
-              </label>
-            </div>
 
-            <div className="snapback-panel__section">
-              <h3 className="snapback-panel__heading">What do you want to do next?</h3>
-              <div className="snapback-panel__chips" role="group" aria-label="Choose a next action">
-                {SNAPBACK_ACTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    className={`snapback-option${snapbackNextAction === option.id ? ' snapback-option--active' : ''}`}
-                    aria-pressed={snapbackNextAction === option.id}
-                    onClick={() => setSnapbackNextAction(option.id)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+            <div className="snapback-panel__content">
+              <div className="snapback-panel__grid">
+                <div className="snapback-panel__section snapback-panel__section--stretch" aria-labelledby="snapback-reason-label">
+                  <h3 id="snapback-reason-label" className="snapback-panel__heading">What pulled you off track?</h3>
+                  <div className="snapback-panel__chips" role="group" aria-label="Select a reason">
+                    {SNAPBACK_REASONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`snapback-option${snapbackReason === option.id ? ' snapback-option--active' : ''}`}
+                        aria-pressed={snapbackReason === option.id}
+                        onClick={() => setSnapbackReason(option.id)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="snapback-panel__label">
+                    <span className="snapback-panel__label-text">
+                      Add a quick note <span className="snapback-panel__optional">(optional)</span>
+                    </span>
+                    <textarea
+                      className="snapback-panel__textarea"
+                      value={snapbackNote}
+                      onChange={(event) => setSnapbackNote(event.target.value.slice(0, MAX_TASK_STORAGE_LENGTH))}
+                      placeholder="Jot what happened or what you tried instead"
+                      rows={3}
+                    />
+                  </label>
+                </div>
+
+                <div className="snapback-panel__section snapback-panel__section--compact" aria-labelledby="snapback-action-label">
+                  <h3 id="snapback-action-label" className="snapback-panel__heading">Next step</h3>
+                  <div className="snapback-panel__chips" role="group" aria-label="Choose a next action">
+                    {SNAPBACK_ACTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`snapback-option${snapbackNextAction === option.id ? ' snapback-option--active' : ''}`}
+                        aria-pressed={snapbackNextAction === option.id}
+                        onClick={() => setSnapbackNextAction(option.id)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2244,7 +2267,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                 Cancel
               </button>
               <button type="button" className="snapback-panel__button snapback-panel__button--primary" onClick={handleSubmitSnapback}>
-                Log Snap Back
+                Log Snapback
               </button>
             </div>
           </div>

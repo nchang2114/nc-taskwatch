@@ -370,6 +370,82 @@ html[data-theme='light'] .goal-draft-input::placeholder {
   flex-direction: column;
   gap: 0.85rem;
 }
+.goal-modal--archived {
+  max-width: 28rem;
+}
+.goal-archive-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+.goal-archive-empty {
+  font-size: 0.95rem;
+  color: rgba(238, 242, 255, 0.78);
+}
+.goal-archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.goal-archive-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(134, 148, 255, 0.3);
+  background: linear-gradient(135deg, rgba(34, 43, 94, 0.6), rgba(26, 32, 78, 0.52));
+  box-shadow:
+    inset 0 1px 0 rgba(183, 197, 255, 0.06),
+    0 14px 30px -24px rgba(18, 24, 64, 0.6);
+}
+.goal-archive-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.goal-archive-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.98);
+  margin: 0;
+}
+.goal-archive-meta {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
+  color: rgba(213, 221, 255, 0.75);
+}
+.goal-archive-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.goal-archive-restore {
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(170, 186, 255, 0.5);
+  background: rgba(135, 150, 255, 0.28);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+.goal-archive-restore:hover,
+.goal-archive-restore:focus-visible {
+  background: rgba(156, 170, 255, 0.42);
+  border-color: rgba(189, 204, 255, 0.65);
+  transform: translateY(-1px);
+  outline: none;
+}
+.goal-archive-restore:active {
+  transform: translateY(0);
+}
 
 .goal-modal__label {
   font-size: 0.75rem;
@@ -578,6 +654,36 @@ html[data-theme='light'] .goal-modal__button--muted:hover,
 html[data-theme='light'] .goal-modal__button--muted:focus-visible {
   background: rgba(92, 91, 255, 0.22);
   color: rgba(22, 28, 80, 0.96);
+}
+html[data-theme='light'] .goal-modal--archived {
+  border-color: rgba(142, 162, 255, 0.34);
+  box-shadow: 0 18px 42px -28px rgba(94, 112, 190, 0.28);
+}
+html[data-theme='light'] .goal-archive-item {
+  background: linear-gradient(135deg, rgba(238, 242, 255, 0.92), rgba(224, 232, 255, 0.78));
+  border: 1px solid rgba(156, 170, 255, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 12px 26px -24px rgba(94, 112, 190, 0.28);
+}
+html[data-theme='light'] .goal-archive-name {
+  color: rgba(38, 46, 96, 0.9);
+}
+html[data-theme='light'] .goal-archive-meta {
+  color: rgba(62, 76, 140, 0.65);
+}
+html[data-theme='light'] .goal-archive-empty {
+  color: rgba(52, 64, 124, 0.68);
+}
+html[data-theme='light'] .goal-archive-restore {
+  border-color: rgba(132, 148, 255, 0.42);
+  background: rgba(132, 148, 255, 0.16);
+  color: rgba(38, 46, 96, 0.9);
+}
+html[data-theme='light'] .goal-archive-restore:hover,
+html[data-theme='light'] .goal-archive-restore:focus-visible {
+  background: rgba(132, 148, 255, 0.24);
+  border-color: rgba(132, 148, 255, 0.52);
 }
 /* Light theme adjustments */
 html[data-theme='light'] .goals-layer {
