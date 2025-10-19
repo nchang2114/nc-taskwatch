@@ -2876,6 +2876,121 @@ html[data-theme='light'] .goal-gradient-custom-field label {
 }
 
 
+.goal-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.5rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.goal-archived-section {
+  margin-top: 2rem;
+}
+
+.goal-archived-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.goal-archived-toggle:hover,
+.goal-archived-toggle:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  outline: none;
+}
+
+.goal-archived-toggle:focus-visible {
+  box-shadow: 0 0 0 2px rgba(188, 194, 255, 0.35);
+}
+
+.goal-archived-toggle--empty {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.goal-archived-label {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.goal-archived-count {
+  margin-left: auto;
+  margin-right: 0.75rem;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.goal-archived-chevron {
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.8;
+  transition: transform 0.2s ease;
+}
+
+.goal-archived-chevron--open {
+  transform: rotate(180deg);
+}
+
+.goal-archived-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.goal-entry--archived .goal-card {
+  opacity: 0.88;
+  transition: opacity 0.2s ease;
+}
+
+.goal-entry--archived .goal-card:hover,
+.goal-entry--archived .goal-card:focus-within {
+  opacity: 1;
+}
+
+.goal-archived-empty {
+  margin-top: 0.75rem;
+}
+
+html[data-theme='light'] .goal-archived-toggle {
+  background: rgba(30, 41, 90, 0.07);
+  border-color: rgba(30, 41, 90, 0.12);
+  color: rgba(30, 41, 90, 0.86);
+}
+
+html[data-theme='light'] .goal-archived-toggle:hover,
+html[data-theme='light'] .goal-archived-toggle:focus-visible {
+  background: rgba(30, 41, 90, 0.12);
+  border-color: rgba(30, 41, 90, 0.2);
+}
+
+html[data-theme='light'] .goal-archived-count {
+  color: rgba(30, 41, 90, 0.6);
+}
+
+html[data-theme='light'] .goal-status-pill {
+  background: rgba(30, 41, 90, 0.12);
+  color: rgba(30, 41, 90, 0.82);
+}
+
+
 /* Favourite card accents */
 /* Favourite card accents */
 .goal-card--favorite {

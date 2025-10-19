@@ -27,6 +27,7 @@ export type GoalSnapshot = {
   color?: string
   surfaceStyle: SurfaceStyle
   starred: boolean
+  archived: boolean
   buckets: GoalBucketSnapshot[]
 }
 
@@ -102,8 +103,9 @@ export const createGoalsSnapshot = (goals: Goal[] | unknown): GoalSnapshot[] => 
     const color = typeof candidate.color === 'string' ? candidate.color : undefined
     const surfaceStyle = ensureSurfaceStyle(candidate.surfaceStyle, DEFAULT_SURFACE_STYLE)
     const starred = Boolean(candidate.starred)
+    const archived = Boolean(candidate.archived)
     const buckets = coerceBuckets(candidate.buckets)
-    snapshot.push({ id, name, color, surfaceStyle, starred, buckets })
+    snapshot.push({ id, name, color, surfaceStyle, starred, archived, buckets })
   })
   return snapshot
 }

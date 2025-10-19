@@ -443,6 +443,10 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   })
   const [isSelectorOpen, setIsSelectorOpen] = useState(false)
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
+  const activeGoalSnapshots = useMemo(
+    () => goalsSnapshot.filter((goal) => !goal.archived),
+    [goalsSnapshot],
+  )
   const [hasRequestedGoals, setHasRequestedGoals] = useState(false)
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(() => new Set())
   const [expandedBuckets, setExpandedBuckets] = useState<Set<string>>(() => new Set())
@@ -650,12 +654,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   const focusCandidates = useMemo<FocusCandidate[]>(() => {
     const candidates: FocusCandidate[] = []
-    goalsSnapshot.forEach((goal) => {
+    activeGoalSnapshots.forEach((goal) => {
       goal.buckets
         .filter((bucket) => !bucket.archived)
         .forEach((bucket) => {
-        bucket.tasks.forEach((task) => {
-          candidates.push({
+          bucket.tasks.forEach((task) => {
+            candidates.push({
             goalId: goal.id,
             goalName: goal.name,
             bucketId: bucket.id,
@@ -672,7 +676,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         })
     })
     return candidates
-  }, [goalsSnapshot])
+  }, [activeGoalSnapshots])
 
   const priorityTasks = useMemo(
     () => focusCandidates.filter((candidate) => candidate.priority && !candidate.completed),
@@ -969,13 +973,13 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   }, [isRunning, elapsedSeconds, sessionStart, sessionTaskLabel, sessionGoalName])
 
   useEffect(() => {
-    if (goalsSnapshot.length === 0) {
+    if (activeGoalSnapshots.length === 0) {
       setExpandedGoals(new Set())
       setExpandedBuckets(new Set())
       return
     }
     setExpandedGoals((current) => {
-      const validGoalIds = new Set(goalsSnapshot.map((goal) => goal.id))
+      const validGoalIds = new Set(activeGoalSnapshots.map((goal) => goal.id))
       const next = new Set<string>()
       current.forEach((id) => {
         if (validGoalIds.has(id)) {
@@ -986,7 +990,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     })
     setExpandedBuckets((current) => {
       const validBucketIds = new Set(
-        goalsSnapshot.flatMap((goal) =>
+        activeGoalSnapshots.flatMap((goal) =>
           goal.buckets.filter((bucket) => !bucket.archived).map((bucket) => bucket.id),
         ),
       )
@@ -998,7 +1002,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       })
       return next
     })
-  }, [goalsSnapshot])
+  }, [activeGoalSnapshots])
 
   const currentTaskLower = normalizedCurrentTask.toLocaleLowerCase()
   const isDefaultTask = normalizedCurrentTask.length === 0
@@ -1895,9 +1899,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
             <div className="task-selector__section">
               <h2 className="task-selector__section-title">Goals</h2>
-              {goalsSnapshot.length > 0 ? (
+              {activeGoalSnapshots.length > 0 ? (
                 <ul className="task-selector__goals">
-                  {goalsSnapshot.map((goal) => {
+                  {activeGoalSnapshots.map((goal) => {
                     const goalExpanded = expandedGoals.has(goal.id)
                     const goalSurface = goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE
                     const goalToggleClass = `task-selector__goal-toggle surface-goal surface-goal--${goalSurface}`

@@ -7,6 +7,7 @@ export type DbGoal = {
   sort_index: number
   card_surface: string | null
   starred: boolean
+  goal_archive?: boolean
 }
 export type DbBucket = {
   id: string
@@ -49,6 +50,7 @@ export type GoalSeed = {
   color?: string | null
   surfaceStyle?: string | null
   starred?: boolean
+  archived?: boolean
   buckets?: BucketSeed[]
 }
 
@@ -62,6 +64,7 @@ export async function fetchGoalsHierarchy(): Promise<
         color: string
         surfaceStyle?: string | null
         starred?: boolean
+        archived?: boolean
         buckets: Array<{
           id: string
           name: string
@@ -86,7 +89,7 @@ export async function fetchGoalsHierarchy(): Promise<
   // Goals
   const { data: goals, error: gErr } = await supabase
     .from('goals')
-    .select('id, name, color, sort_index, card_surface, starred')
+    .select('id, name, color, sort_index, card_surface, starred, goal_archive')
     .order('sort_index', { ascending: true })
   if (gErr) return null
   if (!goals || goals.length === 0) return { goals: [] }
@@ -161,6 +164,7 @@ export async function fetchGoalsHierarchy(): Promise<
       color: g.color,
       starred: Boolean((g as any).starred),
       surfaceStyle,
+      archived: Boolean((g as any).goal_archive),
       buckets: (bucketsByGoal.get(g.id) ?? []).map((bucket) => ({
         ...bucket,
         surfaceStyle:
@@ -272,8 +276,8 @@ export async function createGoal(name: string, color: string, surface: string = 
   const sort_index = await nextSortIndex('goals')
   const { data, error } = await supabase
     .from('goals')
-    .insert([{ user_id: session.user.id, name, color, sort_index, card_surface: surface, starred: false }])
-    .select('id, name, color, sort_index, card_surface, starred')
+    .insert([{ user_id: session.user.id, name, color, sort_index, card_surface: surface, starred: false, goal_archive: false }])
+    .select('id, name, color, sort_index, card_surface, starred, goal_archive')
     .single()
   if (error) return null
   return data as DbGoal
@@ -295,6 +299,12 @@ export async function setGoalStarred(goalId: string, starred: boolean) {
   if (!supabase) return
   await ensureSingleUserSession()
   await supabase.from('goals').update({ starred }).eq('id', goalId)
+}
+
+export async function setGoalArchived(goalId: string, archived: boolean) {
+  if (!supabase) return
+  await ensureSingleUserSession()
+  await supabase.from('goals').update({ goal_archive: archived }).eq('id', goalId)
 }
 
 export async function renameGoal(goalId: string, name: string) {
@@ -649,6 +659,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       sort_index: (index + 1) * STEP,
       card_surface: goal.surfaceStyle ?? 'glass',
       starred: Boolean(goal.starred),
+      goal_archive: Boolean(goal.archived),
     }))
 
     const { data: insertedGoals, error: goalsError } = await supabase

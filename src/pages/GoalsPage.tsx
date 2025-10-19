@@ -14,6 +14,7 @@ import {
   setGoalColor as apiSetGoalColor,
   setGoalSurface as apiSetGoalSurface,
   setGoalStarred as apiSetGoalStarred,
+  setGoalArchived as apiSetGoalArchived,
   deleteBucketById as apiDeleteBucketById,
   deleteCompletedTasksInBucket as apiDeleteCompletedTasksInBucket,
   deleteTaskById as apiDeleteTaskById,
@@ -420,6 +421,7 @@ export interface Goal {
   color: string
   surfaceStyle?: GoalSurfaceStyle
   starred: boolean
+  archived: boolean
   customGradient?: {
     from: string
     to: string
@@ -444,6 +446,7 @@ const DEFAULT_GOALS: Goal[] = [
     color: 'from-sky-500 to-indigo-500',
     surfaceStyle: 'glass',
     starred: false,
+    archived: false,
     buckets: [
       {
         id: 'b_demo_1',
@@ -497,6 +500,7 @@ const DEFAULT_GOALS: Goal[] = [
     color: 'from-fuchsia-500 to-purple-500',
     surfaceStyle: 'glass',
     starred: false,
+    archived: false,
     buckets: [
       {
         id: 'b1',
@@ -540,6 +544,7 @@ const DEFAULT_GOALS: Goal[] = [
     color: 'from-emerald-500 to-cyan-500',
     surfaceStyle: 'glass',
     starred: false,
+    archived: false,
     buckets: [
       {
         id: 'b4',
@@ -582,6 +587,7 @@ const DEFAULT_GOALS: Goal[] = [
     color: 'from-lime-400 to-emerald-500',
     surfaceStyle: 'glass',
     starred: false,
+    archived: false,
     buckets: [
       {
         id: 'b7',
@@ -624,6 +630,7 @@ const DEFAULT_GOAL_SEEDS: Parameters<typeof seedGoalsIfEmpty>[0] = DEFAULT_GOALS
   color: goal.color,
   surfaceStyle: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
   starred: Boolean(goal.starred),
+  archived: Boolean(goal.archived),
   buckets: goal.buckets.map((bucket) => ({
     name: bucket.name,
     favorite: bucket.favorite,
@@ -659,6 +666,7 @@ function reconcileGoalsWithSnapshot(snapshot: GoalSnapshot[], current: Goal[]): 
       color: goal.color ?? existingGoal?.color ?? FALLBACK_GOAL_COLOR,
       surfaceStyle: goal.surfaceStyle,
       starred: goal.starred ?? existingGoal?.starred ?? false,
+      archived: goal.archived ?? existingGoal?.archived ?? false,
       customGradient: existingGoal?.customGradient,
       buckets: goal.buckets.map((bucket) => {
         const existingBucket = existingGoal?.buckets.find((item) => item.id === bucket.id)
@@ -1126,6 +1134,9 @@ interface GoalRowProps {
   activeCustomizerGoalId: string | null
   isStarred: boolean
   onToggleStarred: () => void
+  isArchived: boolean
+  onArchiveGoal: () => void
+  onRestoreGoal: () => void
 }
 
 const GoalRow: React.FC<GoalRowProps> = ({
@@ -1201,6 +1212,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
   activeCustomizerGoalId,
   isStarred,
   onToggleStarred,
+  isArchived,
+  onArchiveGoal,
+  onRestoreGoal,
 }) => {
   const [dragHover, setDragHover] = useState<
     | { bucketId: string; section: 'active' | 'completed'; index: number }
@@ -1790,6 +1804,21 @@ const GoalRow: React.FC<GoalRowProps> = ({
                 onClick={(e) => {
                   e.stopPropagation()
                   setMenuOpen(false)
+                  if (isArchived) {
+                    onRestoreGoal()
+                  } else {
+                    onArchiveGoal()
+                  }
+                }}
+              >
+                {isArchived ? 'Restore goal' : 'Archive goal'}
+              </button>
+              <button
+                type="button"
+                className="goal-menu__item"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMenuOpen(false)
                   onManageArchivedBuckets()
                 }}
               >
@@ -1962,8 +1991,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
           }
         }}
         className="goal-header-toggle w-full text-left p-4 md:p-5"
-        draggable
-          onDragStart={(e) => {
+        draggable={!isArchived}
+        onDragStart={(e) => {
+          if (isArchived) {
+            e.preventDefault()
+            return
+          }
           try { e.dataTransfer.setData('text/plain', goal.id) } catch {}
           const headerEl = e.currentTarget as HTMLElement
           const container = headerEl.closest('li.goal-entry') as HTMLElement | null
@@ -2005,6 +2038,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
           try { e.dataTransfer.effectAllowed = 'move' } catch {}
         }}
         onDragEnd={(e) => {
+          if (isArchived) {
+            return
+          }
           const headerEl = e.currentTarget as HTMLElement
           const container = headerEl.closest('li.goal-entry') as HTMLElement | null
           container?.classList.remove('dragging')
@@ -2089,6 +2125,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                     </h3>
                   )}
                 </div>
+                {isArchived ? <span className="goal-status-pill flex-none">Archived</span> : null}
               </div>
             )
           })()}
@@ -2128,10 +2165,25 @@ const GoalRow: React.FC<GoalRowProps> = ({
           <div className="mt-3 md:mt-4">
             <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
               <h4 className="goal-subheading">Task Bank</h4>
-              <button onClick={() => onStartBucketDraft(goal.id)} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 whitespace-nowrap">+ Add Bucket</button>
+              {!isArchived ? (
+                <button
+                  onClick={() => onStartBucketDraft(goal.id)}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 whitespace-nowrap"
+                >
+                  + Add Bucket
+                </button>
+              ) : null}
             </div>
 
-            <p className="mt-2 text-xs text-white/60">Buckets surface in Stopwatch when <span className="text-white">Favourited</span>.</p>
+            {isArchived ? (
+              <p className="mt-2 text-xs text-white/60">
+                Restore this goal to continue editing. Buckets and tasks stay as you left them.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-white/60">
+                Buckets surface in Stopwatch when <span className="text-white">Favourited</span>.
+              </p>
+            )}
 
             <ul
               className="goal-bucket-list mt-3 md:mt-4 space-y-2"
@@ -3912,6 +3964,7 @@ export default function GoalsPage(): ReactElement {
           const normalized = result.goals.map((goal: any) => ({
             ...goal,
             starred: Boolean(goal.starred),
+            archived: Boolean(goal.archived),
             surfaceStyle: normalizeSurfaceStyle(goal.surfaceStyle as string | null | undefined),
             buckets: Array.isArray(goal.buckets)
               ? goal.buckets.map((bucket: any) => ({
@@ -4059,6 +4112,7 @@ export default function GoalsPage(): ReactElement {
   // Goal-level DnD hover state and ghost
   const [goalHoverIndex, setGoalHoverIndex] = useState<number | null>(null)
   const [goalLineTop, setGoalLineTop] = useState<number | null>(null)
+  const [showArchivedGoals, setShowArchivedGoals] = useState(false)
 
   useEffect(() => {
     expandedRef.current = expanded
@@ -4169,6 +4223,137 @@ export default function GoalsPage(): ReactElement {
   const cancelBucketRename = () => {
     setRenamingBucketId(null)
     setBucketRenameDraft('')
+  }
+
+  const archiveGoal = (goalId: string) => {
+    let bucketIds: string[] = []
+    let taskIds: string[] = []
+    setGoals((current) => {
+      const target = current.find((goal) => goal.id === goalId)
+      if (!target || target.archived) {
+        return current
+      }
+      bucketIds = target.buckets.map((bucket) => bucket.id)
+      taskIds = target.buckets.flatMap((bucket) => bucket.tasks.map((task) => task.id))
+      const next = current.map((goal) => (goal.id === goalId ? { ...goal, archived: true } : goal))
+      apiSetGoalArchived(goalId, true).catch(() => {
+        setGoals((rollback) =>
+          rollback.map((goal) => (goal.id === goalId ? { ...goal, archived: false } : goal)),
+        )
+      })
+      return next
+    })
+    setExpanded((prev) => {
+      if (!prev[goalId]) {
+        return prev
+      }
+      const next = { ...prev }
+      next[goalId] = false
+      return next
+    })
+    setBucketExpanded((prev) => {
+      if (bucketIds.length === 0) {
+        return prev
+      }
+      let changed = false
+      const next = { ...prev }
+      bucketIds.forEach((bucketId) => {
+        if (next[bucketId]) {
+          next[bucketId] = false
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+    setCompletedCollapsed((prev) => {
+      if (bucketIds.length === 0) {
+        return prev
+      }
+      let changed = false
+      const next = { ...prev }
+      bucketIds.forEach((bucketId) => {
+        if (next[bucketId] !== undefined) {
+          next[bucketId] = true
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+    setBucketDrafts((prev) => {
+      if (prev[goalId] === undefined) return prev
+      const { [goalId]: _removed, ...rest } = prev
+      return rest
+    })
+    if (bucketIds.length > 0) {
+      setTaskDrafts((prev) => {
+        let changed = false
+        const next = { ...prev }
+        bucketIds.forEach((bucketId) => {
+          if (bucketId in next) {
+            delete next[bucketId]
+            changed = true
+          }
+        })
+        return changed ? next : prev
+      })
+    }
+    if (taskIds.length > 0) {
+      setTaskEdits((prev) => {
+        let changed = false
+        const next = { ...prev }
+        taskIds.forEach((taskId) => {
+          if (taskId in next) {
+            delete next[taskId]
+            changed = true
+          }
+        })
+        return changed ? next : prev
+      })
+      setTaskDetails((prev) => {
+        let changed = false
+        const next = { ...prev }
+        taskIds.forEach((taskId) => {
+          if (taskId in next) {
+            delete next[taskId]
+            changed = true
+          }
+        })
+        return changed ? next : prev
+      })
+    }
+    if (focusPromptTarget?.goalId === goalId) {
+      setFocusPromptTarget(null)
+    }
+    if (revealedDeleteTaskKey && revealedDeleteTaskKey.startsWith(`${goalId}__`)) {
+      setRevealedDeleteTaskKey(null)
+    }
+    if (renamingGoalId === goalId) {
+      setRenamingGoalId(null)
+      setGoalRenameDraft('')
+    }
+    if (activeCustomizerGoalId === goalId) {
+      setActiveCustomizerGoalId(null)
+    }
+    if (managingArchivedGoalId === goalId) {
+      setManagingArchivedGoalId(null)
+    }
+  }
+
+  const restoreGoal = (goalId: string) => {
+    setGoals((current) => {
+      const target = current.find((goal) => goal.id === goalId)
+      if (!target || !target.archived) {
+        return current
+      }
+      const next = current.map((goal) => (goal.id === goalId ? { ...goal, archived: false } : goal))
+      apiSetGoalArchived(goalId, false).catch(() => {
+        setGoals((rollback) =>
+          rollback.map((goal) => (goal.id === goalId ? { ...goal, archived: true } : goal)),
+        )
+      })
+      return next
+    })
+    setExpanded((prev) => ({ ...prev, [goalId]: true }))
   }
 
   const deleteGoal = (goalId: string) => {
@@ -4532,7 +4717,7 @@ export default function GoalsPage(): ReactElement {
       .then((db) => {
         const id = db?.id ?? `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
         const surfaceStyle = normalizeSurfaceStyle((db?.card_surface as string | null | undefined) ?? 'glass')
-        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, surfaceStyle, starred: false, buckets: [] }
+        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, surfaceStyle, starred: false, archived: false, buckets: [] }
         setGoals((current) => [newGoal, ...current])
         setExpanded((current) => ({ ...current, [id]: true }))
         // Persist new goal at the top to match optimistic UI order
@@ -4542,7 +4727,7 @@ export default function GoalsPage(): ReactElement {
       })
       .catch(() => {
         const id = `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, surfaceStyle: 'glass', starred: false, buckets: [] }
+        const newGoal: Goal = { id, name: trimmed, color: gradientForGoal, surfaceStyle: 'glass', starred: false, archived: false, buckets: [] }
         setGoals((current) => [newGoal, ...current])
         setExpanded((current) => ({ ...current, [id]: true }))
       })
@@ -4553,21 +4738,42 @@ export default function GoalsPage(): ReactElement {
 
   const normalizedSearch = searchTerm.trim().toLowerCase()
 
-  const visibleGoals = normalizedSearch
-    ? goals.filter((goal) => {
-        if (goal.name.toLowerCase().includes(normalizedSearch)) {
+  const filteredGoals = useMemo(() => {
+    if (!normalizedSearch) {
+      return goals
+    }
+    return goals.filter((goal) => {
+      if (goal.name.toLowerCase().includes(normalizedSearch)) {
+        return true
+      }
+      return goal.buckets.filter((bucket) => !bucket.archived).some((bucket) => {
+        if (bucket.name.toLowerCase().includes(normalizedSearch)) {
           return true
         }
-        return goal.buckets.filter((bucket) => !bucket.archived).some((bucket) => {
-          if (bucket.name.toLowerCase().includes(normalizedSearch)) {
-            return true
-          }
-          return bucket.tasks.some((task) => task.text.toLowerCase().includes(normalizedSearch))
-        })
+        return bucket.tasks.some((task) => task.text.toLowerCase().includes(normalizedSearch))
       })
-    : goals
+    })
+  }, [goals, normalizedSearch])
+
+  const visibleActiveGoals = useMemo(
+    () => filteredGoals.filter((goal) => !goal.archived),
+    [filteredGoals],
+  )
+  const visibleArchivedGoals = useMemo(
+    () => filteredGoals.filter((goal) => goal.archived),
+    [filteredGoals],
+  )
+  const archivedGoals = useMemo(() => goals.filter((goal) => goal.archived), [goals])
+  const archivedGoalsCount = archivedGoals.length
 
   const hasNoGoals = goals.length === 0
+  const hasNoActiveGoals = goals.every((goal) => goal.archived)
+
+  useEffect(() => {
+    if (normalizedSearch && visibleArchivedGoals.length > 0) {
+      setShowArchivedGoals((current) => (current ? current : true))
+    }
+  }, [normalizedSearch, visibleArchivedGoals])
 
   useEffect(() => {
     if (!normalizedSearch) {
@@ -5430,16 +5636,13 @@ export default function GoalsPage(): ReactElement {
   const reorderGoalsByVisibleInsert = (goalId: string, toVisibleIndex: number) => {
     const fromGlobalIndex = goals.findIndex((g) => g.id === goalId)
     if (fromGlobalIndex === -1) return
+    const targetGoal = goals[fromGlobalIndex]
+    if (!targetGoal || targetGoal.archived) {
+      return
+    }
     // Build the visible list exactly like the DOM candidates used for insert metrics,
     // but exclude the dragged goal so indices match the hover line positions.
-    const visible = normalizedSearch
-      ? goals.filter((g) =>
-          (g.id !== goalId) && (
-            g.name.toLowerCase().includes(normalizedSearch) ||
-            g.buckets.some((b) => b.name.toLowerCase().includes(normalizedSearch) || b.tasks.some((t) => t.text.toLowerCase().includes(normalizedSearch)))
-          )
-        )
-      : goals.filter((g) => g.id !== goalId)
+    const visible = visibleActiveGoals.filter((g) => g.id !== goalId)
     const visibleIds = visible.map((g) => g.id)
     // Clamp target visible index to [0, visibleIds.length]
     const clampedVisibleIndex = Math.max(0, Math.min(toVisibleIndex, visibleIds.length))
@@ -5538,12 +5741,19 @@ export default function GoalsPage(): ReactElement {
             </button>
           </div>
 
-          {hasNoGoals && visibleGoals.length === 0 ? (
+          {hasNoGoals ? (
             <p className="text-white/70 text-sm">No goals yet.</p>
-          ) : visibleGoals.length === 0 ? (
-            <p className="text-white/70 text-sm">
-              No goals match “{searchTerm.trim()}”.
-            </p>
+          ) : visibleActiveGoals.length === 0 ? (
+            normalizedSearch ? (
+              <p className="text-white/70 text-sm">
+                No active goals match “{searchTerm.trim()}”.
+                {visibleArchivedGoals.length > 0 ? ' Matches found in Archived Goals below.' : ''}
+              </p>
+            ) : hasNoActiveGoals ? (
+              <p className="text-white/70 text-sm">All goals are archived. Restore one from the section below.</p>
+            ) : (
+              <p className="text-white/70 text-sm">No active goals right now.</p>
+            )
           ) : (
             <ul
               className="goal-list space-y-3 md:space-y-4"
@@ -5561,7 +5771,7 @@ export default function GoalsPage(): ReactElement {
                 const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean; openIds?: string[] } | null
                 if (!info) return
                 e.preventDefault()
-                const toIndex = goalHoverIndex ?? visibleGoals.length
+                const toIndex = goalHoverIndex ?? visibleActiveGoals.length
                 reorderGoalsByVisibleInsert(info.goalId, toIndex)
                 // Restore goals open state snapshot
                 if (info.openIds && info.openIds.length > 0) {
@@ -5583,7 +5793,7 @@ export default function GoalsPage(): ReactElement {
               {goalLineTop !== null ? (
                 <div className="goal-insert-line" style={{ top: `${goalLineTop}px` }} aria-hidden />
               ) : null}
-              {visibleGoals.map((g) => (
+              {visibleActiveGoals.map((g) => (
                 <li key={g.id} className="goal-entry" data-goal-id={g.id}>
                   <GoalRow
                     goal={g}
@@ -5664,11 +5874,142 @@ export default function GoalsPage(): ReactElement {
                     activeCustomizerGoalId={activeCustomizerGoalId}
                     isStarred={Boolean(g.starred)}
                     onToggleStarred={() => toggleGoalStarred(g.id)}
-                />
+                    isArchived={g.archived}
+                    onArchiveGoal={() => archiveGoal(g.id)}
+                    onRestoreGoal={() => restoreGoal(g.id)}
+                  />
                 </li>
               ))}
             </ul>
           )}
+
+          <section className="goal-archived-section">
+            <button
+              type="button"
+              className={classNames('goal-archived-toggle', archivedGoalsCount === 0 && 'goal-archived-toggle--empty')}
+              onClick={() => setShowArchivedGoals((value) => !value)}
+              aria-expanded={showArchivedGoals}
+            >
+              <span className="goal-archived-label">Archived Goals</span>
+              <span className="goal-archived-count">{archivedGoalsCount}</span>
+              <svg
+                className={classNames('goal-archived-chevron', showArchivedGoals && 'goal-archived-chevron--open')}
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M5 9l7 7 7-7"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            {showArchivedGoals ? (
+              archivedGoalsCount === 0 ? (
+                <p className="goal-archived-empty text-white/60 text-sm">
+                  Archive a goal from the menu to see it here.
+                </p>
+              ) : visibleArchivedGoals.length === 0 ? (
+                <p className="goal-archived-empty text-white/60 text-sm">
+                  No archived goals match “{searchTerm.trim()}”.
+                </p>
+              ) : (
+                <ul className="goal-archived-list space-y-3 md:space-y-4">
+                  {visibleArchivedGoals.map((g) => (
+                    <li key={g.id} className="goal-entry goal-entry--archived" data-goal-id={g.id}>
+                      <GoalRow
+                        goal={g}
+                        isOpen={expanded[g.id] ?? false}
+                        onToggle={() => toggleExpand(g.id)}
+                        onDeleteGoal={(goalId) => deleteGoal(goalId)}
+                        onCollapseOtherGoalsForDrag={collapseOtherGoalsForDrag}
+                        onRestoreGoalsOpenState={restoreGoalsOpenState}
+                        isRenaming={renamingGoalId === g.id}
+                        goalRenameValue={renamingGoalId === g.id ? goalRenameDraft : undefined}
+                        onStartGoalRename={(goalId, initial) => startGoalRename(goalId, initial)}
+                        onGoalRenameChange={(value) => handleGoalRenameChange(value)}
+                        onGoalRenameSubmit={() => submitGoalRename()}
+                        onGoalRenameCancel={() => cancelGoalRename()}
+                        renamingBucketId={renamingBucketId}
+                        bucketRenameValue={bucketRenameDraft}
+                        onStartBucketRename={(goalId, bucketId, initial) => startBucketRename(goalId, bucketId, initial)}
+                        onBucketRenameChange={(value) => handleBucketRenameChange(value)}
+                        onBucketRenameSubmit={() => submitBucketRename()}
+                        onBucketRenameCancel={() => cancelBucketRename()}
+                        onDeleteBucket={(bucketId) => deleteBucket(g.id, bucketId)}
+                        onArchiveBucket={(bucketId) => archiveBucket(g.id, bucketId)}
+                        archivedBucketCount={g.buckets.filter((bucket) => bucket.archived).length}
+                        onManageArchivedBuckets={() => openArchivedManager(g.id)}
+                        onDeleteCompletedTasks={(bucketId) => deleteCompletedTasks(g.id, bucketId)}
+                        onToggleBucketFavorite={(bucketId) => toggleBucketFavorite(g.id, bucketId)}
+                        onUpdateBucketSurface={(goalId, bucketId, surface) => updateBucketSurface(goalId, bucketId, surface)}
+                        bucketExpanded={bucketExpanded}
+                        onToggleBucketExpanded={toggleBucketExpanded}
+                        completedCollapsed={completedCollapsed}
+                        onToggleCompletedCollapsed={toggleCompletedSection}
+                        taskDetails={taskDetails}
+                        handleToggleTaskDetails={handleToggleTaskDetails}
+                        handleTaskNotesChange={handleTaskNotesChange}
+                        handleAddSubtask={handleAddSubtask}
+                        handleSubtaskTextChange={handleSubtaskTextChange}
+                        handleToggleSubtaskCompleted={handleToggleSubtaskCompleted}
+                        handleRemoveSubtask={handleRemoveSubtask}
+                        taskDrafts={taskDrafts}
+                        onStartTaskDraft={startTaskDraft}
+                        onTaskDraftChange={handleTaskDraftChange}
+                        onTaskDraftSubmit={handleTaskDraftSubmit}
+                        onTaskDraftBlur={handleTaskDraftBlur}
+                        onTaskDraftCancel={handleTaskDraftCancel}
+                        registerTaskDraftRef={registerTaskDraftRef}
+                        bucketDraftValue={bucketDrafts[g.id]}
+                        onStartBucketDraft={startBucketDraft}
+                        onBucketDraftChange={handleBucketDraftChange}
+                        onBucketDraftSubmit={handleBucketDraftSubmit}
+                        onBucketDraftBlur={handleBucketDraftBlur}
+                        onBucketDraftCancel={handleBucketDraftCancel}
+                        registerBucketDraftRef={registerBucketDraftRef}
+                        highlightTerm={normalizedSearch}
+                        onToggleTaskComplete={(bucketId, taskId) => toggleTaskCompletion(g.id, bucketId, taskId)}
+                        onCycleTaskDifficulty={(bucketId, taskId) => cycleTaskDifficulty(g.id, bucketId, taskId)}
+                        onToggleTaskPriority={(bucketId, taskId) => toggleTaskPriority(g.id, bucketId, taskId)}
+                        revealedDeleteTaskKey={revealedDeleteTaskKey}
+                        onRevealDeleteTask={setRevealedDeleteTaskKey}
+                        onDeleteCompletedTask={deleteCompletedTask}
+                        editingTasks={taskEdits}
+                        onStartTaskEdit={(goalId, bucketId, taskId, initial, options) =>
+                          startTaskEdit(goalId, bucketId, taskId, initial, options)
+                        }
+                        onTaskEditChange={handleTaskEditChange}
+                        onTaskEditSubmit={(goalId, bucketId, taskId) => handleTaskEditSubmit(goalId, bucketId, taskId)}
+                        onTaskEditBlur={(goalId, bucketId, taskId) => handleTaskEditBlur(goalId, bucketId, taskId)}
+                        onTaskEditCancel={(taskId) => handleTaskEditCancel(taskId)}
+                        registerTaskEditRef={registerTaskEditRef}
+                        focusPromptTarget={focusPromptTarget}
+                        onTaskTextClick={handleTaskTextClick}
+                        onDismissFocusPrompt={dismissFocusPrompt}
+                        onStartFocusTask={handleStartFocusTask}
+                        onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
+                          reorderTasks(goalId, bucketId, section, fromIndex, toIndex)
+                        }
+                        onReorderBuckets={(bucketId, toIndex) => reorderBuckets(g.id, bucketId, toIndex)}
+                        onOpenCustomizer={(goalId) => setActiveCustomizerGoalId(goalId)}
+                        activeCustomizerGoalId={activeCustomizerGoalId}
+                        isStarred={Boolean(g.starred)}
+                        onToggleStarred={() => toggleGoalStarred(g.id)}
+                        isArchived={g.archived}
+                        onArchiveGoal={() => archiveGoal(g.id)}
+                        onRestoreGoal={() => restoreGoal(g.id)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : null}
+          </section>
+
         </div>
       </div>
 
