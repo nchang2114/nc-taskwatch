@@ -111,6 +111,17 @@ const SNAPBACK_ACTIONS = [
 type SnapbackReasonId = (typeof SNAPBACK_REASONS)[number]['id']
 type SnapbackActionId = (typeof SNAPBACK_ACTIONS)[number]['id']
 
+const LIFE_ROUTINES_NAME = 'Life Routines'
+const LIFE_ROUTINES_GOAL_ID = 'life-routines'
+const LIFE_ROUTINES_BUCKET_ID = 'life-routines'
+const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
+const LIFE_ROUTINE_TASKS = [
+  { id: 'life-sleep', label: 'Sleep', detail: 'Protect your rest window tonight.' },
+  { id: 'life-eat', label: 'Eat', detail: 'Pause for a nourishing meal.' },
+  { id: 'life-meditate', label: 'Meditate', detail: 'Take ten for stillness.' },
+  { id: 'life-socials', label: 'Socials', detail: 'Reach out and connect.' },
+] as const
+
 declare global {
   interface Window {
     __ncSetElapsed?: (ms: number) => void
@@ -450,6 +461,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [hasRequestedGoals, setHasRequestedGoals] = useState(false)
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(() => new Set())
   const [expandedBuckets, setExpandedBuckets] = useState<Set<string>>(() => new Set())
+  const [lifeRoutinesExpanded, setLifeRoutinesExpanded] = useState(false)
   const [focusSource, setFocusSource] = useState<FocusSource | null>(() => readStoredFocusSource())
   const [customTaskDraft, setCustomTaskDraft] = useState('')
   const [isCompletingFocus, setIsCompletingFocus] = useState(false)
@@ -1349,6 +1361,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     const goalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
     const entryGoalName = focusSource?.goalName ?? activeFocusCandidate?.goalName ?? null
     const entryBucketName = focusSource?.bucketName ?? activeFocusCandidate?.bucketName ?? null
+    const isLifeRoutineFocus =
+      goalId === LIFE_ROUTINES_GOAL_ID && bucketId === LIFE_ROUTINES_BUCKET_ID && taskId?.startsWith('life-')
 
     if (!taskId || !bucketId || !goalId) {
       return
@@ -1375,54 +1389,58 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     setSessionStart(null)
     lastTickRef.current = null
 
-    setGoalsSnapshot((current) => {
-      let mutated = false
-      const updated = current.map((goal) => {
-        if (goal.id !== goalId) {
-          return goal
-        }
-        const updatedBuckets = goal.buckets.map((bucket) => {
-          if (bucket.id !== bucketId) {
-            return bucket
+    if (!isLifeRoutineFocus) {
+      setGoalsSnapshot((current) => {
+        let mutated = false
+        const updated = current.map((goal) => {
+          if (goal.id !== goalId) {
+            return goal
           }
-          const updatedTasks = bucket.tasks.map((task) => {
-            if (task.id !== taskId) {
-              return task
+          const updatedBuckets = goal.buckets.map((bucket) => {
+            if (bucket.id !== bucketId) {
+              return bucket
             }
-            mutated = true
-            return { ...task, completed: true }
+            const updatedTasks = bucket.tasks.map((task) => {
+              if (task.id !== taskId) {
+                return task
+              }
+              mutated = true
+              return { ...task, completed: true }
+            })
+            if (!mutated) {
+              return { ...bucket, tasks: updatedTasks }
+            }
+            const activeTasks = updatedTasks.filter((task) => !task.completed)
+            const completedTasks = updatedTasks.filter((task) => task.completed)
+            return { ...bucket, tasks: [...activeTasks, ...completedTasks] }
           })
-          if (!mutated) {
-            return { ...bucket, tasks: updatedTasks }
-          }
-          const activeTasks = updatedTasks.filter((task) => !task.completed)
-          const completedTasks = updatedTasks.filter((task) => task.completed)
-          return { ...bucket, tasks: [...activeTasks, ...completedTasks] }
+          return { ...goal, buckets: updatedBuckets }
         })
-        return { ...goal, buckets: updatedBuckets }
+        if (mutated) {
+          publishGoalsSnapshot(updated)
+          return updated
+        }
+        return current
       })
-      if (mutated) {
-        publishGoalsSnapshot(updated)
-        return updated
-      }
-      return current
-    })
-
-    try {
-      await setTaskCompletedAndResort(taskId, bucketId, true)
-    } catch (error) {
-      console.warn('Failed to mark task complete from Taskwatch', error)
-    } finally {
-      const timeoutId = window.setTimeout(() => {
-        setIsCompletingFocus(false)
-        setCurrentTaskName('')
-        setFocusSource(null)
-        setCustomTaskDraft('')
-        setIsSelectorOpen(false)
-        focusCompletionTimeoutRef.current = null
-      }, FOCUS_COMPLETION_RESET_DELAY_MS)
-      focusCompletionTimeoutRef.current = timeoutId
     }
+
+    if (!isLifeRoutineFocus) {
+      try {
+        await setTaskCompletedAndResort(taskId, bucketId, true)
+      } catch (error) {
+        console.warn('Failed to mark task complete from Taskwatch', error)
+      }
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsCompletingFocus(false)
+      setCurrentTaskName('')
+      setFocusSource(null)
+      setCustomTaskDraft('')
+      setIsSelectorOpen(false)
+      focusCompletionTimeoutRef.current = null
+    }, FOCUS_COMPLETION_RESET_DELAY_MS)
+    focusCompletionTimeoutRef.current = timeoutId
   }
 
   const handleSelectTask = (taskName: string, source: FocusSource | null) => {
@@ -1895,6 +1913,75 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
               ) : (
                 <p className="task-selector__empty">No priority tasks yet.</p>
               )}
+            </div>
+
+            <div className="task-selector__section">
+              <h2 className="task-selector__section-title">Life Routines</h2>
+              <button
+                type="button"
+                className={`task-selector__goal-toggle surface-goal surface-goal--${LIFE_ROUTINES_SURFACE}`}
+                onClick={() => setLifeRoutinesExpanded((value) => !value)}
+                aria-expanded={lifeRoutinesExpanded}
+              >
+                <span className="task-selector__goal-info">
+                  <span className="task-selector__goal-badge" aria-hidden="true">
+                    System
+                  </span>
+                  <span className="task-selector__goal-name">{LIFE_ROUTINES_NAME}</span>
+                </span>
+                <span className="task-selector__chevron" aria-hidden="true">
+                  {lifeRoutinesExpanded ? '−' : '+'}
+                </span>
+              </button>
+              {lifeRoutinesExpanded ? (
+                <ul className="task-selector__list">
+                  {LIFE_ROUTINE_TASKS.map((task) => {
+                    const taskLower = task.label.trim().toLocaleLowerCase()
+                    const matches = focusSource
+                      ? focusSource.goalId === LIFE_ROUTINES_GOAL_ID &&
+                        focusSource.bucketId === LIFE_ROUTINES_BUCKET_ID &&
+                        currentTaskLower === taskLower
+                      : !isDefaultTask && currentTaskLower === taskLower
+                    const rowClassName = [
+                      'task-selector__task',
+                      'goal-task-row',
+                      matches ? 'task-selector__task--active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                    return (
+                      <li key={task.id} className="task-selector__item">
+                        <button
+                          type="button"
+                          className={rowClassName}
+                          onClick={() =>
+                            handleSelectTask(task.label, {
+                              goalId: LIFE_ROUTINES_GOAL_ID,
+                              bucketId: LIFE_ROUTINES_BUCKET_ID,
+                              goalName: LIFE_ROUTINES_NAME,
+                              bucketName: LIFE_ROUTINES_NAME,
+                              taskId: task.id,
+                              taskDifficulty: 'none',
+                              priority: false,
+                              goalSurface: LIFE_ROUTINES_SURFACE,
+                              bucketSurface: LIFE_ROUTINES_SURFACE,
+                            })
+                          }
+                        >
+                          <div className="task-selector__task-main">
+                            <div className="task-selector__task-content">
+                              <span className="goal-task-text">
+                                <span className="goal-task-text__inner">{task.label}</span>
+                              </span>
+                              <span className="task-selector__origin task-selector__origin--dropdown">{task.detail}</span>
+                            </div>
+                          </div>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : null}
             </div>
 
             <div className="task-selector__section">

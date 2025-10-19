@@ -293,6 +293,174 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   outline-offset: 2px;
 }
 
+.life-routines-card {
+  --lr-bg: rgba(255, 204, 153, 0.08);
+  --lr-border: rgba(255, 194, 136, 0.24);
+  --lr-text: rgba(255, 247, 236, 0.9);
+  --lr-muted: rgba(255, 230, 204, 0.7);
+  --lr-pill-bg: rgba(255, 204, 153, 0.08);
+  --lr-pill-border: rgba(255, 194, 140, 0.22);
+  --lr-pill-text: rgba(255, 240, 222, 0.84);
+  margin-top: clamp(0.5rem, 2vw, 0.85rem);
+  padding: clamp(0.6rem, 2.2vw, 0.85rem);
+  border-radius: 0.75rem;
+  border: 1px solid var(--lr-border);
+  background: var(--lr-bg);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.42rem, 1.5vw, 0.6rem);
+}
+
+.life-routines-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: clamp(0.4rem, 1.4vw, 0.65rem);
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.life-routines-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+  color: var(--lr-text);
+}
+
+.life-routines-card__eyebrow {
+  margin: 0;
+  font-size: 0.55rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(255, 233, 210, 0.8);
+}
+
+.life-routines-card__title {
+  margin: 0;
+  font-size: clamp(0.88rem, 2.2vw, 1.08rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.life-routines-card__subtitle {
+  margin: 0;
+  font-size: clamp(0.68rem, 1.7vw, 0.8rem);
+  line-height: 1.38;
+  color: var(--lr-muted);
+}
+
+.life-routines-card__indicator {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 205, 168, 0.28);
+  background: rgba(255, 205, 168, 0.14);
+  color: var(--lr-text);
+  transition: transform 0.18s ease;
+}
+
+.life-routines-card__chevron {
+  width: 0.75rem;
+  height: 0.75rem;
+  transition: transform 0.18s ease;
+}
+
+.life-routines-card--open .life-routines-card__indicator {
+  transform: rotate(180deg);
+}
+
+.life-routines-card__tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: clamp(0.35rem, 1.4vw, 0.6rem);
+}
+
+.life-routines-card__task {
+  border-radius: 0.6rem;
+  background: var(--lr-pill-bg);
+  border: 1px solid var(--lr-pill-border);
+  overflow: hidden;
+}
+
+.life-routines-card__task-button {
+  display: grid;
+  gap: 0.16rem;
+  width: 100%;
+  padding: clamp(0.45rem, 1.5vw, 0.65rem) clamp(0.58rem, 1.7vw, 0.8rem);
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.life-routines-card__task-button:focus-visible {
+  outline: 2px solid rgba(255, 205, 168, 0.4);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+.life-routines-card__focus {
+  margin-top: clamp(0.3rem, 1.2vw, 0.45rem);
+}
+
+.life-routines-card__task-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  font-size: 0.76rem;
+  color: var(--lr-pill-text);
+  margin: 0;
+}
+
+.life-routines-card__task-title::before {
+  content: '';
+  width: 0.26rem;
+  height: 0.26rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 218, 160, 0.9), rgba(255, 170, 90, 0.88));
+  box-shadow: 0 0 4px rgba(255, 186, 96, 0.35);
+}
+
+.life-routines-card__task-blurb {
+  margin: 0;
+  font-size: 0.66rem;
+  line-height: 1.28;
+  color: rgba(255, 235, 214, 0.64);
+}
+
+html[data-theme='light'] .life-routines-card {
+  --lr-bg: rgba(255, 246, 232, 0.92);
+  --lr-border: rgba(227, 182, 116, 0.36);
+  --lr-text: rgba(94, 58, 12, 0.92);
+  --lr-muted: rgba(120, 78, 24, 0.7);
+  --lr-pill-bg: rgba(255, 234, 207, 0.8);
+  --lr-pill-border: rgba(209, 164, 102, 0.38);
+  --lr-pill-text: rgba(104, 66, 16, 0.86);
+}
+
+html[data-theme='light'] .life-routines-card__eyebrow {
+  color: rgba(128, 84, 22, 0.86);
+}
+
+html[data-theme='light'] .life-routines-card__task-blurb {
+  color: rgba(92, 60, 18, 0.7);
+}
+
+
 .goal-draft {
   margin-top: clamp(0.85rem, 2.6vw, 1.4rem);
   border: 1px dashed rgba(118, 142, 255, 0.45);

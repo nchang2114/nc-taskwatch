@@ -104,6 +104,17 @@ const createTaskDetails = (overrides?: Partial<TaskDetails>): TaskDetails => ({
 })
 
 const TASK_DETAILS_STORAGE_KEY = 'nc-taskwatch-task-details-v1'
+const LIFE_ROUTINES_NAME = 'Life Routines'
+const LIFE_ROUTINES_TAGLINE = 'A steady cadence for your everyday wellbeing.'
+const LIFE_ROUTINES_GOAL_ID = 'life-routines'
+const LIFE_ROUTINES_BUCKET_ID = 'life-routines'
+const LIFE_ROUTINES_SURFACE: GoalSurfaceStyle = 'linen'
+const LIFE_ROUTINE_TASKS = [
+  { id: 'life-sleep', title: 'Sleep', blurb: 'Protect 7–9 hours and wind down with intention.' },
+  { id: 'life-eat', title: 'Eat', blurb: 'Plan balanced meals and pause to truly refuel.' },
+  { id: 'life-meditate', title: 'Meditate', blurb: 'Give your mind 10 minutes of quiet focus.' },
+  { id: 'life-socials', title: 'Socials', blurb: 'Reach out, share a laugh, or check in with someone.' },
+] as const
 
 const sanitizeSubtasks = (value: unknown): TaskSubtask[] => {
   if (!Array.isArray(value)) {
@@ -3718,6 +3729,7 @@ export default function GoalsPage(): ReactElement {
   const [taskEdits, setTaskEdits] = useState<Record<string, string>>({})
   const taskEditRefs = useRef(new Map<string, HTMLSpanElement>())
   const submittingEdits = useRef(new Set<string>())
+  const [lifeRoutinesExpanded, setLifeRoutinesExpanded] = useState(false)
   const [focusPromptTarget, setFocusPromptTarget] = useState<FocusPromptTarget | null>(null)
   const [revealedDeleteTaskKey, setRevealedDeleteTaskKey] = useState<string | null>(null)
   const [managingArchivedGoalId, setManagingArchivedGoalId] = useState<string | null>(null)
@@ -4736,7 +4748,22 @@ export default function GoalsPage(): ReactElement {
     closeCreateGoal()
   }
 
-  const normalizedSearch = searchTerm.trim().toLowerCase()
+const normalizedSearch = searchTerm.trim().toLowerCase()
+
+  const lifeRoutineMatchesSearch = useMemo(() => {
+    if (!normalizedSearch) {
+      return true
+    }
+    const needle = normalizedSearch
+    if (LIFE_ROUTINES_NAME.toLowerCase().includes(needle)) {
+      return true
+    }
+    return LIFE_ROUTINE_TASKS.some((task) => {
+      const titleMatch = task.title.toLowerCase().includes(needle)
+      const blurbMatch = task.blurb.toLowerCase().includes(needle)
+      return titleMatch || blurbMatch
+    })
+  }, [normalizedSearch])
 
   const filteredGoals = useMemo(() => {
     if (!normalizedSearch) {
@@ -4768,12 +4795,22 @@ export default function GoalsPage(): ReactElement {
 
   const hasNoGoals = goals.length === 0
   const hasNoActiveGoals = goals.every((goal) => goal.archived)
+  const hasLifeRoutineMatch = normalizedSearch ? lifeRoutineMatchesSearch : false
+  const showNoActiveGoalsNotice =
+    visibleActiveGoals.length === 0 && (normalizedSearch ? !hasLifeRoutineMatch : true)
+  const shouldShowLifeRoutinesCard = !normalizedSearch || lifeRoutineMatchesSearch
 
   useEffect(() => {
     if (normalizedSearch && visibleArchivedGoals.length > 0) {
       setShowArchivedGoals((current) => (current ? current : true))
     }
   }, [normalizedSearch, visibleArchivedGoals])
+
+  useEffect(() => {
+    if (normalizedSearch && lifeRoutineMatchesSearch) {
+      setLifeRoutinesExpanded((current) => (current ? current : true))
+    }
+  }, [normalizedSearch, lifeRoutineMatchesSearch])
 
   useEffect(() => {
     if (!normalizedSearch) {
@@ -5051,6 +5088,41 @@ export default function GoalsPage(): ReactElement {
         autoStart: true,
       })
       setFocusPromptTarget(null)
+    },
+    [],
+  )
+  const handleLifeRoutineFocus = useCallback(
+    (taskId: string, taskTitle: string) => {
+      broadcastFocusTask({
+        goalId: LIFE_ROUTINES_GOAL_ID,
+        goalName: LIFE_ROUTINES_NAME,
+        bucketId: LIFE_ROUTINES_BUCKET_ID,
+        bucketName: LIFE_ROUTINES_NAME,
+        taskId,
+        taskName: taskTitle,
+        taskDifficulty: null,
+        priority: null,
+        goalSurface: LIFE_ROUTINES_SURFACE,
+        bucketSurface: LIFE_ROUTINES_SURFACE,
+        autoStart: true,
+      })
+      setFocusPromptTarget(null)
+    },
+    [],
+  )
+  const toggleLifeRoutineFocusPrompt = useCallback(
+    (taskId: string) => {
+      setFocusPromptTarget((current) => {
+        const isSame =
+          current &&
+          current.goalId === LIFE_ROUTINES_GOAL_ID &&
+          current.bucketId === LIFE_ROUTINES_BUCKET_ID &&
+          current.taskId === taskId
+        if (isSame) {
+          return null
+        }
+        return { goalId: LIFE_ROUTINES_GOAL_ID, bucketId: LIFE_ROUTINES_BUCKET_ID, taskId }
+      })
     },
     [],
   )
@@ -5741,9 +5813,83 @@ export default function GoalsPage(): ReactElement {
             </button>
           </div>
 
+          {shouldShowLifeRoutinesCard ? (
+            <section
+              className={classNames('life-routines-card', lifeRoutinesExpanded && 'life-routines-card--open')}
+              aria-label={LIFE_ROUTINES_NAME}
+            >
+              <button
+                type="button"
+                className="life-routines-card__header"
+                onClick={() => setLifeRoutinesExpanded((value) => !value)}
+                aria-expanded={lifeRoutinesExpanded}
+                aria-controls="life-routines-body"
+              >
+                <div className="life-routines-card__meta">
+                  <p className="life-routines-card__eyebrow">System Layer</p>
+                  <h2 className="life-routines-card__title">
+                    {highlightText(LIFE_ROUTINES_NAME, normalizedSearch)}
+                  </h2>
+                  <p className="life-routines-card__subtitle">
+                    {highlightText(LIFE_ROUTINES_TAGLINE, normalizedSearch)}
+                  </p>
+                </div>
+                <span className="life-routines-card__indicator" aria-hidden="true">
+                  <svg className="life-routines-card__chevron" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M6 9l6 6 6-6"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+              {lifeRoutinesExpanded ? (
+                <ul id="life-routines-body" className="life-routines-card__tasks">
+                  {LIFE_ROUTINE_TASKS.map((task) => (
+                    <li key={task.id} className="life-routines-card__task">
+                      <button
+                        type="button"
+                        className="life-routines-card__task-button"
+                        onClick={() => toggleLifeRoutineFocusPrompt(task.id)}
+                      >
+                        <span className="life-routines-card__task-title">
+                          {highlightText(task.title, normalizedSearch)}
+                        </span>
+                        <span className="life-routines-card__task-blurb">
+                          {highlightText(task.blurb, normalizedSearch)}
+                        </span>
+                      </button>
+                      {focusPromptTarget &&
+                      focusPromptTarget.goalId === LIFE_ROUTINES_GOAL_ID &&
+                      focusPromptTarget.bucketId === LIFE_ROUTINES_BUCKET_ID &&
+                      focusPromptTarget.taskId === task.id ? (
+                        <div className="life-routines-card__focus goal-task-focus">
+                          <button
+                            type="button"
+                            className="goal-task-focus__button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              handleLifeRoutineFocus(task.id, task.title)
+                              dismissFocusPrompt()
+                            }}
+                          >
+                            Start Focus
+                          </button>
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+          ) : null}
+
           {hasNoGoals ? (
             <p className="text-white/70 text-sm">No goals yet.</p>
-          ) : visibleActiveGoals.length === 0 ? (
+          ) : showNoActiveGoalsNotice ? (
             normalizedSearch ? (
               <p className="text-white/70 text-sm">
                 No active goals match “{searchTerm.trim()}”.
