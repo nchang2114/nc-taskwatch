@@ -93,6 +93,23 @@ const NOTEBOOK_STORAGE_KEY = 'nc-taskwatch-notebook'
 const MAX_TASK_STORAGE_LENGTH = 256
 const FOCUS_COMPLETION_RESET_DELAY_MS = 800
 const PRIORITY_HOLD_MS = 300
+const SNAPBACK_MARKER_DURATION_MS = 60000
+
+const SNAPBACK_REASONS = [
+  { id: 'tired' as const, label: 'Energy dip' },
+  { id: 'distracted' as const, label: 'Lost focus' },
+  { id: 'interrupted' as const, label: 'Interrupted' },
+  { id: 'other' as const, label: 'Something else' },
+]
+
+const SNAPBACK_ACTIONS = [
+  { id: 'resume' as const, label: 'Resume this focus' },
+  { id: 'break' as const, label: 'Take a short break' },
+  { id: 'switch' as const, label: 'Switch tasks' },
+]
+
+type SnapbackReasonId = (typeof SNAPBACK_REASONS)[number]['id']
+type SnapbackActionId = (typeof SNAPBACK_ACTIONS)[number]['id']
 
 declare global {
   interface Window {
@@ -387,6 +404,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [isRunning, setIsRunning] = useState(false)
   const [isTimeHidden, setIsTimeHidden] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>(() => getStoredHistory())
+  const [lastSnapbackSummary, setLastSnapbackSummary] = useState<string | null>(null)
+  const [isSnapbackOpen, setIsSnapbackOpen] = useState(false)
+  const [snapbackReason, setSnapbackReason] = useState<SnapbackReasonId>('tired')
+  const [snapbackNextAction, setSnapbackNextAction] = useState<SnapbackActionId>('resume')
+  const [snapbackNote, setSnapbackNote] = useState('')
   const [currentTaskName, setCurrentTaskName] = useState<string>(initialTaskName)
   const [sessionStart, setSessionStart] = useState<number | null>(null)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
@@ -414,6 +436,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const focusCompletionTimeoutRef = useRef<number | null>(null)
   const focusPriorityHoldTimerRef = useRef<number | null>(null)
   const focusPriorityHoldTriggeredRef = useRef(false)
+  const snapbackDialogRef = useRef<HTMLDivElement | null>(null)
   const focusContextRef = useRef<{ goalName: string | null; bucketName: string | null }>({
     goalName: null,
     bucketName: null,
@@ -1498,6 +1521,94 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     [sessionStart],
   )
 
+  const handleOpenSnapback = useCallback(() => {
+    setIsRunning(false)
+    setSnapbackReason('tired')
+    setSnapbackNextAction('resume')
+    setSnapbackNote('')
+    setIsSnapbackOpen(true)
+  }, [])
+
+  const handleCloseSnapback = useCallback(() => {
+    setIsSnapbackOpen(false)
+    setSnapbackNote('')
+  }, [])
+
+  const handleSubmitSnapback = useCallback(() => {
+    const reasonMeta = SNAPBACK_REASONS.find((option) => option.id === snapbackReason)
+    const actionMeta = SNAPBACK_ACTIONS.find((option) => option.id === snapbackNextAction)
+    const reasonLabel = reasonMeta?.label ?? 'Snapback'
+    const actionLabel = actionMeta?.label ?? 'Decide next'
+    const note = snapbackNote.trim()
+    const now = Date.now()
+
+    if (elapsed > 0) {
+      const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'Focus Session'
+      registerNewHistoryEntry(elapsed, entryName)
+      setElapsed(0)
+      setSessionStart(null)
+      lastTickRef.current = null
+    } else {
+      setSessionStart(null)
+    }
+
+    const labelParts = [reasonLabel]
+    if (note.length > 0) {
+      labelParts.push(note)
+    }
+    const markerTaskName = `Snapback • ${labelParts.join(' – ')}`.slice(0, MAX_TASK_STORAGE_LENGTH)
+    const context = focusContextRef.current
+    const markerEntry: HistoryEntry = {
+      id: makeHistoryId(),
+      taskName: markerTaskName,
+      elapsed: SNAPBACK_MARKER_DURATION_MS,
+      startedAt: now,
+      endedAt: now + SNAPBACK_MARKER_DURATION_MS,
+      goalName: context.goalName,
+      bucketName: actionLabel,
+    }
+
+    setHistory((current) => {
+      const next = [markerEntry, ...current]
+      return next.length > 250 ? next.slice(0, 250) : next
+    })
+
+    setLastSnapbackSummary(`${reasonLabel}${note.length > 0 ? ` • ${note}` : ''} → ${actionLabel}`)
+    setIsSnapbackOpen(false)
+    setSnapbackNote('')
+
+    if (snapbackNextAction === 'resume') {
+      const resumeStart = Date.now()
+      setSessionStart(resumeStart)
+      setIsRunning(true)
+    } else {
+    setIsRunning(false)
+    if (snapbackNextAction === 'switch') {
+      setIsSelectorOpen(true)
+    }
+  }
+  }, [elapsed, normalizedCurrentTask, registerNewHistoryEntry, snapbackNextAction, snapbackNote, snapbackReason])
+
+  useEffect(() => {
+    if (!isSnapbackOpen) {
+      return
+    }
+    const timerId = window.setTimeout(() => {
+      snapbackDialogRef.current?.focus()
+    }, 0)
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        handleCloseSnapback()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.clearTimeout(timerId)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [handleCloseSnapback, isSnapbackOpen])
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
@@ -1965,6 +2076,25 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         </div>
       </section>
 
+      <section className="snapback-tool" aria-label="Snap back momentum">
+        <div className="snapback-tool__card">
+          <div className="snapback-tool__body">
+            <h2 className="snapback-tool__title">Snap Back</h2>
+            <p className="snapback-tool__text">
+              Momentum dipped? Pause, capture what happened, and choose your next move.
+            </p>
+            {lastSnapbackSummary ? (
+              <p className="snapback-tool__last" aria-live="polite">
+                Last snapback: {lastSnapbackSummary}
+              </p>
+            ) : null}
+          </div>
+          <button type="button" className="snapback-tool__button" onClick={handleOpenSnapback}>
+            Snap Back
+          </button>
+        </div>
+      </section>
+
       <section className="taskwatch-notes" aria-label="Notes and subtasks">
         <div className="taskwatch-notes__header">
           <div className="taskwatch-notes__heading">
@@ -2045,6 +2175,81 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           />
         </div>
       </section>
+
+      {isSnapbackOpen ? (
+        <div className="snapback-overlay" role="dialog" aria-modal="true" aria-labelledby="snapback-title" onClick={handleCloseSnapback}>
+          <div
+            className="snapback-panel"
+            ref={snapbackDialogRef}
+            tabIndex={-1}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button type="button" className="snapback-panel__close" onClick={handleCloseSnapback} aria-label="Close snapback panel">
+              ×
+            </button>
+            <h2 className="snapback-panel__title" id="snapback-title">
+              Snap Back Check-in
+            </h2>
+            <p className="snapback-panel__lead">What pulled you off track?</p>
+            <div className="snapback-panel__context">
+              <span className="snapback-panel__context-label">Current focus</span>
+              <span className="snapback-panel__context-task">{safeTaskName}</span>
+              {focusContextLabel ? <span className="snapback-panel__context-meta">{focusContextLabel}</span> : null}
+            </div>
+            <div className="snapback-panel__section">
+              <div className="snapback-panel__chips" role="group" aria-label="Select a reason">
+                {SNAPBACK_REASONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`snapback-option${snapbackReason === option.id ? ' snapback-option--active' : ''}`}
+                    aria-pressed={snapbackReason === option.id}
+                    onClick={() => setSnapbackReason(option.id)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <label className="snapback-panel__label">
+                <span className="snapback-panel__label-text">Add a quick note (optional)</span>
+                <textarea
+                  className="snapback-panel__textarea"
+                  value={snapbackNote}
+                  onChange={(event) => setSnapbackNote(event.target.value.slice(0, MAX_TASK_STORAGE_LENGTH))}
+                  placeholder="Jot what happened or what you tried instead"
+                  rows={3}
+                />
+              </label>
+            </div>
+
+            <div className="snapback-panel__section">
+              <h3 className="snapback-panel__heading">What do you want to do next?</h3>
+              <div className="snapback-panel__chips" role="group" aria-label="Choose a next action">
+                {SNAPBACK_ACTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`snapback-option${snapbackNextAction === option.id ? ' snapback-option--active' : ''}`}
+                    aria-pressed={snapbackNextAction === option.id}
+                    onClick={() => setSnapbackNextAction(option.id)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="snapback-panel__actions">
+              <button type="button" className="snapback-panel__button snapback-panel__button--ghost" onClick={handleCloseSnapback}>
+                Cancel
+              </button>
+              <button type="button" className="snapback-panel__button snapback-panel__button--primary" onClick={handleSubmitSnapback}>
+                Log Snap Back
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <p className="meta meta-note">Built with React + Vite for seamless desktop and mobile use.</p>
     </div>
