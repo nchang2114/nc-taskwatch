@@ -16,7 +16,7 @@ export type DbBucket = {
   favorite: boolean
   sort_index: number
   buckets_card_style: string | null
-  archived?: boolean
+  bucket_archive?: boolean
 }
 export type DbTask = {
   id: string
@@ -96,7 +96,7 @@ export async function fetchGoalsHierarchy(): Promise<
   // Buckets
   const { data: buckets, error: bErr } = await supabase
     .from('buckets')
-    .select('id, user_id, goal_id, name, favorite, sort_index, buckets_card_style, archived')
+    .select('id, user_id, goal_id, name, favorite, sort_index, buckets_card_style, bucket_archive')
     .in('goal_id', goalIds)
     .order('sort_index', { ascending: true })
   if (bErr) return null
@@ -130,7 +130,7 @@ export async function fetchGoalsHierarchy(): Promise<
       name: b.name,
       favorite: b.favorite,
       surfaceStyle: (b as any).buckets_card_style ?? null,
-      archived: Boolean((b as any).archived),
+      archived: Boolean((b as any).bucket_archive),
       tasks: [] as any[],
     }
     bucketMap.set(b.id, node)
@@ -362,11 +362,21 @@ export async function createBucket(goalId: string, name: string, surface: string
   const sort_index = await nextSortIndex('buckets', { goal_id: goalId })
   const { data, error } = await supabase
     .from('buckets')
-    .insert([{ user_id: session.user.id, goal_id: goalId, name, favorite: false, archived: false, sort_index, buckets_card_style: surface }])
-    .select('id, name, favorite, archived, sort_index, buckets_card_style')
+    .insert([
+      {
+        user_id: session.user.id,
+        goal_id: goalId,
+        name,
+        favorite: false,
+        bucket_archive: false,
+        sort_index,
+        buckets_card_style: surface,
+      },
+    ])
+    .select('id, name, favorite, bucket_archive, sort_index, buckets_card_style')
     .single()
   if (error) return null
-  return data as { id: string; name: string; favorite: boolean; sort_index: number }
+  return data as { id: string; name: string; favorite: boolean; bucket_archive?: boolean; sort_index: number }
 }
 
 export async function setBucketSurface(bucketId: string, surface: string | null) {
@@ -390,7 +400,7 @@ export async function setBucketFavorite(bucketId: string, favorite: boolean) {
 export async function setBucketArchived(bucketId: string, archived: boolean) {
   if (!supabase) return
   await ensureSingleUserSession()
-  await supabase.from('buckets').update({ archived }).eq('id', bucketId)
+  await supabase.from('buckets').update({ bucket_archive: archived }).eq('id', bucketId)
 }
 
 export async function deleteBucketById(bucketId: string) {
@@ -659,7 +669,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       goal_id: string
       name: string
       favorite: boolean
-      archived: boolean
+      bucket_archive: boolean
       sort_index: number
       buckets_card_style: string | null
     }> = []
@@ -673,7 +683,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
           goal_id: goalId,
           name: bucket.name,
           favorite: Boolean(bucket.favorite),
-          archived: Boolean(bucket.archived),
+          bucket_archive: Boolean(bucket.archived),
           sort_index: (bucketIndex + 1) * STEP,
           buckets_card_style: bucket.surfaceStyle ?? 'glass',
         })
