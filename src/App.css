@@ -2914,6 +2914,55 @@ html[data-theme='light'] .nav-links--drawer {
   color: var(--text-primary);
 }
 
+.history-section__date-group {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(0.3rem, 1vw, 0.5rem);
+}
+
+.history-section__date-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(0.3rem, 0.9vw, 0.45rem);
+  margin-left: clamp(0.45rem, 1.4vw, 0.75rem);
+}
+
+.history-section__date-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(1.85rem, 4.6vw, 2.25rem);
+  height: clamp(1.85rem, 4.6vw, 2.25rem);
+  border-radius: 999px;
+  border: 1px solid rgba(114, 138, 255, 0.45);
+  background: rgba(34, 44, 100, 0.6);
+  color: rgba(198, 210, 255, 0.92);
+  font-family: var(--font-display);
+  font-size: clamp(0.9rem, 2.1vw, 1rem);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.history-section__date-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.history-section__date-button:not(:disabled):hover {
+  background: rgba(48, 62, 134, 0.82);
+  border-color: rgba(134, 160, 255, 0.62);
+  color: #f4f7ff;
+  transform: translateY(-1px);
+}
+
+.history-section__date-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(142, 160, 255, 0.4);
+}
+
 .history-section__desc {
   margin: clamp(0.25rem, 0.8vw, 0.4rem) 0 0;
   font-size: clamp(0.85rem, 1.6vw, 0.95rem);
@@ -3974,6 +4023,22 @@ html[data-theme='light'] .history-entry__delete:hover {
 
 html[data-theme='light'] .history-section__date {
   color: rgba(43, 57, 122, 0.9);
+}
+
+html[data-theme='light'] .history-section__date-button {
+  background: rgba(243, 246, 255, 0.9);
+  border-color: rgba(142, 156, 244, 0.5);
+  color: rgba(40, 52, 118, 0.82);
+}
+
+html[data-theme='light'] .history-section__date-button:not(:disabled):hover {
+  background: rgba(228, 234, 255, 0.95);
+  border-color: rgba(112, 130, 236, 0.6);
+  color: rgba(24, 32, 86, 0.95);
+}
+
+html[data-theme='light'] .history-section__date-button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(104, 122, 238, 0.28);
 }
 
 html[data-theme='light'] .history-section__desc {

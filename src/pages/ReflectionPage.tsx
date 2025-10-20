@@ -1506,6 +1506,7 @@ export default function ReflectionPage() {
   const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(() => readStoredActiveSession())
   const [nowTick, setNowTick] = useState(() => Date.now())
+  const [historyDayOffset, setHistoryDayOffset] = useState(0)
   const [journal, setJournal] = useState('')
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
   const [hoveredHistoryId, setHoveredHistoryId] = useState<string | null>(null)
@@ -1534,6 +1535,16 @@ export default function ReflectionPage() {
   useEffect(() => {
     selectedHistoryIdRef.current = selectedHistoryId
   }, [selectedHistoryId])
+
+  useEffect(() => {
+    setSelectedHistoryId(null)
+    setHoveredHistoryId(null)
+    setEditingHistoryId(null)
+    setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
+    setDragPreview(null)
+    dragStateRef.current = null
+    dragPreviewRef.current = null
+  }, [historyDayOffset])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -2301,8 +2312,11 @@ export default function ReflectionPage() {
   const dayStart = useMemo(() => {
     const date = new Date(nowTick)
     date.setHours(0, 0, 0, 0)
+    if (historyDayOffset !== 0) {
+      date.setDate(date.getDate() + historyDayOffset)
+    }
     return date.getTime()
-  }, [nowTick])
+  }, [nowTick, historyDayOffset])
   const dayEnd = dayStart + DAY_DURATION_MS
   const currentTimePercent = useMemo(() => {
     if (nowTick < dayStart || nowTick > dayEnd) {
@@ -2399,6 +2413,12 @@ export default function ReflectionPage() {
     const date = new Date(dayStart)
     return date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
   }, [dayStart])
+  const handlePreviousDay = useCallback(() => {
+    setHistoryDayOffset((offset) => offset - 1)
+  }, [])
+  const handleNextDay = useCallback(() => {
+    setHistoryDayOffset((offset) => Math.min(offset + 1, 0))
+  }, [])
 
   const handleWindowPointerMove = useCallback(
     (event: PointerEvent) => {
@@ -2632,7 +2652,28 @@ export default function ReflectionPage() {
             </button>
           </div>
           <div className="history-section__header">
-            <h3 className="history-section__date">{dayLabel}</h3>
+            <div className="history-section__date-group">
+              <h3 className="history-section__date">{dayLabel}</h3>
+              <div className="history-section__date-controls" role="group" aria-label="Session history day navigation">
+                <button
+                  type="button"
+                  className="history-section__date-button"
+                  onClick={handlePreviousDay}
+                  aria-label="View previous day"
+                >
+                  <span aria-hidden="true">&lt;</span>
+                </button>
+                <button
+                  type="button"
+                  className="history-section__date-button"
+                  onClick={handleNextDay}
+                  disabled={historyDayOffset >= 0}
+                  aria-label="View next day"
+                >
+                  <span aria-hidden="true">&gt;</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           <div
