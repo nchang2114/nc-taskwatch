@@ -1681,6 +1681,45 @@ export default function ReflectionPage() {
 
   const goalLookup = useMemo(() => createGoalTaskMap(goalsSnapshot), [goalsSnapshot])
   const goalColorLookup = useMemo(() => createGoalColorMap(goalsSnapshot), [goalsSnapshot])
+  const goalSurfaceLookup = useMemo(() => {
+    const map = new Map<string, SurfaceStyle>()
+    goalsSnapshot.forEach((goal) => {
+      const name = goal.name?.trim()
+      if (!name) {
+        return
+      }
+      map.set(name.toLowerCase(), ensureSurfaceStyle(goal.surfaceStyle, DEFAULT_SURFACE_STYLE))
+    })
+    return map
+  }, [goalsSnapshot])
+  const bucketSurfaceLookup = useMemo(() => {
+    const byGoal = new Map<string, SurfaceStyle>()
+    const byName = new Map<string, SurfaceStyle>()
+    goalsSnapshot.forEach((goal) => {
+      const goalName = goal.name?.trim()
+      if (!goalName) {
+        return
+      }
+      const goalKey = goalName.toLowerCase()
+      const goalSurface = ensureSurfaceStyle(goal.surfaceStyle, DEFAULT_SURFACE_STYLE)
+      goal.buckets.forEach((bucket) => {
+        const bucketName = bucket.name?.trim()
+        if (!bucketName) {
+          return
+        }
+        const bucketKey = bucketName.toLowerCase()
+        const bucketSurface = ensureSurfaceStyle(bucket.surfaceStyle, goalSurface)
+        const scopedKey = `${goalKey}::${bucketKey}`
+        if (!byGoal.has(scopedKey)) {
+          byGoal.set(scopedKey, bucketSurface)
+        }
+        if (!byName.has(bucketKey)) {
+          byName.set(bucketKey, bucketSurface)
+        }
+      })
+    })
+    return { byGoal, byName }
+  }, [goalsSnapshot])
   const enhancedGoalLookup = useMemo(() => {
     if (!activeSession || !activeSession.goalName) {
       return goalLookup
@@ -1700,15 +1739,25 @@ export default function ReflectionPage() {
   }, [goalLookup, goalColorLookup, activeSession])
 
   const goalOptions = useMemo(() => {
-    const set = new Set<string>()
+    const normalizedLifeRoutines = LIFE_ROUTINES_NAME.toLowerCase()
+    const seen = new Set<string>()
+    const ordered: string[] = []
     goalsSnapshot.forEach((goal) => {
       const trimmed = goal.name?.trim()
-      if (trimmed) {
-        set.add(trimmed)
+      if (!trimmed) {
+        return
       }
+      const normalized = trimmed.toLowerCase()
+      if (normalized === normalizedLifeRoutines) {
+        return
+      }
+      if (seen.has(normalized)) {
+        return
+      }
+      seen.add(normalized)
+      ordered.push(trimmed)
     })
-    set.add(LIFE_ROUTINES_NAME)
-    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+    return [LIFE_ROUTINES_NAME, ...ordered]
   }, [goalsSnapshot])
 
   const bucketOptionsByGoal = useMemo(() => {
@@ -1776,13 +1825,23 @@ export default function ReflectionPage() {
   const goalDropdownId = useId()
   const bucketDropdownId = useId()
 
-  const goalDropdownOptions = useMemo<HistoryDropdownOption[]>(
-    () => [
-      { value: '', label: 'No goal' },
-      ...resolvedGoalOptions.map((option) => ({ value: option, label: option })),
-    ],
-    [resolvedGoalOptions],
-  )
+  const goalDropdownOptions = useMemo<HistoryDropdownOption[]>(() => {
+    const normalizedLifeRoutines = LIFE_ROUTINES_NAME.toLowerCase()
+    const optionsWithoutLife = resolvedGoalOptions.filter(
+      (option) => option.trim().toLowerCase() !== normalizedLifeRoutines,
+    )
+    const hasLifeOption =
+      resolvedGoalOptions.some((option) => option.trim().toLowerCase() === normalizedLifeRoutines) ||
+      lifeRoutineBucketOptions.length > 0
+    const next: HistoryDropdownOption[] = [{ value: '', label: 'No goal' }]
+    if (hasLifeOption) {
+      next.push({ value: LIFE_ROUTINES_NAME, label: LIFE_ROUTINES_NAME })
+    }
+    optionsWithoutLife.forEach((option) => {
+      next.push({ value: option, label: option })
+    })
+    return next
+  }, [lifeRoutineBucketOptions, resolvedGoalOptions])
 
   const bucketDropdownOptions = useMemo<HistoryDropdownOption[]>(
     () => [
@@ -2000,6 +2059,43 @@ export default function ReflectionPage() {
     const nextElapsed = Math.max(nextEndedAt - nextStartedAt, 1)
     const normalizedGoalName = nextGoalName
     const normalizedBucketName = nextBucketName
+    const goalKey = normalizedGoalName.toLowerCase()
+    const bucketKey = normalizedBucketName.toLowerCase()
+    const hasGoalName = normalizedGoalName.length > 0
+    const hasBucketName = normalizedBucketName.length > 0
+    const lifeRoutineKey = LIFE_ROUTINES_NAME.toLowerCase()
+    const resolvedGoalSurface = ensureSurfaceStyle(
+      (() => {
+        if (!hasGoalName) {
+          return DEFAULT_SURFACE_STYLE
+        }
+        if (goalKey === lifeRoutineKey) {
+          return LIFE_ROUTINES_SURFACE
+        }
+        return goalSurfaceLookup.get(goalKey) ?? DEFAULT_SURFACE_STYLE
+      })(),
+      DEFAULT_SURFACE_STYLE,
+    )
+    const resolvedBucketSurface = (() => {
+      if (!hasBucketName) {
+        return null
+      }
+      if (goalKey === lifeRoutineKey) {
+        const routineSurface = lifeRoutineSurfaceLookup.get(bucketKey)
+        return routineSurface ? ensureSurfaceStyle(routineSurface, LIFE_ROUTINES_SURFACE) : null
+      }
+      if (!hasGoalName) {
+        const fallback = bucketSurfaceLookup.byName.get(bucketKey)
+        return fallback ? ensureSurfaceStyle(fallback, DEFAULT_SURFACE_STYLE) : null
+      }
+      const scopedKey = `${goalKey}::${bucketKey}`
+      const scopedSurface = bucketSurfaceLookup.byGoal.get(scopedKey)
+      if (scopedSurface) {
+        return ensureSurfaceStyle(scopedSurface, DEFAULT_SURFACE_STYLE)
+      }
+      const fallback = bucketSurfaceLookup.byName.get(bucketKey)
+      return fallback ? ensureSurfaceStyle(fallback, DEFAULT_SURFACE_STYLE) : null
+    })()
     updateHistory((current) => {
       const index = current.findIndex((entry) => entry.id === selectedHistoryEntry.id)
       if (index === -1) {
@@ -2011,7 +2107,9 @@ export default function ReflectionPage() {
         (target.goalName ?? '') === normalizedGoalName &&
         (target.bucketName ?? '') === normalizedBucketName &&
         target.startedAt === nextStartedAt &&
-        target.endedAt === nextEndedAt
+        target.endedAt === nextEndedAt &&
+        target.goalSurface === resolvedGoalSurface &&
+        target.bucketSurface === resolvedBucketSurface
       ) {
         return current
       }
@@ -2024,6 +2122,8 @@ export default function ReflectionPage() {
         startedAt: nextStartedAt,
         endedAt: nextEndedAt,
         elapsed: nextElapsed,
+        goalSurface: resolvedGoalSurface,
+        bucketSurface: resolvedBucketSurface,
       }
       return next
     })
@@ -2035,7 +2135,7 @@ export default function ReflectionPage() {
       endedAt: nextEndedAt,
     })
     setEditingHistoryId(null)
-  }, [historyDraft, selectedHistoryEntry, updateHistory])
+  }, [bucketSurfaceLookup, goalSurfaceLookup, historyDraft, lifeRoutineSurfaceLookup, selectedHistoryEntry, updateHistory])
 
   const handleHistoryFieldKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
