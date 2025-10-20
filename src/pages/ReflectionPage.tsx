@@ -1541,6 +1541,7 @@ export default function ReflectionPage() {
     endedAt: null,
   })
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
+  const [hoveredDuringDragId, setHoveredDuringDragId] = useState<string | null>(null)
   const pieCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const [supportsConicGradient, setSupportsConicGradient] = useState(() => {
     if (typeof window === 'undefined') {
@@ -1993,6 +1994,7 @@ export default function ReflectionPage() {
         return
       }
       setHoveredHistoryId((current) => (current === entryId ? null : current))
+      setHoveredDuringDragId((current) => (current === entryId ? null : current))
       if (selectedHistoryId === entryId) {
         setSelectedHistoryId(null)
         setEditingHistoryId(null)
@@ -2811,6 +2813,7 @@ export default function ReflectionPage() {
       const nextPreview = { entryId: state.entryId, startedAt: nextStartRounded, endedAt: nextEndRounded }
       dragPreviewRef.current = nextPreview
       setDragPreview(nextPreview)
+      setHoveredDuringDragId(state.entryId)
     },
     [],
   )
@@ -2891,6 +2894,7 @@ export default function ReflectionPage() {
       dragPreviewRef.current = null
       setDragPreview(null)
       dragPreventClickRef.current = state.hasMoved
+      setHoveredDuringDragId(null)
     },
     [handleWindowPointerMove, setHistoryDraft, updateHistory],
   )
@@ -2939,6 +2943,7 @@ export default function ReflectionPage() {
       dragPreventClickRef.current = false
       dragPreviewRef.current = null
       setDragPreview(null)
+      setHoveredDuringDragId(segment.entry.id)
       event.stopPropagation()
       window.addEventListener('pointermove', handleWindowPointerMove)
       window.addEventListener('pointerup', handleWindowPointerUp)
@@ -2983,6 +2988,7 @@ export default function ReflectionPage() {
       }
       setDragPreview(dragPreviewRef.current)
       dragPreventClickRef.current = false
+      setHoveredDuringDragId('new-entry')
       event.currentTarget.setPointerCapture?.(event.pointerId)
       event.preventDefault()
       event.stopPropagation()
@@ -3178,15 +3184,20 @@ export default function ReflectionPage() {
               const handleResizeEndPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
                 startDrag(event, segment, 'resize-end')
               }
+              const isPreviewEntry = segment.entry.id === 'new-entry'
+              const isDragHover = hoveredDuringDragId === segment.entry.id
+              const showDragBadge = isDragHover || (isPreviewEntry && dragPreview?.entryId === 'new-entry')
               const blockClassName = [
                 'history-timeline__block',
                 isActiveSegment ? 'history-timeline__block--active' : '',
                 isSelected ? 'history-timeline__block--selected' : '',
                 isDragging ? 'history-timeline__block--dragging' : '',
+                isDragHover ? 'history-timeline__block--drag-hover' : '',
               ]
                 .filter(Boolean)
                 .join(' ')
               const isAnchoredTooltip = segment.entry.id === anchoredTooltipId
+              const shouldSuppressTooltip = Boolean(dragStateRef.current)
               const tooltipClassName = `history-timeline__tooltip${isSelected ? ' history-timeline__tooltip--pinned' : ''}${
                 isEditing ? ' history-timeline__tooltip--editing' : ''
               }`
@@ -3344,25 +3355,28 @@ export default function ReflectionPage() {
                 onPointerDown: (event) => event.stopPropagation(),
               }
 
-              const inlineTooltip = (
-                <div
-                  {...tooltipCommonProps}
-                  ref={isAnchoredTooltip && !isEditing ? setActiveTooltipNode : null}
-                  style={
-                    isAnchoredTooltip && !isEditing
-                      ? ({
-                          '--history-tooltip-shift-x': `${activeTooltipOffsets.x}px`,
-                          '--history-tooltip-shift-y': `${activeTooltipOffsets.y}px`,
-                        } as CSSProperties)
-                      : undefined
-                  }
-                >
-                  {tooltipContent}
-                </div>
-              )
+              const inlineTooltip =
+                shouldSuppressTooltip && showDragBadge
+                  ? null
+                  : (
+                    <div
+                      {...tooltipCommonProps}
+                      ref={isAnchoredTooltip && !isEditing ? setActiveTooltipNode : null}
+                      style={
+                        isAnchoredTooltip && !isEditing
+                          ? ({
+                              '--history-tooltip-shift-x': `${activeTooltipOffsets.x}px`,
+                              '--history-tooltip-shift-y': `${activeTooltipOffsets.y}px`,
+                            } as CSSProperties)
+                          : undefined
+                      }
+                    >
+                      {tooltipContent}
+                    </div>
+                  )
 
               const renderedTooltip =
-                isEditing && typeof document !== 'undefined'
+                (isEditing && typeof document !== 'undefined' && !(shouldSuppressTooltip && showDragBadge))
                   ? createPortal(
                       <div {...tooltipCommonProps}>{tooltipContent}</div>,
                       document.body,
@@ -3379,6 +3393,11 @@ export default function ReflectionPage() {
                     top: `calc(${segment.lane} * var(--history-timeline-row-height))`,
                     background: segment.gradientCss ?? segment.color,
                   }}
+                  data-drag-time={
+                    showDragBadge
+                      ? `${formatTimeOfDay(resolvedStartedAt)} — ${formatTimeOfDay(resolvedEndedAt)}`
+                      : undefined
+                  }
                   tabIndex={0}
                   role="button"
                   aria-pressed={isSelected}

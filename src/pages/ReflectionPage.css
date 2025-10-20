@@ -652,3 +652,38 @@ html[data-theme='light'] .history-dropdown__empty {
 .site-main--goals .reflection-page {
   padding-inline: clamp(0.75rem, 3vw, 1.5rem);
 }
+.history-timeline__block.history-timeline__block--drag-hover::after {
+  content: attr(data-drag-time);
+  position: absolute;
+  top: -2.1rem;
+  right: 0;
+  transform: translateX(50%);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(24, 34, 80, 0.85);
+  color: #f8fafc;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.25);
+  white-space: nowrap;
+  line-height: 1;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 12rem;
+}
+
+html[data-theme='light'] .history-timeline__block.history-timeline__block--drag-hover::after {
+  background: rgba(240, 244, 255, 0.9);
+  color: rgba(15, 23, 42, 0.9);
+}
+
+.history-timeline__block.history-timeline__block--drag-hover .history-timeline__tooltip {
+  display: none !important;
+}
+
+.history-timeline__block.history-timeline__block--drag-hover .history-timeline__tooltip.history-timeline__tooltip--pinned {
+  display: none !important;
+}
