@@ -1525,7 +1525,6 @@ const computeRangeOverview = (
 export default function ReflectionPage() {
   const [activeRange, setActiveRange] = useState<ReflectionRangeKey>('24h')
   const [history, setHistory] = useState<HistoryEntry[]>(() => readStoredHistory())
-  const [deletedHistoryStack, setDeletedHistoryStack] = useState<{ entry: HistoryEntry; index: number }[]>([])
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
   const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(() => readStoredActiveSession())
@@ -1932,7 +1931,7 @@ export default function ReflectionPage() {
       startedAt: selectedHistoryEntry.startedAt,
       endedAt: selectedHistoryEntry.endedAt,
     })
-    setEditingHistoryId(null)
+    setEditingHistoryId((current) => (current === selectedHistoryEntry.id ? current : null))
   }, [selectedHistoryEntry])
 
   useEffect(() => {
@@ -1993,8 +1992,6 @@ export default function ReflectionPage() {
       if (index === -1) {
         return
       }
-      const entry = history[index]
-      setDeletedHistoryStack((stack) => [...stack, { entry, index }])
       setHoveredHistoryId((current) => (current === entryId ? null : current))
       if (selectedHistoryId === entryId) {
         setSelectedHistoryId(null)
@@ -2005,23 +2002,6 @@ export default function ReflectionPage() {
     },
     [history, selectedHistoryId, updateHistory],
   )
-
-  const handleUndoDelete = useCallback(() => {
-    if (deletedHistoryStack.length === 0) {
-      return
-    }
-    const { entry, index } = deletedHistoryStack[deletedHistoryStack.length - 1]
-    setDeletedHistoryStack((stack) => stack.slice(0, -1))
-    updateHistory((current) => {
-      if (current.some((item) => item.id === entry.id)) {
-        return current
-      }
-      const next = [...current]
-      const insertIndex = Math.min(index, next.length)
-      next.splice(insertIndex, 0, entry)
-      return next
-    })
-  }, [deletedHistoryStack, updateHistory])
 
   const handleAddHistoryEntry = useCallback(() => {
     const now = Date.now()
@@ -2240,6 +2220,8 @@ export default function ReflectionPage() {
   }, [commitHistoryDraft])
 
   const handleStartEditingHistoryEntry = useCallback((entry: HistoryEntry) => {
+    setSelectedHistoryId(entry.id)
+    setHoveredHistoryId(entry.id)
     setEditingHistoryId(entry.id)
     setHistoryDraft({
       taskName: entry.taskName,
@@ -2321,7 +2303,6 @@ export default function ReflectionPage() {
     const handleStorage = (event: StorageEvent) => {
       if (event.key === HISTORY_STORAGE_KEY) {
         setHistory(readStoredHistory())
-        setDeletedHistoryStack([])
         return
       }
       if (event.key === CURRENT_SESSION_STORAGE_KEY) {
@@ -2333,10 +2314,8 @@ export default function ReflectionPage() {
       const detail = sanitizeHistory(custom.detail)
       if (detail.length > 0 || Array.isArray(custom.detail)) {
         setHistory(detail)
-        setDeletedHistoryStack([])
       } else {
         setHistory(readStoredHistory())
-        setDeletedHistoryStack([])
       }
     }
     const handleSessionBroadcast = (event: Event) => {
@@ -2647,6 +2626,28 @@ export default function ReflectionPage() {
       })
       .filter((segment): segment is { entry: HistoryEntry; start: number; end: number } => Boolean(segment))
 
+    if (preview && preview.entryId === 'new-entry') {
+      const start = Math.max(Math.min(preview.startedAt, preview.endedAt), dayStart)
+      const end = Math.min(Math.max(preview.startedAt, preview.endedAt), dayEnd)
+      if (end > start) {
+        const syntheticEntry: HistoryEntry = {
+          id: 'new-entry',
+          taskName: '',
+          goalName: null,
+          bucketName: null,
+          goalId: null,
+          bucketId: null,
+          taskId: null,
+          elapsed: Math.max(end - start, MIN_SESSION_DURATION_DRAG_MS),
+          startedAt: start,
+          endedAt: end,
+          goalSurface: DEFAULT_SURFACE_STYLE,
+          bucketSurface: null,
+        }
+        entries.push({ entry: syntheticEntry, start, end })
+      }
+    }
+
     entries.sort((a, b) => a.start - b.start)
     const lanes: number[] = []
     return entries.map(({ entry, start, end }) => {
@@ -2824,33 +2825,65 @@ export default function ReflectionPage() {
       window.removeEventListener('pointermove', handleWindowPointerMove)
       window.removeEventListener('pointerup', handleWindowPointerUp)
       window.removeEventListener('pointercancel', handleWindowPointerUp)
+      const bar = timelineBarRef.current
+      if (bar?.hasPointerCapture?.(state.pointerId)) {
+        bar.releasePointerCapture(state.pointerId)
+      }
 
       const preview = dragPreviewRef.current
-      if (state.hasMoved && preview && preview.entryId === state.entryId) {
-        updateHistory((current) => {
-          const index = current.findIndex((entry) => entry.id === preview.entryId)
-          if (index === -1) {
-            return current
+      if (state.hasMoved && preview) {
+        if (state.entryId === 'new-entry') {
+          const startedAt = Math.min(preview.startedAt, preview.endedAt)
+          const endedAt = Math.max(preview.startedAt, preview.endedAt)
+          const elapsed = Math.max(endedAt - startedAt, MIN_SESSION_DURATION_DRAG_MS)
+          const newEntry: HistoryEntry = {
+            id: makeHistoryId(),
+            taskName: '',
+            goalName: null,
+            bucketName: null,
+            goalId: null,
+            bucketId: null,
+            taskId: null,
+            elapsed,
+            startedAt,
+            endedAt,
+            goalSurface: DEFAULT_SURFACE_STYLE,
+            bucketSurface: null,
           }
-          const target = current[index]
-          if (target.startedAt === preview.startedAt && target.endedAt === preview.endedAt) {
-            return current
+          updateHistory((current) => {
+            const next = [...current, newEntry]
+            next.sort((a, b) => a.startedAt - b.startedAt)
+            return next
+          })
+          setTimeout(() => {
+            handleStartEditingHistoryEntry(newEntry)
+          }, 0)
+        } else {
+          updateHistory((current) => {
+            const index = current.findIndex((entry) => entry.id === preview.entryId)
+            if (index === -1) {
+              return current
+            }
+            const target = current[index]
+            if (target.startedAt === preview.startedAt && target.endedAt === preview.endedAt) {
+              return current
+            }
+            const next = [...current]
+            next[index] = {
+              ...target,
+              startedAt: preview.startedAt,
+              endedAt: preview.endedAt,
+              elapsed: Math.max(preview.endedAt - preview.startedAt, 1),
+            }
+            return next
+          })
+          if (selectedHistoryIdRef.current === state.entryId) {
+            setHistoryDraft((draft) => ({
+              ...draft,
+              startedAt: preview.startedAt,
+              endedAt: preview.endedAt,
+            }))
           }
-          const next = [...current]
-          next[index] = {
-            ...target,
-            startedAt: preview.startedAt,
-            endedAt: preview.endedAt,
-            elapsed: Math.max(preview.endedAt - preview.startedAt, 1),
-          }
-          return next
-        })
-        if (selectedHistoryIdRef.current === state.entryId) {
-          setHistoryDraft((draft) => ({
-            ...draft,
-            startedAt: preview.startedAt,
-            endedAt: preview.endedAt,
-          }))
         }
       }
 
@@ -2914,6 +2947,52 @@ export default function ReflectionPage() {
     [dayStart, dayEnd, handleWindowPointerMove, handleWindowPointerUp],
   )
 
+  const startCreateDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>, startTimestamp: number) => {
+      if (event.button !== 0) {
+        return
+      }
+      if (dragStateRef.current) {
+        return
+      }
+      const bar = timelineBarRef.current
+      if (!bar) {
+        return
+      }
+      const rect = bar.getBoundingClientRect()
+      if (!rect || rect.width <= 0) {
+        return
+      }
+      dragStateRef.current = {
+        entryId: 'new-entry',
+        type: 'resize-end',
+        pointerId: event.pointerId,
+        rectWidth: rect.width,
+        startX: event.clientX,
+        initialStart: startTimestamp,
+        initialEnd: startTimestamp + MIN_SESSION_DURATION_DRAG_MS,
+        dayStart,
+        dayEnd,
+        minDurationMs: MIN_SESSION_DURATION_DRAG_MS,
+        hasMoved: false,
+      }
+      dragPreviewRef.current = {
+        entryId: 'new-entry',
+        startedAt: startTimestamp,
+        endedAt: startTimestamp + MIN_SESSION_DURATION_DRAG_MS,
+      }
+      setDragPreview(dragPreviewRef.current)
+      dragPreventClickRef.current = false
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+      event.preventDefault()
+      event.stopPropagation()
+      window.addEventListener('pointermove', handleWindowPointerMove)
+      window.addEventListener('pointerup', handleWindowPointerUp)
+      window.addEventListener('pointercancel', handleWindowPointerUp)
+    },
+    [dayStart, dayEnd, handleWindowPointerMove, handleWindowPointerUp],
+  )
+
   return (
     <section className="site-main__inner reflection-page" aria-label="Reflection">
       <div className="reflection-intro">
@@ -2931,15 +3010,6 @@ export default function ReflectionPage() {
 
         <section className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`} aria-label="Session History">
           <div className="history-controls history-controls--floating">
-            <button
-              type="button"
-              className="history-controls__button"
-              onClick={handleUndoDelete}
-              disabled={deletedHistoryStack.length === 0}
-              aria-label="Undo last deleted session"
-            >
-              Undo
-            </button>
             <button
               type="button"
               className="history-controls__button history-controls__button--primary"
@@ -2980,7 +3050,33 @@ export default function ReflectionPage() {
             ref={timelineRef}
             onClick={handleTimelineBackgroundClick}
           >
-            <div className="history-timeline__bar" ref={timelineBarRef}>
+            <div
+              className="history-timeline__bar"
+              ref={timelineBarRef}
+              onDoubleClick={(event) => {
+                event.stopPropagation()
+              }}
+              onPointerDown={(event) => {
+                if (event.target !== event.currentTarget) {
+                  return
+                }
+                const bar = timelineBarRef.current
+                if (!bar) {
+                  return
+                }
+                if (event.nativeEvent.button !== 0) {
+                  return
+                }
+                const rect = bar.getBoundingClientRect()
+                if (rect.width <= 0) {
+                  return
+                }
+                const ratio = (event.clientX - rect.left) / rect.width
+                const clampedRatio = Math.min(Math.max(ratio, 0), 1)
+                const startTimestamp = Math.round(dayStart + clampedRatio * DAY_DURATION_MS)
+                startCreateDrag(event, startTimestamp)
+              }}
+            >
             {showCurrentTimeIndicator ? (
               <div
                 className="history-timeline__current-time"
@@ -3294,7 +3390,19 @@ export default function ReflectionPage() {
                       dragPreventClickRef.current = false
                       return
                     }
+                    if (event.detail > 1) {
+                      return
+                    }
                     handleSelectHistorySegment(segment.entry)
+                  }}
+                  onDoubleClick={(event) => {
+                    event.stopPropagation()
+                    if (dragPreventClickRef.current) {
+                      dragPreventClickRef.current = false
+                    }
+                    if (!isActiveSessionSegment) {
+                      handleStartEditingHistoryEntry(segment.entry)
+                    }
                   }}
                   onMouseEnter={() =>
                     setHoveredHistoryId((current) => (current === segment.entry.id ? current : segment.entry.id))
