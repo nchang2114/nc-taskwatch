@@ -15,6 +15,13 @@ import {
 import { createPortal } from 'react-dom'
 import './ReflectionPage.css'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
+import {
+  DEFAULT_SURFACE_STYLE,
+  ensureSurfaceStyle,
+  sanitizeSurfaceStyle,
+  type SurfaceStyle,
+} from '../lib/surfaceStyles'
+import { LIFE_ROUTINE_DEFAULTS } from '../lib/lifeRoutines'
 
 const JOURNAL_PROMPTS = [
   "What was today's biggest win?",
@@ -47,6 +54,11 @@ type HistoryEntry = {
   endedAt: number
   goalName: string | null
   bucketName: string | null
+  goalId: string | null
+  bucketId: string | null
+  taskId: string | null
+  goalSurface: SurfaceStyle
+  bucketSurface: SurfaceStyle | null
 }
 
 type HistoryDraftState = {
@@ -104,18 +116,104 @@ const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
 const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 const UNCATEGORISED_LABEL = 'Uncategorised'
-const UNCATEGORISED_GRADIENT: GoalGradientInfo = {
-  css: 'linear-gradient(135deg, #94a3b8 0%, #64748b 45%, #1e293b 100%)',
-  start: '#94a3b8',
-  end: '#1e293b',
-  angle: 135,
-  stops: [
-    { color: '#94a3b8', position: 0 },
-    { color: '#64748b', position: 0.45 },
-    { color: '#1e293b', position: 1 },
-  ],
-}
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
+const LIFE_ROUTINES_NAME = 'Life Routines'
+const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
+const LIFE_ROUTINE_SURFACE_LOOKUP = new Map(
+  LIFE_ROUTINE_DEFAULTS.map((routine) => [routine.title.toLowerCase(), routine.surfaceStyle]),
+)
+
+type SurfaceGradientInfo = {
+  gradient: string
+  start: string
+  mid: string
+  end: string
+  base: string
+}
+
+const SURFACE_GRADIENT_INFO: Record<SurfaceStyle, SurfaceGradientInfo> = {
+  glass: {
+    gradient: 'linear-gradient(135deg, #313c67 0%, #1f2952 45%, #121830 100%)',
+    start: '#313c67',
+    mid: '#1f2952',
+    end: '#121830',
+    base: '#1f2952',
+  },
+  midnight: {
+    gradient: 'linear-gradient(135deg, #8e9bff 0%, #6c86ff 45%, #3f51b5 100%)',
+    start: '#8e9bff',
+    mid: '#6c86ff',
+    end: '#3f51b5',
+    base: '#5a63f1',
+  },
+  slate: {
+    gradient: 'linear-gradient(135deg, #97e3ff 0%, #5ec0ff 45%, #1f7adb 100%)',
+    start: '#97e3ff',
+    mid: '#5ec0ff',
+    end: '#1f7adb',
+    base: '#45b0ff',
+  },
+  charcoal: {
+    gradient: 'linear-gradient(135deg, #ffb8d5 0%, #f472b6 45%, #be3a84 100%)',
+    start: '#ffb8d5',
+    mid: '#f472b6',
+    end: '#be3a84',
+    base: '#f472b6',
+  },
+  linen: {
+    gradient: 'linear-gradient(135deg, #ffd4aa 0%, #f9a84f 45%, #d97706 100%)',
+    start: '#ffd4aa',
+    mid: '#f9a84f',
+    end: '#d97706',
+    base: '#f9a84f',
+  },
+  frost: {
+    gradient: 'linear-gradient(135deg, #aee9ff 0%, #6dd3ff 45%, #1d9bf0 100%)',
+    start: '#aee9ff',
+    mid: '#6dd3ff',
+    end: '#1d9bf0',
+    base: '#38bdf8',
+  },
+  grove: {
+    gradient: 'linear-gradient(135deg, #baf5d8 0%, #4ade80 45%, #15803d 100%)',
+    start: '#baf5d8',
+    mid: '#4ade80',
+    end: '#15803d',
+    base: '#34d399',
+  },
+  lagoon: {
+    gradient: 'linear-gradient(135deg, #a7dcff 0%, #60a5fa 45%, #2563eb 100%)',
+    start: '#a7dcff',
+    mid: '#60a5fa',
+    end: '#2563eb',
+    base: '#3b82f6',
+  },
+  ember: {
+    gradient: 'linear-gradient(135deg, #ffd5b5 0%, #fb923c 45%, #c2410c 100%)',
+    start: '#ffd5b5',
+    mid: '#fb923c',
+    end: '#c2410c',
+    base: '#f97316',
+  },
+}
+
+const getSurfaceColorInfo = (surface: SurfaceStyle): GoalColorInfo => {
+  const info = SURFACE_GRADIENT_INFO[surface]
+  return {
+    gradient: {
+      css: info.gradient,
+      start: info.start,
+      end: info.end,
+      angle: 135,
+      stops: [
+        { color: info.start, position: 0 },
+        { color: info.mid, position: 0.45 },
+        { color: info.end, position: 1 },
+      ],
+    },
+    solidColor: info.base,
+  }
+}
 
 type GoalLookup = Map<string, { goalName: string; colorInfo?: GoalColorInfo }>
 
@@ -176,17 +274,50 @@ const sanitizeHistory = (value: unknown): HistoryEntry[] => {
       const endedAt = typeof candidate.endedAt === 'number' ? candidate.endedAt : null
       const goalNameRaw = typeof candidate.goalName === 'string' ? candidate.goalName : ''
       const bucketNameRaw = typeof candidate.bucketName === 'string' ? candidate.bucketName : ''
+      const goalIdRaw = typeof candidate.goalId === 'string' ? candidate.goalId : null
+      const bucketIdRaw = typeof candidate.bucketId === 'string' ? candidate.bucketId : null
+      const taskIdRaw = typeof candidate.taskId === 'string' ? candidate.taskId : null
+      const goalSurfaceRaw = sanitizeSurfaceStyle(candidate.goalSurface)
+      const bucketSurfaceRaw = sanitizeSurfaceStyle(candidate.bucketSurface)
       if (!id || elapsed === null || startedAt === null || endedAt === null) {
         return null
       }
+      const normalizedGoalName = goalNameRaw.trim()
+      const normalizedBucketName = bucketNameRaw.trim()
+      const normalizedGoalId = goalIdRaw ?? null
+      const normalizedBucketId = bucketIdRaw ?? null
+      const normalizedTaskId = taskIdRaw ?? null
+      let goalSurface = goalSurfaceRaw ?? null
+      let bucketSurface = bucketSurfaceRaw ?? null
+      if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
+        goalSurface = LIFE_ROUTINES_SURFACE
+      }
+      if (!bucketSurface && normalizedBucketName.length > 0) {
+        const routineSurface = LIFE_ROUTINE_SURFACE_LOOKUP.get(normalizedBucketName.toLowerCase())
+        if (routineSurface) {
+          bucketSurface = routineSurface
+          if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
+            goalSurface = LIFE_ROUTINES_SURFACE
+          }
+        }
+      }
+      const normalizedGoalSurface = ensureSurfaceStyle(goalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE)
+      const normalizedBucketSurface =
+        bucketSurface !== null ? ensureSurfaceStyle(bucketSurface, DEFAULT_SURFACE_STYLE) : null
+
       return {
         id,
         taskName,
         elapsed,
         startedAt,
         endedAt,
-        goalName: goalNameRaw.trim().length > 0 ? goalNameRaw : null,
-        bucketName: bucketNameRaw.trim().length > 0 ? bucketNameRaw : null,
+        goalName: normalizedGoalName.length > 0 ? normalizedGoalName : null,
+        bucketName: normalizedBucketName.length > 0 ? normalizedBucketName : null,
+        goalId: normalizedGoalId,
+        bucketId: normalizedBucketId,
+        taskId: normalizedTaskId,
+        goalSurface: normalizedGoalSurface,
+        bucketSurface: normalizedBucketSurface,
       }
     })
     .filter((entry): entry is HistoryEntry => Boolean(entry))
@@ -862,6 +993,12 @@ type GoalMetadata = {
 type ActiveSessionState = {
   taskName: string
   goalName: string | null
+  bucketName: string | null
+  goalId: string | null
+  bucketId: string | null
+  taskId: string | null
+  goalSurface: SurfaceStyle
+  bucketSurface: SurfaceStyle | null
   startedAt: number | null
   baseElapsed: number
   isRunning: boolean
@@ -873,6 +1010,27 @@ const resolveGoalMetadata = (
   taskLookup: GoalLookup,
   goalColorLookup: Map<string, GoalColorInfo | undefined>,
 ): GoalMetadata => {
+  const goalNameRaw = entry.goalName?.trim()
+  const bucketNameRaw = entry.bucketName?.trim()
+  const normalizedGoalName = goalNameRaw?.toLowerCase() ?? ''
+  const normalizedBucketName = bucketNameRaw?.toLowerCase() ?? ''
+  const isLifeRoutineEntry =
+    (goalNameRaw && normalizedGoalName === LIFE_ROUTINES_NAME.toLowerCase()) ||
+    (bucketNameRaw && LIFE_ROUTINE_SURFACE_LOOKUP.has(normalizedBucketName))
+
+  if (isLifeRoutineEntry) {
+    const routineSurface =
+      entry.bucketSurface ?? (normalizedBucketName ? LIFE_ROUTINE_SURFACE_LOOKUP.get(normalizedBucketName) ?? null : null)
+    const surfaceInfo = routineSurface ? getSurfaceColorInfo(routineSurface) : getSurfaceColorInfo(LIFE_ROUTINES_SURFACE)
+    const labelCandidate =
+      bucketNameRaw && bucketNameRaw.length > 0
+        ? bucketNameRaw
+        : entry.taskName.trim().length > 0
+          ? entry.taskName.trim()
+          : LIFE_ROUTINES_NAME
+    return { label: labelCandidate, colorInfo: surfaceInfo }
+  }
+
   const goalName = entry.goalName?.trim()
   if (goalName && goalName.length > 0) {
     const colorInfo = goalColorLookup.get(goalName.toLowerCase())
@@ -887,7 +1045,8 @@ const resolveGoalMetadata = (
     }
   }
 
-  return { label: UNCATEGORISED_LABEL, colorInfo: { gradient: UNCATEGORISED_GRADIENT } }
+  const fallbackSurfaceInfo = getSurfaceColorInfo(entry.goalSurface)
+  return { label: UNCATEGORISED_LABEL, colorInfo: fallbackSurfaceInfo }
 }
 
 const sanitizeActiveSession = (value: unknown): ActiveSessionState | null => {
@@ -899,11 +1058,39 @@ const sanitizeActiveSession = (value: unknown): ActiveSessionState | null => {
   const taskName = rawTaskName.trim()
   const rawGoalName = typeof candidate.goalName === 'string' ? candidate.goalName.trim() : ''
   const goalName = rawGoalName.length > 0 ? rawGoalName : null
+  const rawBucketName = typeof candidate.bucketName === 'string' ? candidate.bucketName.trim() : ''
+  const bucketName = rawBucketName.length > 0 ? rawBucketName : null
+  const rawGoalId = typeof candidate.goalId === 'string' ? candidate.goalId.trim() : ''
+  const goalId = rawGoalId.length > 0 ? rawGoalId : null
+  const rawBucketId = typeof candidate.bucketId === 'string' ? candidate.bucketId.trim() : ''
+  const bucketId = rawBucketId.length > 0 ? rawBucketId : null
+  const rawTaskId = typeof candidate.taskId === 'string' ? candidate.taskId.trim() : ''
+  const taskId = rawTaskId.length > 0 ? rawTaskId : null
+  const sanitizedGoalSurface = sanitizeSurfaceStyle(candidate.goalSurface)
+  const goalSurface = ensureSurfaceStyle(
+    sanitizedGoalSurface ?? DEFAULT_SURFACE_STYLE,
+    DEFAULT_SURFACE_STYLE,
+  )
+  const sanitizedBucketSurface = sanitizeSurfaceStyle(candidate.bucketSurface)
+  const bucketSurface = sanitizedBucketSurface ?? null
   const startedAt = typeof candidate.startedAt === 'number' ? candidate.startedAt : null
   const baseElapsed = typeof candidate.baseElapsed === 'number' ? Math.max(0, candidate.baseElapsed) : 0
   const isRunning = Boolean(candidate.isRunning)
   const updatedAt = typeof candidate.updatedAt === 'number' ? candidate.updatedAt : Date.now()
-  return { taskName, goalName, startedAt, baseElapsed, isRunning, updatedAt }
+  return {
+    taskName,
+    goalName,
+    bucketName,
+    goalId,
+    bucketId,
+    taskId,
+    goalSurface,
+    bucketSurface,
+    startedAt,
+    baseElapsed,
+    isRunning,
+    updatedAt,
+  }
 }
 
 const readStoredActiveSession = (): ActiveSessionState | null => {
@@ -1349,9 +1536,14 @@ export default function ReflectionPage() {
       taskName: '',
       goalName: null,
       bucketName: null,
+      goalId: null,
+      bucketId: null,
+      taskId: null,
       elapsed,
       startedAt,
       endedAt,
+      goalSurface: DEFAULT_SURFACE_STYLE,
+      bucketSurface: null,
     }
     updateHistory((current) => {
       const next = [...current, entry]
@@ -1672,7 +1864,12 @@ export default function ReflectionPage() {
       startedAt: safeStartedAt,
       endedAt,
       goalName: activeSession.goalName ?? null,
-      bucketName: null,
+      bucketName: activeSession.bucketName ?? null,
+      goalId: activeSession.goalId,
+      bucketId: activeSession.bucketId,
+      taskId: activeSession.taskId,
+      goalSurface: activeSession.goalSurface,
+      bucketSurface: activeSession.bucketSurface,
     }
     const filteredHistory = history.filter((entry) => entry.id !== activeEntry.id)
     return [activeEntry, ...filteredHistory]

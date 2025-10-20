@@ -32,6 +32,14 @@ import {
   sanitizeSurfaceStyle,
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
+import {
+  LIFE_ROUTINE_STORAGE_KEY,
+  LIFE_ROUTINE_UPDATE_EVENT,
+  LIFE_ROUTINE_DEFAULTS,
+  readStoredLifeRoutines,
+  sanitizeLifeRoutineList,
+  type LifeRoutineConfig,
+} from '../lib/lifeRoutines'
 
 type HistoryEntry = {
   id: string
@@ -41,6 +49,11 @@ type HistoryEntry = {
   endedAt: number
   goalName: string | null
   bucketName: string | null
+  goalId: string | null
+  bucketId: string | null
+  taskId: string | null
+  goalSurface: SurfaceStyle
+  bucketSurface: SurfaceStyle | null
 }
 
 type FocusCandidate = {
@@ -113,14 +126,13 @@ type SnapbackActionId = (typeof SNAPBACK_ACTIONS)[number]['id']
 
 const LIFE_ROUTINES_NAME = 'Life Routines'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
-const LIFE_ROUTINES_BUCKET_ID = 'life-routines'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
-const LIFE_ROUTINE_TASKS = [
-  { id: 'life-sleep', label: 'Sleep', detail: 'Protect your rest window tonight.' },
-  { id: 'life-eat', label: 'Eat', detail: 'Pause for a nourishing meal.' },
-  { id: 'life-meditate', label: 'Meditate', detail: 'Take ten for stillness.' },
-  { id: 'life-socials', label: 'Socials', detail: 'Reach out and connect.' },
-] as const
+const LIFE_ROUTINE_SURFACE_MAP = new Map(
+  LIFE_ROUTINE_DEFAULTS.map((routine) => [routine.title.toLowerCase(), routine.surfaceStyle]),
+)
+
+const makeSessionKey = (goalId: string | null, bucketId: string | null, taskId: string | null) =>
+  goalId && bucketId ? `${goalId}::${bucketId}::${taskId ?? ''}` : null
 
 declare global {
   interface Window {
@@ -257,9 +269,36 @@ const sanitizeHistory = (value: unknown): HistoryEntry[] => {
       const endedAt = typeof candidate.endedAt === 'number' ? candidate.endedAt : null
       const goalNameRaw = typeof candidate.goalName === 'string' ? candidate.goalName : ''
       const bucketNameRaw = typeof candidate.bucketName === 'string' ? candidate.bucketName : ''
+      const goalIdRaw = typeof candidate.goalId === 'string' ? candidate.goalId : null
+      const bucketIdRaw = typeof candidate.bucketId === 'string' ? candidate.bucketId : null
+      const taskIdRaw = typeof candidate.taskId === 'string' ? candidate.taskId : null
+      const goalSurfaceRaw = sanitizeSurfaceStyle(candidate.goalSurface)
+      const bucketSurfaceRaw = sanitizeSurfaceStyle(candidate.bucketSurface)
 
       if (!id || taskName === null || elapsed === null || startedAt === null || endedAt === null) {
         return null
+      }
+
+      const normalizedGoalName = goalNameRaw.trim()
+      const normalizedBucketName = bucketNameRaw.trim()
+      const normalizedGoalId = goalIdRaw ?? null
+      const normalizedBucketId = bucketIdRaw ?? null
+      const normalizedTaskId = taskIdRaw ?? null
+
+      let goalSurface = goalSurfaceRaw ?? null
+      let bucketSurface = bucketSurfaceRaw ?? null
+
+      if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
+        goalSurface = LIFE_ROUTINES_SURFACE
+      }
+      if (!bucketSurface && normalizedBucketName.length > 0) {
+        const routineSurface = LIFE_ROUTINE_SURFACE_MAP.get(normalizedBucketName.toLowerCase())
+        if (routineSurface) {
+          bucketSurface = routineSurface
+          if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
+            goalSurface = LIFE_ROUTINES_SURFACE
+          }
+        }
       }
 
       return {
@@ -268,8 +307,13 @@ const sanitizeHistory = (value: unknown): HistoryEntry[] => {
         elapsed,
         startedAt,
         endedAt,
-        goalName: goalNameRaw.length > 0 ? goalNameRaw : null,
-        bucketName: bucketNameRaw.length > 0 ? bucketNameRaw : null,
+        goalName: normalizedGoalName.length > 0 ? normalizedGoalName : null,
+        bucketName: normalizedBucketName.length > 0 ? normalizedBucketName : null,
+        goalId: normalizedGoalId,
+        bucketId: normalizedBucketId,
+        taskId: normalizedTaskId,
+        goalSurface: ensureSurfaceStyle(goalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE),
+        bucketSurface,
       }
     })
     .filter((entry): entry is HistoryEntry => Boolean(entry))
@@ -448,10 +492,27 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const focusPriorityHoldTimerRef = useRef<number | null>(null)
   const focusPriorityHoldTriggeredRef = useRef(false)
   const snapbackDialogRef = useRef<HTMLDivElement | null>(null)
-  const focusContextRef = useRef<{ goalName: string | null; bucketName: string | null }>({
+  const focusContextRef = useRef<{
+    goalId: string | null
+    bucketId: string | null
+    taskId: string | null
+    sessionKey: string | null
+    goalName: string | null
+    bucketName: string | null
+    goalSurface: SurfaceStyle
+    bucketSurface: SurfaceStyle | null
+  }>({
+    goalId: null,
+    bucketId: null,
+    taskId: null,
+    sessionKey: null,
     goalName: null,
     bucketName: null,
+    goalSurface: DEFAULT_SURFACE_STYLE,
+    bucketSurface: null,
   })
+  const currentSessionKeyRef = useRef<string | null>(null)
+  const lastLoggedSessionKeyRef = useRef<string | null>(null)
   const [isSelectorOpen, setIsSelectorOpen] = useState(false)
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
   const activeGoalSnapshots = useMemo(
@@ -462,6 +523,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(() => new Set())
   const [expandedBuckets, setExpandedBuckets] = useState<Set<string>>(() => new Set())
   const [lifeRoutinesExpanded, setLifeRoutinesExpanded] = useState(false)
+  const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
+  const lifeRoutineBucketIds = useMemo(
+    () => new Set(lifeRoutineTasks.map((task) => task.bucketId)),
+    [lifeRoutineTasks],
+  )
   const [focusSource, setFocusSource] = useState<FocusSource | null>(() => readStoredFocusSource())
   const [customTaskDraft, setCustomTaskDraft] = useState('')
   const [isCompletingFocus, setIsCompletingFocus] = useState(false)
@@ -477,6 +543,28 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
     return () => {
       window.clearInterval(intervalId)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === LIFE_ROUTINE_STORAGE_KEY) {
+        setLifeRoutineTasks(readStoredLifeRoutines())
+      }
+    }
+    const handleUpdate = (event: Event) => {
+      if (event instanceof CustomEvent) {
+        setLifeRoutineTasks(sanitizeLifeRoutineList(event.detail))
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener(LIFE_ROUTINE_UPDATE_EVENT, handleUpdate as EventListener)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener(LIFE_ROUTINE_UPDATE_EVENT, handleUpdate as EventListener)
     }
   }, [])
 
@@ -659,9 +747,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   const normalizedCurrentTask = useMemo(() => currentTaskName.trim(), [currentTaskName])
   const safeTaskName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
-  const sessionGoalName = focusSource?.goalName?.trim() || null
-  const sessionTaskLabel =
-    normalizedCurrentTask.length > 0 ? normalizedCurrentTask : sessionGoalName ? sessionGoalName : ''
   const elapsedSeconds = Math.floor(elapsed / 1000)
 
   const focusCandidates = useMemo<FocusCandidate[]>(() => {
@@ -720,8 +805,28 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     return null
   }, [focusCandidates, focusSource, normalizedCurrentTask])
 
+  const sessionGoalName = focusSource?.goalName?.trim() || null
+  const sessionBucketName = focusSource?.bucketName?.trim() || null
+  const sessionTaskLabel =
+    normalizedCurrentTask.length > 0 ? normalizedCurrentTask : sessionGoalName ? sessionGoalName : ''
+  const rawSessionGoalSurface =
+    focusSource?.goalSurface ?? activeFocusCandidate?.goalSurface ?? DEFAULT_SURFACE_STYLE
+  const sessionGoalSurface = ensureSurfaceStyle(rawSessionGoalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE)
+  const rawSessionBucketSurface = focusSource?.bucketSurface ?? activeFocusCandidate?.bucketSurface ?? null
+  const sessionBucketSurface =
+    rawSessionBucketSurface !== null && rawSessionBucketSurface !== undefined
+      ? ensureSurfaceStyle(rawSessionBucketSurface, DEFAULT_SURFACE_STYLE)
+      : null
+  const sessionGoalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
+  const sessionBucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
+  const sessionTaskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
+
   const effectiveGoalName = focusSource?.goalName ?? activeFocusCandidate?.goalName ?? null
   const effectiveBucketName = focusSource?.bucketName ?? activeFocusCandidate?.bucketName ?? null
+  const effectiveGoalSurface =
+    focusSource?.goalSurface ?? activeFocusCandidate?.goalSurface ?? DEFAULT_SURFACE_STYLE
+  const effectiveBucketSurface =
+    focusSource?.bucketSurface ?? activeFocusCandidate?.bucketSurface ?? null
   const notebookKey = useMemo(
     () => computeNotebookKey(focusSource, normalizedCurrentTask),
     [focusSource, normalizedCurrentTask],
@@ -852,11 +957,28 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
 
   useEffect(() => {
+    const contextGoalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
+    const contextBucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
+    const contextTaskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
+    const sessionKey = makeSessionKey(contextGoalId, contextBucketId, contextTaskId)
     focusContextRef.current = {
+      goalId: contextGoalId,
+      bucketId: contextBucketId,
+      taskId: contextTaskId,
+      sessionKey,
       goalName: effectiveGoalName,
       bucketName: effectiveBucketName,
+      goalSurface: effectiveGoalSurface,
+      bucketSurface: effectiveBucketSurface,
     }
-  }, [effectiveGoalName, effectiveBucketName])
+  }, [
+    focusSource,
+    activeFocusCandidate,
+    effectiveGoalName,
+    effectiveBucketName,
+    effectiveGoalSurface,
+    effectiveBucketSurface,
+  ])
 
   useEffect(() => {
     setFocusSource((current) => {
@@ -964,9 +1086,15 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     const payload = {
       taskName: sessionTaskLabel,
       goalName: sessionGoalName,
+      bucketName: sessionBucketName,
       startedAt: sessionStart,
       baseElapsed: elapsed,
       isRunning,
+      goalId: sessionGoalId,
+      bucketId: sessionBucketId,
+      taskId: sessionTaskId,
+      goalSurface: sessionGoalSurface,
+      bucketSurface: sessionBucketSurface,
       updatedAt: Date.now(),
     }
 
@@ -982,7 +1110,19 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     } catch {
       // ignore dispatch errors
     }
-  }, [isRunning, elapsedSeconds, sessionStart, sessionTaskLabel, sessionGoalName])
+  }, [
+    isRunning,
+    elapsedSeconds,
+    sessionStart,
+    sessionTaskLabel,
+    sessionGoalName,
+    sessionBucketName,
+    sessionGoalId,
+    sessionBucketId,
+    sessionTaskId,
+    sessionGoalSurface,
+    sessionBucketSurface,
+  ])
 
   useEffect(() => {
     if (activeGoalSnapshots.length === 0) {
@@ -1362,7 +1502,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     const entryGoalName = focusSource?.goalName ?? activeFocusCandidate?.goalName ?? null
     const entryBucketName = focusSource?.bucketName ?? activeFocusCandidate?.bucketName ?? null
     const isLifeRoutineFocus =
-      goalId === LIFE_ROUTINES_GOAL_ID && bucketId === LIFE_ROUTINES_BUCKET_ID && taskId?.startsWith('life-')
+      goalId === LIFE_ROUTINES_GOAL_ID && bucketId !== null && lifeRoutineBucketIds.has(bucketId)
 
     if (!taskId || !bucketId || !goalId) {
       return
@@ -1379,8 +1519,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
     if (elapsed > 0) {
       registerNewHistoryEntry(elapsed, entryName, {
+        goalId,
+        bucketId,
+        taskId,
+        sessionKey: currentSessionKeyRef.current,
         goalName: entryGoalName,
         bucketName: entryBucketName,
+        goalSurface: effectiveGoalSurface,
+        bucketSurface: effectiveBucketSurface,
       })
     }
 
@@ -1388,6 +1534,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     setElapsed(0)
     setSessionStart(null)
     lastTickRef.current = null
+    currentSessionKeyRef.current = null
+    lastLoggedSessionKeyRef.current = null
 
     if (!isLifeRoutineFocus) {
       setGoalsSnapshot((current) => {
@@ -1471,6 +1619,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     setCustomTaskDraft('')
     setIsSelectorOpen(false)
     selectorButtonRef.current?.focus()
+    currentSessionKeyRef.current = null
+    lastLoggedSessionKeyRef.current = null
   }
 
   const handleCustomSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1491,12 +1641,19 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const handleStartStop = () => {
     setIsRunning((current) => {
       if (current) {
+        currentSessionKeyRef.current = null
+        lastLoggedSessionKeyRef.current = null
         return false
       }
 
       const now = Date.now()
       setSessionStart(now - elapsed)
       lastTickRef.current = null
+      const startGoalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
+      const startBucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
+      const startTaskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
+      currentSessionKeyRef.current = makeSessionKey(startGoalId, startBucketId, startTaskId)
+      lastLoggedSessionKeyRef.current = null
       return true
     })
   }
@@ -1504,12 +1661,23 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const handleReset = () => {
     if (elapsed > 0) {
       const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
-      registerNewHistoryEntry(elapsed, entryName)
+      registerNewHistoryEntry(elapsed, entryName, {
+        goalId: focusContextRef.current.goalId,
+        bucketId: focusContextRef.current.bucketId,
+        taskId: focusContextRef.current.taskId,
+        sessionKey: currentSessionKeyRef.current,
+        goalName: focusContextRef.current.goalName,
+        bucketName: focusContextRef.current.bucketName,
+        goalSurface: focusContextRef.current.goalSurface,
+        bucketSurface: focusContextRef.current.bucketSurface,
+      })
     }
     setIsRunning(false)
     setElapsed(0)
     setSessionStart(null)
     lastTickRef.current = null
+    currentSessionKeyRef.current = null
+    lastLoggedSessionKeyRef.current = null
   }
 
   const handleToggleTimeVisibility = useCallback(() => {
@@ -1520,15 +1688,55 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     (
       elapsedMs: number,
       taskName: string,
-      context?: { goalName?: string | null; bucketName?: string | null },
+      context?: {
+        goalId?: string | null
+        bucketId?: string | null
+        taskId?: string | null
+        sessionKey?: string | null
+        goalName?: string | null
+        bucketName?: string | null
+        goalSurface?: SurfaceStyle | null
+        bucketSurface?: SurfaceStyle | null
+      },
     ) => {
       const now = Date.now()
       const startedAt = sessionStart ?? now - elapsedMs
       const fallbackContext = focusContextRef.current
+      const contextGoalId = context?.goalId !== undefined ? context.goalId : fallbackContext.goalId
+      const contextBucketId = context?.bucketId !== undefined ? context.bucketId : fallbackContext.bucketId
+      const contextTaskId = context?.taskId !== undefined ? context.taskId : fallbackContext.taskId
+      const sessionKeyExplicit =
+        context?.sessionKey !== undefined ? context.sessionKey : fallbackContext.sessionKey
+      const sessionKey =
+        sessionKeyExplicit !== undefined && sessionKeyExplicit !== null
+          ? sessionKeyExplicit
+          : makeSessionKey(contextGoalId, contextBucketId, contextTaskId)
       const goalName =
         context?.goalName !== undefined ? context.goalName : fallbackContext.goalName ?? null
       const bucketName =
         context?.bucketName !== undefined ? context.bucketName : fallbackContext.bucketName ?? null
+      const contextGoalSurface = context?.goalSurface
+      const contextBucketSurface = context?.bucketSurface
+      const goalSurfaceValue =
+        contextGoalSurface !== undefined ? contextGoalSurface : fallbackContext.goalSurface
+      const bucketSurfaceValue =
+        contextBucketSurface !== undefined ? contextBucketSurface : fallbackContext.bucketSurface
+      const normalizedGoalSurface = ensureSurfaceStyle(
+        goalSurfaceValue ?? DEFAULT_SURFACE_STYLE,
+        DEFAULT_SURFACE_STYLE,
+      )
+      const normalizedBucketSurface =
+        bucketSurfaceValue !== undefined && bucketSurfaceValue !== null
+          ? ensureSurfaceStyle(bucketSurfaceValue, DEFAULT_SURFACE_STYLE)
+          : null
+
+      if (sessionKey) {
+        if (lastLoggedSessionKeyRef.current === sessionKey) {
+          return
+        }
+        lastLoggedSessionKeyRef.current = sessionKey
+      }
+
       const entry: HistoryEntry = {
         id: makeHistoryId(),
         taskName,
@@ -1537,6 +1745,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         endedAt: now,
         goalName,
         bucketName,
+        goalId: contextGoalId ?? null,
+        bucketId: contextBucketId ?? null,
+        taskId: contextTaskId ?? null,
+        goalSurface: normalizedGoalSurface,
+        bucketSurface: normalizedBucketSurface,
       }
 
       setHistory((current) => {
@@ -1571,15 +1784,27 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     const note = snapbackNote.trim()
     const now = Date.now()
 
-    if (elapsed > 0) {
-      const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'Focus Session'
-      registerNewHistoryEntry(elapsed, entryName)
-      setElapsed(0)
-      setSessionStart(null)
-      lastTickRef.current = null
-    } else {
-      setSessionStart(null)
-    }
+  if (elapsed > 0) {
+    const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'Focus Session'
+    registerNewHistoryEntry(elapsed, entryName, {
+      goalId: focusContextRef.current.goalId,
+      bucketId: focusContextRef.current.bucketId,
+      taskId: focusContextRef.current.taskId,
+      sessionKey: currentSessionKeyRef.current,
+      goalName: focusContextRef.current.goalName,
+      bucketName: focusContextRef.current.bucketName,
+      goalSurface: focusContextRef.current.goalSurface,
+      bucketSurface: focusContextRef.current.bucketSurface,
+    })
+    setElapsed(0)
+    setSessionStart(null)
+    lastTickRef.current = null
+  } else {
+    setSessionStart(null)
+  }
+
+  currentSessionKeyRef.current = null
+  lastLoggedSessionKeyRef.current = null
 
     const labelParts = [reasonLabel]
     if (note.length > 0) {
@@ -1587,6 +1812,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     }
     const markerTaskName = `Snapback • ${labelParts.join(' – ')}`.slice(0, MAX_TASK_STORAGE_LENGTH)
     const context = focusContextRef.current
+    const markerGoalSurface = ensureSurfaceStyle(context.goalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE)
+    const markerBucketSurface =
+      context.bucketSurface !== undefined && context.bucketSurface !== null
+        ? ensureSurfaceStyle(context.bucketSurface, DEFAULT_SURFACE_STYLE)
+        : null
     const markerEntry: HistoryEntry = {
       id: makeHistoryId(),
       taskName: markerTaskName,
@@ -1595,6 +1825,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       endedAt: now + SNAPBACK_MARKER_DURATION_MS,
       goalName: context.goalName,
       bucketName: actionLabel,
+      goalId: context.goalId,
+      bucketId: context.bucketId,
+      taskId: context.taskId,
+      goalSurface: markerGoalSurface,
+      bucketSurface: markerBucketSurface,
     }
 
     setHistory((current) => {
@@ -1610,11 +1845,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       const resumeStart = Date.now()
       setSessionStart(resumeStart)
       setIsRunning(true)
+      const resumeGoalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
+      const resumeBucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
+      const resumeTaskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
+      currentSessionKeyRef.current = makeSessionKey(resumeGoalId, resumeBucketId, resumeTaskId)
+      lastLoggedSessionKeyRef.current = null
     } else {
-    setIsRunning(false)
-    if (snapbackNextAction === 'switch') {
-      setIsSelectorOpen(true)
-    }
+      setIsRunning(false)
+      if (snapbackNextAction === 'switch') {
+        setIsSelectorOpen(true)
+      }
   }
   }, [elapsed, normalizedCurrentTask, registerNewHistoryEntry, snapbackNextAction, snapbackNote, snapbackReason])
 
@@ -1675,14 +1915,26 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
       if (detail.autoStart) {
         const now = Date.now()
+        const previousSessionKey = currentSessionKeyRef.current
         if (elapsed > 0) {
           const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
-          registerNewHistoryEntry(elapsed, entryName, previousContext)
+          registerNewHistoryEntry(elapsed, entryName, {
+            goalId: previousContext.goalId,
+            bucketId: previousContext.bucketId,
+            taskId: previousContext.taskId,
+            sessionKey: previousSessionKey,
+            goalName: previousContext.goalName,
+            bucketName: previousContext.bucketName,
+            goalSurface: previousContext.goalSurface,
+            bucketSurface: previousContext.bucketSurface,
+          })
         }
         setElapsed(0)
         setSessionStart(now)
         lastTickRef.current = null
         setIsRunning(true)
+        currentSessionKeyRef.current = makeSessionKey(detail.goalId ?? null, detail.bucketId ?? null, detail.taskId ?? null)
+        lastLoggedSessionKeyRef.current = null
       }
     }
     window.addEventListener(FOCUS_EVENT_TYPE, handleFocusBroadcast as EventListener)
@@ -1935,11 +2187,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
               </button>
               {lifeRoutinesExpanded ? (
                 <ul className="task-selector__list">
-                  {LIFE_ROUTINE_TASKS.map((task) => {
-                    const taskLower = task.label.trim().toLocaleLowerCase()
+                  {lifeRoutineTasks.map((task) => {
+                    const taskLower = task.title.trim().toLocaleLowerCase()
                     const matches = focusSource
                       ? focusSource.goalId === LIFE_ROUTINES_GOAL_ID &&
-                        focusSource.bucketId === LIFE_ROUTINES_BUCKET_ID &&
+                        focusSource.bucketId === task.bucketId &&
                         currentTaskLower === taskLower
                       : !isDefaultTask && currentTaskLower === taskLower
                     const rowClassName = [
@@ -1955,25 +2207,25 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                           type="button"
                           className={rowClassName}
                           onClick={() =>
-                            handleSelectTask(task.label, {
+                            handleSelectTask(task.title, {
                               goalId: LIFE_ROUTINES_GOAL_ID,
-                              bucketId: LIFE_ROUTINES_BUCKET_ID,
+                              bucketId: task.bucketId,
                               goalName: LIFE_ROUTINES_NAME,
-                              bucketName: LIFE_ROUTINES_NAME,
+                              bucketName: task.title,
                               taskId: task.id,
                               taskDifficulty: 'none',
                               priority: false,
                               goalSurface: LIFE_ROUTINES_SURFACE,
-                              bucketSurface: LIFE_ROUTINES_SURFACE,
+                              bucketSurface: task.surfaceStyle,
                             })
                           }
                         >
                           <div className="task-selector__task-main">
                             <div className="task-selector__task-content">
                               <span className="goal-task-text">
-                                <span className="goal-task-text__inner">{task.label}</span>
+                                <span className="goal-task-text__inner">{task.title}</span>
                               </span>
-                              <span className="task-selector__origin task-selector__origin--dropdown">{task.detail}</span>
+                              <span className="task-selector__origin task-selector__origin--dropdown">{task.blurb}</span>
                             </div>
                           </div>
                         </button>

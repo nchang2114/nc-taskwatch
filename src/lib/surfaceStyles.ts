@@ -1,4 +1,4 @@
-export const SURFACE_STYLES = ['glass', 'midnight', 'slate', 'charcoal', 'linen', 'frost'] as const
+export const SURFACE_STYLES = ['glass', 'midnight', 'slate', 'charcoal', 'linen', 'frost', 'grove', 'lagoon', 'ember'] as const
 
 export type SurfaceStyle = (typeof SURFACE_STYLES)[number]
 

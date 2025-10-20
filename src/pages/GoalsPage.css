@@ -151,6 +151,24 @@ html[data-theme='light'] .goal-draft-input::placeholder {
   box-shadow: 0 18px 34px -24px rgba(38, 124, 162, 0.22);
 }
 
+.goal-card--grove {
+  background: linear-gradient(135deg, rgba(140, 255, 204, 0.26), rgba(74, 222, 128, 0.16));
+  border-color: rgba(74, 222, 128, 0.28);
+  box-shadow: 0 18px 34px -24px rgba(20, 120, 70, 0.22);
+}
+
+.goal-card--lagoon {
+  background: linear-gradient(135deg, rgba(146, 213, 255, 0.26), rgba(59, 130, 246, 0.14));
+  border-color: rgba(59, 130, 246, 0.28);
+  box-shadow: 0 18px 34px -24px rgba(24, 92, 180, 0.22);
+}
+
+.goal-card--ember {
+  background: linear-gradient(135deg, rgba(255, 210, 170, 0.28), rgba(249, 115, 22, 0.18));
+  border-color: rgba(249, 115, 22, 0.28);
+  box-shadow: 0 18px 34px -24px rgba(170, 70, 12, 0.22);
+}
+
 .goal-card--customizing {
   border-color: rgba(139, 132, 255, 0.62);
   box-shadow: 0 40px 70px -46px rgba(74, 90, 230, 0.56);
@@ -202,6 +220,24 @@ html[data-theme='light'] .goal-card--frost {
   background: linear-gradient(135deg, rgba(174, 233, 255, 0.18), rgba(154, 224, 255, 0.12));
   border-color: rgba(124, 222, 255, 0.22);
   box-shadow: 0 14px 28px -20px rgba(86, 196, 230, 0.16);
+}
+
+html[data-theme='light'] .goal-card--grove {
+  background: linear-gradient(135deg, rgba(180, 255, 220, 0.2), rgba(134, 239, 172, 0.14));
+  border-color: rgba(74, 222, 128, 0.24);
+  box-shadow: 0 14px 28px -20px rgba(42, 140, 96, 0.16);
+}
+
+html[data-theme='light'] .goal-card--lagoon {
+  background: linear-gradient(135deg, rgba(180, 230, 255, 0.2), rgba(96, 165, 250, 0.14));
+  border-color: rgba(59, 130, 246, 0.24);
+  box-shadow: 0 14px 28px -20px rgba(54, 118, 210, 0.16);
+}
+
+html[data-theme='light'] .goal-card--ember {
+  background: linear-gradient(135deg, rgba(255, 223, 191, 0.2), rgba(253, 186, 116, 0.14));
+  border-color: rgba(249, 115, 22, 0.24);
+  box-shadow: 0 14px 28px -20px rgba(190, 98, 24, 0.16);
 }
 
 html[data-theme='light'] .goal-card--favorite {
@@ -298,9 +334,11 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   --lr-border: rgba(255, 194, 136, 0.24);
   --lr-text: rgba(255, 247, 236, 0.9);
   --lr-muted: rgba(255, 230, 204, 0.7);
-  --lr-pill-bg: rgba(255, 204, 153, 0.08);
-  --lr-pill-border: rgba(255, 194, 140, 0.22);
-  --lr-pill-text: rgba(255, 240, 222, 0.84);
+  --lr-pill-bg: rgba(80, 55, 140, 0.18);
+  --lr-pill-border: rgba(116, 95, 184, 0.34);
+  --lr-pill-text: rgba(235, 233, 255, 0.9);
+  --lr-pill-muted: rgba(205, 204, 255, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(172, 154, 255, 0.95), rgba(99, 102, 241, 0.9));
   margin-top: clamp(0.5rem, 2vw, 0.85rem);
   padding: clamp(0.6rem, 2.2vw, 0.85rem);
   border-radius: 0.75rem;
@@ -392,6 +430,7 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   background: var(--lr-pill-bg);
   border: 1px solid var(--lr-pill-border);
   overflow: hidden;
+  color: var(--lr-pill-text);
 }
 
 .life-routines-card__task-inner {
@@ -450,6 +489,78 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   color: inherit;
 }
 
+.life-routines-card__task--surface-glass {
+  --lr-pill-bg: rgba(48, 64, 120, 0.16);
+  --lr-pill-border: rgba(118, 142, 255, 0.3);
+  --lr-pill-text: rgba(235, 240, 255, 0.92);
+  --lr-pill-muted: rgba(210, 220, 255, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(148, 163, 255, 0.95), rgba(99, 102, 241, 0.88));
+}
+
+.life-routines-card__task--surface-midnight {
+  --lr-pill-bg: rgba(80, 55, 140, 0.22);
+  --lr-pill-border: rgba(116, 95, 184, 0.38);
+  --lr-pill-text: rgba(235, 233, 255, 0.94);
+  --lr-pill-muted: rgba(200, 200, 255, 0.76);
+  --lr-pill-marker: linear-gradient(135deg, rgba(172, 154, 255, 0.95), rgba(99, 102, 241, 0.9));
+}
+
+.life-routines-card__task--surface-slate {
+  --lr-pill-bg: rgba(54, 126, 190, 0.18);
+  --lr-pill-border: rgba(96, 180, 255, 0.32);
+  --lr-pill-text: rgba(220, 244, 255, 0.92);
+  --lr-pill-muted: rgba(186, 222, 255, 0.78);
+  --lr-pill-marker: linear-gradient(135deg, rgba(120, 200, 255, 0.95), rgba(59, 130, 246, 0.9));
+}
+
+.life-routines-card__task--surface-charcoal {
+  --lr-pill-bg: rgba(150, 60, 110, 0.18);
+  --lr-pill-border: rgba(231, 174, 206, 0.32);
+  --lr-pill-text: rgba(255, 232, 245, 0.92);
+  --lr-pill-muted: rgba(255, 210, 235, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(255, 188, 213, 0.95), rgba(244, 114, 182, 0.9));
+}
+
+.life-routines-card__task--surface-linen {
+  --lr-pill-bg: rgba(174, 120, 60, 0.18);
+  --lr-pill-border: rgba(255, 201, 150, 0.32);
+  --lr-pill-text: rgba(255, 244, 230, 0.92);
+  --lr-pill-muted: rgba(255, 224, 198, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(255, 214, 170, 0.95), rgba(249, 115, 22, 0.88));
+}
+
+.life-routines-card__task--surface-frost {
+  --lr-pill-bg: rgba(40, 140, 170, 0.18);
+  --lr-pill-border: rgba(124, 222, 255, 0.32);
+  --lr-pill-text: rgba(224, 248, 255, 0.92);
+  --lr-pill-muted: rgba(190, 236, 255, 0.76);
+  --lr-pill-marker: linear-gradient(135deg, rgba(174, 233, 255, 0.95), rgba(59, 191, 255, 0.9));
+}
+
+.life-routines-card__task--surface-grove {
+  --lr-pill-bg: rgba(30, 146, 104, 0.2);
+  --lr-pill-border: rgba(74, 222, 128, 0.36);
+  --lr-pill-text: rgba(226, 255, 239, 0.94);
+  --lr-pill-muted: rgba(198, 245, 216, 0.78);
+  --lr-pill-marker: linear-gradient(135deg, rgba(134, 239, 172, 0.96), rgba(34, 197, 94, 0.9));
+}
+
+.life-routines-card__task--surface-lagoon {
+  --lr-pill-bg: rgba(24, 118, 164, 0.2);
+  --lr-pill-border: rgba(59, 130, 246, 0.38);
+  --lr-pill-text: rgba(220, 240, 255, 0.94);
+  --lr-pill-muted: rgba(190, 226, 255, 0.78);
+  --lr-pill-marker: linear-gradient(135deg, rgba(125, 211, 252, 0.96), rgba(56, 189, 248, 0.9));
+}
+
+.life-routines-card__task--surface-ember {
+  --lr-pill-bg: rgba(168, 78, 22, 0.22);
+  --lr-pill-border: rgba(249, 115, 22, 0.38);
+  --lr-pill-text: rgba(255, 240, 224, 0.94);
+  --lr-pill-muted: rgba(255, 216, 190, 0.78);
+  --lr-pill-marker: linear-gradient(135deg, rgba(253, 186, 116, 0.96), rgba(249, 115, 22, 0.9));
+}
+
 .life-routines-card__task-button:focus-visible {
   outline: 2px solid rgba(255, 205, 168, 0.4);
   outline-offset: 2px;
@@ -488,7 +599,7 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   width: 0.26rem;
   height: 0.26rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(255, 218, 160, 0.9), rgba(255, 170, 90, 0.88));
+  background: var(--lr-pill-marker, linear-gradient(135deg, rgba(255, 218, 160, 0.9), rgba(255, 170, 90, 0.88)));
   box-shadow: 0 0 4px rgba(255, 186, 96, 0.35);
 }
 
@@ -496,7 +607,7 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   margin: 0;
   font-size: 0.66rem;
   line-height: 1.28;
-  color: rgba(255, 235, 214, 0.64);
+  color: var(--lr-pill-muted, rgba(255, 235, 214, 0.64));
 }
 
 html[data-theme='light'] .life-routines-card {
@@ -507,6 +618,8 @@ html[data-theme='light'] .life-routines-card {
   --lr-pill-bg: rgba(255, 234, 207, 0.8);
   --lr-pill-border: rgba(209, 164, 102, 0.38);
   --lr-pill-text: rgba(104, 66, 16, 0.86);
+  --lr-pill-muted: rgba(128, 84, 22, 0.68);
+  --lr-pill-marker: linear-gradient(135deg, rgba(255, 205, 148, 0.95), rgba(234, 142, 52, 0.88));
 }
 
 html[data-theme='light'] .life-routines-card__eyebrow {
@@ -525,6 +638,78 @@ html[data-theme='light'] .life-routines-card__task-rename {
 
 html[data-theme='light'] .life-routines-card__task-rename::placeholder {
   color: rgba(122, 98, 58, 0.55);
+}
+
+html[data-theme='light'] .life-routines-card__task--surface-glass {
+  --lr-pill-bg: rgba(241, 244, 255, 0.92);
+  --lr-pill-border: rgba(118, 142, 255, 0.26);
+  --lr-pill-text: rgba(46, 54, 102, 0.94);
+  --lr-pill-muted: rgba(82, 96, 150, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(79, 70, 229, 0.88));
+}
+
+html[data-theme='light'] .life-routines-card__task--surface-midnight {
+  --lr-pill-bg: rgba(226, 228, 255, 0.92);
+  --lr-pill-border: rgba(92, 91, 255, 0.32);
+  --lr-pill-text: rgba(36, 40, 96, 0.94);
+  --lr-pill-muted: rgba(72, 78, 150, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(129, 140, 248, 0.95), rgba(79, 70, 229, 0.88));
+}
+
+html[data-theme='light'] .life-routines-card__task--surface-slate {
+  --lr-pill-bg: rgba(222, 244, 255, 0.92);
+  --lr-pill-border: rgba(82, 168, 255, 0.32);
+  --lr-pill-text: rgba(20, 56, 94, 0.94);
+  --lr-pill-muted: rgba(56, 104, 150, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.88));
+}
+
+html[data-theme='light'] .life-routines-card__task--surface-charcoal {
+  --lr-pill-bg: rgba(255, 236, 246, 0.92);
+  --lr-pill-border: rgba(255, 155, 201, 0.32);
+  --lr-pill-text: rgba(110, 48, 76, 0.94);
+  --lr-pill-muted: rgba(134, 60, 92, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(244, 114, 182, 0.95), rgba(236, 72, 153, 0.88));
+}
+
+html[data-theme='light'] .life-routines-card__task--surface-linen {
+  --lr-pill-bg: rgba(255, 240, 214, 0.92);
+  --lr-pill-border: rgba(255, 198, 140, 0.32);
+  --lr-pill-text: rgba(112, 68, 24, 0.94);
+  --lr-pill-muted: rgba(138, 92, 46, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(247, 144, 9, 0.95), rgba(234, 88, 12, 0.88));
+}
+
+html[data-theme='light'] .life-routines-card__task--surface-frost {
+  --lr-pill-bg: rgba(232, 249, 255, 0.94);
+  --lr-pill-border: rgba(124, 222, 255, 0.32);
+  --lr-pill-text: rgba(24, 68, 92, 0.94);
+  --lr-pill-muted: rgba(32, 92, 132, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(59, 191, 255, 0.95), rgba(2, 132, 199, 0.88));
+}
+
+html[data-theme='light'] .life-routines-card__task--surface-grove {
+  --lr-pill-bg: rgba(222, 251, 232, 0.94);
+  --lr-pill-border: rgba(74, 222, 128, 0.32);
+  --lr-pill-text: rgba(24, 78, 56, 0.94);
+  --lr-pill-muted: rgba(32, 102, 70, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(22, 163, 74, 0.88));
+}
+
+html[data-theme='light'] .life-routines-card__task--surface-lagoon {
+  --lr-pill-bg: rgba(224, 242, 255, 0.94);
+  --lr-pill-border: rgba(59, 130, 246, 0.32);
+  --lr-pill-text: rgba(18, 68, 110, 0.94);
+  --lr-pill-muted: rgba(30, 92, 136, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(56, 189, 248, 0.95), rgba(28, 110, 212, 0.88));
+}
+
+html[data-theme='light'] .life-routines-card__task--surface-ember {
+  --lr-pill-bg: rgba(255, 239, 224, 0.94);
+  --lr-pill-border: rgba(249, 115, 22, 0.32);
+  --lr-pill-text: rgba(110, 60, 24, 0.94);
+  --lr-pill-muted: rgba(134, 76, 34, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(253, 186, 116, 0.95), rgba(234, 88, 12, 0.88));
 }
 
 
@@ -1971,6 +2156,24 @@ html[data-theme='light'] .goal-task-add:focus-visible {
   box-shadow: 0 16px 30px -22px rgba(38, 124, 162, 0.2);
 }
 
+.goal-bucket-item--surface-grove {
+  background: linear-gradient(135deg, rgba(140, 255, 204, 0.28), rgba(74, 222, 128, 0.16));
+  border-color: rgba(74, 222, 128, 0.26);
+  box-shadow: 0 16px 30px -22px rgba(22, 118, 76, 0.22);
+}
+
+.goal-bucket-item--surface-lagoon {
+  background: linear-gradient(135deg, rgba(146, 213, 255, 0.28), rgba(59, 130, 246, 0.16));
+  border-color: rgba(59, 130, 246, 0.26);
+  box-shadow: 0 16px 30px -22px rgba(30, 96, 190, 0.22);
+}
+
+.goal-bucket-item--surface-ember {
+  background: linear-gradient(135deg, rgba(255, 210, 170, 0.3), rgba(249, 115, 22, 0.18));
+  border-color: rgba(249, 115, 22, 0.26);
+  box-shadow: 0 16px 30px -22px rgba(146, 68, 16, 0.22);
+}
+
 html[data-theme='light'] .goal-bucket-item--surface-glass {
   background: rgba(255, 255, 255, 0.84);
   border-color: rgba(128, 146, 238, 0.16);
@@ -2005,6 +2208,24 @@ html[data-theme='light'] .goal-bucket-item--surface-frost {
   background: linear-gradient(135deg, rgba(174, 233, 255, 0.2), rgba(154, 224, 255, 0.12));
   border-color: rgba(124, 222, 255, 0.2);
   box-shadow: 0 12px 22px -18px rgba(86, 196, 230, 0.16);
+}
+
+html[data-theme='light'] .goal-bucket-item--surface-grove {
+  background: linear-gradient(135deg, rgba(180, 255, 220, 0.22), rgba(134, 239, 172, 0.14));
+  border-color: rgba(74, 222, 128, 0.22);
+  box-shadow: 0 12px 22px -18px rgba(58, 160, 112, 0.16);
+}
+
+html[data-theme='light'] .goal-bucket-item--surface-lagoon {
+  background: linear-gradient(135deg, rgba(184, 232, 255, 0.22), rgba(125, 211, 252, 0.14));
+  border-color: rgba(59, 130, 246, 0.22);
+  box-shadow: 0 12px 22px -18px rgba(74, 128, 210, 0.16);
+}
+
+html[data-theme='light'] .goal-bucket-item--surface-ember {
+  background: linear-gradient(135deg, rgba(255, 226, 198, 0.22), rgba(254, 178, 105, 0.14));
+  border-color: rgba(249, 115, 22, 0.22);
+  box-shadow: 0 12px 22px -18px rgba(174, 108, 42, 0.16);
 }
 
 .goal-task-row--draft {

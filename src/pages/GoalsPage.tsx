@@ -34,6 +34,14 @@ import {
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
 import {
+  LIFE_ROUTINE_STORAGE_KEY,
+  LIFE_ROUTINE_UPDATE_EVENT,
+  readStoredLifeRoutines,
+  sanitizeLifeRoutineList,
+  writeStoredLifeRoutines,
+  type LifeRoutineConfig,
+} from '../lib/lifeRoutines'
+import {
   createGoalsSnapshot,
   publishGoalsSnapshot,
   readStoredGoalsSnapshot,
@@ -107,21 +115,7 @@ const TASK_DETAILS_STORAGE_KEY = 'nc-taskwatch-task-details-v1'
 const LIFE_ROUTINES_NAME = 'Life Routines'
 const LIFE_ROUTINES_TAGLINE = 'A steady cadence for your everyday wellbeing.'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
-const LIFE_ROUTINES_BUCKET_ID = 'life-routines'
 const LIFE_ROUTINES_SURFACE: GoalSurfaceStyle = 'linen'
-
-type LifeRoutineTask = {
-  id: string
-  title: string
-  blurb: string
-}
-
-const LIFE_ROUTINE_TASKS: readonly LifeRoutineTask[] = [
-  { id: 'life-sleep', title: 'Sleep', blurb: 'Protect 7–9 hours and wind down with intention.' },
-  { id: 'life-eat', title: 'Eat', blurb: 'Plan balanced meals and pause to truly refuel.' },
-  { id: 'life-meditate', title: 'Meditate', blurb: 'Give your mind 10 minutes of quiet focus.' },
-  { id: 'life-socials', title: 'Socials', blurb: 'Reach out, share a laugh, or check in with someone.' },
-]
 
 const sanitizeSubtasks = (value: unknown): TaskSubtask[] => {
   if (!Array.isArray(value)) {
@@ -746,6 +740,9 @@ const GOAL_SURFACE_CLASS_MAP: Record<GoalSurfaceStyle, string> = {
   charcoal: 'goal-card--charcoal',
   linen: 'goal-card--linen',
   frost: 'goal-card--frost',
+  grove: 'goal-card--grove',
+  lagoon: 'goal-card--lagoon',
+  ember: 'goal-card--ember',
 }
 
 const BUCKET_SURFACE_CLASS_MAP: Record<BucketSurfaceStyle, string> = {
@@ -755,6 +752,9 @@ const BUCKET_SURFACE_CLASS_MAP: Record<BucketSurfaceStyle, string> = {
   charcoal: 'goal-bucket-item--surface-charcoal',
   linen: 'goal-bucket-item--surface-linen',
   frost: 'goal-bucket-item--surface-frost',
+  grove: 'goal-bucket-item--surface-grove',
+  lagoon: 'goal-bucket-item--surface-lagoon',
+  ember: 'goal-bucket-item--surface-ember',
 }
 
 const GOAL_SURFACE_PRESETS: Array<{
@@ -792,6 +792,21 @@ const GOAL_SURFACE_PRESETS: Array<{
     label: 'Frost',
     description: 'Minty aqua highlight with a breezy feel.',
   },
+  {
+    id: 'grove',
+    label: 'Grove',
+    description: 'Lush greens with a soft forest glow.',
+  },
+  {
+    id: 'lagoon',
+    label: 'Lagoon',
+    description: 'Crystal blues with a calming tide.',
+  },
+  {
+    id: 'ember',
+    label: 'Ember',
+    description: 'Vibrant amber with a warm spark.',
+  },
 ]
 
 const BUCKET_SURFACE_PRESETS: Array<{
@@ -805,6 +820,9 @@ const BUCKET_SURFACE_PRESETS: Array<{
   { id: 'charcoal', label: 'Cherry', description: 'Blush pink highlight with a pastel glow.' },
   { id: 'linen', label: 'Warm', description: 'Golden peach accent with gentle warmth.' },
   { id: 'frost', label: 'Frost', description: 'Minty aqua highlight with a breezy feel.' },
+  { id: 'grove', label: 'Grove', description: 'Fresh green lift with botanical energy.' },
+  { id: 'lagoon', label: 'Lagoon', description: 'Crystal blue blend for clean focus.' },
+  { id: 'ember', label: 'Ember', description: 'Radiant amber spark with soft glow.' },
 ]
 
 const formatGradientLabel = (value: string) =>
@@ -1060,6 +1078,70 @@ const BucketCustomizer = React.forwardRef<HTMLDivElement, BucketCustomizerProps>
 )
 
 BucketCustomizer.displayName = 'BucketCustomizer'
+
+interface LifeRoutineCustomizerProps {
+  routine: LifeRoutineConfig
+  onUpdate: (surface: BucketSurfaceStyle) => void
+  onClose: () => void
+}
+
+const LifeRoutineCustomizer = React.forwardRef<HTMLDivElement, LifeRoutineCustomizerProps>(
+  ({ routine, onUpdate, onClose }, ref) => {
+    const surfaceStyle = normalizeBucketSurfaceStyle(routine.surfaceStyle)
+
+    return (
+      <div ref={ref} className="goal-customizer" role="region" aria-label={`Customise routine ${routine.title}`}>
+        <div className="goal-customizer__header">
+          <div>
+            <p className="goal-customizer__title">Routine gradient</p>
+            <p className="goal-customizer__subtitle">Pick the tint that best matches this ritual.</p>
+          </div>
+          <button
+            type="button"
+            className="goal-customizer__close"
+            onClick={onClose}
+            aria-label="Close routine customiser"
+            data-auto-focus="true"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+
+        <div className="goal-customizer__section">
+          <p className="goal-customizer__label">Gradient palette</p>
+          <div className="goal-customizer__surface-grid">
+            {BUCKET_SURFACE_PRESETS.map((preset) => {
+              const isActive = surfaceStyle === preset.id
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className={classNames('goal-customizer__surface', isActive && 'goal-customizer__surface--active')}
+                  onClick={() => onUpdate(preset.id)}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={classNames('goal-customizer__surface-preview', `goal-customizer__surface-preview--${preset.id}`)}
+                  />
+                  <span className="goal-customizer__surface-title">{preset.label}</span>
+                  <span className="goal-customizer__surface-caption">{preset.description}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="goal-customizer__footer">
+          <button type="button" className="goal-customizer__done" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    )
+  },
+)
+
+LifeRoutineCustomizer.displayName = 'LifeRoutineCustomizer'
 
 interface GoalRowProps {
   goal: Goal
@@ -3737,9 +3819,7 @@ export default function GoalsPage(): ReactElement {
   const taskEditRefs = useRef(new Map<string, HTMLSpanElement>())
   const submittingEdits = useRef(new Set<string>())
   const [lifeRoutinesExpanded, setLifeRoutinesExpanded] = useState(false)
-  const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineTask[]>(() =>
-    LIFE_ROUTINE_TASKS.map((task) => ({ ...task })),
-  )
+  const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
   const [lifeRoutineMenuOpenId, setLifeRoutineMenuOpenId] = useState<string | null>(null)
   const lifeRoutineMenuRef = useRef<HTMLDivElement | null>(null)
   const lifeRoutineMenuAnchorRef = useRef<HTMLButtonElement | null>(null)
@@ -3748,6 +3828,44 @@ export default function GoalsPage(): ReactElement {
   const [renamingLifeRoutineId, setRenamingLifeRoutineId] = useState<string | null>(null)
   const [lifeRoutineRenameDraft, setLifeRoutineRenameDraft] = useState('')
   const lifeRoutineRenameInputRef = useRef<HTMLInputElement | null>(null)
+  const [activeLifeRoutineCustomizerId, setActiveLifeRoutineCustomizerId] = useState<string | null>(null)
+  const lifeRoutineCustomizerDialogRef = useRef<HTMLDivElement | null>(null)
+  const activeLifeRoutine = useMemo(() => {
+    if (!lifeRoutineMenuOpenId) {
+      return null
+    }
+    return lifeRoutineTasks.find((task) => task.id === lifeRoutineMenuOpenId) ?? null
+  }, [lifeRoutineMenuOpenId, lifeRoutineTasks])
+  const activeLifeRoutineCustomizer = useMemo(() => {
+    if (!activeLifeRoutineCustomizerId) {
+      return null
+    }
+    return lifeRoutineTasks.find((task) => task.id === activeLifeRoutineCustomizerId) ?? null
+  }, [lifeRoutineTasks, activeLifeRoutineCustomizerId])
+  useEffect(() => {
+    writeStoredLifeRoutines(lifeRoutineTasks)
+  }, [lifeRoutineTasks])
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === LIFE_ROUTINE_STORAGE_KEY) {
+        setLifeRoutineTasks(readStoredLifeRoutines())
+      }
+    }
+    const handleExternalUpdate = (event: Event) => {
+      if (event instanceof CustomEvent) {
+        setLifeRoutineTasks(sanitizeLifeRoutineList(event.detail))
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener(LIFE_ROUTINE_UPDATE_EVENT, handleExternalUpdate as EventListener)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener(LIFE_ROUTINE_UPDATE_EVENT, handleExternalUpdate as EventListener)
+    }
+  }, [])
 
   const updateLifeRoutineMenuPosition = useCallback(() => {
     const anchor = lifeRoutineMenuAnchorRef.current
@@ -3823,6 +3941,63 @@ export default function GoalsPage(): ReactElement {
       el.setSelectionRange(len, len)
     }
   }, [renamingLifeRoutineId])
+
+  useEffect(() => {
+    if (activeLifeRoutineCustomizerId && !activeLifeRoutineCustomizer) {
+      setActiveLifeRoutineCustomizerId(null)
+    }
+  }, [activeLifeRoutineCustomizerId, activeLifeRoutineCustomizer])
+
+  useEffect(() => {
+    if (!activeLifeRoutineCustomizerId) {
+      return
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActiveLifeRoutineCustomizerId(null)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [activeLifeRoutineCustomizerId])
+
+  useEffect(() => {
+    if (!activeLifeRoutineCustomizerId) {
+      return
+    }
+    if (typeof document === 'undefined') {
+      return
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [activeLifeRoutineCustomizerId])
+
+  useEffect(() => {
+    if (!activeLifeRoutineCustomizerId) {
+      return
+    }
+    if (typeof window === 'undefined') {
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const dialog = lifeRoutineCustomizerDialogRef.current
+      if (!dialog) {
+        return
+      }
+      const target = dialog.querySelector<HTMLElement>(
+        '[data-auto-focus="true"], button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      target?.focus()
+    })
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [activeLifeRoutineCustomizerId])
 
   const [focusPromptTarget, setFocusPromptTarget] = useState<FocusPromptTarget | null>(null)
   const [revealedDeleteTaskKey, setRevealedDeleteTaskKey] = useState<string | null>(null)
@@ -4353,9 +4528,16 @@ export default function GoalsPage(): ReactElement {
     setRenamingLifeRoutineId(null)
     setLifeRoutineRenameDraft('')
   }
+  const updateLifeRoutineSurface = (routineId: string, surface: BucketSurfaceStyle) => {
+    setLifeRoutineTasks((current) =>
+      current.map((task) => (task.id === routineId ? { ...task, surfaceStyle: surface } : task)),
+    )
+  }
   const deleteLifeRoutine = (routineId: string) => {
+    const routine = lifeRoutineTasks.find((task) => task.id === routineId) ?? null
     setLifeRoutineTasks((current) => current.filter((task) => task.id !== routineId))
     setLifeRoutineMenuOpenId((current) => (current === routineId ? null : current))
+    setActiveLifeRoutineCustomizerId((current) => (current === routineId ? null : current))
     if (renamingLifeRoutineId === routineId) {
       setRenamingLifeRoutineId(null)
       setLifeRoutineRenameDraft('')
@@ -4364,8 +4546,8 @@ export default function GoalsPage(): ReactElement {
       if (
         current &&
         current.goalId === LIFE_ROUTINES_GOAL_ID &&
-        current.bucketId === LIFE_ROUTINES_BUCKET_ID &&
-        current.taskId === routineId
+        current.taskId === routineId &&
+        (!routine || current.bucketId === routine.bucketId)
       ) {
         return null
       }
@@ -4901,13 +5083,6 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     })
   }, [lifeRoutineTasks, normalizedSearch])
 
-  const activeLifeRoutine = useMemo(() => {
-    if (!lifeRoutineMenuOpenId) {
-      return null
-    }
-    return lifeRoutineTasks.find((task) => task.id === lifeRoutineMenuOpenId) ?? null
-  }, [lifeRoutineMenuOpenId, lifeRoutineTasks])
-
   const filteredGoals = useMemo(() => {
     if (!normalizedSearch) {
       return goals
@@ -5234,41 +5409,36 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     },
     [],
   )
-  const handleLifeRoutineFocus = useCallback(
-    (taskId: string, taskTitle: string) => {
-      broadcastFocusTask({
-        goalId: LIFE_ROUTINES_GOAL_ID,
-        goalName: LIFE_ROUTINES_NAME,
-        bucketId: LIFE_ROUTINES_BUCKET_ID,
-        bucketName: LIFE_ROUTINES_NAME,
-        taskId,
-        taskName: taskTitle,
-        taskDifficulty: null,
-        priority: null,
-        goalSurface: LIFE_ROUTINES_SURFACE,
-        bucketSurface: LIFE_ROUTINES_SURFACE,
-        autoStart: true,
-      })
-      setFocusPromptTarget(null)
-    },
-    [],
-  )
-  const toggleLifeRoutineFocusPrompt = useCallback(
-    (taskId: string) => {
-      setFocusPromptTarget((current) => {
-        const isSame =
-          current &&
-          current.goalId === LIFE_ROUTINES_GOAL_ID &&
-          current.bucketId === LIFE_ROUTINES_BUCKET_ID &&
-          current.taskId === taskId
-        if (isSame) {
-          return null
-        }
-        return { goalId: LIFE_ROUTINES_GOAL_ID, bucketId: LIFE_ROUTINES_BUCKET_ID, taskId }
-      })
-    },
-    [],
-  )
+  const handleLifeRoutineFocus = useCallback((routine: LifeRoutineConfig) => {
+    broadcastFocusTask({
+      goalId: LIFE_ROUTINES_GOAL_ID,
+      goalName: LIFE_ROUTINES_NAME,
+      bucketId: routine.bucketId,
+      bucketName: routine.title,
+      taskId: routine.id,
+      taskName: routine.title,
+      taskDifficulty: null,
+      priority: null,
+      goalSurface: LIFE_ROUTINES_SURFACE,
+      bucketSurface: routine.surfaceStyle,
+      autoStart: true,
+    })
+    setFocusPromptTarget(null)
+  }, [])
+
+  const toggleLifeRoutineFocusPrompt = useCallback((routine: LifeRoutineConfig) => {
+    setFocusPromptTarget((current) => {
+      const isSame =
+        current &&
+        current.goalId === LIFE_ROUTINES_GOAL_ID &&
+        current.bucketId === routine.bucketId &&
+        current.taskId === routine.id
+      if (isSame) {
+        return null
+      }
+      return { goalId: LIFE_ROUTINES_GOAL_ID, bucketId: routine.bucketId, taskId: routine.id }
+    })
+  }, [])
 
   const toggleTaskCompletion = (goalId: string, bucketId: string, taskId: string) => {
     setRevealedDeleteTaskKey((current) => {
@@ -5924,6 +6094,18 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                 onClick={(event) => {
                   event.stopPropagation()
                   setLifeRoutineMenuOpenId(null)
+                  setActiveLifeRoutineCustomizerId(activeLifeRoutine.id)
+                }}
+              >
+                Customise gradient
+              </button>
+              <div className="goal-menu__divider" />
+              <button
+                type="button"
+                className="goal-menu__item"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setLifeRoutineMenuOpenId(null)
                   startLifeRoutineRename(activeLifeRoutine.id, activeLifeRoutine.title)
                 }}
               >
@@ -5941,6 +6123,36 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
               >
                 Delete routine
               </button>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null
+
+  const lifeRoutineCustomizerPortal =
+    activeLifeRoutineCustomizer && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="goal-customizer-overlay"
+            role="presentation"
+            onMouseDown={(event) => {
+              event.stopPropagation()
+              setActiveLifeRoutineCustomizerId(null)
+            }}
+          >
+            <div
+              ref={lifeRoutineCustomizerDialogRef}
+              className="goal-customizer-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Customise routine ${activeLifeRoutineCustomizer.title}`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <LifeRoutineCustomizer
+                routine={activeLifeRoutineCustomizer}
+                onUpdate={(surface) => updateLifeRoutineSurface(activeLifeRoutineCustomizer.id, surface)}
+                onClose={() => setActiveLifeRoutineCustomizerId(null)}
+              />
             </div>
           </div>,
           document.body,
@@ -6043,21 +6255,21 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
               {lifeRoutinesExpanded ? (
                 <ul id="life-routines-body" className="life-routines-card__tasks">
                   {lifeRoutineTasks.map((task) => {
-                    const focusKey = makeTaskFocusKey(
-                      LIFE_ROUTINES_GOAL_ID,
-                      LIFE_ROUTINES_BUCKET_ID,
-                      task.id,
-                    )
+                    const focusKey = makeTaskFocusKey(LIFE_ROUTINES_GOAL_ID, task.bucketId, task.id)
                     const isPromptActive =
                       focusPromptTarget &&
                       focusPromptTarget.goalId === LIFE_ROUTINES_GOAL_ID &&
-                      focusPromptTarget.bucketId === LIFE_ROUTINES_BUCKET_ID &&
+                      focusPromptTarget.bucketId === task.bucketId &&
                       focusPromptTarget.taskId === task.id
                     const isRenamingRoutine = renamingLifeRoutineId === task.id
+                    const taskSurfaceClass = classNames(
+                      'life-routines-card__task',
+                      `life-routines-card__task--surface-${task.surfaceStyle}`,
+                    )
                     return (
                       <React.Fragment key={task.id}>
                         <li
-                          className="life-routines-card__task"
+                          className={taskSurfaceClass}
                           data-focus-prompt-key={isPromptActive ? focusKey : undefined}
                         >
                           <div className="life-routines-card__task-inner">
@@ -6088,7 +6300,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                               <button
                                 type="button"
                                 className="life-routines-card__task-button"
-                                onClick={() => toggleLifeRoutineFocusPrompt(task.id)}
+                                onClick={() => toggleLifeRoutineFocusPrompt(task)}
                               >
                                 <span className="life-routines-card__task-title">
                                   {highlightText(task.title, normalizedSearch)}
@@ -6140,7 +6352,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                 className="goal-task-focus__button"
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  handleLifeRoutineFocus(task.id, task.title)
+                                  handleLifeRoutineFocus(task)
                                   dismissFocusPrompt()
                                 }}
                               >
@@ -6435,6 +6647,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
       </div>
 
       {lifeRoutineMenuPortal}
+      {lifeRoutineCustomizerPortal}
       {customizerPortal}
 
       {archivedManagerGoal && (
