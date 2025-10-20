@@ -2869,6 +2869,18 @@ html[data-theme='light'] .goal-task-row--diff-green {
   background-image: linear-gradient(135deg, rgba(174, 233, 255, 0.26), rgba(142, 210, 255, 0.16));
 }
 
+.goal-customizer__surface-preview--grove {
+  background-image: linear-gradient(135deg, rgba(140, 255, 204, 0.28), rgba(74, 222, 128, 0.18));
+}
+
+.goal-customizer__surface-preview--lagoon {
+  background-image: linear-gradient(135deg, rgba(146, 213, 255, 0.28), rgba(59, 130, 246, 0.18));
+}
+
+.goal-customizer__surface-preview--ember {
+  background-image: linear-gradient(135deg, rgba(255, 210, 170, 0.3), rgba(249, 115, 22, 0.2));
+}
+
 .goal-customizer__surface-title {
   font-size: 0.85rem;
   font-weight: 600;
@@ -3077,6 +3089,18 @@ html[data-theme='light'] .goal-customizer__surface-preview--linen {
 
 html[data-theme='light'] .goal-customizer__surface-preview--frost {
   background-image: linear-gradient(135deg, rgba(174, 233, 255, 0.2), rgba(154, 224, 255, 0.12));
+}
+
+html[data-theme='light'] .goal-customizer__surface-preview--grove {
+  background-image: linear-gradient(135deg, rgba(180, 255, 220, 0.22), rgba(134, 239, 172, 0.14));
+}
+
+html[data-theme='light'] .goal-customizer__surface-preview--lagoon {
+  background-image: linear-gradient(135deg, rgba(180, 230, 255, 0.22), rgba(125, 211, 252, 0.14));
+}
+
+html[data-theme='light'] .goal-customizer__surface-preview--ember {
+  background-image: linear-gradient(135deg, rgba(255, 226, 198, 0.22), rgba(254, 178, 105, 0.14));
 }
 
 html[data-theme='light'] .goal-customizer__swatch {
