@@ -82,6 +82,18 @@ type FocusSource = {
   bucketSurface: SurfaceStyle | null
 }
 
+type SessionMetadata = {
+  goalId: string | null
+  bucketId: string | null
+  taskId: string | null
+  goalName: string | null
+  bucketName: string | null
+  goalSurface: SurfaceStyle
+  bucketSurface: SurfaceStyle | null
+  sessionKey: string | null
+  taskLabel: string
+}
+
 const getNextDifficulty = (value: FocusCandidate['difficulty'] | null): FocusCandidate['difficulty'] => {
   switch (value) {
     case 'green':
@@ -133,6 +145,18 @@ const LIFE_ROUTINE_SURFACE_MAP = new Map(
 
 const makeSessionKey = (goalId: string | null, bucketId: string | null, taskId: string | null) =>
   goalId && bucketId ? `${goalId}::${bucketId}::${taskId ?? ''}` : null
+
+const createEmptySessionMetadata = (taskLabel: string): SessionMetadata => ({
+  goalId: null,
+  bucketId: null,
+  taskId: null,
+  goalName: null,
+  bucketName: null,
+  goalSurface: DEFAULT_SURFACE_STYLE,
+  bucketSurface: null,
+  sessionKey: null,
+  taskLabel,
+})
 
 declare global {
   interface Window {
@@ -319,6 +343,36 @@ const sanitizeHistory = (value: unknown): HistoryEntry[] => {
     .filter((entry): entry is HistoryEntry => Boolean(entry))
 }
 
+const historiesAreEqual = (a: HistoryEntry[], b: HistoryEntry[]): boolean => {
+  if (a === b) {
+    return true
+  }
+  if (a.length !== b.length) {
+    return false
+  }
+  for (let index = 0; index < a.length; index += 1) {
+    const left = a[index]
+    const right = b[index]
+    if (
+      left.id !== right.id ||
+      left.taskName !== right.taskName ||
+      left.elapsed !== right.elapsed ||
+      left.startedAt !== right.startedAt ||
+      left.endedAt !== right.endedAt ||
+      left.goalName !== right.goalName ||
+      left.bucketName !== right.bucketName ||
+      left.goalId !== right.goalId ||
+      left.bucketId !== right.bucketId ||
+      left.taskId !== right.taskId ||
+      left.goalSurface !== right.goalSurface ||
+      left.bucketSurface !== right.bucketSurface
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 const getStoredHistory = (): HistoryEntry[] => {
   if (typeof window === 'undefined') {
     return []
@@ -459,6 +513,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [isRunning, setIsRunning] = useState(false)
   const [isTimeHidden, setIsTimeHidden] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>(() => getStoredHistory())
+  const latestHistoryRef = useRef(history)
   const [lastSnapbackSummary, setLastSnapbackSummary] = useState<string | null>(null)
   const [isSnapbackOpen, setIsSnapbackOpen] = useState(false)
   const [snapbackReason, setSnapbackReason] = useState<SnapbackReasonId>('tired')
@@ -570,7 +625,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-
     try {
       window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history))
     } catch (error) {
@@ -583,6 +637,50 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       console.warn('Failed to broadcast stopwatch history update', error)
     }
   }, [history])
+
+  useEffect(() => {
+    latestHistoryRef.current = history
+  }, [history])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const applyIncomingHistory = (incoming: HistoryEntry[]) => {
+      const next = incoming.slice(0, 250)
+      if (!historiesAreEqual(latestHistoryRef.current, next)) {
+        setHistory(next)
+      }
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== HISTORY_STORAGE_KEY) {
+        return
+      }
+      try {
+        const next = getStoredHistory()
+        applyIncomingHistory(next)
+      } catch (error) {
+        console.warn('Failed to sync stopwatch history from storage', error)
+      }
+    }
+
+    const handleHistoryBroadcast = (event: Event) => {
+      if (!(event instanceof CustomEvent)) {
+        return
+      }
+      const sanitized = sanitizeHistory(event.detail)
+      applyIncomingHistory(sanitized)
+    }
+
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener(HISTORY_EVENT_NAME, handleHistoryBroadcast as EventListener)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener(HISTORY_EVENT_NAME, handleHistoryBroadcast as EventListener)
+    }
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -747,7 +845,17 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   const normalizedCurrentTask = useMemo(() => currentTaskName.trim(), [currentTaskName])
   const safeTaskName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
+  const sessionMetadataRef = useRef<SessionMetadata>(createEmptySessionMetadata(safeTaskName))
   const elapsedSeconds = Math.floor(elapsed / 1000)
+
+  useEffect(() => {
+    if (!isRunning) {
+      sessionMetadataRef.current = {
+        ...sessionMetadataRef.current,
+        taskLabel: safeTaskName,
+      }
+    }
+  }, [isRunning, safeTaskName])
 
   const focusCandidates = useMemo<FocusCandidate[]>(() => {
     const candidates: FocusCandidate[] = []
@@ -805,21 +913,73 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     return null
   }, [focusCandidates, focusSource, normalizedCurrentTask])
 
-  const sessionGoalName = focusSource?.goalName?.trim() || null
-  const sessionBucketName = focusSource?.bucketName?.trim() || null
+  const currentSessionMeta = sessionMetadataRef.current
+  const sessionGoalName =
+    isRunning || elapsed > 0
+      ? currentSessionMeta.goalName
+      : focusSource?.goalName?.trim() || null
+  const sessionBucketName =
+    isRunning || elapsed > 0
+      ? currentSessionMeta.bucketName
+      : focusSource?.bucketName?.trim() || null
   const sessionTaskLabel =
-    normalizedCurrentTask.length > 0 ? normalizedCurrentTask : sessionGoalName ? sessionGoalName : ''
+    normalizedCurrentTask.length > 0
+      ? normalizedCurrentTask
+      : sessionGoalName
+        ? sessionGoalName
+        : ''
   const rawSessionGoalSurface =
-    focusSource?.goalSurface ?? activeFocusCandidate?.goalSurface ?? DEFAULT_SURFACE_STYLE
+    isRunning || elapsed > 0
+      ? currentSessionMeta.goalSurface
+      : focusSource?.goalSurface ?? activeFocusCandidate?.goalSurface ?? DEFAULT_SURFACE_STYLE
   const sessionGoalSurface = ensureSurfaceStyle(rawSessionGoalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE)
-  const rawSessionBucketSurface = focusSource?.bucketSurface ?? activeFocusCandidate?.bucketSurface ?? null
+  const rawSessionBucketSurface =
+    isRunning || elapsed > 0
+      ? currentSessionMeta.bucketSurface
+      : focusSource?.bucketSurface ?? activeFocusCandidate?.bucketSurface ?? null
   const sessionBucketSurface =
     rawSessionBucketSurface !== null && rawSessionBucketSurface !== undefined
       ? ensureSurfaceStyle(rawSessionBucketSurface, DEFAULT_SURFACE_STYLE)
       : null
-  const sessionGoalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
-  const sessionBucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
-  const sessionTaskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
+  const sessionGoalId =
+    isRunning || elapsed > 0
+      ? currentSessionMeta.goalId
+      : focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
+  const sessionBucketId =
+    isRunning || elapsed > 0
+      ? currentSessionMeta.bucketId
+      : focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
+  const sessionTaskId =
+    isRunning || elapsed > 0
+      ? currentSessionMeta.taskId
+      : focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
+  const deriveSessionMetadata = useCallback((): SessionMetadata => {
+    const goalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
+    const bucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
+    const taskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
+    const goalName = focusSource?.goalName ?? activeFocusCandidate?.goalName ?? null
+    const bucketName = focusSource?.bucketName ?? activeFocusCandidate?.bucketName ?? null
+    const goalSurfaceSource =
+      focusSource?.goalSurface ?? activeFocusCandidate?.goalSurface ?? DEFAULT_SURFACE_STYLE
+    const goalSurface = ensureSurfaceStyle(goalSurfaceSource ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE)
+    const bucketSurfaceSource = focusSource?.bucketSurface ?? activeFocusCandidate?.bucketSurface ?? null
+    const bucketSurface =
+      bucketSurfaceSource !== null && bucketSurfaceSource !== undefined
+        ? ensureSurfaceStyle(bucketSurfaceSource, DEFAULT_SURFACE_STYLE)
+        : null
+    const sessionKey = makeSessionKey(goalId, bucketId, taskId)
+    return {
+      goalId,
+      bucketId,
+      taskId,
+      goalName,
+      bucketName,
+      goalSurface,
+      bucketSurface,
+      sessionKey,
+      taskLabel: safeTaskName,
+    }
+  }, [activeFocusCandidate, focusSource, safeTaskName])
 
   const effectiveGoalName = focusSource?.goalName ?? activeFocusCandidate?.goalName ?? null
   const effectiveBucketName = focusSource?.bucketName ?? activeFocusCandidate?.bucketName ?? null
@@ -1518,15 +1678,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
     const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
     if (elapsed > 0) {
+      const sessionMeta = sessionMetadataRef.current
       registerNewHistoryEntry(elapsed, entryName, {
-        goalId,
-        bucketId,
-        taskId,
+        goalId: sessionMeta.goalId ?? goalId,
+        bucketId: sessionMeta.bucketId ?? bucketId,
+        taskId: sessionMeta.taskId ?? taskId,
         sessionKey: currentSessionKeyRef.current,
-        goalName: entryGoalName,
-        bucketName: entryBucketName,
-        goalSurface: effectiveGoalSurface,
-        bucketSurface: effectiveBucketSurface,
+        goalName: sessionMeta.goalName ?? entryGoalName,
+        bucketName: sessionMeta.bucketName ?? entryBucketName,
+        goalSurface: sessionMeta.goalSurface,
+        bucketSurface: sessionMeta.bucketSurface,
       })
     }
 
@@ -1536,6 +1697,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     lastTickRef.current = null
     currentSessionKeyRef.current = null
     lastLoggedSessionKeyRef.current = null
+    sessionMetadataRef.current = createEmptySessionMetadata(safeTaskName)
 
     if (!isLifeRoutineFocus) {
       setGoalsSnapshot((current) => {
@@ -1649,10 +1811,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       const now = Date.now()
       setSessionStart(now - elapsed)
       lastTickRef.current = null
-      const startGoalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
-      const startBucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
-      const startTaskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
-      currentSessionKeyRef.current = makeSessionKey(startGoalId, startBucketId, startTaskId)
+      const metadata = deriveSessionMetadata()
+      sessionMetadataRef.current = metadata
+      currentSessionKeyRef.current = metadata.sessionKey
       lastLoggedSessionKeyRef.current = null
       return true
     })
@@ -1661,15 +1822,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const handleReset = () => {
     if (elapsed > 0) {
       const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
+      const sessionMeta = sessionMetadataRef.current
       registerNewHistoryEntry(elapsed, entryName, {
-        goalId: focusContextRef.current.goalId,
-        bucketId: focusContextRef.current.bucketId,
-        taskId: focusContextRef.current.taskId,
+        goalId: sessionMeta.goalId,
+        bucketId: sessionMeta.bucketId,
+        taskId: sessionMeta.taskId,
         sessionKey: currentSessionKeyRef.current,
-        goalName: focusContextRef.current.goalName,
-        bucketName: focusContextRef.current.bucketName,
-        goalSurface: focusContextRef.current.goalSurface,
-        bucketSurface: focusContextRef.current.bucketSurface,
+        goalName: sessionMeta.goalName,
+        bucketName: sessionMeta.bucketName,
+        goalSurface: sessionMeta.goalSurface,
+        bucketSurface: sessionMeta.bucketSurface,
       })
     }
     setIsRunning(false)
@@ -1678,6 +1840,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     lastTickRef.current = null
     currentSessionKeyRef.current = null
     lastLoggedSessionKeyRef.current = null
+    sessionMetadataRef.current = createEmptySessionMetadata(safeTaskName)
   }
 
   const handleToggleTimeVisibility = useCallback(() => {
@@ -1701,35 +1864,19 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     ) => {
       const now = Date.now()
       const startedAt = sessionStart ?? now - elapsedMs
-      const fallbackContext = focusContextRef.current
-      const contextGoalId = context?.goalId !== undefined ? context.goalId : fallbackContext.goalId
-      const contextBucketId = context?.bucketId !== undefined ? context.bucketId : fallbackContext.bucketId
-      const contextTaskId = context?.taskId !== undefined ? context.taskId : fallbackContext.taskId
+      const sessionMeta = sessionMetadataRef.current
+      const contextGoalId =
+        context?.goalId !== undefined ? context.goalId : sessionMeta.goalId
+      const contextBucketId =
+        context?.bucketId !== undefined ? context.bucketId : sessionMeta.bucketId
+      const contextTaskId =
+        context?.taskId !== undefined ? context.taskId : sessionMeta.taskId
       const sessionKeyExplicit =
-        context?.sessionKey !== undefined ? context.sessionKey : fallbackContext.sessionKey
+        context?.sessionKey !== undefined ? context.sessionKey : sessionMeta.sessionKey
       const sessionKey =
         sessionKeyExplicit !== undefined && sessionKeyExplicit !== null
           ? sessionKeyExplicit
           : makeSessionKey(contextGoalId, contextBucketId, contextTaskId)
-      const goalName =
-        context?.goalName !== undefined ? context.goalName : fallbackContext.goalName ?? null
-      const bucketName =
-        context?.bucketName !== undefined ? context.bucketName : fallbackContext.bucketName ?? null
-      const contextGoalSurface = context?.goalSurface
-      const contextBucketSurface = context?.bucketSurface
-      const goalSurfaceValue =
-        contextGoalSurface !== undefined ? contextGoalSurface : fallbackContext.goalSurface
-      const bucketSurfaceValue =
-        contextBucketSurface !== undefined ? contextBucketSurface : fallbackContext.bucketSurface
-      const normalizedGoalSurface = ensureSurfaceStyle(
-        goalSurfaceValue ?? DEFAULT_SURFACE_STYLE,
-        DEFAULT_SURFACE_STYLE,
-      )
-      const normalizedBucketSurface =
-        bucketSurfaceValue !== undefined && bucketSurfaceValue !== null
-          ? ensureSurfaceStyle(bucketSurfaceValue, DEFAULT_SURFACE_STYLE)
-          : null
-
       if (sessionKey) {
         if (lastLoggedSessionKeyRef.current === sessionKey) {
           return
@@ -1737,14 +1884,31 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         lastLoggedSessionKeyRef.current = sessionKey
       }
 
+      const goalName =
+        context?.goalName !== undefined ? context.goalName : sessionMeta.goalName
+      const bucketName =
+        context?.bucketName !== undefined ? context.bucketName : sessionMeta.bucketName
+      const goalSurfaceCandidate =
+        context?.goalSurface !== undefined ? context.goalSurface : sessionMeta.goalSurface
+      const bucketSurfaceCandidate =
+        context?.bucketSurface !== undefined ? context.bucketSurface : sessionMeta.bucketSurface
+      const normalizedGoalSurface = ensureSurfaceStyle(
+        goalSurfaceCandidate ?? DEFAULT_SURFACE_STYLE,
+        DEFAULT_SURFACE_STYLE,
+      )
+      const normalizedBucketSurface =
+        bucketSurfaceCandidate !== undefined && bucketSurfaceCandidate !== null
+          ? ensureSurfaceStyle(bucketSurfaceCandidate, DEFAULT_SURFACE_STYLE)
+          : null
+
       const entry: HistoryEntry = {
         id: makeHistoryId(),
         taskName,
         elapsed: elapsedMs,
         startedAt,
         endedAt: now,
-        goalName,
-        bucketName,
+        goalName: goalName ?? null,
+        bucketName: bucketName ?? null,
         goalId: contextGoalId ?? null,
         bucketId: contextBucketId ?? null,
         taskId: contextTaskId ?? null,
@@ -1759,6 +1923,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         }
         return next
       })
+
+      if (context?.sessionKey !== undefined || sessionMeta.sessionKey !== null) {
+        const nextLabel = taskName.length > 0 ? taskName : sessionMeta.taskLabel
+        sessionMetadataRef.current = createEmptySessionMetadata(nextLabel)
+      }
     },
     [sessionStart],
   )
@@ -1786,15 +1955,31 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   if (elapsed > 0) {
     const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'Focus Session'
+    const sessionMeta = sessionMetadataRef.current
+    const fallbackContext = focusContextRef.current
+    const sourceMeta =
+      sessionMeta.goalId !== null || sessionMeta.bucketId !== null || sessionMeta.taskId !== null
+        ? sessionMeta
+        : {
+            goalId: fallbackContext.goalId,
+            bucketId: fallbackContext.bucketId,
+            taskId: fallbackContext.taskId,
+            goalName: fallbackContext.goalName,
+            bucketName: fallbackContext.bucketName,
+            goalSurface: fallbackContext.goalSurface,
+            bucketSurface: fallbackContext.bucketSurface,
+            sessionKey: sessionMeta.sessionKey,
+            taskLabel: sessionMeta.taskLabel,
+          }
     registerNewHistoryEntry(elapsed, entryName, {
-      goalId: focusContextRef.current.goalId,
-      bucketId: focusContextRef.current.bucketId,
-      taskId: focusContextRef.current.taskId,
+      goalId: sourceMeta.goalId,
+      bucketId: sourceMeta.bucketId,
+      taskId: sourceMeta.taskId,
       sessionKey: currentSessionKeyRef.current,
-      goalName: focusContextRef.current.goalName,
-      bucketName: focusContextRef.current.bucketName,
-      goalSurface: focusContextRef.current.goalSurface,
-      bucketSurface: focusContextRef.current.bucketSurface,
+      goalName: sourceMeta.goalName,
+      bucketName: sourceMeta.bucketName,
+      goalSurface: sourceMeta.goalSurface,
+      bucketSurface: sourceMeta.bucketSurface,
     })
     setElapsed(0)
     setSessionStart(null)
@@ -1805,6 +1990,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   currentSessionKeyRef.current = null
   lastLoggedSessionKeyRef.current = null
+  sessionMetadataRef.current = createEmptySessionMetadata(safeTaskName)
 
     const labelParts = [reasonLabel]
     if (note.length > 0) {
@@ -1845,10 +2031,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       const resumeStart = Date.now()
       setSessionStart(resumeStart)
       setIsRunning(true)
-      const resumeGoalId = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
-      const resumeBucketId = focusSource?.bucketId ?? activeFocusCandidate?.bucketId ?? null
-      const resumeTaskId = focusSource?.taskId ?? activeFocusCandidate?.taskId ?? null
-      currentSessionKeyRef.current = makeSessionKey(resumeGoalId, resumeBucketId, resumeTaskId)
+      const resumeMetadata = deriveSessionMetadata()
+      sessionMetadataRef.current = resumeMetadata
+      currentSessionKeyRef.current = resumeMetadata.sessionKey
       lastLoggedSessionKeyRef.current = null
     } else {
       setIsRunning(false)
@@ -1856,7 +2041,15 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         setIsSelectorOpen(true)
       }
   }
-  }, [elapsed, normalizedCurrentTask, registerNewHistoryEntry, snapbackNextAction, snapbackNote, snapbackReason])
+  }, [
+    deriveSessionMetadata,
+    elapsed,
+    normalizedCurrentTask,
+    registerNewHistoryEntry,
+    snapbackNextAction,
+    snapbackNote,
+    snapbackReason,
+  ])
 
   useEffect(() => {
     if (!isSnapbackOpen) {
@@ -1918,22 +2111,37 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         const previousSessionKey = currentSessionKeyRef.current
         if (elapsed > 0) {
           const entryName = normalizedCurrentTask.length > 0 ? normalizedCurrentTask : 'New Task'
+          const previousSessionMeta = sessionMetadataRef.current
           registerNewHistoryEntry(elapsed, entryName, {
-            goalId: previousContext.goalId,
-            bucketId: previousContext.bucketId,
-            taskId: previousContext.taskId,
+            goalId: previousSessionMeta.goalId ?? previousContext.goalId,
+            bucketId: previousSessionMeta.bucketId ?? previousContext.bucketId,
+            taskId: previousSessionMeta.taskId ?? previousContext.taskId,
             sessionKey: previousSessionKey,
-            goalName: previousContext.goalName,
-            bucketName: previousContext.bucketName,
-            goalSurface: previousContext.goalSurface,
-            bucketSurface: previousContext.bucketSurface,
+            goalName: previousSessionMeta.goalName ?? previousContext.goalName,
+            bucketName: previousSessionMeta.bucketName ?? previousContext.bucketName,
+            goalSurface: previousSessionMeta.goalSurface ?? previousContext.goalSurface,
+            bucketSurface: previousSessionMeta.bucketSurface ?? previousContext.bucketSurface,
           })
         }
         setElapsed(0)
         setSessionStart(now)
         lastTickRef.current = null
         setIsRunning(true)
-        currentSessionKeyRef.current = makeSessionKey(detail.goalId ?? null, detail.bucketId ?? null, detail.taskId ?? null)
+        const autoSessionKey = makeSessionKey(detail.goalId ?? null, detail.bucketId ?? null, detail.taskId ?? null)
+        const autoTaskLabel =
+          taskName.length > 0 ? taskName : goalName.length > 0 ? goalName : 'New Task'
+        sessionMetadataRef.current = {
+          goalId: detail.goalId ?? null,
+          bucketId: detail.bucketId ?? null,
+          taskId: detail.taskId ?? null,
+          goalName: goalName.length > 0 ? goalName : null,
+          bucketName: bucketName.length > 0 ? bucketName : null,
+          goalSurface: safeGoalSurface,
+          bucketSurface: safeBucketSurface,
+          sessionKey: autoSessionKey,
+          taskLabel: autoTaskLabel,
+        }
+        currentSessionKeyRef.current = autoSessionKey
         lastLoggedSessionKeyRef.current = null
       }
     }
