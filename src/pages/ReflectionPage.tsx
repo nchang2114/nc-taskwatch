@@ -713,6 +713,39 @@ const resolveTimestamp = (value: number | null | undefined, fallback: number): n
   return fallback
 }
 
+const makeHistoryId = () => {
+  try {
+    if (typeof globalThis.crypto?.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID()
+    }
+  } catch (error) {
+    console.warn('Failed to generate UUID for history entry, falling back to timestamp-based id', error)
+  }
+  return `history-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+const hashString = (value: string) => {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value.charCodeAt(index)
+    hash = (hash << 5) - hash + char
+    hash |= 0
+  }
+  return hash
+}
+
+const getPaletteColorForLabel = (label: string) => {
+  const hash = Math.abs(hashString(label))
+  const index = hash % CHART_COLORS.length
+  return CHART_COLORS[index]
+}
+
+type LoopSlice = {
+  key: string
+  path: string
+  color: string
+}
+
 const sampleGradientColor = (
   colorInfo: GoalColorInfo | undefined,
   fallback: string,
@@ -741,15 +774,9 @@ const sampleGradientColor = (
   return normalizedFallback
 }
 
-type LoopSlice = {
-  key: string
-  path: string
-  color: string
-}
-
-const GRADIENT_SLICE_DEGREES = 1
-const GRADIENT_MIN_SLICES = 16
-const GRADIENT_MAX_SLICES = 720
+const GRADIENT_SLICE_DEGREES = 0.25
+const GRADIENT_MIN_SLICES = 48
+const GRADIENT_MAX_SLICES = 1440
 
 const buildArcLoopSlices = (arc: PieArc): LoopSlice[] => {
   if (arc.isUnlogged) {
@@ -792,33 +819,6 @@ const buildArcLoopSlices = (arc: PieArc): LoopSlice[] => {
     })
   }
   return slices
-}
-
-const makeHistoryId = () => {
-  try {
-    if (typeof globalThis.crypto?.randomUUID === 'function') {
-      return globalThis.crypto.randomUUID()
-    }
-  } catch (error) {
-    console.warn('Failed to generate UUID for history entry, falling back to timestamp-based id', error)
-  }
-  return `history-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-const hashString = (value: string) => {
-  let hash = 0
-  for (let index = 0; index < value.length; index += 1) {
-    const char = value.charCodeAt(index)
-    hash = (hash << 5) - hash + char
-    hash |= 0
-  }
-  return hash
-}
-
-const getPaletteColorForLabel = (label: string) => {
-  const hash = Math.abs(hashString(label))
-  const index = hash % CHART_COLORS.length
-  return CHART_COLORS[index]
 }
 
 const formatDatePart = (timestamp: number) => {
@@ -883,9 +883,9 @@ const hexToRgb = (hex: string) => {
     return null
   }
   const value = normalized.slice(1)
-  const r = parseInt(value.slice(0, 2), 16)
-  const g = parseInt(value.slice(2, 4), 16)
-  const b = parseInt(value.slice(4, 6), 16)
+  const r = Number.parseInt(value.slice(0, 2), 16)
+  const g = Number.parseInt(value.slice(2, 4), 16)
+  const b = Number.parseInt(value.slice(4, 6), 16)
   return { r, g, b }
 }
 
@@ -3225,6 +3225,19 @@ export default function ReflectionPage() {
                     )
                   }
                   const slices = buildArcLoopSlices(arc)
+                  if (slices.length <= 1) {
+                    const slice = slices[0]
+                    return (
+                      <path
+                        key={arc.id}
+                        className="reflection-pie__slice"
+                        d={arc.path}
+                        fill={slice?.color ?? arc.fill}
+                        fillRule="evenodd"
+                        clipRule="evenodd"
+                      />
+                    )
+                  }
                   return (
                     <g key={arc.id}>
                       {slices.map((slice) => (
