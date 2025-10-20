@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -21,7 +22,14 @@ import {
   sanitizeSurfaceStyle,
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
-import { LIFE_ROUTINE_DEFAULTS } from '../lib/lifeRoutines'
+import {
+  LIFE_ROUTINE_DEFAULTS,
+  LIFE_ROUTINE_STORAGE_KEY,
+  LIFE_ROUTINE_UPDATE_EVENT,
+  readStoredLifeRoutines,
+  sanitizeLifeRoutineList,
+  type LifeRoutineConfig,
+} from '../lib/lifeRoutines'
 
 const JOURNAL_PROMPTS = [
   "What was today's biggest win?",
@@ -119,7 +127,7 @@ const UNCATEGORISED_LABEL = 'Uncategorised'
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
 const LIFE_ROUTINES_NAME = 'Life Routines'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
-const LIFE_ROUTINE_SURFACE_LOOKUP = new Map(
+const LIFE_ROUTINE_DEFAULT_SURFACE_LOOKUP = new Map(
   LIFE_ROUTINE_DEFAULTS.map((routine) => [routine.title.toLowerCase(), routine.surfaceStyle]),
 )
 
@@ -195,6 +203,287 @@ const SURFACE_GRADIENT_INFO: Record<SurfaceStyle, SurfaceGradientInfo> = {
     end: '#c2410c',
     base: '#f97316',
   },
+}
+
+type HistoryDropdownOption = {
+  value: string
+  label: string
+  disabled?: boolean
+}
+
+type HistoryDropdownProps = {
+  id?: string
+  value: string
+  placeholder: string
+  options: HistoryDropdownOption[]
+  onChange: (value: string) => void
+  disabled?: boolean
+}
+
+const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }: HistoryDropdownProps) => {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const pointerSelectionRef = useRef(false)
+  const previousValueRef = useRef(value)
+
+  const selectedOption = useMemo(() => options.find((option) => option.value === value) ?? null, [options, value])
+  const displayLabel = selectedOption?.label ?? placeholder
+  const isPlaceholder = !selectedOption
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const container = containerRef.current
+      if (container && event.target instanceof Node && !container.contains(event.target)) {
+        setOpen(false)
+      }
+    }
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setOpen(false)
+        buttonRef.current?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (disabled && open) {
+      setOpen(false)
+    }
+  }, [disabled, open])
+
+  useEffect(() => {
+    if (previousValueRef.current !== value) {
+      previousValueRef.current = value
+      if (open) {
+        setOpen(false)
+        buttonRef.current?.focus()
+      }
+    }
+  }, [open, value])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const focusTarget = () => {
+      const selectedIndex = options.findIndex((option) => option.value === value && !option.disabled)
+      const fallbackIndex = options.findIndex((option) => !option.disabled)
+      const targetIndex = selectedIndex !== -1 ? selectedIndex : fallbackIndex
+      if (targetIndex === -1) {
+        return
+      }
+      const target = optionRefs.current[targetIndex]
+      if (target) {
+        target.focus()
+      }
+    }
+    const frame = window.requestAnimationFrame(focusTarget)
+    return () => window.cancelAnimationFrame(frame)
+  }, [open, options, value])
+
+  const findNextEnabledIndex = useCallback(
+    (startIndex: number, direction: 1 | -1) => {
+      if (options.length === 0) {
+        return -1
+      }
+      let index = startIndex
+      for (let attempt = 0; attempt < options.length; attempt += 1) {
+        index = (index + direction + options.length) % options.length
+        if (!options[index]?.disabled) {
+          return index
+        }
+      }
+      return -1
+    },
+    [options],
+  )
+
+  const focusOptionAt = useCallback(
+    (targetIndex: number) => {
+      if (targetIndex === -1) {
+        return
+      }
+      const target = optionRefs.current[targetIndex]
+      if (target) {
+        target.focus()
+      }
+    },
+    [],
+  )
+
+  const handleButtonClick = useCallback(() => {
+    if (disabled) {
+      return
+    }
+    setOpen((current) => !current)
+  }, [disabled])
+
+  const handleButtonKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (disabled) {
+        return
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        if (!open) {
+          setOpen(true)
+          return
+        }
+        const selectedIndex = options.findIndex((option) => option.value === value && !option.disabled)
+        const direction: 1 | -1 = event.key === 'ArrowDown' ? 1 : -1
+        const startIndex = selectedIndex !== -1 ? selectedIndex : direction === 1 ? -1 : 0
+        const nextIndex = findNextEnabledIndex(startIndex, direction)
+        focusOptionAt(nextIndex)
+      }
+    },
+    [disabled, findNextEnabledIndex, focusOptionAt, open, options, value],
+  )
+
+  const handleOptionSelect = useCallback(
+    (nextValue: string) => {
+      onChange(nextValue)
+      setOpen(false)
+      buttonRef.current?.focus()
+    },
+    [onChange],
+  )
+
+  const handleOptionKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>, optionIndex: number) => {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        const direction: 1 | -1 = event.key === 'ArrowDown' ? 1 : -1
+        const nextIndex = findNextEnabledIndex(optionIndex, direction)
+        focusOptionAt(nextIndex)
+      } else if (event.key === 'Home') {
+        event.preventDefault()
+        const firstIndex = options.findIndex((option) => !option.disabled)
+        focusOptionAt(firstIndex)
+      } else if (event.key === 'End') {
+        event.preventDefault()
+        let lastIndex = -1
+        for (let i = options.length - 1; i >= 0; i -= 1) {
+          if (!options[i]?.disabled) {
+            lastIndex = i
+            break
+          }
+        }
+        focusOptionAt(lastIndex)
+      } else if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault()
+        const option = options[optionIndex]
+        if (!option?.disabled) {
+          handleOptionSelect(option.value)
+          pointerSelectionRef.current = false
+        }
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        setOpen(false)
+        buttonRef.current?.focus()
+      }
+    },
+    [findNextEnabledIndex, focusOptionAt, handleOptionSelect, options],
+  )
+
+  return (
+    <div className="history-dropdown" ref={containerRef}>
+      <button
+        type="button"
+        id={id}
+        ref={buttonRef}
+        className={[
+          'history-dropdown__button',
+          'history-timeline__field-input',
+          'history-timeline__field-input--select',
+          open ? 'history-dropdown__button--open' : '',
+          disabled ? 'history-dropdown__button--disabled' : '',
+          isPlaceholder ? 'history-dropdown__button--placeholder' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-disabled={disabled || undefined}
+        onClick={handleButtonClick}
+        onKeyDown={handleButtonKeyDown}
+        disabled={disabled}
+      >
+        <span className="history-dropdown__value">{displayLabel}</span>
+        <span className="history-dropdown__chevron" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open ? (
+        <div
+          role="listbox"
+          className="history-dropdown__menu"
+          aria-labelledby={id}
+          tabIndex={-1}
+        >
+          {options.length === 0 ? (
+            <div className="history-dropdown__empty">No options</div>
+          ) : (
+            options.map((option, index) => (
+              <button
+                key={`${option.value || 'empty-option'}-${index}`}
+                type="button"
+                role="option"
+                aria-selected={option.value === value}
+                className={[
+                  'history-dropdown__option',
+                  option.value === value ? 'history-dropdown__option--selected' : '',
+                  option.disabled ? 'history-dropdown__option--disabled' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onPointerDown={(event) => {
+                  if (option.disabled) {
+                    event.preventDefault()
+                    return
+                  }
+                  pointerSelectionRef.current = true
+                  event.preventDefault()
+                  handleOptionSelect(option.value)
+                }}
+                onClick={(event) => {
+                  if (option.disabled) {
+                    event.preventDefault()
+                    return
+                  }
+                  if (pointerSelectionRef.current) {
+                    pointerSelectionRef.current = false
+                    return
+                  }
+                  event.preventDefault()
+                  handleOptionSelect(option.value)
+                }}
+                onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                disabled={option.disabled}
+                ref={(node) => {
+                  optionRefs.current[index] = node
+                }}
+                tabIndex={-1}
+              >
+                {option.label}
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 const getSurfaceColorInfo = (surface: SurfaceStyle): GoalColorInfo => {
@@ -293,7 +582,7 @@ const sanitizeHistory = (value: unknown): HistoryEntry[] => {
         goalSurface = LIFE_ROUTINES_SURFACE
       }
       if (!bucketSurface && normalizedBucketName.length > 0) {
-        const routineSurface = LIFE_ROUTINE_SURFACE_LOOKUP.get(normalizedBucketName.toLowerCase())
+        const routineSurface = LIFE_ROUTINE_DEFAULT_SURFACE_LOOKUP.get(normalizedBucketName.toLowerCase())
         if (routineSurface) {
           bucketSurface = routineSurface
           if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
@@ -1009,6 +1298,7 @@ const resolveGoalMetadata = (
   entry: HistoryEntry,
   taskLookup: GoalLookup,
   goalColorLookup: Map<string, GoalColorInfo | undefined>,
+  lifeRoutineSurfaceLookup: Map<string, SurfaceStyle>,
 ): GoalMetadata => {
   const goalNameRaw = entry.goalName?.trim()
   const bucketNameRaw = entry.bucketName?.trim()
@@ -1016,11 +1306,11 @@ const resolveGoalMetadata = (
   const normalizedBucketName = bucketNameRaw?.toLowerCase() ?? ''
   const isLifeRoutineEntry =
     (goalNameRaw && normalizedGoalName === LIFE_ROUTINES_NAME.toLowerCase()) ||
-    (bucketNameRaw && LIFE_ROUTINE_SURFACE_LOOKUP.has(normalizedBucketName))
+    (bucketNameRaw && lifeRoutineSurfaceLookup.has(normalizedBucketName))
 
   if (isLifeRoutineEntry) {
     const routineSurface =
-      entry.bucketSurface ?? (normalizedBucketName ? LIFE_ROUTINE_SURFACE_LOOKUP.get(normalizedBucketName) ?? null : null)
+      entry.bucketSurface ?? (normalizedBucketName ? lifeRoutineSurfaceLookup.get(normalizedBucketName) ?? null : null)
     const surfaceInfo = routineSurface ? getSurfaceColorInfo(routineSurface) : getSurfaceColorInfo(LIFE_ROUTINES_SURFACE)
     const labelCandidate =
       bucketNameRaw && bucketNameRaw.length > 0
@@ -1114,6 +1404,7 @@ const computeRangeOverview = (
   range: ReflectionRangeKey,
   taskLookup: GoalLookup,
   goalColorLookup: Map<string, GoalColorInfo | undefined>,
+  lifeRoutineSurfaceLookup: Map<string, SurfaceStyle>,
 ): { segments: PieSegment[]; windowMs: number; loggedMs: number } => {
   const { durationMs: windowMs } = RANGE_DEFS[range]
   const now = Date.now()
@@ -1138,7 +1429,7 @@ const computeRangeOverview = (
     if (overlapMs <= 0) {
       return
     }
-    const metadata = resolveGoalMetadata(entry, taskLookup, goalColorLookup)
+    const metadata = resolveGoalMetadata(entry, taskLookup, goalColorLookup, lifeRoutineSurfaceLookup)
     const current = totals.get(metadata.label)
     if (current) {
       current.durationMs += overlapMs
@@ -1212,6 +1503,7 @@ export default function ReflectionPage() {
   const [history, setHistory] = useState<HistoryEntry[]>(() => readStoredHistory())
   const [deletedHistoryStack, setDeletedHistoryStack] = useState<{ entry: HistoryEntry; index: number }[]>([])
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
+  const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(() => readStoredActiveSession())
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [journal, setJournal] = useState('')
@@ -1242,6 +1534,28 @@ export default function ReflectionPage() {
   useEffect(() => {
     selectedHistoryIdRef.current = selectedHistoryId
   }, [selectedHistoryId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === LIFE_ROUTINE_STORAGE_KEY) {
+        setLifeRoutineTasks(readStoredLifeRoutines())
+      }
+    }
+    const handleUpdate = (event: Event) => {
+      if (event instanceof CustomEvent) {
+        setLifeRoutineTasks(sanitizeLifeRoutineList(event.detail))
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener(LIFE_ROUTINE_UPDATE_EVENT, handleUpdate as EventListener)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener(LIFE_ROUTINE_UPDATE_EVENT, handleUpdate as EventListener)
+    }
+  }, [])
 
   const updateActiveTooltipOffsets = useCallback(() => {
     if (typeof window === 'undefined') {
@@ -1312,6 +1626,35 @@ export default function ReflectionPage() {
     }
   }, [])
 
+  const lifeRoutineSurfaceLookup = useMemo(() => {
+    const map = new Map<string, SurfaceStyle>(LIFE_ROUTINE_DEFAULT_SURFACE_LOOKUP)
+    lifeRoutineTasks.forEach((routine) => {
+      const title = routine.title.trim().toLowerCase()
+      if (title) {
+        map.set(title, routine.surfaceStyle)
+      }
+    })
+    return map
+  }, [lifeRoutineTasks])
+
+  const lifeRoutineBucketOptions = useMemo(() => {
+    const seen = new Set<string>()
+    const result: string[] = []
+    lifeRoutineTasks.forEach((routine) => {
+      const title = routine.title.trim()
+      if (!title) {
+        return
+      }
+      const normalized = title.toLowerCase()
+      if (seen.has(normalized)) {
+        return
+      }
+      seen.add(normalized)
+      result.push(title)
+    })
+    return result.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+  }, [lifeRoutineTasks])
+
   const updateHistory = useCallback(
     (updater: (current: HistoryEntry[]) => HistoryEntry[]) => {
       setHistory((current) => {
@@ -1353,6 +1696,7 @@ export default function ReflectionPage() {
         set.add(trimmed)
       }
     })
+    set.add(LIFE_ROUTINES_NAME)
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
   }, [goalsSnapshot])
 
@@ -1371,8 +1715,11 @@ export default function ReflectionPage() {
         map.set(goalName, bucketNames)
       }
     })
+    if (lifeRoutineBucketOptions.length > 0) {
+      map.set(LIFE_ROUTINES_NAME, lifeRoutineBucketOptions)
+    }
     return map
-  }, [goalsSnapshot])
+  }, [goalsSnapshot, lifeRoutineBucketOptions])
 
   const allBucketOptions = useMemo(() => {
     const set = new Set<string>()
@@ -1384,8 +1731,9 @@ export default function ReflectionPage() {
         }
       })
     })
+    lifeRoutineBucketOptions.forEach((title) => set.add(title))
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-  }, [goalsSnapshot])
+  }, [goalsSnapshot, lifeRoutineBucketOptions])
 
   const trimmedDraftGoal = historyDraft.goalName.trim()
   const trimmedDraftBucket = historyDraft.bucketName.trim()
@@ -1413,6 +1761,25 @@ export default function ReflectionPage() {
     }
     return availableBucketOptions
   }, [availableBucketOptions, trimmedDraftBucket])
+
+  const goalDropdownId = useId()
+  const bucketDropdownId = useId()
+
+  const goalDropdownOptions = useMemo<HistoryDropdownOption[]>(
+    () => [
+      { value: '', label: 'No goal' },
+      ...resolvedGoalOptions.map((option) => ({ value: option, label: option })),
+    ],
+    [resolvedGoalOptions],
+  )
+
+  const bucketDropdownOptions = useMemo<HistoryDropdownOption[]>(
+    () => [
+      { value: '', label: 'No bucket' },
+      ...resolvedBucketOptions.map((option) => ({ value: option, label: option })),
+    ],
+    [resolvedBucketOptions],
+  )
 
   const selectedHistoryEntry = useMemo(() => {
     if (!selectedHistoryId) {
@@ -1584,12 +1951,19 @@ export default function ReflectionPage() {
     [selectedHistoryId],
   )
 
+  const updateHistoryDraftField = useCallback(
+    (field: 'taskName' | 'goalName' | 'bucketName', nextValue: string) => {
+      setHistoryDraft((draft) => ({ ...draft, [field]: nextValue }))
+    },
+    [],
+  )
+
   const handleHistoryFieldChange = useCallback(
     (field: 'taskName' | 'goalName' | 'bucketName') => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { value } = event.target
-      setHistoryDraft((draft) => ({ ...draft, [field]: value }))
+      updateHistoryDraftField(field, value)
     },
-    [],
+    [updateHistoryDraftField],
   )
 
   const commitHistoryDraft = useCallback(() => {
@@ -1887,8 +2261,15 @@ export default function ReflectionPage() {
   }, [effectiveHistory, selectedHistoryId])
 
   const { segments, windowMs, loggedMs } = useMemo(
-    () => computeRangeOverview(effectiveHistory, activeRange, enhancedGoalLookup, goalColorLookup),
-    [effectiveHistory, activeRange, enhancedGoalLookup, goalColorLookup, nowTick],
+    () =>
+      computeRangeOverview(
+        effectiveHistory,
+        activeRange,
+        enhancedGoalLookup,
+        goalColorLookup,
+        lifeRoutineSurfaceLookup,
+      ),
+    [effectiveHistory, activeRange, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, nowTick],
   )
   const activeRangeConfig = RANGE_DEFS[activeRange]
   const loggedSegments = useMemo(() => segments.filter((segment) => !segment.isUnlogged), [segments])
@@ -1970,7 +2351,7 @@ export default function ReflectionPage() {
       const maxWidth = Math.max(100 - safeLeft, 0)
       const widthPercent = Math.min(Math.max(rawWidth, 0.8), maxWidth)
       const labelSource = entry.goalName?.trim().length ? entry.goalName! : entry.taskName
-      const metadata = resolveGoalMetadata(entry, enhancedGoalLookup, goalColorLookup)
+      const metadata = resolveGoalMetadata(entry, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup)
       const gradientCss = metadata.colorInfo?.gradient?.css
       const solidColor = metadata.colorInfo?.solidColor
       const fallbackLabel =
@@ -2443,34 +2824,24 @@ export default function ReflectionPage() {
                             <div className="history-timeline__field-group">
                               <label className="history-timeline__field">
                                 <span className="history-timeline__field-text">Goal</span>
-                                <select
-                                  className="history-timeline__field-input history-timeline__field-input--select"
+                                <HistoryDropdown
+                                  id={goalDropdownId}
                                   value={historyDraft.goalName}
-                                  onChange={handleHistoryFieldChange('goalName')}
-                                >
-                                  <option value="">No goal</option>
-                                  {resolvedGoalOptions.map((option) => (
-                                    <option key={`goal-option-${option}`} value={option}>
-                                      {option}
-                                    </option>
-                                  ))}
-                                </select>
+                                  placeholder="Select goal"
+                                  options={goalDropdownOptions}
+                                  onChange={(nextValue) => updateHistoryDraftField('goalName', nextValue)}
+                                />
                               </label>
                               <label className="history-timeline__field">
                                 <span className="history-timeline__field-text">Bucket</span>
-                                <select
-                                  className="history-timeline__field-input history-timeline__field-input--select"
+                                <HistoryDropdown
+                                  id={bucketDropdownId}
                                   value={historyDraft.bucketName}
-                                  onChange={handleHistoryFieldChange('bucketName')}
+                                  placeholder="Select bucket"
+                                  options={bucketDropdownOptions}
+                                  onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
                                   disabled={availableBucketOptions.length === 0}
-                                >
-                                  <option value="">No bucket</option>
-                                  {resolvedBucketOptions.map((option) => (
-                                    <option key={`bucket-option-${option}`} value={option}>
-                                      {option}
-                                    </option>
-                                  ))}
-                                </select>
+                                />
                               </label>
                             </div>
                           </div>
