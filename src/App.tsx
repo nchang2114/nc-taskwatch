@@ -34,6 +34,8 @@ const TAB_PANEL_IDS: Record<TabKey, string> = {
   reflection: 'tab-panel-reflection',
 }
 
+const ENABLE_TAB_SWIPE = false
+
 const SWIPE_SEQUENCE: TabKey[] = ['reflection', 'taskwatch', 'goals']
 
 
@@ -426,6 +428,15 @@ function App() {
     </span>
   ))
 
+  const swipeHandlers = ENABLE_TAB_SWIPE
+    ? {
+        onPointerDownCapture: handleSwipePointerDown,
+        onPointerMoveCapture: handleSwipePointerMove,
+        onPointerUpCapture: handleSwipePointerUp,
+        onPointerCancelCapture: handleSwipePointerCancel,
+      }
+    : undefined
+
   const mainClassName = 'site-main'
 
   return (
@@ -495,10 +506,7 @@ function App() {
 
       <main
         className={mainClassName}
-        onPointerDownCapture={handleSwipePointerDown}
-        onPointerMoveCapture={handleSwipePointerMove}
-        onPointerUpCapture={handleSwipePointerUp}
-        onPointerCancelCapture={handleSwipePointerCancel}
+        {...(swipeHandlers ?? {})}
       >
         <section
           id={TAB_PANEL_IDS.goals}
