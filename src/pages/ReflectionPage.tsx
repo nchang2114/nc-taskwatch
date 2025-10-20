@@ -906,6 +906,30 @@ const mixHexColors = (source: string, target: string, ratio: number) => {
   return rgbToHex(mix(sourceRgb.r, targetRgb.r), mix(sourceRgb.g, targetRgb.g), mix(sourceRgb.b, targetRgb.b))
 }
 
+const resolveCssColor = (value: string, fallback?: string): string => {
+  const trimmed = value.trim()
+  if (trimmed.startsWith('var(') && typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const content = trimmed.slice(4, -1)
+    const [rawName, ...rest] = content.split(',')
+    const variableName = rawName.trim()
+    const fallbackValue = rest.join(',').trim()
+    const computed = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim()
+    if (computed.length > 0) {
+      return computed
+    }
+    if (fallbackValue.length > 0) {
+      return resolveCssColor(fallbackValue, fallback)
+    }
+    if (typeof fallback === 'string' && fallback !== trimmed) {
+      return resolveCssColor(fallback, undefined)
+    }
+  }
+  if (trimmed.length === 0 && typeof fallback === 'string') {
+    return fallback
+  }
+  return trimmed
+}
+
 const applyAlphaToHex = (hex: string, alpha: number) => {
   const normalized = normalizeHexColor(hex)
   if (!normalized) {
@@ -1518,6 +1542,20 @@ export default function ReflectionPage() {
     endedAt: null,
   })
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
+  const pieCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [supportsConicGradient, setSupportsConicGradient] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+    const context = document.createElement('canvas').getContext('2d')
+    return Boolean(context && 'createConicGradient' in context)
+  })
+  const [themeToken, setThemeToken] = useState(() => {
+    if (typeof document === 'undefined') {
+      return 'dark'
+    }
+    return document.documentElement.getAttribute('data-theme') ?? 'dark'
+  })
   const timelineRef = useRef<HTMLDivElement | null>(null)
   const timelineBarRef = useRef<HTMLDivElement | null>(null)
   const activeTooltipRef = useRef<HTMLDivElement | null>(null)
@@ -1535,6 +1573,29 @@ export default function ReflectionPage() {
   useEffect(() => {
     selectedHistoryIdRef.current = selectedHistoryId
   }, [selectedHistoryId])
+
+  useEffect(() => {
+    if (supportsConicGradient || typeof window === 'undefined') {
+      return
+    }
+    const context = document.createElement('canvas').getContext('2d')
+    if (context && 'createConicGradient' in context) {
+      setSupportsConicGradient(true)
+    }
+  }, [supportsConicGradient])
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
+      return
+    }
+    const root = document.documentElement
+    const handleMutation = () => {
+      setThemeToken(root.getAttribute('data-theme') ?? 'dark')
+    }
+    const observer = new MutationObserver(handleMutation)
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     setSelectedHistoryId(null)
@@ -2407,6 +2468,143 @@ export default function ReflectionPage() {
     return base
   }, [loggedSegments, windowMs, loggedMs, unloggedFraction])
   const pieArcs = useMemo(() => createPieArcs(segments, windowMs), [segments, windowMs])
+  useLayoutEffect(() => {
+    if (!supportsConicGradient) {
+      return
+    }
+    const canvas = pieCanvasRef.current
+    if (!canvas) {
+      return
+    }
+    const context = canvas.getContext('2d')
+    if (!context || typeof (context as CanvasRenderingContext2D & { createConicGradient?: unknown }).createConicGradient !== 'function') {
+      return
+    }
+    const ctx = context as CanvasRenderingContext2D & {
+      createConicGradient: (startAngle: number, x: number, y: number) => CanvasGradient
+    }
+
+    const draw = () => {
+      if (typeof window === 'undefined') {
+        return
+      }
+      const displayWidth = canvas.clientWidth || PIE_VIEWBOX_SIZE
+      const displayHeight = canvas.clientHeight || PIE_VIEWBOX_SIZE
+      const dpr = window.devicePixelRatio || 1
+      const scaleX = displayWidth / PIE_VIEWBOX_SIZE
+      const scaleY = displayHeight / PIE_VIEWBOX_SIZE
+      const pixelWidth = Math.max(1, Math.round(displayWidth * dpr))
+      const pixelHeight = Math.max(1, Math.round(displayHeight * dpr))
+
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth
+        canvas.height = pixelHeight
+      }
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.setTransform(dpr * scaleX, 0, 0, dpr * scaleY, 0, 0)
+      ctx.clearRect(0, 0, PIE_VIEWBOX_SIZE, PIE_VIEWBOX_SIZE)
+      ctx.lineJoin = 'round'
+      ctx.lineCap = 'butt'
+      ctx.imageSmoothingEnabled = true
+      if ('imageSmoothingQuality' in ctx) {
+        ;(ctx as unknown as { imageSmoothingQuality: ImageSmoothingQuality }).imageSmoothingQuality = 'high'
+      }
+
+      const fillDonut = (fillStyle: string | CanvasGradient) => {
+        ctx.beginPath()
+        ctx.arc(PIE_CENTER, PIE_CENTER, PIE_RADIUS, 0, Math.PI * 2, false)
+        ctx.arc(PIE_CENTER, PIE_CENTER, PIE_INNER_RADIUS, Math.PI * 2, 0, true)
+        ctx.closePath()
+        ctx.fillStyle = fillStyle
+        ctx.fill()
+      }
+
+      if (pieArcs.length === 0) {
+        const fallbackFill = resolveCssColor('var(--reflection-chart-unlogged-soft)', '#31374d')
+        fillDonut(fallbackFill)
+        return
+      }
+
+      pieArcs.forEach((arc) => {
+        const spanDegrees = arc.endAngle - arc.startAngle
+        if (spanDegrees <= ARC_EPSILON) {
+          return
+        }
+        const startRad = ((arc.startAngle - 90) * Math.PI) / 180
+        const endRad = ((arc.endAngle - 90) * Math.PI) / 180
+        ctx.beginPath()
+        ctx.arc(PIE_CENTER, PIE_CENTER, PIE_RADIUS, startRad, endRad, false)
+        ctx.arc(PIE_CENTER, PIE_CENTER, PIE_INNER_RADIUS, endRad, startRad, true)
+        ctx.closePath()
+
+        let fillStyle: string | CanvasGradient
+        if (arc.isUnlogged) {
+          fillStyle = resolveCssColor(arc.fill, '#31374d')
+        } else if (arc.colorInfo?.gradient) {
+          const gradientInfo = arc.colorInfo.gradient
+          const gradient = ctx.createConicGradient(startRad, PIE_CENTER, PIE_CENTER)
+          const spanRatio = clamp01(spanDegrees / 360)
+          gradientInfo.stops.forEach((stop) => {
+            gradient.addColorStop(spanRatio * clamp01(stop.position), stop.color)
+          })
+          const lastStop = gradientInfo.stops[gradientInfo.stops.length - 1]
+          if (lastStop) {
+            gradient.addColorStop(spanRatio, lastStop.color)
+          }
+          fillStyle = gradient
+        } else if (arc.colorInfo?.solidColor) {
+          fillStyle = arc.colorInfo.solidColor
+        } else {
+          fillStyle = resolveCssColor(arc.fill, arc.baseColor)
+        }
+        ctx.fillStyle = fillStyle
+        ctx.fill()
+      })
+    }
+
+    let rafId: number | null = null
+    const scheduleDraw = () => {
+      if (typeof window === 'undefined') {
+        draw()
+        return
+      }
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId)
+      }
+      rafId = window.requestAnimationFrame(() => {
+        draw()
+        rafId = null
+      })
+    }
+
+    scheduleDraw()
+
+    const handleResize = () => {
+      scheduleDraw()
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    let resizeObserver: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        scheduleDraw()
+      })
+      resizeObserver.observe(canvas)
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      if (resizeObserver) {
+        resizeObserver.disconnect()
+      }
+      if (rafId !== null && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(rafId)
+      }
+    }
+  }, [pieArcs, supportsConicGradient, themeToken])
   const unloggedMs = useMemo(() => Math.max(windowMs - loggedMs, 0), [windowMs, loggedMs])
   const tabPanelId = 'reflection-range-panel'
   const dayStart = useMemo(() => {
@@ -3193,68 +3391,78 @@ export default function ReflectionPage() {
           aria-label={`${activeRangeConfig.label} chart`}
         >
           <div className="reflection-pie">
-            <svg
-              className="reflection-pie__chart"
-              viewBox={`0 0 ${PIE_VIEWBOX_SIZE} ${PIE_VIEWBOX_SIZE}`}
-              aria-hidden="true"
-              focusable="false"
-            >
-              {pieArcs.length === 0 ? (
-                <path
-                  className="reflection-pie__slice reflection-pie__slice--unlogged"
-                  d={FULL_DONUT_PATH}
-                  fill="var(--reflection-chart-unlogged-soft)"
-                  stroke="var(--reflection-chart-unlogged-stroke)"
-                  strokeWidth="1.1"
-                  strokeLinejoin="round"
-                  fillRule="evenodd"
-                  clipRule="evenodd"
-                />
-              ) : (
-                pieArcs.map((arc) => {
-                  if (arc.isUnlogged) {
-                    return (
-                      <path
-                        key={arc.id}
-                        className="reflection-pie__slice reflection-pie__slice--unlogged"
-                        d={arc.path}
-                        fill={arc.fill}
-                        fillRule="evenodd"
-                        clipRule="evenodd"
-                      />
-                    )
-                  }
-                  const slices = buildArcLoopSlices(arc)
-                  if (slices.length <= 1) {
-                    const slice = slices[0]
-                    return (
-                      <path
-                        key={arc.id}
-                        className="reflection-pie__slice"
-                        d={arc.path}
-                        fill={slice?.color ?? arc.fill}
-                        fillRule="evenodd"
-                        clipRule="evenodd"
-                      />
-                    )
-                  }
-                  return (
-                    <g key={arc.id}>
-                      {slices.map((slice) => (
+            {supportsConicGradient ? (
+              <canvas
+                ref={pieCanvasRef}
+                className="reflection-pie__canvas"
+                width={PIE_VIEWBOX_SIZE}
+                height={PIE_VIEWBOX_SIZE}
+                aria-hidden="true"
+              />
+            ) : (
+              <svg
+                className="reflection-pie__chart"
+                viewBox={`0 0 ${PIE_VIEWBOX_SIZE} ${PIE_VIEWBOX_SIZE}`}
+                aria-hidden="true"
+                focusable="false"
+              >
+                {pieArcs.length === 0 ? (
+                  <path
+                    className="reflection-pie__slice reflection-pie__slice--unlogged"
+                    d={FULL_DONUT_PATH}
+                    fill="var(--reflection-chart-unlogged-soft)"
+                    stroke="var(--reflection-chart-unlogged-stroke)"
+                    strokeWidth="1.1"
+                    strokeLinejoin="round"
+                    fillRule="evenodd"
+                    clipRule="evenodd"
+                  />
+                ) : (
+                  pieArcs.map((arc) => {
+                    if (arc.isUnlogged) {
+                      return (
                         <path
-                          key={slice.key}
-                          className="reflection-pie__slice"
-                          d={slice.path}
-                          fill={slice.color}
+                          key={arc.id}
+                          className="reflection-pie__slice reflection-pie__slice--unlogged"
+                          d={arc.path}
+                          fill={arc.fill}
                           fillRule="evenodd"
                           clipRule="evenodd"
                         />
-                      ))}
-                    </g>
-                  )
-                })
-              )}
-            </svg>
+                      )
+                    }
+                    const slices = buildArcLoopSlices(arc)
+                    if (slices.length <= 1) {
+                      const slice = slices[0]
+                      return (
+                        <path
+                          key={arc.id}
+                          className="reflection-pie__slice"
+                          d={arc.path}
+                          fill={slice?.color ?? arc.fill}
+                          fillRule="evenodd"
+                          clipRule="evenodd"
+                        />
+                      )
+                    }
+                    return (
+                      <g key={arc.id}>
+                        {slices.map((slice) => (
+                          <path
+                            key={slice.key}
+                            className="reflection-pie__slice"
+                            d={slice.path}
+                            fill={slice.color}
+                            fillRule="evenodd"
+                            clipRule="evenodd"
+                          />
+                        ))}
+                      </g>
+                    )
+                  })
+                )}
+              </svg>
+            )}
             <div className="reflection-pie__center">
               <span className="reflection-pie__range">{activeRangeConfig.shortLabel}</span>
               <span className="reflection-pie__value">{formatDuration(loggedMs)}</span>
