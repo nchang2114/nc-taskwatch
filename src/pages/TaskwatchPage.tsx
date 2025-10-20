@@ -987,6 +987,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     focusSource?.goalSurface ?? activeFocusCandidate?.goalSurface ?? DEFAULT_SURFACE_STYLE
   const effectiveBucketSurface =
     focusSource?.bucketSurface ?? activeFocusCandidate?.bucketSurface ?? null
+  const isLifeRoutineFocus =
+    (focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null) === LIFE_ROUTINES_GOAL_ID
+  const focusSurfaceClasses = useMemo(() => {
+    if (isLifeRoutineFocus && effectiveBucketSurface) {
+      return ['surface-life-routine', `surface-life-routine--${effectiveBucketSurface}`]
+    }
+    return []
+  }, [effectiveBucketSurface, isLifeRoutineFocus])
   const notebookKey = useMemo(
     () => computeNotebookKey(focusSource, normalizedCurrentTask),
     [focusSource, normalizedCurrentTask],
@@ -2181,6 +2189,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           className={[
             'focus-task',
             'goal-task-row',
+            ...focusSurfaceClasses,
             focusDiffClass,
             focusPriority ? 'goal-task-row--priority' : '',
             isCompletingFocus ? 'goal-task-row--completing' : '',
@@ -2402,9 +2411,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                         focusSource.bucketId === task.bucketId &&
                         currentTaskLower === taskLower
                       : !isDefaultTask && currentTaskLower === taskLower
+                    const surfaceClass = `surface-life-routine surface-life-routine--${task.surfaceStyle}`
                     const rowClassName = [
                       'task-selector__task',
                       'goal-task-row',
+                      'task-selector__task--life-routine',
+                      surfaceClass,
                       matches ? 'task-selector__task--active' : '',
                     ]
                       .filter(Boolean)

@@ -490,75 +490,75 @@ html[data-theme='light'] .goal-favorite-toggle--active {
 }
 
 .life-routines-card__task--surface-glass {
-  --lr-pill-bg: rgba(48, 64, 120, 0.16);
-  --lr-pill-border: rgba(118, 142, 255, 0.3);
-  --lr-pill-text: rgba(235, 240, 255, 0.92);
-  --lr-pill-muted: rgba(210, 220, 255, 0.72);
-  --lr-pill-marker: linear-gradient(135deg, rgba(148, 163, 255, 0.95), rgba(99, 102, 241, 0.88));
+  --lr-pill-bg: linear-gradient(135deg, rgba(48, 64, 120, 0.22), rgba(26, 34, 78, 0.18));
+  --lr-pill-border: rgba(118, 142, 255, 0.26);
+  --lr-pill-text: rgba(235, 240, 255, 0.9);
+  --lr-pill-muted: rgba(210, 220, 255, 0.68);
+  --lr-pill-marker: linear-gradient(135deg, rgba(148, 163, 255, 0.75), rgba(99, 102, 241, 0.68));
 }
 
 .life-routines-card__task--surface-midnight {
-  --lr-pill-bg: rgba(80, 55, 140, 0.22);
-  --lr-pill-border: rgba(116, 95, 184, 0.38);
-  --lr-pill-text: rgba(235, 233, 255, 0.94);
-  --lr-pill-muted: rgba(200, 200, 255, 0.76);
-  --lr-pill-marker: linear-gradient(135deg, rgba(172, 154, 255, 0.95), rgba(99, 102, 241, 0.9));
+  --lr-pill-bg: linear-gradient(135deg, rgba(118, 126, 255, 0.2), rgba(92, 106, 230, 0.16));
+  --lr-pill-border: rgba(142, 149, 255, 0.3);
+  --lr-pill-text: rgba(235, 233, 255, 0.9);
+  --lr-pill-muted: rgba(202, 204, 255, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(172, 154, 255, 0.74), rgba(110, 122, 255, 0.66));
 }
 
 .life-routines-card__task--surface-slate {
-  --lr-pill-bg: rgba(54, 126, 190, 0.18);
-  --lr-pill-border: rgba(96, 180, 255, 0.32);
-  --lr-pill-text: rgba(220, 244, 255, 0.92);
-  --lr-pill-muted: rgba(186, 222, 255, 0.78);
-  --lr-pill-marker: linear-gradient(135deg, rgba(120, 200, 255, 0.95), rgba(59, 130, 246, 0.9));
+  --lr-pill-bg: linear-gradient(135deg, rgba(151, 227, 255, 0.2), rgba(96, 180, 255, 0.14));
+  --lr-pill-border: rgba(120, 198, 255, 0.28);
+  --lr-pill-text: rgba(220, 244, 255, 0.9);
+  --lr-pill-muted: rgba(186, 222, 255, 0.74);
+  --lr-pill-marker: linear-gradient(135deg, rgba(151, 227, 255, 0.72), rgba(96, 180, 255, 0.64));
 }
 
 .life-routines-card__task--surface-charcoal {
-  --lr-pill-bg: rgba(150, 60, 110, 0.18);
-  --lr-pill-border: rgba(231, 174, 206, 0.32);
-  --lr-pill-text: rgba(255, 232, 245, 0.92);
-  --lr-pill-muted: rgba(255, 210, 235, 0.72);
-  --lr-pill-marker: linear-gradient(135deg, rgba(255, 188, 213, 0.95), rgba(244, 114, 182, 0.9));
+  --lr-pill-bg: linear-gradient(135deg, rgba(255, 188, 213, 0.22), rgba(244, 174, 206, 0.16));
+  --lr-pill-border: rgba(231, 174, 206, 0.28);
+  --lr-pill-text: rgba(255, 232, 245, 0.9);
+  --lr-pill-muted: rgba(255, 210, 235, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(255, 188, 213, 0.74), rgba(244, 173, 212, 0.64));
 }
 
 .life-routines-card__task--surface-linen {
-  --lr-pill-bg: rgba(174, 120, 60, 0.18);
-  --lr-pill-border: rgba(255, 201, 150, 0.32);
-  --lr-pill-text: rgba(255, 244, 230, 0.92);
-  --lr-pill-muted: rgba(255, 224, 198, 0.72);
-  --lr-pill-marker: linear-gradient(135deg, rgba(255, 214, 170, 0.95), rgba(249, 115, 22, 0.88));
+  --lr-pill-bg: linear-gradient(135deg, rgba(255, 214, 170, 0.22), rgba(255, 233, 192, 0.16));
+  --lr-pill-border: rgba(255, 201, 150, 0.28);
+  --lr-pill-text: rgba(255, 244, 230, 0.9);
+  --lr-pill-muted: rgba(255, 224, 198, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(255, 214, 170, 0.74), rgba(249, 173, 94, 0.62));
 }
 
 .life-routines-card__task--surface-frost {
-  --lr-pill-bg: rgba(40, 140, 170, 0.18);
-  --lr-pill-border: rgba(124, 222, 255, 0.32);
-  --lr-pill-text: rgba(224, 248, 255, 0.92);
-  --lr-pill-muted: rgba(190, 236, 255, 0.76);
-  --lr-pill-marker: linear-gradient(135deg, rgba(174, 233, 255, 0.95), rgba(59, 191, 255, 0.9));
+  --lr-pill-bg: linear-gradient(135deg, rgba(174, 233, 255, 0.2), rgba(142, 210, 255, 0.14));
+  --lr-pill-border: rgba(124, 222, 255, 0.28);
+  --lr-pill-text: rgba(224, 248, 255, 0.9);
+  --lr-pill-muted: rgba(190, 236, 255, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(174, 233, 255, 0.72), rgba(120, 210, 255, 0.64));
 }
 
 .life-routines-card__task--surface-grove {
-  --lr-pill-bg: rgba(30, 146, 104, 0.2);
-  --lr-pill-border: rgba(74, 222, 128, 0.36);
-  --lr-pill-text: rgba(226, 255, 239, 0.94);
-  --lr-pill-muted: rgba(198, 245, 216, 0.78);
-  --lr-pill-marker: linear-gradient(135deg, rgba(134, 239, 172, 0.96), rgba(34, 197, 94, 0.9));
+  --lr-pill-bg: linear-gradient(135deg, rgba(140, 255, 204, 0.2), rgba(74, 222, 128, 0.14));
+  --lr-pill-border: rgba(94, 240, 156, 0.3);
+  --lr-pill-text: rgba(226, 255, 239, 0.9);
+  --lr-pill-muted: rgba(198, 245, 216, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(140, 255, 204, 0.72), rgba(94, 224, 156, 0.62));
 }
 
 .life-routines-card__task--surface-lagoon {
-  --lr-pill-bg: rgba(24, 118, 164, 0.2);
-  --lr-pill-border: rgba(59, 130, 246, 0.38);
-  --lr-pill-text: rgba(220, 240, 255, 0.94);
-  --lr-pill-muted: rgba(190, 226, 255, 0.78);
-  --lr-pill-marker: linear-gradient(135deg, rgba(125, 211, 252, 0.96), rgba(56, 189, 248, 0.9));
+  --lr-pill-bg: linear-gradient(135deg, rgba(146, 213, 255, 0.2), rgba(88, 168, 255, 0.14));
+  --lr-pill-border: rgba(88, 168, 255, 0.3);
+  --lr-pill-text: rgba(220, 240, 255, 0.9);
+  --lr-pill-muted: rgba(190, 226, 255, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(146, 213, 255, 0.72), rgba(88, 168, 255, 0.6));
 }
 
 .life-routines-card__task--surface-ember {
-  --lr-pill-bg: rgba(168, 78, 22, 0.22);
-  --lr-pill-border: rgba(249, 115, 22, 0.38);
-  --lr-pill-text: rgba(255, 240, 224, 0.94);
-  --lr-pill-muted: rgba(255, 216, 190, 0.78);
-  --lr-pill-marker: linear-gradient(135deg, rgba(253, 186, 116, 0.96), rgba(249, 115, 22, 0.9));
+  --lr-pill-bg: linear-gradient(135deg, rgba(255, 210, 170, 0.22), rgba(249, 160, 68, 0.14));
+  --lr-pill-border: rgba(249, 140, 52, 0.3);
+  --lr-pill-text: rgba(255, 240, 224, 0.9);
+  --lr-pill-muted: rgba(255, 216, 190, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(255, 210, 170, 0.74), rgba(249, 150, 74, 0.6));
 }
 
 .life-routines-card__task-button:focus-visible {

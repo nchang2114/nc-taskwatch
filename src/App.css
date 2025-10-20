@@ -452,6 +452,190 @@
   color: inherit;
 }
 
+.task-selector__task--life-routine {
+  color: var(--taskwatch-life-text, var(--text-primary));
+}
+
+.task-selector__task--life-routine .goal-task-text,
+.task-selector__task--life-routine .goal-task-text__inner {
+  color: inherit;
+}
+
+.task-selector__task--life-routine .task-selector__origin,
+.task-selector__task--life-routine .task-selector__origin--dropdown {
+  color: var(--taskwatch-life-muted, var(--text-secondary));
+}
+
+.focus-task.surface-life-routine {
+  color: var(--taskwatch-life-text, var(--text-primary));
+}
+
+.focus-task.surface-life-routine .focus-task__name,
+.focus-task.surface-life-routine .goal-task-text__inner {
+  color: inherit;
+}
+
+.focus-task.surface-life-routine .focus-task__label,
+.focus-task.surface-life-routine .focus-task__origin {
+  color: var(--taskwatch-life-muted, var(--text-secondary));
+}
+
+.goal-task-row.surface-life-routine {
+  --task-row-shadow: 0 18px 36px rgba(8, 12, 38, 0.45);
+  --task-row-overlay: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  --taskwatch-life-text: var(--text-primary);
+  --taskwatch-life-muted: var(--text-secondary);
+}
+
+.goal-task-row.surface-life-routine--glass {
+  --task-row-bg: linear-gradient(135deg, rgba(48, 64, 120, 0.22), rgba(26, 34, 78, 0.18));
+  --task-row-border: rgba(118, 142, 255, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(148, 163, 255, 0.24), rgba(99, 102, 241, 0.16));
+  --taskwatch-life-text: rgba(235, 240, 255, 0.92);
+  --taskwatch-life-muted: rgba(210, 220, 255, 0.72);
+}
+
+.goal-task-row.surface-life-routine--midnight {
+  --task-row-bg: linear-gradient(135deg, rgba(118, 126, 255, 0.2), rgba(92, 106, 230, 0.16));
+  --task-row-border: rgba(142, 149, 255, 0.34);
+  --task-row-overlay: linear-gradient(135deg, rgba(172, 154, 255, 0.26), rgba(110, 122, 255, 0.18));
+  --taskwatch-life-text: rgba(235, 233, 255, 0.92);
+  --taskwatch-life-muted: rgba(202, 204, 255, 0.72);
+}
+
+.goal-task-row.surface-life-routine--slate {
+  --task-row-bg: linear-gradient(135deg, rgba(151, 227, 255, 0.2), rgba(96, 180, 255, 0.14));
+  --task-row-border: rgba(120, 198, 255, 0.3);
+  --task-row-overlay: linear-gradient(135deg, rgba(151, 227, 255, 0.24), rgba(96, 180, 255, 0.16));
+  --taskwatch-life-text: rgba(220, 244, 255, 0.92);
+  --taskwatch-life-muted: rgba(186, 222, 255, 0.74);
+}
+
+.goal-task-row.surface-life-routine--charcoal {
+  --task-row-bg: linear-gradient(135deg, rgba(255, 188, 213, 0.22), rgba(244, 174, 206, 0.16));
+  --task-row-border: rgba(231, 174, 206, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(255, 188, 213, 0.26), rgba(244, 173, 212, 0.18));
+  --taskwatch-life-text: rgba(255, 232, 245, 0.92);
+  --taskwatch-life-muted: rgba(255, 210, 235, 0.7);
+}
+
+.goal-task-row.surface-life-routine--linen {
+  --task-row-bg: linear-gradient(135deg, rgba(255, 214, 170, 0.22), rgba(255, 233, 192, 0.16));
+  --task-row-border: rgba(255, 201, 150, 0.3);
+  --task-row-overlay: linear-gradient(135deg, rgba(255, 214, 170, 0.26), rgba(249, 173, 94, 0.18));
+  --taskwatch-life-text: rgba(255, 244, 230, 0.92);
+  --taskwatch-life-muted: rgba(255, 224, 198, 0.7);
+}
+
+.goal-task-row.surface-life-routine--frost {
+  --task-row-bg: linear-gradient(135deg, rgba(174, 233, 255, 0.2), rgba(142, 210, 255, 0.14));
+  --task-row-border: rgba(124, 222, 255, 0.3);
+  --task-row-overlay: linear-gradient(135deg, rgba(174, 233, 255, 0.24), rgba(142, 210, 255, 0.16));
+  --taskwatch-life-text: rgba(224, 248, 255, 0.92);
+  --taskwatch-life-muted: rgba(190, 236, 255, 0.72);
+}
+
+.goal-task-row.surface-life-routine--grove {
+  --task-row-bg: linear-gradient(135deg, rgba(140, 255, 204, 0.26), rgba(74, 222, 128, 0.16));
+  --task-row-border: rgba(74, 222, 128, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(140, 255, 204, 0.28), rgba(74, 222, 128, 0.2));
+  --taskwatch-life-text: rgba(222, 252, 240, 0.92);
+  --taskwatch-life-muted: rgba(188, 246, 228, 0.74);
+}
+
+.goal-task-row.surface-life-routine--lagoon {
+  --task-row-bg: linear-gradient(135deg, rgba(146, 213, 255, 0.26), rgba(59, 130, 246, 0.14));
+  --task-row-border: rgba(59, 130, 246, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(146, 213, 255, 0.26), rgba(59, 130, 246, 0.18));
+  --taskwatch-life-text: rgba(224, 242, 255, 0.92);
+  --taskwatch-life-muted: rgba(190, 224, 255, 0.72);
+}
+
+.goal-task-row.surface-life-routine--ember {
+  --task-row-bg: linear-gradient(135deg, rgba(255, 210, 170, 0.28), rgba(249, 115, 22, 0.18));
+  --task-row-border: rgba(249, 115, 22, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(255, 210, 170, 0.3), rgba(249, 115, 22, 0.2));
+  --taskwatch-life-text: rgba(255, 240, 230, 0.94);
+  --taskwatch-life-muted: rgba(255, 208, 190, 0.74);
+}
+
+html[data-theme='light'] .goal-task-row.surface-life-routine {
+  --task-row-shadow: 0 16px 32px rgba(120, 132, 188, 0.28);
+  --task-row-overlay: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.16));
+}
+
+html[data-theme='light'] .goal-task-row.surface-life-routine--glass {
+  --task-row-bg: rgba(241, 244, 255, 0.92);
+  --task-row-border: rgba(118, 142, 255, 0.26);
+  --task-row-overlay: linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(79, 70, 229, 0.14));
+  --taskwatch-life-text: rgba(46, 54, 102, 0.94);
+  --taskwatch-life-muted: rgba(82, 96, 150, 0.72);
+}
+
+html[data-theme='light'] .goal-task-row.surface-life-routine--midnight {
+  --task-row-bg: rgba(226, 228, 255, 0.92);
+  --task-row-border: rgba(92, 91, 255, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(129, 140, 248, 0.24), rgba(79, 70, 229, 0.16));
+  --taskwatch-life-text: rgba(36, 40, 96, 0.94);
+  --taskwatch-life-muted: rgba(72, 78, 150, 0.72);
+}
+
+html[data-theme='light'] .goal-task-row.surface-life-routine--slate {
+  --task-row-bg: rgba(222, 244, 255, 0.92);
+  --task-row-border: rgba(82, 168, 255, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(37, 99, 235, 0.14));
+  --taskwatch-life-text: rgba(20, 56, 94, 0.94);
+  --taskwatch-life-muted: rgba(56, 104, 150, 0.72);
+}
+
+html[data-theme='light'] .goal-task-row.surface-life-routine--charcoal {
+  --task-row-bg: rgba(255, 236, 246, 0.92);
+  --task-row-border: rgba(255, 155, 201, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(244, 114, 182, 0.22), rgba(236, 72, 153, 0.14));
+  --taskwatch-life-text: rgba(110, 48, 76, 0.94);
+  --taskwatch-life-muted: rgba(134, 60, 92, 0.7);
+}
+
+html[data-theme='light'] .goal-task-row.surface-life-routine--linen {
+  --task-row-bg: rgba(255, 240, 214, 0.92);
+  --task-row-border: rgba(255, 198, 140, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(247, 144, 9, 0.22), rgba(234, 88, 12, 0.14));
+  --taskwatch-life-text: rgba(112, 68, 24, 0.94);
+  --taskwatch-life-muted: rgba(138, 92, 46, 0.7);
+}
+
+html[data-theme='light'] .goal-task-row.surface-life-routine--frost {
+  --task-row-bg: rgba(232, 249, 255, 0.94);
+  --task-row-border: rgba(124, 222, 255, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(59, 191, 255, 0.22), rgba(2, 132, 199, 0.14));
+  --taskwatch-life-text: rgba(24, 68, 92, 0.94);
+  --taskwatch-life-muted: rgba(32, 92, 132, 0.7);
+}
+
+html[data-theme='light'] .goal-task-row.surface-life-routine--grove {
+  --task-row-bg: rgba(222, 251, 232, 0.94);
+  --task-row-border: rgba(74, 222, 128, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(22, 163, 74, 0.12));
+  --taskwatch-life-text: rgba(24, 78, 56, 0.94);
+  --taskwatch-life-muted: rgba(32, 102, 70, 0.7);
+}
+
+html[data-theme='light'] .goal-task-row.surface-life-routine--lagoon {
+  --task-row-bg: rgba(224, 242, 255, 0.94);
+  --task-row-border: rgba(59, 130, 246, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(28, 110, 212, 0.14));
+  --taskwatch-life-text: rgba(18, 68, 110, 0.94);
+  --taskwatch-life-muted: rgba(30, 92, 136, 0.7);
+}
+
+html[data-theme='light'] .goal-task-row.surface-life-routine--ember {
+  --task-row-bg: rgba(255, 239, 224, 0.94);
+  --task-row-border: rgba(249, 115, 22, 0.32);
+  --task-row-overlay: linear-gradient(135deg, rgba(253, 186, 116, 0.24), rgba(234, 88, 12, 0.14));
+  --taskwatch-life-text: rgba(110, 60, 24, 0.94);
+  --taskwatch-life-muted: rgba(134, 76, 34, 0.7);
+}
+
 .task-selector__task:active {
   transform: translateY(1px);
 }
