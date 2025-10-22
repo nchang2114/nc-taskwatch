@@ -552,6 +552,15 @@ html[data-theme='light'] .reflection-save:hover {
   z-index: 8;
 }
 
+.history-dropdown__menu--overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: auto;
+  z-index: 100;
+  backdrop-filter: blur(2px);
+}
+
 .history-dropdown__option {
   display: flex;
   align-items: center;

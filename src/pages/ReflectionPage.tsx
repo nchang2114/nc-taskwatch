@@ -224,13 +224,67 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const pointerSelectionRef = useRef(false)
   const previousValueRef = useRef(value)
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 })
+  const [menuPositionReady, setMenuPositionReady] = useState(false)
 
   const selectedOption = useMemo(() => options.find((option) => option.value === value) ?? null, [options, value])
   const displayLabel = selectedOption?.label ?? placeholder
   const isPlaceholder = !selectedOption
+
+  const updateMenuPosition = useCallback(() => {
+    const button = buttonRef.current
+    const menu = menuRef.current
+    if (!button || !menu) {
+      return
+    }
+    const buttonRect = button.getBoundingClientRect()
+    const menuRect = menu.getBoundingClientRect()
+    const spacing = 8
+    
+    let left = buttonRect.left
+    let top = buttonRect.bottom + spacing
+    const width = buttonRect.width
+    
+    // Ensure menu doesn't go off-screen horizontally
+    if (left + width > window.innerWidth - 16) {
+      left = window.innerWidth - width - 16
+    }
+    if (left < 16) {
+      left = 16
+    }
+    
+    // If menu would go below viewport, show it above the button instead
+    if (top + menuRect.height > window.innerHeight - 16) {
+      top = buttonRect.top - menuRect.height - spacing
+    }
+    
+    setMenuPosition({ top, left, width })
+    setMenuPositionReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!open) {
+      setMenuPositionReady(false)
+      return
+    }
+    
+    // Update position when opened
+    updateMenuPosition()
+    
+    // Update position on scroll/resize
+    const handleUpdate = () => updateMenuPosition()
+    window.addEventListener('scroll', handleUpdate, true)
+    window.addEventListener('resize', handleUpdate)
+    
+    return () => {
+      window.removeEventListener('scroll', handleUpdate, true)
+      window.removeEventListener('resize', handleUpdate)
+    }
+  }, [open, updateMenuPosition])
 
   useEffect(() => {
     if (!open) {
@@ -425,63 +479,74 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }
           ▾
         </span>
       </button>
-      {open ? (
-        <div
-          role="listbox"
-          className="history-dropdown__menu"
-          aria-labelledby={id}
-          tabIndex={-1}
-        >
-          {options.length === 0 ? (
-            <div className="history-dropdown__empty">No options</div>
-          ) : (
-            options.map((option, index) => (
-              <button
-                key={`${option.value || 'empty-option'}-${index}`}
-                type="button"
-                role="option"
-                aria-selected={option.value === value}
-                className={[
-                  'history-dropdown__option',
-                  option.value === value ? 'history-dropdown__option--selected' : '',
-                  option.disabled ? 'history-dropdown__option--disabled' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onPointerDown={(event) => {
-                  if (option.disabled) {
-                    event.preventDefault()
-                    return
-                  }
-                  pointerSelectionRef.current = true
-                  event.preventDefault()
-                  handleOptionSelect(option.value)
-                }}
-                onClick={(event) => {
-                  if (option.disabled) {
-                    event.preventDefault()
-                    return
-                  }
-                  if (pointerSelectionRef.current) {
-                    pointerSelectionRef.current = false
-                    return
-                  }
-                  event.preventDefault()
-                  handleOptionSelect(option.value)
-                }}
-                onKeyDown={(event) => handleOptionKeyDown(event, index)}
-                disabled={option.disabled}
-                ref={(node) => {
-                  optionRefs.current[index] = node
-                }}
-                tabIndex={-1}
-              >
-                {option.label}
-              </button>
-            ))
-          )}
-        </div>
-      ) : null}
+      {open && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="listbox"
+              className="history-dropdown__menu history-dropdown__menu--overlay"
+              aria-labelledby={id}
+              tabIndex={-1}
+              style={{
+                position: 'fixed',
+                top: `${menuPosition.top}px`,
+                left: `${menuPosition.left}px`,
+                width: `${menuPosition.width}px`,
+                visibility: menuPositionReady ? 'visible' : 'hidden',
+              }}
+            >
+              {options.length === 0 ? (
+                <div className="history-dropdown__empty">No options</div>
+              ) : (
+                options.map((option, index) => (
+                  <button
+                    key={`${option.value || 'empty-option'}-${index}`}
+                    type="button"
+                    role="option"
+                    aria-selected={option.value === value}
+                    className={[
+                      'history-dropdown__option',
+                      option.value === value ? 'history-dropdown__option--selected' : '',
+                      option.disabled ? 'history-dropdown__option--disabled' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onPointerDown={(event) => {
+                      if (option.disabled) {
+                        event.preventDefault()
+                        return
+                      }
+                      pointerSelectionRef.current = true
+                      event.preventDefault()
+                      handleOptionSelect(option.value)
+                    }}
+                    onClick={(event) => {
+                      if (option.disabled) {
+                        event.preventDefault()
+                        return
+                      }
+                      if (pointerSelectionRef.current) {
+                        pointerSelectionRef.current = false
+                        return
+                      }
+                      event.preventDefault()
+                      handleOptionSelect(option.value)
+                    }}
+                    onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                    disabled={option.disabled}
+                    ref={(node) => {
+                      optionRefs.current[index] = node
+                    }}
+                    tabIndex={-1}
+                  >
+                    {option.label}
+                  </button>
+                ))
+              )}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }
@@ -3117,8 +3182,29 @@ export default function ReflectionPage() {
                 : segment.bucketLabel
               const baseStartedAt = segment.entry.startedAt
               const baseEndedAt = segment.entry.endedAt
-              const resolvedStartedAt = isSelected ? resolveTimestamp(historyDraft.startedAt, baseStartedAt) : baseStartedAt
-              const resolvedEndedAt = isSelected ? resolveTimestamp(historyDraft.endedAt, baseEndedAt) : baseEndedAt
+              
+              // Use drag preview timestamps if this segment is being dragged
+              const draggedStartedAt = isDragging && dragPreview ? dragPreview.startedAt : baseStartedAt
+              const draggedEndedAt = isDragging && dragPreview ? dragPreview.endedAt : baseEndedAt
+              
+              // For active sessions, use live timestamp unless user has explicitly modified the start time, but prioritize drag preview
+              const shouldUseLiveStartTime = isActiveSessionSegment && activeSession?.isRunning && historyDraft.startedAt === null && !isDragging
+              const resolvedStartedAt = isSelected 
+                ? isDragging 
+                  ? draggedStartedAt  // During drag, always use drag preview
+                  : shouldUseLiveStartTime 
+                    ? baseStartedAt  // Use live timestamp from the active session
+                    : resolveTimestamp(historyDraft.startedAt, baseStartedAt) 
+                : draggedStartedAt
+              // For active sessions, use live timestamp unless user has explicitly modified the end time, but prioritize drag preview
+              const shouldUseLiveEndTime = isActiveSessionSegment && activeSession?.isRunning && historyDraft.endedAt === null && !isDragging
+              const resolvedEndedAt = isSelected 
+                ? isDragging 
+                  ? draggedEndedAt  // During drag, always use drag preview
+                  : shouldUseLiveEndTime 
+                    ? baseEndedAt  // Use live timestamp from the active session
+                    : resolveTimestamp(historyDraft.endedAt, baseEndedAt) 
+                : draggedEndedAt
               const resolvedDurationMs = Math.max(resolvedEndedAt - resolvedStartedAt, 0)
               const startTimeInputValue = formatTimeInputValue(resolvedStartedAt)
               const endTimeInputValue = formatTimeInputValue(resolvedEndedAt)
