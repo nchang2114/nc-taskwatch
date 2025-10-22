@@ -2393,6 +2393,23 @@ html[data-theme='light'] .goal-bucket-item--surface-ember {
   overflow: hidden !important;
 }
 
+/* Life routine drag visuals */
+.life-routines-card__task-inner[draggable='true'] {
+  cursor: grab;
+}
+.life-routines-card__task.dragging {
+  opacity: 1;
+}
+.life-routines-card__task--collapsed {
+  height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  border-width: 0 !important;
+  overflow: hidden !important;
+}
+
 /* Bucket drag ghost that mirrors the header look */
 .goal-bucket-drag-clone {
   position: fixed;

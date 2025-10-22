@@ -6547,6 +6547,20 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                               } catch {}
                               ;(window as any).__dragLifeRoutineInfo = { routineId: task.id, index }
                               setLifeRoutineHoverIndex(index)
+                              // Collapse the original item after drag image is captured
+                              const scheduleCollapse = () => {
+                                container?.classList.add('life-routines-card__task--collapsed')
+                              }
+                              if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                                window.requestAnimationFrame(() => {
+                                  window.requestAnimationFrame(scheduleCollapse)
+                                })
+                              } else {
+                                setTimeout(scheduleCollapse, 0)
+                              }
+                              try {
+                                event.dataTransfer.effectAllowed = 'move'
+                              } catch {}
                             }}
                             onDragEnd={(event) => {
                               const info = (window as any).__dragLifeRoutineInfo as
@@ -6559,6 +6573,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                 'li.life-routines-card__task',
                               ) as HTMLElement | null
                               container?.classList.remove('dragging')
+                              container?.classList.remove('life-routines-card__task--collapsed')
                               const ghost = lifeRoutineDragCloneRef.current
                               if (ghost && ghost.parentNode) {
                                 ghost.parentNode.removeChild(ghost)
