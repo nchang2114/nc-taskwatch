@@ -290,11 +290,22 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }
     if (!open) {
       return
     }
-    const handlePointerDown = (event: PointerEvent) => {
+    const handleClickOutside = (event: Event) => {
       const container = containerRef.current
-      if (container && event.target instanceof Node && !container.contains(event.target)) {
-        setOpen(false)
+      const menu = menuRef.current
+      
+      // If click is on the button itself, let the button handler deal with it
+      if (container && event.target instanceof Node && container.contains(event.target)) {
+        return
       }
+      
+      // If click is on the menu, don't close
+      if (menu && event.target instanceof Node && menu.contains(event.target)) {
+        return
+      }
+      
+      // Click is outside both - close the dropdown
+      setOpen(false)
     }
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -303,10 +314,10 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }
         buttonRef.current?.focus()
       }
     }
-    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('click', handleClickOutside, true)
     document.addEventListener('keydown', handleKeyDown)
     return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('click', handleClickOutside, true)
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [open])
@@ -3091,8 +3102,7 @@ export default function ReflectionPage() {
             </button>
           </div>
           <div className="history-section__header">
-            <div className="history-section__date-group">
-              <h3 className="history-section__date">{dayLabel}</h3>
+            <div className="history-section__date-container">
               <div className="history-section__date-controls" role="group" aria-label="Session history day navigation">
                 <button
                   type="button"
@@ -3112,6 +3122,7 @@ export default function ReflectionPage() {
                   <span aria-hidden="true">&gt;</span>
                 </button>
               </div>
+              <h3 className="history-section__date">{dayLabel}</h3>
             </div>
           </div>
 
