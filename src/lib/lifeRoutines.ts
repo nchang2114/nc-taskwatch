@@ -27,11 +27,11 @@ const LIFE_ROUTINE_DEFAULT_DATA: LifeRoutineConfig[] = [
     surfaceStyle: 'grove',
   },
   {
-    id: 'life-meditate',
-    bucketId: 'life-meditate',
-    title: 'Meditate',
-    blurb: 'Give your mind 10 minutes of quiet focus.',
-    surfaceStyle: 'lagoon',
+    id: 'life-cooking',
+    bucketId: 'life-cooking',
+    title: 'Cooking',
+    blurb: 'Prep ingredients, cook, and plate something nourishing.',
+    surfaceStyle: 'grove',
   },
   {
     id: 'life-socials',
@@ -39,6 +39,20 @@ const LIFE_ROUTINE_DEFAULT_DATA: LifeRoutineConfig[] = [
     title: 'Socials',
     blurb: 'Reach out, share a laugh, or check in with someone.',
     surfaceStyle: 'ember',
+  },
+  {
+    id: 'life-screen-break',
+    bucketId: 'life-screen-break',
+    title: 'Screen Break',
+    blurb: 'Step away from devices—move, stretch, or rest your eyes.',
+    surfaceStyle: 'lagoon',
+  },
+  {
+    id: 'life-meditate',
+    bucketId: 'life-meditate',
+    title: 'Meditate',
+    blurb: 'Give your mind 10 minutes of quiet focus.',
+    surfaceStyle: 'lagoon',
   },
 ]
 
