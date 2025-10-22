@@ -2780,9 +2780,15 @@ export default function ReflectionPage() {
   }, [])
   const anchoredTooltipId = hoveredHistoryId ?? selectedHistoryId
   const dayEntryCount = daySegments.length
+  const monthAndYearLabel = useMemo(() => {
+    const date = new Date(dayStart)
+    return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  }, [dayStart])
   const dayLabel = useMemo(() => {
     const date = new Date(dayStart)
-    return date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
+    const weekday = date.toLocaleDateString(undefined, { weekday: 'long' })
+    const dayNumber = date.getDate().toString().padStart(2, '0')
+    return `${weekday} · ${dayNumber}`
   }, [dayStart])
   const handlePreviousDay = useCallback(() => {
     setHistoryDayOffset((offset) => offset - 1)
@@ -3055,6 +3061,38 @@ export default function ReflectionPage() {
             Review today’s focus sessions, fine-tune their timing, and capture what made each block productive.
           </p>
         </div>
+        <div className="history-calendar-header">
+          <div className="history-calendar-header__left">
+            <button
+              type="button"
+              className="history-calendar-header__today"
+              onClick={() => setHistoryDayOffset(0)}
+              aria-label="Jump to today"
+            >
+              Today
+            </button>
+            <h2 className="history-calendar-header__month">{monthAndYearLabel}</h2>
+          </div>
+          <div className="history-calendar-header__center">
+            <button
+              type="button"
+              className="history-calendar-header__arrow"
+              onClick={handlePreviousDay}
+              aria-label="View previous day"
+            >
+              <span aria-hidden="true">‹</span>
+            </button>
+            <button
+              type="button"
+              className="history-calendar-header__arrow"
+              onClick={handleNextDay}
+              disabled={historyDayOffset >= 0}
+              aria-label="View next day"
+            >
+              <span aria-hidden="true">›</span>
+            </button>
+          </div>
+        </div>
 
         <section className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`} aria-label="Session History">
           <div className="history-controls history-controls--floating">
@@ -3068,28 +3106,7 @@ export default function ReflectionPage() {
             </button>
           </div>
           <div className="history-section__header">
-            <div className="history-section__date-container">
-              <div className="history-section__date-controls" role="group" aria-label="Session history day navigation">
-                <button
-                  type="button"
-                  className="history-section__date-button"
-                  onClick={handlePreviousDay}
-                  aria-label="View previous day"
-                >
-                  <span aria-hidden="true">&lt;</span>
-                </button>
-                <button
-                  type="button"
-                  className="history-section__date-button"
-                  onClick={handleNextDay}
-                  disabled={historyDayOffset >= 0}
-                  aria-label="View next day"
-                >
-                  <span aria-hidden="true">&gt;</span>
-                </button>
-              </div>
-              <h3 className="history-section__date">{dayLabel}</h3>
-            </div>
+            <h3 className="history-section__date">{dayLabel}</h3>
           </div>
 
           <div
