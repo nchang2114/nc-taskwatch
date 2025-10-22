@@ -311,10 +311,13 @@
 .task-selector__custom-form {
   display: flex;
   gap: 0.55rem;
+  align-items: stretch;
+  flex-wrap: wrap;
 }
 
 .task-selector__input {
   flex: 1 1 auto;
+  min-width: 0; /* Allow input to shrink */
   border-radius: 0.75rem;
   border: 1px solid var(--control-border);
   background: var(--control-surface);
@@ -456,6 +459,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+  word-break: break-word;
 }
 
 .task-selector__task--life-routine {
@@ -733,6 +737,8 @@ html[data-theme='light'] .task-selector__goal-toggle {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.25rem;
+  min-width: 0; /* Allow content to shrink */
+  flex: 1; /* Take available space */
 }
 
 .task-selector__goal-badge,
@@ -778,10 +784,10 @@ html[data-theme='light'] .task-selector__bucket-badge {
   letter-spacing: 0.01em;
   font-weight: 600;
   color: inherit;
-  max-width: min(18rem, 65vw);
-  white-space: nowrap;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-selector__bucket-toggle {
@@ -1023,10 +1029,10 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible {
 
   .task-selector-popover {
     position: fixed;
-    left: max(0.65rem, env(safe-area-inset-left));
-    right: max(0.65rem, env(safe-area-inset-right));
-    top: clamp(5.25rem, 15vh, 7.25rem);
-    bottom: max(1.15rem, env(safe-area-inset-bottom));
+    left: max(0.5rem, env(safe-area-inset-left));
+    right: max(0.5rem, env(safe-area-inset-right));
+    top: clamp(4.5rem, 12vh, 6.5rem);
+    bottom: max(1rem, env(safe-area-inset-bottom));
     width: auto;
     max-height: none;
     border-radius: 0.9rem;
