@@ -105,6 +105,12 @@ export const sanitizeLifeRoutineList = (value: unknown): LifeRoutineConfig[] => 
     seen.add(routine.id)
     result.push(cloneRoutine(routine))
   }
+  LIFE_ROUTINE_DEFAULT_DATA.forEach((routine) => {
+    if (!seen.has(routine.id)) {
+      seen.add(routine.id)
+      result.push(cloneRoutine(routine))
+    }
+  })
   return result.length > 0 ? result : LIFE_ROUTINE_DEFAULT_DATA.map(cloneRoutine)
 }
 
