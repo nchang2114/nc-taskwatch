@@ -6406,58 +6406,71 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
               className={classNames('life-routines-card', lifeRoutinesExpanded && 'life-routines-card--open')}
               aria-label={LIFE_ROUTINES_NAME}
             >
-              <button
-                type="button"
-                className="life-routines-card__header"
-                onClick={() => setLifeRoutinesExpanded((value) => !value)}
-                aria-expanded={lifeRoutinesExpanded}
-                aria-controls="life-routines-body"
-              >
-              <div className="life-routines-card__header-content">
-                <div className="life-routines-card__meta">
-                  <p className="life-routines-card__eyebrow">System Layer</p>
-                  <h2 className="life-routines-card__title">
-                    {highlightText(LIFE_ROUTINES_NAME, normalizedSearch)}
-                  </h2>
-                  <p className="life-routines-card__subtitle">
-                    {highlightText(LIFE_ROUTINES_TAGLINE, normalizedSearch)}
-                  </p>
-                </div>
-                {lifeRoutinesExpanded && (
-                  <button 
-                    type="button" 
-                    className="life-routines-card__add-inline-button" 
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      handleAddLifeRoutine()
-                    }}
-                    aria-label="Add routine"
+              <div className="life-routines-card__header-wrapper">
+                <div className="life-routines-card__header-left">
+                  <button
+                    type="button"
+                    className="life-routines-card__header"
+                    onClick={() => setLifeRoutinesExpanded((value) => !value)}
+                    aria-expanded={lifeRoutinesExpanded}
+                    aria-controls="life-routines-body"
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <div className="life-routines-card__header-content">
+                    <div className="life-routines-card__meta">
+                      <p className="life-routines-card__eyebrow">System Layer</p>
+                      <h2 className="life-routines-card__title">
+                        {highlightText(LIFE_ROUTINES_NAME, normalizedSearch)}
+                      </h2>
+                      <p className="life-routines-card__subtitle">
+                        {highlightText(LIFE_ROUTINES_TAGLINE, normalizedSearch)}
+                      </p>
+                    </div>
+                  </div>
+                  </button>
+                  {lifeRoutinesExpanded && (
+                    <button 
+                      type="button" 
+                      className="life-routines-card__add-inline-button" 
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        handleAddLifeRoutine()
+                      }}
+                      aria-label="Add routine"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                        <path
+                          d="M10 4v12M4 10h12"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <span>Add routine</span>
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="life-routines-card__toggle"
+                  onClick={() => setLifeRoutinesExpanded((value) => !value)}
+                  aria-expanded={lifeRoutinesExpanded}
+                  aria-controls="life-routines-body"
+                  aria-label={`${lifeRoutinesExpanded ? 'Collapse' : 'Expand'} life routines`}
+                >
+                  <span className="life-routines-card__indicator" aria-hidden="true">
+                    <svg className="life-routines-card__chevron" viewBox="0 0 24 24" fill="none">
                       <path
-                        d="M10 4v12M4 10h12"
+                        d="M6 9l6 6 6-6"
                         stroke="currentColor"
                         strokeWidth="1.6"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
                     </svg>
-                    <span>Add routine</span>
-                  </button>
-                )}
+                  </span>
+                </button>
               </div>
-                <span className="life-routines-card__indicator" aria-hidden="true">
-                  <svg className="life-routines-card__chevron" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M6 9l6 6 6-6"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </button>
               {lifeRoutinesExpanded ? (
                 <>
                   <ul
