@@ -1239,6 +1239,113 @@ interface GoalRowProps {
   onRestoreGoal: () => void
 }
 
+// Copy key visual styles so the drag clone matches layered backgrounds and borders
+const copyVisualStyles = (src: HTMLElement, dst: HTMLElement) => {
+  const rowCS = window.getComputedStyle(src)
+  const isTaskRow = src.classList.contains('goal-task-row') || dst.classList.contains('goal-task-row')
+
+  if (isTaskRow) {
+    const taskVars = ['--task-row-bg', '--task-row-overlay', '--task-row-border', '--task-row-shadow', '--priority-overlay']
+    for (const name of taskVars) {
+      const value = rowCS.getPropertyValue(name)
+      const trimmed = value.trim()
+      if (trimmed) {
+        dst.style.setProperty(name, trimmed)
+      } else {
+        dst.style.removeProperty(name)
+      }
+    }
+
+    dst.style.backgroundColor = rowCS.backgroundColor
+    dst.style.backgroundImage = rowCS.backgroundImage && rowCS.backgroundImage !== 'none' ? rowCS.backgroundImage : 'none'
+    dst.style.backgroundSize = rowCS.backgroundSize
+    dst.style.backgroundPosition = rowCS.backgroundPosition
+    dst.style.backgroundRepeat = rowCS.backgroundRepeat
+    dst.style.borderColor = rowCS.borderColor
+    dst.style.borderWidth = rowCS.borderWidth
+    dst.style.borderStyle = rowCS.borderStyle
+    dst.style.borderRadius = rowCS.borderRadius
+    dst.style.boxShadow = rowCS.boxShadow
+    dst.style.outline = rowCS.outline
+    dst.style.color = rowCS.color
+    dst.style.opacity = rowCS.opacity
+
+    return
+  }
+
+  const parseColor = (value: string) => {
+    const s = (value || '').trim().toLowerCase()
+    let m = s.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)$/)
+    if (m) return { r: +m[1], g: +m[2], b: +m[3], a: Math.max(0, Math.min(1, +m[4])) }
+    m = s.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/)
+    if (m) return { r: +m[1], g: +m[2], b: +m[3], a: 1 }
+    m = s.match(/^#([0-9a-f]{6})$/)
+    if (m) {
+      const n = parseInt(m[1], 16)
+      return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, a: 1 }
+    }
+    return { r: 0, g: 0, b: 0, a: 0 }
+  }
+  const toCssRgb = (c: { r: number; g: number; b: number }) => `rgb(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)})`
+  const over = (top: { r: number; g: number; b: number; a: number }, under: { r: number; g: number; b: number; a: number }) => {
+    const a = top.a + under.a * (1 - top.a)
+    if (a === 0) return { r: under.r, g: under.g, b: under.b, a }
+    return {
+      r: (top.r * top.a + under.r * under.a * (1 - top.a)) / a,
+      g: (top.g * top.a + under.g * under.a * (1 - top.a)) / a,
+      b: (top.b * top.a + under.b * under.a * (1 - top.a)) / a,
+      a,
+    }
+  }
+  // Known layers: page base, goal card, bucket body, row surface
+  const themeBase = document.documentElement.getAttribute('data-theme') === 'light'
+    ? parseColor('rgb(248, 250, 255)')
+    : parseColor('rgb(16, 20, 36)')
+
+  const cardEl = src.closest('.goal-card') as HTMLElement | null
+  const cardCS = cardEl ? window.getComputedStyle(cardEl) : null
+
+  // Compose colors: page -> card -> bucket -> row
+  // Helper to apply layer with its own opacity
+  const withOpacity = (colorStr: string, opacityStr: string) => {
+    const c = parseColor(colorStr)
+    const o = Math.max(0, Math.min(1, parseFloat(opacityStr || '1')))
+    return { r: c.r, g: c.g, b: c.b, a: (c.a ?? 1) * o }
+  }
+  let base = themeBase
+  // Compose page and known containers (falling back to theme mid-tones if fully transparent)
+
+  
+
+  // Compose base strictly from theme base + goal entry (card) to avoid overly dark appearance in dark mode
+  // Start at theme base only
+  base = themeBase
+  // Blend goal card (entry) over theme base if present
+  if (cardCS) {
+    base = over(withOpacity(cardCS.backgroundColor, cardCS.opacity), base)
+  }
+  // Finally, flatten the row surface over the entry so the clone looks like in-list
+  base = over(withOpacity(rowCS.backgroundColor, rowCS.opacity), base)
+
+  // Apply computed backgrounds
+  dst.style.backgroundImage = rowCS.backgroundImage && rowCS.backgroundImage !== 'none' ? rowCS.backgroundImage : 'none'
+  dst.style.backgroundSize = rowCS.backgroundSize
+  dst.style.backgroundPosition = rowCS.backgroundPosition
+  dst.style.backgroundRepeat = rowCS.backgroundRepeat
+  dst.style.backgroundColor = toCssRgb(base)
+  // Match overall element opacity
+  dst.style.opacity = rowCS.opacity
+
+  // Borders / radius / shadows / text
+  dst.style.borderColor = rowCS.borderColor
+  dst.style.borderWidth = rowCS.borderWidth
+  dst.style.borderStyle = rowCS.borderStyle
+  dst.style.borderRadius = rowCS.borderRadius
+  dst.style.boxShadow = rowCS.boxShadow
+  dst.style.outline = rowCS.outline
+  dst.style.color = rowCS.color
+}
+
 const GoalRow: React.FC<GoalRowProps> = ({
   goal,
   isOpen,
@@ -1418,113 +1525,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
     return best.index
   }
 
-  // Copy key visual styles so the drag clone matches layered backgrounds and borders
-  const copyVisualStyles = (src: HTMLElement, dst: HTMLElement) => {
-    const rowCS = window.getComputedStyle(src)
-    const isTaskRow = src.classList.contains('goal-task-row') || dst.classList.contains('goal-task-row')
-
-    if (isTaskRow) {
-      const taskVars = ['--task-row-bg', '--task-row-overlay', '--task-row-border', '--task-row-shadow', '--priority-overlay']
-      for (const name of taskVars) {
-        const value = rowCS.getPropertyValue(name)
-        const trimmed = value.trim()
-        if (trimmed) {
-          dst.style.setProperty(name, trimmed)
-        } else {
-          dst.style.removeProperty(name)
-        }
-      }
-
-      dst.style.backgroundColor = rowCS.backgroundColor
-      dst.style.backgroundImage = rowCS.backgroundImage && rowCS.backgroundImage !== 'none' ? rowCS.backgroundImage : 'none'
-      dst.style.backgroundSize = rowCS.backgroundSize
-      dst.style.backgroundPosition = rowCS.backgroundPosition
-      dst.style.backgroundRepeat = rowCS.backgroundRepeat
-      dst.style.borderColor = rowCS.borderColor
-      dst.style.borderWidth = rowCS.borderWidth
-      dst.style.borderStyle = rowCS.borderStyle
-      dst.style.borderRadius = rowCS.borderRadius
-      dst.style.boxShadow = rowCS.boxShadow
-      dst.style.outline = rowCS.outline
-      dst.style.color = rowCS.color
-      dst.style.opacity = rowCS.opacity
-
-      return
-    }
-
-    const parseColor = (value: string) => {
-      const s = (value || '').trim().toLowerCase()
-      let m = s.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)$/)
-      if (m) return { r: +m[1], g: +m[2], b: +m[3], a: Math.max(0, Math.min(1, +m[4])) }
-      m = s.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/)
-      if (m) return { r: +m[1], g: +m[2], b: +m[3], a: 1 }
-      m = s.match(/^#([0-9a-f]{6})$/)
-      if (m) {
-        const n = parseInt(m[1], 16)
-        return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, a: 1 }
-      }
-      return { r: 0, g: 0, b: 0, a: 0 }
-    }
-    const toCssRgb = (c: { r: number; g: number; b: number }) => `rgb(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)})`
-    const over = (top: { r: number; g: number; b: number; a: number }, under: { r: number; g: number; b: number; a: number }) => {
-      const a = top.a + under.a * (1 - top.a)
-      if (a === 0) return { r: under.r, g: under.g, b: under.b, a }
-      return {
-        r: (top.r * top.a + under.r * under.a * (1 - top.a)) / a,
-        g: (top.g * top.a + under.g * under.a * (1 - top.a)) / a,
-        b: (top.b * top.a + under.b * under.a * (1 - top.a)) / a,
-        a,
-      }
-    }
-    // Known layers: page base, goal card, bucket body, row surface
-    const themeBase = document.documentElement.getAttribute('data-theme') === 'light'
-      ? parseColor('rgb(248, 250, 255)')
-      : parseColor('rgb(16, 20, 36)')
-
-    const cardEl = src.closest('.goal-card') as HTMLElement | null
-    const cardCS = cardEl ? window.getComputedStyle(cardEl) : null
-
-    // Compose colors: page -> card -> bucket -> row
-    // Helper to apply layer with its own opacity
-    const withOpacity = (colorStr: string, opacityStr: string) => {
-      const c = parseColor(colorStr)
-      const o = Math.max(0, Math.min(1, parseFloat(opacityStr || '1')))
-      return { r: c.r, g: c.g, b: c.b, a: (c.a ?? 1) * o }
-    }
-    let base = themeBase
-    // Compose page and known containers (falling back to theme mid-tones if fully transparent)
-
-    
-
-    // Compose base strictly from theme base + goal entry (card) to avoid overly dark appearance in dark mode
-    // Start at theme base only
-    base = themeBase
-    // Blend goal card (entry) over theme base if present
-    if (cardCS) {
-      base = over(withOpacity(cardCS.backgroundColor, cardCS.opacity), base)
-    }
-    // Finally, flatten the row surface over the entry so the clone looks like in-list
-    base = over(withOpacity(rowCS.backgroundColor, rowCS.opacity), base)
-
-    // Apply computed backgrounds
-    dst.style.backgroundImage = rowCS.backgroundImage && rowCS.backgroundImage !== 'none' ? rowCS.backgroundImage : 'none'
-    dst.style.backgroundSize = rowCS.backgroundSize
-    dst.style.backgroundPosition = rowCS.backgroundPosition
-    dst.style.backgroundRepeat = rowCS.backgroundRepeat
-    dst.style.backgroundColor = toCssRgb(base)
-    // Match overall element opacity
-    dst.style.opacity = rowCS.opacity
-
-    // Borders / radius / shadows / text
-    dst.style.borderColor = rowCS.borderColor
-    dst.style.borderWidth = rowCS.borderWidth
-    dst.style.borderStyle = rowCS.borderStyle
-    dst.style.borderRadius = rowCS.borderRadius
-    dst.style.boxShadow = rowCS.boxShadow
-    dst.style.outline = rowCS.outline
-    dst.style.color = rowCS.color
-  }
-
   const computeInsertMetrics = (listEl: HTMLElement, y: number) => {
     const index = computeInsertIndex(listEl, y)
     const rows = Array.from(listEl.querySelectorAll('li.goal-task-row')) as HTMLElement[]
@@ -1613,6 +1613,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
     const top = Math.round(clamped * 2) / 2
     return { index: best.index, top }
   }
+
   const totalTasks = activeBuckets.reduce((acc, bucket) => acc + bucket.tasks.length, 0)
   const completedTasksCount = activeBuckets.reduce(
     (acc, bucket) => acc + bucket.tasks.filter((task) => task.completed).length,
@@ -3828,6 +3829,66 @@ export default function GoalsPage(): ReactElement {
   const [renamingLifeRoutineId, setRenamingLifeRoutineId] = useState<string | null>(null)
   const [lifeRoutineRenameDraft, setLifeRoutineRenameDraft] = useState('')
   const lifeRoutineRenameInputRef = useRef<HTMLInputElement | null>(null)
+  const [editingLifeRoutineDescriptionId, setEditingLifeRoutineDescriptionId] = useState<string | null>(null)
+  const [lifeRoutineDescriptionDraft, setLifeRoutineDescriptionDraft] = useState('')
+  const lifeRoutineDescriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [lifeRoutineHoverIndex, setLifeRoutineHoverIndex] = useState<number | null>(null)
+  const [lifeRoutineLineTop, setLifeRoutineLineTop] = useState<number | null>(null)
+  const lifeRoutineDragCloneRef = useRef<HTMLElement | null>(null)
+  const computeLifeRoutineInsertMetrics = useCallback((listEl: HTMLElement, y: number) => {
+    const items = Array.from(listEl.querySelectorAll('li.life-routines-card__task')) as HTMLElement[]
+    const candidates = items.filter((el) => !el.classList.contains('dragging'))
+    const listRect = listEl.getBoundingClientRect()
+    const cs = window.getComputedStyle(listEl)
+    const padTop = parseFloat(cs.paddingTop || '0') || 0
+    const padBottom = parseFloat(cs.paddingBottom || '0') || 0
+    if (candidates.length === 0) {
+      const rawTop = (padTop - 1) / 2
+      const clamped = Math.max(0.5, Math.min(rawTop, listRect.height - 0.5))
+      const top = Math.round(clamped * 2) / 2
+      return { index: 0, top }
+    }
+    const rects = candidates.map((el) => el.getBoundingClientRect())
+    const anchors: Array<{ y: number; index: number }> = []
+    anchors.push({ y: rects[0].top, index: 0 })
+    for (let i = 0; i < rects.length - 1; i++) {
+      const a = rects[i]
+      const b = rects[i + 1]
+      const mid = a.bottom + (b.top - a.bottom) / 2
+      anchors.push({ y: mid, index: i + 1 })
+    }
+    anchors.push({ y: rects[rects.length - 1].bottom, index: rects.length })
+
+    let best = anchors[0]
+    let bestDist = Math.abs(y - anchors[0].y)
+    for (let i = 1; i < anchors.length; i++) {
+      const dist = Math.abs(y - anchors[i].y)
+      if (dist < bestDist) {
+        best = anchors[i]
+        bestDist = dist
+      }
+    }
+
+    let rawTop: number
+    if (best.index <= 0) {
+      rawTop = (padTop - 1) / 2
+    } else if (best.index >= candidates.length) {
+      const last = candidates[candidates.length - 1]
+      const a = last.getBoundingClientRect()
+      rawTop = a.bottom - listRect.top + (padBottom - 1) / 2
+    } else {
+      const prev = candidates[best.index - 1]
+      const next = candidates[best.index]
+      const a = prev.getBoundingClientRect()
+      const b = next.getBoundingClientRect()
+      const gap = Math.max(0, b.top - a.bottom)
+      rawTop = a.bottom - listRect.top + (gap - 1) / 2
+    }
+
+    const clamped = Math.max(0.5, Math.min(rawTop, listRect.height - 0.5))
+    const top = Math.round(clamped * 2) / 2
+    return { index: best.index, top }
+  }, [])
   const [activeLifeRoutineCustomizerId, setActiveLifeRoutineCustomizerId] = useState<string | null>(null)
   const lifeRoutineCustomizerDialogRef = useRef<HTMLDivElement | null>(null)
   const activeLifeRoutine = useMemo(() => {
@@ -3941,6 +4002,14 @@ export default function GoalsPage(): ReactElement {
       el.setSelectionRange(len, len)
     }
   }, [renamingLifeRoutineId])
+
+  useEffect(() => {
+    if (editingLifeRoutineDescriptionId && lifeRoutineDescriptionTextareaRef.current) {
+      const el = lifeRoutineDescriptionTextareaRef.current
+      el.focus()
+      el.setSelectionRange(el.value.length, el.value.length)
+    }
+  }, [editingLifeRoutineDescriptionId])
 
   useEffect(() => {
     if (activeLifeRoutineCustomizerId && !activeLifeRoutineCustomizer) {
@@ -4509,6 +4578,8 @@ export default function GoalsPage(): ReactElement {
   const startLifeRoutineRename = (routineId: string, initial: string) => {
     setRenamingLifeRoutineId(routineId)
     setLifeRoutineRenameDraft(initial)
+    setEditingLifeRoutineDescriptionId(null)
+    setLifeRoutineDescriptionDraft('')
   }
   const handleLifeRoutineRenameChange = (value: string) => setLifeRoutineRenameDraft(value)
   const submitLifeRoutineRename = () => {
@@ -4523,8 +4594,43 @@ export default function GoalsPage(): ReactElement {
     }
     setRenamingLifeRoutineId(null)
     setLifeRoutineRenameDraft('')
+    setLifeRoutineDescriptionDraft((current) =>
+      renamingLifeRoutineId === editingLifeRoutineDescriptionId ? current : '',
+    )
   }
   const cancelLifeRoutineRename = () => {
+    const currentId = renamingLifeRoutineId
+    setRenamingLifeRoutineId(null)
+    setLifeRoutineRenameDraft('')
+    if (currentId && editingLifeRoutineDescriptionId === currentId) {
+      setEditingLifeRoutineDescriptionId(null)
+      setLifeRoutineDescriptionDraft('')
+    }
+  }
+  const startLifeRoutineDescriptionEdit = (routine: LifeRoutineConfig) => {
+    setRenamingLifeRoutineId(routine.id)
+    setLifeRoutineRenameDraft(routine.title)
+    setEditingLifeRoutineDescriptionId(routine.id)
+    setLifeRoutineDescriptionDraft(routine.blurb)
+  }
+  const handleLifeRoutineDescriptionChange = (value: string) => setLifeRoutineDescriptionDraft(value)
+  const submitLifeRoutineDescription = () => {
+    if (!editingLifeRoutineDescriptionId) {
+      return
+    }
+    const routineId = editingLifeRoutineDescriptionId
+    const next = lifeRoutineDescriptionDraft.trim()
+    setLifeRoutineTasks((current) =>
+      current.map((task) => (task.id === routineId ? { ...task, blurb: next } : task)),
+    )
+    setEditingLifeRoutineDescriptionId(null)
+    setLifeRoutineDescriptionDraft('')
+    setRenamingLifeRoutineId((current) => (current === routineId ? null : current))
+    setLifeRoutineRenameDraft('')
+  }
+  const cancelLifeRoutineDescription = () => {
+    setEditingLifeRoutineDescriptionId(null)
+    setLifeRoutineDescriptionDraft('')
     setRenamingLifeRoutineId(null)
     setLifeRoutineRenameDraft('')
   }
@@ -4535,12 +4641,20 @@ export default function GoalsPage(): ReactElement {
   }
   const deleteLifeRoutine = (routineId: string) => {
     const routine = lifeRoutineTasks.find((task) => task.id === routineId) ?? null
-    setLifeRoutineTasks((current) => current.filter((task) => task.id !== routineId))
+    setLifeRoutineTasks((current) => {
+      const updated = current.filter((task) => task.id !== routineId)
+      writeStoredLifeRoutines(updated)
+      return updated
+    })
     setLifeRoutineMenuOpenId((current) => (current === routineId ? null : current))
     setActiveLifeRoutineCustomizerId((current) => (current === routineId ? null : current))
     if (renamingLifeRoutineId === routineId) {
       setRenamingLifeRoutineId(null)
       setLifeRoutineRenameDraft('')
+    }
+    if (editingLifeRoutineDescriptionId === routineId) {
+      setEditingLifeRoutineDescriptionId(null)
+      setLifeRoutineDescriptionDraft('')
     }
     setFocusPromptTarget((current) => {
       if (
@@ -4552,6 +4666,54 @@ export default function GoalsPage(): ReactElement {
         return null
       }
       return current
+    })
+  }
+
+  const handleAddLifeRoutine = () => {
+    const id = `life-custom-${Date.now().toString(36)}`
+    const title = 'New routine'
+    const newRoutine: LifeRoutineConfig = {
+      id,
+      bucketId: id,
+      title,
+      blurb: 'Describe the cadence you want to build.',
+      surfaceStyle: DEFAULT_SURFACE_STYLE,
+    }
+    setLifeRoutinesExpanded(true)
+    setLifeRoutineTasks((current) => {
+      const updated = [...current, newRoutine]
+      writeStoredLifeRoutines(updated)
+      return updated
+    })
+    setRenamingLifeRoutineId(id)
+    setLifeRoutineRenameDraft(title)
+    setEditingLifeRoutineDescriptionId(null)
+    setLifeRoutineDescriptionDraft('')
+    requestAnimationFrame(() => {
+      lifeRoutineRenameInputRef.current?.focus()
+    })
+  }
+
+  const reorderLifeRoutines = (routineId: string, targetIndex: number) => {
+    setLifeRoutineTasks((current) => {
+      const fromIndex = current.findIndex((task) => task.id === routineId)
+      if (fromIndex === -1) {
+        return current
+      }
+      
+      // Clamp the target index to valid range
+      const clampedTargetIndex = Math.max(0, Math.min(targetIndex, current.length - 1))
+      
+      // If we're not actually moving, don't change anything
+      if (fromIndex === clampedTargetIndex) {
+        return current
+      }
+      
+      const next = current.slice()
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(clampedTargetIndex, 0, moved)
+      writeStoredLifeRoutines(next)
+      return next
     })
   }
 
@@ -6090,14 +6252,26 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
             >
               <button
                 type="button"
+              className="goal-menu__item"
+              onClick={(event) => {
+                event.stopPropagation()
+                setLifeRoutineMenuOpenId(null)
+                setActiveLifeRoutineCustomizerId(activeLifeRoutine.id)
+              }}
+            >
+              Customise gradient
+            </button>
+            <div className="goal-menu__divider" />
+              <button
+                type="button"
                 className="goal-menu__item"
                 onClick={(event) => {
                   event.stopPropagation()
                   setLifeRoutineMenuOpenId(null)
-                  setActiveLifeRoutineCustomizerId(activeLifeRoutine.id)
+                  startLifeRoutineDescriptionEdit(activeLifeRoutine)
                 }}
               >
-                Customise gradient
+                Edit description
               </button>
               <div className="goal-menu__divider" />
               <button
@@ -6231,6 +6405,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                 aria-expanded={lifeRoutinesExpanded}
                 aria-controls="life-routines-body"
               >
+              <div className="life-routines-card__header-content">
                 <div className="life-routines-card__meta">
                   <p className="life-routines-card__eyebrow">System Layer</p>
                   <h2 className="life-routines-card__title">
@@ -6240,6 +6415,29 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     {highlightText(LIFE_ROUTINES_TAGLINE, normalizedSearch)}
                   </p>
                 </div>
+                {lifeRoutinesExpanded && (
+                  <button 
+                    type="button" 
+                    className="life-routines-card__add-inline-button" 
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      handleAddLifeRoutine()
+                    }}
+                    aria-label="Add routine"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                      <path
+                        d="M10 4v12M4 10h12"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span>Add routine</span>
+                  </button>
+                )}
+              </div>
                 <span className="life-routines-card__indicator" aria-hidden="true">
                   <svg className="life-routines-card__chevron" viewBox="0 0 24 24" fill="none">
                     <path
@@ -6253,8 +6451,52 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                 </span>
               </button>
               {lifeRoutinesExpanded ? (
-                <ul id="life-routines-body" className="life-routines-card__tasks">
-                  {lifeRoutineTasks.map((task) => {
+                <>
+                  <ul
+                    id="life-routines-body"
+                    className="life-routines-card__tasks"
+                    onDragOver={(event) => {
+                      const info = (window as any).__dragLifeRoutineInfo as { routineId: string; index: number } | null
+                      if (!info) {
+                      return
+                    }
+                    event.preventDefault()
+                    const list = event.currentTarget as HTMLElement
+                    const { index, top } = computeLifeRoutineInsertMetrics(list, event.clientY)
+                    setLifeRoutineHoverIndex((current) => (current === index ? current : index))
+                    setLifeRoutineLineTop(top)
+                  }}
+                  onDrop={(event) => {
+                    const info = (window as any).__dragLifeRoutineInfo as { routineId: string; index: number } | null
+                    if (!info) {
+                      return
+                    }
+                    event.preventDefault()
+                    const targetIndex = lifeRoutineHoverIndex ?? lifeRoutineTasks.length
+                    if (info.index !== targetIndex) {
+                      reorderLifeRoutines(info.routineId, targetIndex)
+                    }
+                    setLifeRoutineHoverIndex(null)
+                    setLifeRoutineLineTop(null)
+                    const ghost = lifeRoutineDragCloneRef.current
+                    if (ghost && ghost.parentNode) {
+                      ghost.parentNode.removeChild(ghost)
+                    }
+                    lifeRoutineDragCloneRef.current = null
+                    ;(window as any).__dragLifeRoutineInfo = null
+                  }}
+                  onDragLeave={(event) => {
+                    if (event.currentTarget.contains(event.relatedTarget as Node)) {
+                      return
+                    }
+                    setLifeRoutineHoverIndex(null)
+                    setLifeRoutineLineTop(null)
+                  }}
+                >
+                  {lifeRoutineLineTop !== null ? (
+                    <div className="goal-insert-line" style={{ top: `${lifeRoutineLineTop}px` }} aria-hidden />
+                  ) : null}
+                  {lifeRoutineTasks.map((task, index) => {
                     const focusKey = makeTaskFocusKey(LIFE_ROUTINES_GOAL_ID, task.bucketId, task.id)
                     const isPromptActive =
                       focusPromptTarget &&
@@ -6262,6 +6504,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                       focusPromptTarget.bucketId === task.bucketId &&
                       focusPromptTarget.taskId === task.id
                     const isRenamingRoutine = renamingLifeRoutineId === task.id
+                    const isEditingRoutineDescription = editingLifeRoutineDescriptionId === task.id
+                    const isRoutineEditorOpen = isRenamingRoutine || isEditingRoutineDescription
                     const taskSurfaceClass = classNames(
                       'life-routines-card__task',
                       `life-routines-card__task--surface-${task.surfaceStyle}`,
@@ -6272,29 +6516,107 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           className={taskSurfaceClass}
                           data-focus-prompt-key={isPromptActive ? focusKey : undefined}
                         >
-                          <div className="life-routines-card__task-inner">
-                            {isRenamingRoutine ? (
+                          <div
+                            className="life-routines-card__task-inner"
+                            draggable={!isRoutineEditorOpen}
+                            onDragStart={(event) => {
+                              if (isRoutineEditorOpen) {
+                                event.preventDefault()
+                                return
+                              }
+                              try {
+                                event.dataTransfer.setData('text/plain', task.id)
+                              } catch {}
+                              const container = event.currentTarget.closest('li.life-routines-card__task') as
+                                | HTMLElement
+                                | null
+                              container?.classList.add('dragging')
+                              const srcEl = (container ?? event.currentTarget) as HTMLElement
+                              const rect = srcEl.getBoundingClientRect()
+                              const clone = srcEl.cloneNode(true) as HTMLElement
+                              clone.className = 'life-routines-card__task life-routines-card__task--drag-clone'
+                              clone.style.width = `${Math.floor(rect.width)}px`
+                              clone.style.opacity = '0.9'
+                              clone.style.pointerEvents = 'none'
+                              clone.style.boxShadow = '0 12px 32px rgba(12, 18, 48, 0.35)'
+                              copyVisualStyles(srcEl, clone)
+                              document.body.appendChild(clone)
+                              lifeRoutineDragCloneRef.current = clone
+                              try {
+                                event.dataTransfer.setDragImage(clone, 16, 0)
+                              } catch {}
+                              ;(window as any).__dragLifeRoutineInfo = { routineId: task.id, index }
+                              setLifeRoutineHoverIndex(index)
+                            }}
+                            onDragEnd={(event) => {
+                              const info = (window as any).__dragLifeRoutineInfo as
+                                | { routineId: string; index: number }
+                                | null
+                              if (info) {
+                                ;(window as any).__dragLifeRoutineInfo = null
+                              }
+                              const container = event.currentTarget.closest(
+                                'li.life-routines-card__task',
+                              ) as HTMLElement | null
+                              container?.classList.remove('dragging')
+                              const ghost = lifeRoutineDragCloneRef.current
+                              if (ghost && ghost.parentNode) {
+                                ghost.parentNode.removeChild(ghost)
+                              }
+                              lifeRoutineDragCloneRef.current = null
+                              setLifeRoutineHoverIndex(null)
+                              setLifeRoutineLineTop(null)
+                            }}
+                          >
+                            {isRoutineEditorOpen ? (
                               <div className="life-routines-card__task-editor">
-                                <input
-                                  ref={lifeRoutineRenameInputRef}
-                                  value={lifeRoutineRenameDraft}
-                                  onChange={(event) => handleLifeRoutineRenameChange(event.target.value)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter') {
-                                      event.preventDefault()
-                                      submitLifeRoutineRename()
-                                    } else if (event.key === 'Escape') {
-                                      event.preventDefault()
-                                      cancelLifeRoutineRename()
-                                    }
-                                  }}
-                                  onBlur={() => submitLifeRoutineRename()}
-                                  className="life-routines-card__task-rename"
-                                  placeholder="Rename routine"
-                                />
-                                <span className="life-routines-card__task-blurb">
-                                  {highlightText(task.blurb, normalizedSearch)}
-                                </span>
+                                {isRenamingRoutine ? (
+                                  <input
+                                    ref={lifeRoutineRenameInputRef}
+                                    value={lifeRoutineRenameDraft}
+                                    onChange={(event) => handleLifeRoutineRenameChange(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') {
+                                        event.preventDefault()
+                                        submitLifeRoutineRename()
+                                      } else if (event.key === 'Escape') {
+                                        event.preventDefault()
+                                        cancelLifeRoutineRename()
+                                      }
+                                    }}
+                                    onBlur={() => submitLifeRoutineRename()}
+                                    className="life-routines-card__task-rename"
+                                    placeholder="Rename routine"
+                                  />
+                                ) : (
+                                  <span className="life-routines-card__task-title">
+                                    {highlightText(task.title, normalizedSearch)}
+                                  </span>
+                                )}
+                                {isEditingRoutineDescription ? (
+                                  <textarea
+                                    ref={lifeRoutineDescriptionTextareaRef}
+                                    value={lifeRoutineDescriptionDraft}
+                                    onChange={(event) => handleLifeRoutineDescriptionChange(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                                        event.preventDefault()
+                                        submitLifeRoutineDescription()
+                                      } else if (event.key === 'Escape') {
+                                        event.preventDefault()
+                                        cancelLifeRoutineDescription()
+                                      }
+                                    }}
+                                    onBlur={() => submitLifeRoutineDescription()}
+                                    className="life-routines-card__task-description"
+                                    placeholder="Describe the cadence"
+                                    rows={3}
+                                  />
+                                ) : (
+                                  <span className="life-routines-card__task-blurb">
+                                    {highlightText(task.blurb, normalizedSearch)}
+                                  </span>
+                                )}
                               </div>
                             ) : (
                               <button
@@ -6365,6 +6687,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     )
                   })}
                 </ul>
+                </>
               ) : null}
             </section>
           ) : null}

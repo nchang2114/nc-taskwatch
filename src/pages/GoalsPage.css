@@ -363,11 +363,50 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   cursor: pointer;
 }
 
+.life-routines-card__header-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  gap: clamp(0.75rem, 2vw, 1rem);
+}
+
 .life-routines-card__meta {
   display: flex;
   flex-direction: column;
   gap: 0.16rem;
   color: var(--lr-text);
+  flex: 1;
+}
+
+.life-routines-card__add-inline-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--lr-border);
+  border-radius: 0.375rem;
+  background: var(--lr-bg);
+  color: var(--lr-text);
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  flex: none;
+}
+
+.life-routines-card__add-inline-button:hover,
+.life-routines-card__add-inline-button:focus-visible {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--lr-text);
+  color: var(--lr-text);
+  transform: translateY(-1px);
+}
+
+.life-routines-card__add-inline-button:focus-visible {
+  outline: 2px solid var(--lr-border);
+  outline-offset: 2px;
 }
 
 .life-routines-card__eyebrow {
@@ -423,6 +462,45 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   display: flex;
   flex-direction: column;
   gap: clamp(0.35rem, 1.4vw, 0.55rem);
+  position: relative;
+}
+
+.life-routines-card__add-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: clamp(0.35rem, 1.2vw, 0.55rem);
+  border-radius: 0.6rem;
+  border: 1px dashed rgba(148, 163, 255, 0.3);
+  background: rgba(18, 28, 72, 0.3);
+  color: rgba(232, 235, 255, 0.85);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.life-routines-card__add-item:hover,
+.life-routines-card__add-item:focus-visible {
+  border-color: rgba(168, 182, 255, 0.5);
+  background: rgba(24, 36, 90, 0.45);
+  color: #fff;
+}
+
+.life-routines-card__add-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(148, 163, 255, 0.35);
+}
+
+.life-routines-card__add-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.life-routines-card__add-label {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .life-routines-card__task {
@@ -431,6 +509,13 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   border: 1px solid var(--lr-pill-border);
   overflow: hidden;
   color: var(--lr-pill-text);
+}
+
+.life-routines-card__task--drag-clone {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0.95;
+  z-index: 50;
 }
 
 .life-routines-card__task-inner {
@@ -480,6 +565,24 @@ html[data-theme='light'] .goal-favorite-toggle--active {
 }
 
 .life-routines-card__task-rename:focus-visible {
+  outline: 2px solid rgba(255, 205, 168, 0.4);
+  outline-offset: 2px;
+}
+
+.life-routines-card__task-description {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(12, 20, 48, 0.55);
+  padding: 0.5rem 0.65rem;
+  color: inherit;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 3rem;
+}
+
+.life-routines-card__task-description:focus-visible {
   outline: 2px solid rgba(255, 205, 168, 0.4);
   outline-offset: 2px;
 }
@@ -638,6 +741,25 @@ html[data-theme='light'] .life-routines-card__task-rename {
 
 html[data-theme='light'] .life-routines-card__task-rename::placeholder {
   color: rgba(122, 98, 58, 0.55);
+}
+
+html[data-theme='light'] .life-routines-card__add-item {
+  border-color: rgba(152, 128, 72, 0.35);
+  background: rgba(255, 242, 220, 0.85);
+  color: rgba(99, 68, 12, 0.85);
+}
+
+html[data-theme='light'] .life-routines-card__add-item:hover,
+html[data-theme='light'] .life-routines-card__add-item:focus-visible {
+  border-color: rgba(140, 118, 64, 0.45);
+  background: rgba(255, 236, 204, 0.95);
+  color: rgba(80, 52, 10, 0.92);
+}
+
+html[data-theme='light'] .life-routines-card__task-description {
+  border-color: rgba(133, 146, 222, 0.35);
+  background: rgba(252, 252, 255, 0.9);
+  color: rgba(82, 54, 16, 0.92);
 }
 
 html[data-theme='light'] .life-routines-card__task--surface-glass {
