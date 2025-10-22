@@ -38,6 +38,7 @@ import {
   LIFE_ROUTINE_UPDATE_EVENT,
   readStoredLifeRoutines,
   sanitizeLifeRoutineList,
+  syncLifeRoutinesWithSupabase,
   writeStoredLifeRoutines,
   type LifeRoutineConfig,
 } from '../lib/lifeRoutines'
@@ -3829,6 +3830,22 @@ export default function GoalsPage(): ReactElement {
   const [renamingLifeRoutineId, setRenamingLifeRoutineId] = useState<string | null>(null)
   const [lifeRoutineRenameDraft, setLifeRoutineRenameDraft] = useState('')
   const lifeRoutineRenameInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const synced = await syncLifeRoutinesWithSupabase()
+      if (!cancelled && synced) {
+        setLifeRoutineTasks((current) =>
+          JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
+        )
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const [editingLifeRoutineDescriptionId, setEditingLifeRoutineDescriptionId] = useState<string | null>(null)
   const [lifeRoutineDescriptionDraft, setLifeRoutineDescriptionDraft] = useState('')
   const lifeRoutineDescriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -4651,8 +4668,7 @@ export default function GoalsPage(): ReactElement {
     const routine = lifeRoutineTasks.find((task) => task.id === routineId) ?? null
     setLifeRoutineTasks((current) => {
       const updated = current.filter((task) => task.id !== routineId)
-      writeStoredLifeRoutines(updated)
-      return updated
+      return sanitizeLifeRoutineList(updated)
     })
     setLifeRoutineMenuOpenId((current) => (current === routineId ? null : current))
     setActiveLifeRoutineCustomizerId((current) => (current === routineId ? null : current))
@@ -4686,12 +4702,12 @@ export default function GoalsPage(): ReactElement {
       title,
       blurb: 'Describe the cadence you want to build.',
       surfaceStyle: DEFAULT_SURFACE_STYLE,
+      sortIndex: lifeRoutineTasks.length,
     }
     setLifeRoutinesExpanded(true)
     setLifeRoutineTasks((current) => {
       const updated = [...current, newRoutine]
-      writeStoredLifeRoutines(updated)
-      return updated
+      return sanitizeLifeRoutineList(updated)
     })
     setRenamingLifeRoutineId(id)
     setLifeRoutineRenameDraft(title)
@@ -4720,8 +4736,7 @@ export default function GoalsPage(): ReactElement {
       const next = current.slice()
       const [moved] = next.splice(fromIndex, 1)
       next.splice(clampedTargetIndex, 0, moved)
-      writeStoredLifeRoutines(next)
-      return next
+      return sanitizeLifeRoutineList(next)
     })
   }
 

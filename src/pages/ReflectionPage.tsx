@@ -28,6 +28,7 @@ import {
   LIFE_ROUTINE_UPDATE_EVENT,
   readStoredLifeRoutines,
   sanitizeLifeRoutineList,
+  syncLifeRoutinesWithSupabase,
   type LifeRoutineConfig,
 } from '../lib/lifeRoutines'
 import {
@@ -1581,6 +1582,21 @@ export default function ReflectionPage() {
   const dragPreviewRef = useRef<DragPreview | null>(null)
   const dragPreventClickRef = useRef(false)
   const selectedHistoryIdRef = useRef<string | null>(selectedHistoryId)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const synced = await syncLifeRoutinesWithSupabase()
+      if (!cancelled && synced) {
+        setLifeRoutineTasks((current) =>
+          JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
+        )
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     dragPreviewRef.current = dragPreview

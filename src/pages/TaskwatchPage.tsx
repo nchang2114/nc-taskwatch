@@ -37,6 +37,7 @@ import {
   LIFE_ROUTINE_UPDATE_EVENT,
   readStoredLifeRoutines,
   sanitizeLifeRoutineList,
+  syncLifeRoutinesWithSupabase,
   type LifeRoutineConfig,
 } from '../lib/lifeRoutines'
 import {
@@ -499,6 +500,21 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [customTaskDraft, setCustomTaskDraft] = useState('')
   const [isCompletingFocus, setIsCompletingFocus] = useState(false)
   void _viewportWidth
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const synced = await syncLifeRoutinesWithSupabase()
+      if (!cancelled && synced) {
+        setLifeRoutineTasks((current) =>
+          JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
+        )
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     setCurrentTime(Date.now())
