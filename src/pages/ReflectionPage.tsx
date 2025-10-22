@@ -694,6 +694,36 @@ const DAY_DURATION_MS = 24 * 60 * 60 * 1000
 const DRAG_DETECTION_THRESHOLD_PX = 3
 const MIN_SESSION_DURATION_DRAG_MS = MINUTE_MS
 
+const formatDateInputValue = (timestamp: number | null): string => {
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
+    return ''
+  }
+  const date = new Date(timestamp)
+  const year = date.getFullYear().toString().padStart(4, '0')
+  const month = (date.getMonth() + 1).toString().padStart(2, '0')
+  const day = date.getDate().toString().padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const applyDateToTimestamp = (reference: number, dateValue: string): number | null => {
+  if (!Number.isFinite(reference) || typeof dateValue !== 'string') {
+    return null
+  }
+  const [yearStr, monthStr, dayStr] = dateValue.split('-')
+  if (!yearStr || !monthStr || !dayStr) {
+    return null
+  }
+  const year = Number(yearStr)
+  const month = Number(monthStr)
+  const day = Number(dayStr)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null
+  }
+  const base = new Date(reference)
+  base.setFullYear(year, month - 1, day)
+  return base.getTime()
+}
+
 const formatTimeInputValue = (timestamp: number | null): string => {
   if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
     return ''
@@ -2036,10 +2066,20 @@ export default function ReflectionPage() {
   )
 
   const handleAddHistoryEntry = useCallback(() => {
-    const now = Date.now()
+    const nowDate = new Date()
+    const targetDate = new Date()
+    targetDate.setHours(0, 0, 0, 0)
+    if (historyDayOffset !== 0) {
+      targetDate.setDate(targetDate.getDate() + historyDayOffset)
+    }
+    const timeOfDayMs =
+      nowDate.getHours() * 60 * 60 * 1000 +
+      nowDate.getMinutes() * 60 * 1000 +
+      nowDate.getSeconds() * 1000 +
+      nowDate.getMilliseconds()
+    const startedAt = targetDate.getTime() + timeOfDayMs
     const defaultDuration = 30 * 60 * 1000
-    const endedAt = now
-    const startedAt = Math.max(endedAt - defaultDuration, 0)
+    const endedAt = Math.max(startedAt + defaultDuration, startedAt + MINUTE_MS)
     const elapsed = Math.max(endedAt - startedAt, 1)
     const entry: HistoryEntry = {
       id: makeHistoryId(),
@@ -2070,7 +2110,7 @@ export default function ReflectionPage() {
       startedAt,
       endedAt,
     })
-  }, [updateHistory])
+  }, [historyDayOffset, updateHistory])
 
   const handleSelectHistorySegment = useCallback(
     (entry: HistoryEntry) => {
@@ -2126,8 +2166,8 @@ export default function ReflectionPage() {
     if (!Number.isFinite(nextEndedAt)) {
       nextEndedAt = selectedHistoryEntry.endedAt
     }
-    while (nextEndedAt <= nextStartedAt) {
-      nextEndedAt += DAY_DURATION_MS
+    if (nextEndedAt <= nextStartedAt) {
+      nextEndedAt = nextStartedAt + MIN_SESSION_DURATION_DRAG_MS
     }
     const nextElapsed = Math.max(nextEndedAt - nextStartedAt, 1)
     const normalizedGoalName = nextGoalName
@@ -2772,37 +2812,12 @@ export default function ReflectionPage() {
       if (state.type === 'move') {
         nextStart = state.initialStart + deltaMs
         nextEnd = state.initialEnd + deltaMs
-
-        const overflowLeft = state.dayStart - nextStart
-        if (overflowLeft > 0) {
-          nextStart += overflowLeft
-          nextEnd += overflowLeft
-        }
-        const overflowRight = nextEnd - state.dayEnd
-        if (overflowRight > 0) {
-          nextStart -= overflowRight
-          nextEnd -= overflowRight
-        }
       } else if (state.type === 'resize-start') {
-        nextStart = state.initialStart + deltaMs
-        const maxStart = state.initialEnd - state.minDurationMs
-        if (nextStart > maxStart) {
-          nextStart = maxStart
-        }
-        if (nextStart < state.dayStart) {
-          nextStart = state.dayStart
-        }
+        nextStart = Math.min(state.initialEnd - state.minDurationMs, state.initialStart + deltaMs)
         nextEnd = state.initialEnd
       } else {
-        nextEnd = state.initialEnd + deltaMs
-        const minEnd = state.initialStart + state.minDurationMs
-        if (nextEnd < minEnd) {
-          nextEnd = minEnd
-        }
-        if (nextEnd > state.dayEnd) {
-          nextEnd = state.dayEnd
-        }
         nextStart = state.initialStart
+        nextEnd = Math.max(state.initialStart + state.minDurationMs, state.initialEnd + deltaMs)
       }
 
       if (nextEnd - nextStart < state.minDurationMs) {
@@ -2812,9 +2827,6 @@ export default function ReflectionPage() {
           nextEnd = nextStart + state.minDurationMs
         }
       }
-
-      nextStart = Math.max(state.dayStart, Math.min(nextStart, state.dayEnd - state.minDurationMs))
-      nextEnd = Math.min(state.dayEnd, Math.max(nextEnd, state.dayStart + state.minDurationMs))
 
       const movedEnough = Math.abs(deltaPx) >= DRAG_DETECTION_THRESHOLD_PX
       if (movedEnough && !state.hasMoved) {
@@ -3170,9 +3182,28 @@ export default function ReflectionPage() {
                     : resolveTimestamp(historyDraft.endedAt, baseEndedAt) 
                 : draggedEndedAt
               const resolvedDurationMs = Math.max(resolvedEndedAt - resolvedStartedAt, 0)
+              const startDateInputValue = formatDateInputValue(resolvedStartedAt)
+              const endDateInputValue = formatDateInputValue(resolvedEndedAt)
               const startTimeInputValue = formatTimeInputValue(resolvedStartedAt)
               const endTimeInputValue = formatTimeInputValue(resolvedEndedAt)
               const durationMinutesValue = Math.max(1, Math.round(resolvedDurationMs / MINUTE_MS)).toString()
+              const handleStartDateInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+                const { value } = event.target
+                setHistoryDraft((draft) => {
+                  if (!isEditing || selectedHistoryId !== segment.entry.id) {
+                    return draft
+                  }
+                  if (value.trim().length === 0) {
+                    return draft
+                  }
+                  const reference = resolveTimestamp(draft.startedAt, baseStartedAt)
+                  const parsed = applyDateToTimestamp(reference, value)
+                  if (parsed === null) {
+                    return draft
+                  }
+                  return { ...draft, startedAt: parsed }
+                })
+              }
               const handleStartTimeInputChange = (event: ChangeEvent<HTMLInputElement>) => {
                 const { value } = event.target
                 setHistoryDraft((draft) => {
@@ -3188,6 +3219,23 @@ export default function ReflectionPage() {
                     return draft
                   }
                   return { ...draft, startedAt: parsed }
+                })
+              }
+              const handleEndDateInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+                const { value } = event.target
+                setHistoryDraft((draft) => {
+                  if (!isEditing || selectedHistoryId !== segment.entry.id) {
+                    return draft
+                  }
+                  if (value.trim().length === 0) {
+                    return draft
+                  }
+                  const reference = resolveTimestamp(draft.endedAt, baseEndedAt)
+                  const parsed = applyDateToTimestamp(reference, value)
+                  if (parsed === null) {
+                    return draft
+                  }
+                  return { ...draft, endedAt: parsed }
                 })
               }
               const handleEndTimeInputChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -3281,6 +3329,28 @@ export default function ReflectionPage() {
                                 onKeyDown={handleHistoryFieldKeyDown}
                               />
                             </label>
+                            <div className="history-timeline__field-group">
+                              <label className="history-timeline__field">
+                                <span className="history-timeline__field-text">Start date</span>
+                                <input
+                                  className="history-timeline__field-input"
+                                  type="date"
+                                  value={startDateInputValue}
+                                  onChange={handleStartDateInputChange}
+                                  onKeyDown={handleHistoryFieldKeyDown}
+                                />
+                              </label>
+                              <label className="history-timeline__field">
+                                <span className="history-timeline__field-text">End date</span>
+                                <input
+                                  className="history-timeline__field-input"
+                                  type="date"
+                                  value={endDateInputValue}
+                                  onChange={handleEndDateInputChange}
+                                  onKeyDown={handleHistoryFieldKeyDown}
+                                />
+                              </label>
+                            </div>
                             <div className="history-timeline__field-group">
                               <label className="history-timeline__field">
                                 <span className="history-timeline__field-text">Start time</span>
