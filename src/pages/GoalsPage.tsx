@@ -3917,7 +3917,15 @@ export default function GoalsPage(): ReactElement {
     }
     const handleExternalUpdate = (event: Event) => {
       if (event instanceof CustomEvent) {
-        setLifeRoutineTasks(sanitizeLifeRoutineList(event.detail))
+        // Only update if the data is actually different to avoid infinite loops
+        const newData = sanitizeLifeRoutineList(event.detail)
+        setLifeRoutineTasks((current) => {
+          // Compare the stringified versions to see if they're actually different
+          if (JSON.stringify(current) === JSON.stringify(newData)) {
+            return current
+          }
+          return newData
+        })
       }
     }
     window.addEventListener('storage', handleStorage)
