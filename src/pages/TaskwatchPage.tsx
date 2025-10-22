@@ -35,26 +35,25 @@ import {
 import {
   LIFE_ROUTINE_STORAGE_KEY,
   LIFE_ROUTINE_UPDATE_EVENT,
-  LIFE_ROUTINE_DEFAULTS,
   readStoredLifeRoutines,
   sanitizeLifeRoutineList,
   type LifeRoutineConfig,
 } from '../lib/lifeRoutines'
-
-type HistoryEntry = {
-  id: string
-  taskName: string
-  elapsed: number
-  startedAt: number
-  endedAt: number
-  goalName: string | null
-  bucketName: string | null
-  goalId: string | null
-  bucketId: string | null
-  taskId: string | null
-  goalSurface: SurfaceStyle
-  bucketSurface: SurfaceStyle | null
-}
+import {
+  CURRENT_SESSION_EVENT_NAME,
+  CURRENT_SESSION_STORAGE_KEY,
+  HISTORY_EVENT_NAME,
+  HISTORY_LIMIT,
+  HISTORY_STORAGE_KEY,
+  broadcastHistoryUpdate,
+  fetchHistoryFromSupabase,
+  mergeHistoryEntries,
+  readStoredHistory as readPersistedHistory,
+  sanitizeHistoryEntries,
+  syncHistoryToSupabase,
+  type HistoryEntry,
+  writeStoredHistory,
+} from '../lib/sessionHistory'
 
 type FocusCandidate = {
   goalId: string
@@ -108,12 +107,8 @@ const getNextDifficulty = (value: FocusCandidate['difficulty'] | null): FocusCan
   }
 }
 
-const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
-const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
 const CURRENT_TASK_STORAGE_KEY = 'nc-taskwatch-current-task'
 const CURRENT_TASK_SOURCE_KEY = 'nc-taskwatch-current-task-source'
-const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
-const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 const NOTEBOOK_STORAGE_KEY = 'nc-taskwatch-notebook'
 const MAX_TASK_STORAGE_LENGTH = 256
 const FOCUS_COMPLETION_RESET_DELAY_MS = 800
@@ -139,10 +134,6 @@ type SnapbackActionId = (typeof SNAPBACK_ACTIONS)[number]['id']
 const LIFE_ROUTINES_NAME = 'Life Routines'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
-const LIFE_ROUTINE_SURFACE_MAP = new Map(
-  LIFE_ROUTINE_DEFAULTS.map((routine) => [routine.title.toLowerCase(), routine.surfaceStyle]),
-)
-
 const makeSessionKey = (goalId: string | null, bucketId: string | null, taskId: string | null) =>
   goalId && bucketId ? `${goalId}::${bucketId}::${taskId ?? ''}` : null
 
@@ -274,75 +265,6 @@ const computeNotebookKey = (focusSource: FocusSource | null, taskName: string): 
   return 'scratchpad'
 }
 
-const sanitizeHistory = (value: unknown): HistoryEntry[] => {
-  if (!Array.isArray(value)) {
-    return []
-  }
-
-  return value
-    .map((entry) => {
-      if (typeof entry !== 'object' || entry === null) {
-        return null
-      }
-
-      const candidate = entry as Record<string, unknown>
-      const id = typeof candidate.id === 'string' ? candidate.id : null
-      const taskName = typeof candidate.taskName === 'string' ? candidate.taskName : null
-      const elapsed = typeof candidate.elapsed === 'number' ? candidate.elapsed : null
-      const startedAt = typeof candidate.startedAt === 'number' ? candidate.startedAt : null
-      const endedAt = typeof candidate.endedAt === 'number' ? candidate.endedAt : null
-      const goalNameRaw = typeof candidate.goalName === 'string' ? candidate.goalName : ''
-      const bucketNameRaw = typeof candidate.bucketName === 'string' ? candidate.bucketName : ''
-      const goalIdRaw = typeof candidate.goalId === 'string' ? candidate.goalId : null
-      const bucketIdRaw = typeof candidate.bucketId === 'string' ? candidate.bucketId : null
-      const taskIdRaw = typeof candidate.taskId === 'string' ? candidate.taskId : null
-      const goalSurfaceRaw = sanitizeSurfaceStyle(candidate.goalSurface)
-      const bucketSurfaceRaw = sanitizeSurfaceStyle(candidate.bucketSurface)
-
-      if (!id || taskName === null || elapsed === null || startedAt === null || endedAt === null) {
-        return null
-      }
-
-      const normalizedGoalName = goalNameRaw.trim()
-      const normalizedBucketName = bucketNameRaw.trim()
-      const normalizedGoalId = goalIdRaw ?? null
-      const normalizedBucketId = bucketIdRaw ?? null
-      const normalizedTaskId = taskIdRaw ?? null
-
-      let goalSurface = goalSurfaceRaw ?? null
-      let bucketSurface = bucketSurfaceRaw ?? null
-
-      if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
-        goalSurface = LIFE_ROUTINES_SURFACE
-      }
-      if (!bucketSurface && normalizedBucketName.length > 0) {
-        const routineSurface = LIFE_ROUTINE_SURFACE_MAP.get(normalizedBucketName.toLowerCase())
-        if (routineSurface) {
-          bucketSurface = routineSurface
-          if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
-            goalSurface = LIFE_ROUTINES_SURFACE
-          }
-        }
-      }
-
-      return {
-        id,
-        taskName,
-        elapsed,
-        startedAt,
-        endedAt,
-        goalName: normalizedGoalName.length > 0 ? normalizedGoalName : null,
-        bucketName: normalizedBucketName.length > 0 ? normalizedBucketName : null,
-        goalId: normalizedGoalId,
-        bucketId: normalizedBucketId,
-        taskId: normalizedTaskId,
-        goalSurface: ensureSurfaceStyle(goalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE),
-        bucketSurface,
-      }
-    })
-    .filter((entry): entry is HistoryEntry => Boolean(entry))
-}
-
 const historiesAreEqual = (a: HistoryEntry[], b: HistoryEntry[]): boolean => {
   if (a === b) {
     return true
@@ -371,24 +293,6 @@ const historiesAreEqual = (a: HistoryEntry[], b: HistoryEntry[]): boolean => {
     }
   }
   return true
-}
-
-const getStoredHistory = (): HistoryEntry[] => {
-  if (typeof window === 'undefined') {
-    return []
-  }
-
-  try {
-    const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY)
-    if (!raw) {
-      return []
-    }
-    const parsed = JSON.parse(raw)
-    return sanitizeHistory(parsed)
-  } catch (error) {
-    console.warn('Failed to read stopwatch history from storage', error)
-    return []
-  }
 }
 
 const getStoredTaskName = (): string => {
@@ -512,7 +416,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [elapsed, setElapsed] = useState(0)
   const [isRunning, setIsRunning] = useState(false)
   const [isTimeHidden, setIsTimeHidden] = useState(false)
-  const [history, setHistory] = useState<HistoryEntry[]>(() => getStoredHistory())
+  const [history, setHistory] = useState<HistoryEntry[]>(() => readPersistedHistory())
   const latestHistoryRef = useRef(history)
   const [lastSnapbackSummary, setLastSnapbackSummary] = useState<string | null>(null)
   const [isSnapbackOpen, setIsSnapbackOpen] = useState(false)
@@ -624,18 +528,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   }, [])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history))
-    } catch (error) {
-      console.warn('Failed to persist stopwatch history', error)
-    }
-    try {
-      const event = new CustomEvent(HISTORY_EVENT_NAME, { detail: history })
-      window.dispatchEvent(event)
-    } catch (error) {
-      console.warn('Failed to broadcast stopwatch history update', error)
-    }
+    writeStoredHistory(history)
+    broadcastHistoryUpdate(history)
+    void syncHistoryToSupabase(history)
   }, [history])
 
   useEffect(() => {
@@ -643,12 +538,33 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   }, [history])
 
   useEffect(() => {
+    let isActive = true
+    void (async () => {
+      const remote = await fetchHistoryFromSupabase()
+      if (!isActive || !remote) {
+        return
+      }
+      setHistory((current) => {
+        const merged = mergeHistoryEntries(current, remote)
+        if (historiesAreEqual(current, merged)) {
+          return current
+        }
+        latestHistoryRef.current = merged
+        return merged
+      })
+    })()
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  useEffect(() => {
     if (typeof window === 'undefined') {
       return
     }
 
     const applyIncomingHistory = (incoming: HistoryEntry[]) => {
-      const next = incoming.slice(0, 250)
+      const next = incoming.slice(0, HISTORY_LIMIT)
       if (!historiesAreEqual(latestHistoryRef.current, next)) {
         setHistory(next)
       }
@@ -659,7 +575,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         return
       }
       try {
-        const next = getStoredHistory()
+        const next = readPersistedHistory()
         applyIncomingHistory(next)
       } catch (error) {
         console.warn('Failed to sync stopwatch history from storage', error)
@@ -670,7 +586,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       if (!(event instanceof CustomEvent)) {
         return
       }
-      const sanitized = sanitizeHistory(event.detail)
+      const sanitized = sanitizeHistoryEntries(event.detail)
       applyIncomingHistory(sanitized)
     }
 
@@ -1926,8 +1842,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
       setHistory((current) => {
         const next = [entry, ...current]
-        if (next.length > 250) {
-          return next.slice(0, 250)
+        if (next.length > HISTORY_LIMIT) {
+          return next.slice(0, HISTORY_LIMIT)
         }
         return next
       })
@@ -2028,7 +1944,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
     setHistory((current) => {
       const next = [markerEntry, ...current]
-      return next.length > 250 ? next.slice(0, 250) : next
+      return next.length > HISTORY_LIMIT ? next.slice(0, HISTORY_LIMIT) : next
     })
 
     setLastSnapbackSummary(`${reasonLabel}${note.length > 0 ? ` • ${note}` : ''} → ${actionLabel}`)

@@ -30,6 +30,21 @@ import {
   sanitizeLifeRoutineList,
   type LifeRoutineConfig,
 } from '../lib/lifeRoutines'
+import {
+  CURRENT_SESSION_EVENT_NAME,
+  CURRENT_SESSION_STORAGE_KEY,
+  HISTORY_EVENT_NAME,
+  HISTORY_STORAGE_KEY,
+  broadcastHistoryUpdate,
+  fetchHistoryFromSupabase,
+  mergeHistoryEntries,
+  readStoredHistory as readPersistedHistory,
+  sanitizeHistoryEntries,
+  truncateHistory,
+  syncHistoryToSupabase,
+  type HistoryEntry,
+  writeStoredHistory,
+} from '../lib/sessionHistory'
 
 const JOURNAL_PROMPTS = [
   "What was today's biggest win?",
@@ -53,21 +68,6 @@ const RANGE_DEFS: Record<ReflectionRangeKey, RangeDefinition> = {
 }
 
 const RANGE_KEYS: ReflectionRangeKey[] = ['24h', '48h', '7d']
-
-type HistoryEntry = {
-  id: string
-  taskName: string
-  elapsed: number
-  startedAt: number
-  endedAt: number
-  goalName: string | null
-  bucketName: string | null
-  goalId: string | null
-  bucketId: string | null
-  taskId: string | null
-  goalSurface: SurfaceStyle
-  bucketSurface: SurfaceStyle | null
-}
 
 type HistoryDraftState = {
   taskName: string
@@ -119,10 +119,6 @@ type PieArc = {
   isUnlogged?: boolean
 }
 
-const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
-const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
-const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
-const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 const UNCATEGORISED_LABEL = 'Uncategorised'
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
 const LIFE_ROUTINES_NAME = 'Life Routines'
@@ -622,86 +618,34 @@ type TimelineSegment = {
   tooltipTask: string
 }
 
-const sanitizeHistory = (value: unknown): HistoryEntry[] => {
-  if (!Array.isArray(value)) {
-    return []
+const historiesAreEqual = (a: HistoryEntry[], b: HistoryEntry[]): boolean => {
+  if (a === b) {
+    return true
   }
-  return value
-    .map((entry) => {
-      if (typeof entry !== 'object' || entry === null) {
-        return null
-      }
-      const candidate = entry as Record<string, unknown>
-      const id = typeof candidate.id === 'string' ? candidate.id : null
-      const taskName = typeof candidate.taskName === 'string' ? candidate.taskName : ''
-      const elapsed = typeof candidate.elapsed === 'number' ? candidate.elapsed : null
-      const startedAt = typeof candidate.startedAt === 'number' ? candidate.startedAt : null
-      const endedAt = typeof candidate.endedAt === 'number' ? candidate.endedAt : null
-      const goalNameRaw = typeof candidate.goalName === 'string' ? candidate.goalName : ''
-      const bucketNameRaw = typeof candidate.bucketName === 'string' ? candidate.bucketName : ''
-      const goalIdRaw = typeof candidate.goalId === 'string' ? candidate.goalId : null
-      const bucketIdRaw = typeof candidate.bucketId === 'string' ? candidate.bucketId : null
-      const taskIdRaw = typeof candidate.taskId === 'string' ? candidate.taskId : null
-      const goalSurfaceRaw = sanitizeSurfaceStyle(candidate.goalSurface)
-      const bucketSurfaceRaw = sanitizeSurfaceStyle(candidate.bucketSurface)
-      if (!id || elapsed === null || startedAt === null || endedAt === null) {
-        return null
-      }
-      const normalizedGoalName = goalNameRaw.trim()
-      const normalizedBucketName = bucketNameRaw.trim()
-      const normalizedGoalId = goalIdRaw ?? null
-      const normalizedBucketId = bucketIdRaw ?? null
-      const normalizedTaskId = taskIdRaw ?? null
-      let goalSurface = goalSurfaceRaw ?? null
-      let bucketSurface = bucketSurfaceRaw ?? null
-      if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
-        goalSurface = LIFE_ROUTINES_SURFACE
-      }
-      if (!bucketSurface && normalizedBucketName.length > 0) {
-        const routineSurface = LIFE_ROUTINE_DEFAULT_SURFACE_LOOKUP.get(normalizedBucketName.toLowerCase())
-        if (routineSurface) {
-          bucketSurface = routineSurface
-          if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
-            goalSurface = LIFE_ROUTINES_SURFACE
-          }
-        }
-      }
-      const normalizedGoalSurface = ensureSurfaceStyle(goalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE)
-      const normalizedBucketSurface =
-        bucketSurface !== null ? ensureSurfaceStyle(bucketSurface, DEFAULT_SURFACE_STYLE) : null
-
-      return {
-        id,
-        taskName,
-        elapsed,
-        startedAt,
-        endedAt,
-        goalName: normalizedGoalName.length > 0 ? normalizedGoalName : null,
-        bucketName: normalizedBucketName.length > 0 ? normalizedBucketName : null,
-        goalId: normalizedGoalId,
-        bucketId: normalizedBucketId,
-        taskId: normalizedTaskId,
-        goalSurface: normalizedGoalSurface,
-        bucketSurface: normalizedBucketSurface,
-      }
-    })
-    .filter((entry): entry is HistoryEntry => Boolean(entry))
-}
-
-const readStoredHistory = (): HistoryEntry[] => {
-  if (typeof window === 'undefined') {
-    return []
+  if (a.length !== b.length) {
+    return false
   }
-  try {
-    const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY)
-    if (!raw) {
-      return []
+  for (let index = 0; index < a.length; index += 1) {
+    const left = a[index]
+    const right = b[index]
+    if (
+      left.id !== right.id ||
+      left.taskName !== right.taskName ||
+      left.elapsed !== right.elapsed ||
+      left.startedAt !== right.startedAt ||
+      left.endedAt !== right.endedAt ||
+      left.goalName !== right.goalName ||
+      left.bucketName !== right.bucketName ||
+      left.goalId !== right.goalId ||
+      left.bucketId !== right.bucketId ||
+      left.taskId !== right.taskId ||
+      left.goalSurface !== right.goalSurface ||
+      left.bucketSurface !== right.bucketSurface
+    ) {
+      return false
     }
-    const parsed = JSON.parse(raw)
-    return sanitizeHistory(parsed)
-  } catch {
-    return []
   }
+  return true
 }
 
 const formatDuration = (ms: number) => {
@@ -1600,7 +1544,8 @@ const computeRangeOverview = (
 
 export default function ReflectionPage() {
   const [activeRange, setActiveRange] = useState<ReflectionRangeKey>('24h')
-  const [history, setHistory] = useState<HistoryEntry[]>(() => readStoredHistory())
+  const [history, setHistory] = useState<HistoryEntry[]>(() => readPersistedHistory())
+  const latestHistoryRef = useRef(history)
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
   const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(() => readStoredActiveSession())
@@ -1758,20 +1703,10 @@ export default function ReflectionPage() {
   )
 
   const persistHistory = useCallback((next: HistoryEntry[]) => {
-    if (typeof window === 'undefined') {
-      return
-    }
-    try {
-      window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next))
-    } catch (error) {
-      console.warn('Failed to persist history from Reflection', error)
-    }
-    try {
-      const event = new CustomEvent(HISTORY_EVENT_NAME, { detail: next })
-      window.dispatchEvent(event)
-    } catch (error) {
-      console.warn('Failed to broadcast history update from Reflection', error)
-    }
+    const bounded = truncateHistory(next)
+    writeStoredHistory(bounded)
+    broadcastHistoryUpdate(bounded)
+    void syncHistoryToSupabase(bounded)
   }, [])
 
   const lifeRoutineSurfaceLookup = useMemo(() => {
@@ -1806,15 +1741,41 @@ export default function ReflectionPage() {
   const updateHistory = useCallback(
     (updater: (current: HistoryEntry[]) => HistoryEntry[]) => {
       setHistory((current) => {
-        const next = updater(current)
-        if (next !== current) {
-          persistHistory(next)
+        const next = truncateHistory(updater(current))
+        if (historiesAreEqual(current, next)) {
+          return current
         }
+        persistHistory(next)
         return next
       })
     },
     [persistHistory],
   )
+
+  useEffect(() => {
+    latestHistoryRef.current = history
+  }, [history])
+
+  useEffect(() => {
+    let isActive = true
+    void (async () => {
+      const remote = await fetchHistoryFromSupabase()
+      if (!isActive || !remote) {
+        return
+      }
+      setHistory((current) => {
+        const merged = mergeHistoryEntries(current, remote)
+        if (historiesAreEqual(current, merged)) {
+          return current
+        }
+        persistHistory(merged)
+        return merged
+      })
+    })()
+    return () => {
+      isActive = false
+    }
+  }, [persistHistory])
 
   const goalLookup = useMemo(() => createGoalTaskMap(goalsSnapshot), [goalsSnapshot])
   const goalColorLookup = useMemo(() => createGoalColorMap(goalsSnapshot), [goalsSnapshot])
@@ -2380,7 +2341,10 @@ export default function ReflectionPage() {
     }
     const handleStorage = (event: StorageEvent) => {
       if (event.key === HISTORY_STORAGE_KEY) {
-        setHistory(readStoredHistory())
+        const stored = readPersistedHistory()
+        if (!historiesAreEqual(latestHistoryRef.current, stored)) {
+          setHistory(stored)
+        }
         return
       }
       if (event.key === CURRENT_SESSION_STORAGE_KEY) {
@@ -2389,11 +2353,16 @@ export default function ReflectionPage() {
     }
     const handleHistoryBroadcast = (event: Event) => {
       const custom = event as CustomEvent<unknown>
-      const detail = sanitizeHistory(custom.detail)
+      const detail = truncateHistory(sanitizeHistoryEntries(custom.detail))
       if (detail.length > 0 || Array.isArray(custom.detail)) {
-        setHistory(detail)
+        if (!historiesAreEqual(latestHistoryRef.current, detail)) {
+          setHistory(detail)
+        }
       } else {
-        setHistory(readStoredHistory())
+        const stored = readPersistedHistory()
+        if (!historiesAreEqual(latestHistoryRef.current, stored)) {
+          setHistory(stored)
+        }
       }
     }
     const handleSessionBroadcast = (event: Event) => {
