@@ -35,15 +35,10 @@ import {
   CURRENT_SESSION_STORAGE_KEY,
   HISTORY_EVENT_NAME,
   HISTORY_STORAGE_KEY,
-  broadcastHistoryUpdate,
-  fetchHistoryFromSupabase,
-  mergeHistoryEntries,
   readStoredHistory as readPersistedHistory,
-  sanitizeHistoryEntries,
-  truncateHistory,
-  syncHistoryToSupabase,
+  persistHistorySnapshot,
+  syncHistoryWithSupabase,
   type HistoryEntry,
-  writeStoredHistory,
 } from '../lib/sessionHistory'
 
 const JOURNAL_PROMPTS = [
@@ -1702,13 +1697,6 @@ export default function ReflectionPage() {
     [updateActiveTooltipOffsets],
   )
 
-  const persistHistory = useCallback((next: HistoryEntry[]) => {
-    const bounded = truncateHistory(next)
-    writeStoredHistory(bounded)
-    broadcastHistoryUpdate(bounded)
-    void syncHistoryToSupabase(bounded)
-  }, [])
-
   const lifeRoutineSurfaceLookup = useMemo(() => {
     const map = new Map<string, SurfaceStyle>(LIFE_ROUTINE_DEFAULT_SURFACE_LOOKUP)
     lifeRoutineTasks.forEach((routine) => {
@@ -1738,44 +1726,33 @@ export default function ReflectionPage() {
     return result.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
   }, [lifeRoutineTasks])
 
-  const updateHistory = useCallback(
-    (updater: (current: HistoryEntry[]) => HistoryEntry[]) => {
-      setHistory((current) => {
-        const next = truncateHistory(updater(current))
-        if (historiesAreEqual(current, next)) {
-          return current
-        }
-        persistHistory(next)
-        return next
-      })
-    },
-    [persistHistory],
-  )
+  const updateHistory = useCallback((updater: (current: HistoryEntry[]) => HistoryEntry[]) => {
+    setHistory((current) => {
+      const next = updater(current)
+      if (historiesAreEqual(current, next)) {
+        return current
+      }
+      return persistHistorySnapshot(next)
+    })
+  }, [])
 
   useEffect(() => {
     latestHistoryRef.current = history
   }, [history])
 
   useEffect(() => {
-    let isActive = true
+    let cancelled = false
     void (async () => {
-      const remote = await fetchHistoryFromSupabase()
-      if (!isActive || !remote) {
+      const synced = await syncHistoryWithSupabase()
+      if (cancelled || !synced) {
         return
       }
-      setHistory((current) => {
-        const merged = mergeHistoryEntries(current, remote)
-        if (historiesAreEqual(current, merged)) {
-          return current
-        }
-        persistHistory(merged)
-        return merged
-      })
+      setHistory((current) => (historiesAreEqual(current, synced) ? current : synced))
     })()
     return () => {
-      isActive = false
+      cancelled = true
     }
-  }, [persistHistory])
+  }, [])
 
   const goalLookup = useMemo(() => createGoalTaskMap(goalsSnapshot), [goalsSnapshot])
   const goalColorLookup = useMemo(() => createGoalColorMap(goalsSnapshot), [goalsSnapshot])
@@ -2351,18 +2328,10 @@ export default function ReflectionPage() {
         setActiveSession(readStoredActiveSession())
       }
     }
-    const handleHistoryBroadcast = (event: Event) => {
-      const custom = event as CustomEvent<unknown>
-      const detail = truncateHistory(sanitizeHistoryEntries(custom.detail))
-      if (detail.length > 0 || Array.isArray(custom.detail)) {
-        if (!historiesAreEqual(latestHistoryRef.current, detail)) {
-          setHistory(detail)
-        }
-      } else {
-        const stored = readPersistedHistory()
-        if (!historiesAreEqual(latestHistoryRef.current, stored)) {
-          setHistory(stored)
-        }
+    const handleHistoryBroadcast = () => {
+      const stored = readPersistedHistory()
+      if (!historiesAreEqual(latestHistoryRef.current, stored)) {
+        setHistory(stored)
       }
     }
     const handleSessionBroadcast = (event: Event) => {

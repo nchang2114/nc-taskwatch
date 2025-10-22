@@ -16,11 +16,7 @@ export const HISTORY_LIMIT = 250
 const LIFE_ROUTINES_NAME = 'Life Routines'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
 
-const LIFE_ROUTINE_SURFACE_LOOKUP = new Map(
-  LIFE_ROUTINE_DEFAULTS.map((routine) => [routine.title.toLowerCase(), routine.surfaceStyle]),
-)
-
-let knownRemoteIds = new Set<string>()
+type HistoryPendingAction = 'upsert' | 'delete'
 
 export type HistoryEntry = {
   id: string
@@ -37,12 +33,18 @@ export type HistoryEntry = {
   bucketSurface: SurfaceStyle | null
 }
 
+export type HistoryRecord = HistoryEntry & {
+  createdAt: number
+  updatedAt: number
+  pendingAction: HistoryPendingAction | null
+}
+
 type HistoryCandidate = {
-  id: unknown
-  taskName: unknown
-  elapsed: unknown
-  startedAt: unknown
-  endedAt: unknown
+  id?: unknown
+  taskName?: unknown
+  elapsed?: unknown
+  startedAt?: unknown
+  endedAt?: unknown
   goalName?: unknown
   bucketName?: unknown
   goalId?: unknown
@@ -52,46 +54,45 @@ type HistoryCandidate = {
   bucketSurface?: unknown
 }
 
-const normalizeLifeRoutineSurface = (
-  goalName: string,
-  bucketName: string,
-  goalSurface: SurfaceStyle | null,
-  bucketSurface: SurfaceStyle | null,
-): { goalSurface: SurfaceStyle; bucketSurface: SurfaceStyle | null } => {
-  let resolvedGoalSurface = goalSurface
-  let resolvedBucketSurface = bucketSurface
-
-  if (!resolvedGoalSurface && goalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
-    resolvedGoalSurface = LIFE_ROUTINES_SURFACE
-  }
-  if (!resolvedBucketSurface && bucketName.length > 0) {
-    const routineSurface = LIFE_ROUTINE_SURFACE_LOOKUP.get(bucketName.toLowerCase())
-    if (routineSurface) {
-      resolvedBucketSurface = routineSurface
-      if (!resolvedGoalSurface && goalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
-        resolvedGoalSurface = LIFE_ROUTINES_SURFACE
-      }
-    }
-  }
-
-  return {
-    goalSurface: ensureSurfaceStyle(resolvedGoalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE),
-    bucketSurface: resolvedBucketSurface ? ensureSurfaceStyle(resolvedBucketSurface, DEFAULT_SURFACE_STYLE) : null,
-  }
+type HistoryRecordCandidate = HistoryCandidate & {
+  createdAt?: unknown
+  updatedAt?: unknown
+  pendingAction?: unknown
 }
 
-export const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
+const LIFE_ROUTINE_BUCKET_SURFACES = new Map(
+  LIFE_ROUTINE_DEFAULTS.map((routine) => [routine.title.trim().toLowerCase(), routine.surfaceStyle]),
+)
+
+const clampNumber = (value: unknown, fallback: number): number => {
+  const num = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(num) ? num : fallback
+}
+
+const parseTimestamp = (value: unknown, fallback: number): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+  return fallback
+}
+
+const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
   if (!Array.isArray(value)) {
     return []
   }
 
   return value
-    .map((entry) => {
-      if (typeof entry !== 'object' || entry === null) {
+    .map((rawEntry) => {
+      if (typeof rawEntry !== 'object' || rawEntry === null) {
         return null
       }
-      const candidate = entry as HistoryCandidate
-
+      const candidate = rawEntry as HistoryCandidate
       const id = typeof candidate.id === 'string' ? candidate.id : null
       const taskName = typeof candidate.taskName === 'string' ? candidate.taskName : null
       const elapsed = typeof candidate.elapsed === 'number' ? candidate.elapsed : null
@@ -112,12 +113,21 @@ export const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
       const normalizedGoalName = goalNameRaw.trim()
       const normalizedBucketName = bucketNameRaw.trim()
 
-      const { goalSurface, bucketSurface } = normalizeLifeRoutineSurface(
-        normalizedGoalName,
-        normalizedBucketName,
-        goalSurfaceRaw ?? null,
-        bucketSurfaceRaw ?? null,
-      )
+      let goalSurface = goalSurfaceRaw ?? null
+      let bucketSurface = bucketSurfaceRaw ?? null
+
+      if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
+        goalSurface = LIFE_ROUTINES_SURFACE
+      }
+      if (!bucketSurface && normalizedBucketName.length > 0) {
+        const routineSurface = LIFE_ROUTINE_BUCKET_SURFACES.get(normalizedBucketName.toLowerCase())
+        if (routineSurface) {
+          bucketSurface = routineSurface
+          if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
+            goalSurface = LIFE_ROUTINES_SURFACE
+          }
+        }
+      }
 
       return {
         id,
@@ -130,31 +140,48 @@ export const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
         goalId: goalIdRaw,
         bucketId: bucketIdRaw,
         taskId: taskIdRaw,
-        goalSurface,
-        bucketSurface,
+        goalSurface: ensureSurfaceStyle(goalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE),
+        bucketSurface: bucketSurface ? ensureSurfaceStyle(bucketSurface, DEFAULT_SURFACE_STYLE) : null,
       }
     })
     .filter((entry): entry is HistoryEntry => Boolean(entry))
 }
 
-export const truncateHistory = (entries: HistoryEntry[], limit: number = HISTORY_LIMIT): HistoryEntry[] => {
-  if (entries.length <= limit) {
-    return entries.slice()
-  }
-  return entries.slice(0, limit)
+const sanitizeHistoryRecords = (value: unknown): HistoryRecord[] => {
+  const entries = sanitizeHistoryEntries(value)
+  const array = Array.isArray(value) ? (value as HistoryRecordCandidate[]) : []
+  const now = Date.now()
+
+  return entries.map((entry, index) => {
+    const candidate = array[index] ?? {}
+    const createdAt = parseTimestamp(candidate.createdAt, entry.startedAt ?? now)
+    const updatedAt = parseTimestamp(candidate.updatedAt, Math.max(createdAt, entry.endedAt ?? createdAt))
+    const rawPending = candidate.pendingAction
+    const pendingAction =
+      rawPending === 'upsert' || rawPending === 'delete' ? (rawPending as HistoryPendingAction) : null
+
+    return {
+      ...entry,
+      createdAt,
+      updatedAt,
+      pendingAction,
+    }
+  })
 }
 
-export const sortHistoryByEndedAtDesc = (entries: HistoryEntry[]): HistoryEntry[] =>
-  entries
-    .slice()
-    .sort((a, b) => {
-      if (a.endedAt === b.endedAt) {
-        return b.startedAt - a.startedAt
-      }
-      return b.endedAt - a.endedAt
-    })
+const stripMetadata = (record: HistoryRecord): HistoryEntry => {
+  const { createdAt: _c, updatedAt: _u, pendingAction: _p, ...entry } = record
+  return entry
+}
 
-export const readStoredHistory = (): HistoryEntry[] => {
+const recordsToActiveEntries = (records: HistoryRecord[]): HistoryEntry[] =>
+  records
+    .filter((record) => record.pendingAction !== 'delete')
+    .sort((a, b) => (a.endedAt === b.endedAt ? b.startedAt - a.startedAt : b.endedAt - a.endedAt))
+    .slice(0, HISTORY_LIMIT)
+    .map(stripMetadata)
+
+const readHistoryRecords = (): HistoryRecord[] => {
   if (typeof window === 'undefined') {
     return []
   }
@@ -163,135 +190,317 @@ export const readStoredHistory = (): HistoryEntry[] => {
     if (!raw) {
       return []
     }
-    const parsed = JSON.parse(raw)
-    return sanitizeHistoryEntries(parsed)
+    return sanitizeHistoryRecords(JSON.parse(raw))
   } catch {
     return []
   }
 }
 
-export const writeStoredHistory = (history: HistoryEntry[]): void => {
+const writeHistoryRecords = (records: HistoryRecord[]): void => {
   if (typeof window === 'undefined') {
     return
   }
   try {
-    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history))
+    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(records))
   } catch (error) {
     console.warn('Failed to persist session history locally', error)
   }
 }
 
-export const broadcastHistoryUpdate = (history: HistoryEntry[]): void => {
+export const readStoredHistory = (): HistoryEntry[] => recordsToActiveEntries(readHistoryRecords())
+
+const broadcastHistoryRecords = (records: HistoryRecord[]): void => {
   if (typeof window === 'undefined') {
     return
   }
   try {
-    const event = new CustomEvent(HISTORY_EVENT_NAME, { detail: history })
+    const event = new CustomEvent<HistoryRecord[]>(HISTORY_EVENT_NAME, { detail: records })
     window.dispatchEvent(event)
   } catch (error) {
-    console.warn('Failed to broadcast session history update', error)
+    console.warn('Failed to broadcast history update', error)
   }
 }
 
-export const mergeHistoryEntries = (localEntries: HistoryEntry[], remoteEntries: HistoryEntry[]): HistoryEntry[] => {
-  const merged = new Map<string, HistoryEntry>()
-  localEntries.forEach((entry) => {
-    merged.set(entry.id, entry)
-  })
-  remoteEntries.forEach((entry) => {
-    merged.set(entry.id, entry)
-  })
-  return truncateHistory(sortHistoryByEndedAtDesc(Array.from(merged.values())))
+const sortRecordsForStorage = (records: HistoryRecord[]): HistoryRecord[] =>
+  records
+    .slice()
+    .sort((a, b) => {
+      if (a.endedAt === b.endedAt) {
+        return b.startedAt - a.startedAt
+      }
+      return b.endedAt - a.endedAt
+    })
+
+const recordEqualsEntry = (record: HistoryRecord, entry: HistoryEntry): boolean =>
+  record.taskName === entry.taskName &&
+  record.elapsed === entry.elapsed &&
+  record.startedAt === entry.startedAt &&
+  record.endedAt === entry.endedAt &&
+  record.goalName === entry.goalName &&
+  record.bucketName === entry.bucketName &&
+  record.goalId === entry.goalId &&
+  record.bucketId === entry.bucketId &&
+  record.taskId === entry.taskId &&
+  record.goalSurface === entry.goalSurface &&
+  record.bucketSurface === entry.bucketSurface
+
+const updateRecordWithEntry = (record: HistoryRecord, entry: HistoryEntry, timestamp: number): HistoryRecord => {
+  if (recordEqualsEntry(record, entry) && record.pendingAction !== 'delete') {
+    return record
+  }
+  return {
+    ...record,
+    ...entry,
+    updatedAt: timestamp,
+    pendingAction: 'upsert',
+  }
 }
 
-type DbSessionHistoryRow = {
-  id: string
-  user_id: string
-  task_name: string
-  elapsed_ms: number
-  started_at: string | null
-  ended_at: string | null
-  goal_name: string | null
-  bucket_name: string | null
-  goal_id: string | null
-  bucket_id: string | null
-  task_id: string | null
-  goal_surface: string | null
-  bucket_surface: string | null
-}
-
-const mapDbRowToCandidate = (row: DbSessionHistoryRow): HistoryCandidate => ({
-  id: row.id,
-  taskName: row.task_name,
-  elapsed: typeof row.elapsed_ms === 'number' && Number.isFinite(row.elapsed_ms) ? row.elapsed_ms : null,
-  startedAt: (() => {
-    if (!row.started_at) return null
-    const parsed = Date.parse(row.started_at)
-    return Number.isFinite(parsed) ? parsed : null
-  })(),
-  endedAt: (() => {
-    if (!row.ended_at) return null
-    const parsed = Date.parse(row.ended_at)
-    return Number.isFinite(parsed) ? parsed : null
-  })(),
-  goalName: row.goal_name ?? undefined,
-  bucketName: row.bucket_name ?? undefined,
-  goalId: row.goal_id ?? undefined,
-  bucketId: row.bucket_id ?? undefined,
-  taskId: row.task_id ?? undefined,
-  goalSurface: row.goal_surface ?? undefined,
-  bucketSurface: row.bucket_surface ?? undefined,
+const createRecordFromEntry = (entry: HistoryEntry, timestamp: number): HistoryRecord => ({
+  ...entry,
+  createdAt: timestamp,
+  updatedAt: timestamp,
+  pendingAction: 'upsert',
 })
 
-const formatTimestampForDb = (timestamp: number): string => {
-  const safe = Number.isFinite(timestamp) ? timestamp : Date.now()
-  return new Date(safe).toISOString()
-}
-
-const mapEntryToDbRow = (entry: HistoryEntry, userId: string) => ({
-  id: entry.id,
-  user_id: userId,
-  task_name: entry.taskName,
-  elapsed_ms: Math.max(0, Math.round(entry.elapsed)),
-  started_at: formatTimestampForDb(entry.startedAt),
-  ended_at: formatTimestampForDb(entry.endedAt),
-  goal_name: entry.goalName,
-  bucket_name: entry.bucketName,
-  goal_id: entry.goalId,
-  bucket_id: entry.bucketId,
-  task_id: entry.taskId,
-  goal_surface: entry.goalSurface,
-  bucket_surface: entry.bucketSurface,
+const markRecordPendingDelete = (record: HistoryRecord, timestamp: number): HistoryRecord => ({
+  ...record,
+  updatedAt: timestamp,
+  pendingAction: 'delete',
 })
 
-export const fetchHistoryFromSupabase = async (): Promise<HistoryEntry[] | null> => {
-  if (!supabase) {
-    return null
-  }
-  const session = await ensureSingleUserSession()
-  if (!session) {
-    return null
-  }
-  const { data, error } = await supabase
-    .from('session_history')
-    .select(
-      'id, user_id, task_name, elapsed_ms, started_at, ended_at, goal_name, bucket_name, goal_id, bucket_id, task_id, goal_surface, bucket_surface',
-    )
-    .eq('user_id', session.user.id)
-    .order('ended_at', { ascending: false })
-    .limit(HISTORY_LIMIT)
-  if (error || !data) {
-    if (error) {
-      console.warn('Failed to fetch session history from Supabase', error)
+const persistRecords = (records: HistoryRecord[]): HistoryEntry[] => {
+  const sorted = sortRecordsForStorage(records)
+  writeHistoryRecords(sorted)
+  const activeEntries = recordsToActiveEntries(sorted)
+  broadcastHistoryRecords(sorted)
+  return activeEntries
+}
+
+export const persistHistorySnapshot = (nextEntries: HistoryEntry[]): HistoryEntry[] => {
+  const sanitized = sanitizeHistoryEntries(nextEntries)
+  const existingRecords = readHistoryRecords()
+  const recordsById = new Map<string, HistoryRecord>()
+  existingRecords.forEach((record) => {
+    recordsById.set(record.id, record)
+  })
+
+  const timestamp = Date.now()
+  const activeIds = new Set<string>()
+
+  sanitized.forEach((entry) => {
+    activeIds.add(entry.id)
+    const existing = recordsById.get(entry.id)
+    if (existing) {
+      recordsById.set(entry.id, updateRecordWithEntry(existing, entry, timestamp))
+    } else {
+      recordsById.set(entry.id, createRecordFromEntry(entry, timestamp))
     }
-    return null
-  }
-  const sanitized = sanitizeHistoryEntries(data.map(mapDbRowToCandidate))
-  knownRemoteIds = new Set(sanitized.map((entry) => entry.id))
-  return truncateHistory(sortHistoryByEndedAtDesc(sanitized))
+  })
+
+  recordsById.forEach((record, id) => {
+    if (!activeIds.has(id)) {
+      recordsById.set(id, markRecordPendingDelete(record, timestamp))
+    }
+  })
+
+  const nextRecords = Array.from(recordsById.values())
+  const activeEntries = persistRecords(nextRecords)
+  schedulePendingPush()
+  return activeEntries
 }
 
-export const syncHistoryToSupabase = async (history: HistoryEntry[]): Promise<void> => {
+const payloadFromRecord = (
+  record: HistoryRecord,
+  userId: string,
+  overrideUpdatedAt?: number,
+): Record<string, unknown> => {
+  const updatedAt = overrideUpdatedAt ?? record.updatedAt
+  return {
+    id: record.id,
+    user_id: userId,
+    task_name: record.taskName,
+    elapsed_ms: Math.max(0, Math.round(record.elapsed)),
+    started_at: new Date(record.startedAt).toISOString(),
+    ended_at: new Date(record.endedAt).toISOString(),
+    goal_name: record.goalName,
+    bucket_name: record.bucketName,
+    goal_id: record.goalId,
+    bucket_id: record.bucketId,
+    task_id: record.taskId,
+    goal_surface: record.goalSurface,
+    bucket_surface: record.bucketSurface,
+    created_at: new Date(record.createdAt).toISOString(),
+    updated_at: new Date(updatedAt).toISOString(),
+  }
+}
+
+const mapDbRowToRecord = (row: Record<string, unknown>): HistoryRecord | null => {
+  const id = typeof row.id === 'string' ? row.id : null
+  if (!id) {
+    return null
+  }
+  const taskName = typeof row.task_name === 'string' ? row.task_name : ''
+
+  const startedAt = parseTimestamp(row.started_at, Date.now())
+  const endedAt = parseTimestamp(row.ended_at, startedAt)
+  const elapsed = clampNumber(row.elapsed_ms, Math.max(0, endedAt - startedAt))
+
+  const candidate: HistoryCandidate = {
+    id,
+    taskName,
+    elapsed,
+    startedAt,
+    endedAt,
+    goalName: typeof row.goal_name === 'string' ? row.goal_name : null,
+    bucketName: typeof row.bucket_name === 'string' ? row.bucket_name : null,
+    goalId: typeof row.goal_id === 'string' ? row.goal_id : null,
+    bucketId: typeof row.bucket_id === 'string' ? row.bucket_id : null,
+    taskId: typeof row.task_id === 'string' ? row.task_id : null,
+    goalSurface: typeof row.goal_surface === 'string' ? row.goal_surface : null,
+    bucketSurface: typeof row.bucket_surface === 'string' ? row.bucket_surface : null,
+  }
+
+  const entry = sanitizeHistoryEntries([candidate])[0]
+  if (!entry) {
+    return null
+  }
+
+  const createdAt = parseTimestamp(row.created_at, startedAt)
+  const updatedAt = parseTimestamp(row.updated_at, endedAt)
+  return {
+    ...entry,
+    createdAt,
+    updatedAt,
+    pendingAction: null,
+  }
+}
+
+let activeSyncPromise: Promise<HistoryEntry[] | null> | null = null
+let pendingPushTimeout: number | null = null
+
+const schedulePendingPush = (): void => {
+  if (!supabase) {
+    return
+  }
+  if (typeof window === 'undefined') {
+    void pushPendingHistoryToSupabase()
+    return
+  }
+  if (pendingPushTimeout !== null) {
+    window.clearTimeout(pendingPushTimeout)
+  }
+  pendingPushTimeout = window.setTimeout(() => {
+    pendingPushTimeout = null
+    void pushPendingHistoryToSupabase()
+  }, 25)
+}
+
+export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> => {
+  if (activeSyncPromise) {
+    return activeSyncPromise
+  }
+  if (!supabase) {
+    return null
+  }
+
+  activeSyncPromise = (async () => {
+    const session = await ensureSingleUserSession()
+    if (!session) {
+      return null
+    }
+
+    const userId = session.user.id
+    const now = Date.now()
+    const nowIso = new Date(now).toISOString()
+    const localRecords = readHistoryRecords()
+    const recordsById = new Map<string, HistoryRecord>()
+    localRecords.forEach((record) => {
+      recordsById.set(record.id, record)
+    })
+
+    const selectColumns =
+      'id, task_name, elapsed_ms, started_at, ended_at, goal_name, bucket_name, goal_id, bucket_id, task_id, goal_surface, bucket_surface, created_at, updated_at'
+
+    const { data: remoteRows, error: fetchError } = await supabase
+      .from('session_history')
+      .select(selectColumns)
+      .eq('user_id', userId)
+    if (fetchError) {
+      console.warn('Failed to fetch session history delta from Supabase', fetchError)
+      return null
+    }
+
+    const remoteMap = new Map<string, HistoryRecord>()
+    ;(remoteRows ?? []).forEach((row) => {
+      const record = mapDbRowToRecord(row as Record<string, unknown>)
+      if (!record) {
+        return
+      }
+      remoteMap.set(record.id, record)
+      const local = recordsById.get(record.id)
+      if (!local) {
+        recordsById.set(record.id, record)
+        return
+      }
+      const remoteTimestamp = record.updatedAt
+      const localTimestamp = local.updatedAt
+      if (remoteTimestamp > localTimestamp || (!local.pendingAction && remoteTimestamp === localTimestamp)) {
+        recordsById.set(record.id, { ...record, pendingAction: null })
+      }
+    })
+
+    // Remove records that were deleted remotely (not present in remoteMap and no local pending action)
+    recordsById.forEach((record, id) => {
+      if (!remoteMap.has(id) && !record.pendingAction) {
+        recordsById.delete(id)
+      }
+    })
+
+    const pending = Array.from(recordsById.values()).filter((record) => record.pendingAction)
+    const pendingUpserts = pending.filter((record) => record.pendingAction === 'upsert')
+    const pendingDeletes = pending.filter((record) => record.pendingAction === 'delete')
+
+    if (pendingUpserts.length > 0) {
+      const payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
+      const { error: upsertError } = await supabase.from('session_history').upsert(payloads, { onConflict: 'id' })
+      if (upsertError) {
+        console.warn('Failed to push pending history updates to Supabase', upsertError)
+      } else {
+        pendingUpserts.forEach((record, index) => {
+          const payload = payloads[index]
+          const updatedIso = typeof payload.updated_at === 'string' ? payload.updated_at : nowIso
+          const updatedAt = Date.parse(updatedIso)
+          record.pendingAction = null
+          record.updatedAt = Number.isFinite(updatedAt) ? updatedAt : Date.now()
+          recordsById.set(record.id, record)
+        })
+      }
+    }
+
+    if (pendingDeletes.length > 0) {
+      const deleteIds = pendingDeletes.map((record) => record.id)
+      const { error: deleteError } = await supabase.from('session_history').delete().in('id', deleteIds)
+      if (deleteError) {
+        console.warn('Failed to delete session history rows from Supabase', deleteError)
+      } else {
+        deleteIds.forEach((id) => {
+          recordsById.delete(id)
+        })
+      }
+    }
+
+    return persistRecords(Array.from(recordsById.values()))
+  })()
+
+  try {
+    return await activeSyncPromise
+  } finally {
+    activeSyncPromise = null
+  }
+}
+
+export const pushPendingHistoryToSupabase = async (): Promise<void> => {
   if (!supabase) {
     return
   }
@@ -300,55 +509,40 @@ export const syncHistoryToSupabase = async (history: HistoryEntry[]): Promise<vo
     return
   }
 
-  const sanitized = truncateHistory(sortHistoryByEndedAtDesc(sanitizeHistoryEntries(history)))
-  const rows = sanitized.map((entry) => mapEntryToDbRow(entry, session.user.id))
+  const userId = session.user.id
+  const records = readHistoryRecords()
+  const pendingUpserts = records.filter((record) => record.pendingAction === 'upsert')
+  const pendingDeletes = records.filter((record) => record.pendingAction === 'delete')
 
-  const { data: remoteIdsData, error: remoteIdsError } = await supabase
-    .from('session_history')
-    .select('id')
-    .eq('user_id', session.user.id)
-
-  if (remoteIdsError) {
-    console.warn('Failed to read existing session history ids from Supabase', remoteIdsError)
-    return
-  }
-
-  const remoteIds = new Set((remoteIdsData ?? []).map((row) => row.id))
-  const localIds = new Set(rows.map((row) => row.id))
-
-  let upsertFailed = false
-
-  if (rows.length > 0) {
-    const { error: upsertError } = await supabase.from('session_history').upsert(rows, { onConflict: 'id' })
+  if (pendingUpserts.length > 0) {
+    const payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
+    const { error: upsertError } = await supabase.from('session_history').upsert(payloads, { onConflict: 'id' })
     if (upsertError) {
-      console.warn('Failed to upsert session history to Supabase', upsertError)
-      upsertFailed = true
+      console.warn('Failed to push pending history updates to Supabase', upsertError)
     } else {
-      rows.forEach((row) => {
-        knownRemoteIds.add(row.id)
+      pendingUpserts.forEach((record, index) => {
+        const payload = payloads[index]
+        const updatedIso = typeof payload.updated_at === 'string' ? payload.updated_at : new Date().toISOString()
+        const updatedAt = Date.parse(updatedIso)
+        record.pendingAction = null
+        record.updatedAt = Number.isFinite(updatedAt) ? updatedAt : Date.now()
       })
     }
   }
 
-  if (upsertFailed) {
-    return
-  }
-
-  const idsToDelete: string[] = []
-  remoteIds.forEach((id) => {
-    if (!localIds.has(id) && knownRemoteIds.has(id)) {
-      idsToDelete.push(id)
-    }
-  })
-
-  if (idsToDelete.length > 0) {
-    const { error: deleteError } = await supabase.from('session_history').delete().in('id', idsToDelete)
+  if (pendingDeletes.length > 0) {
+    const deleteIds = pendingDeletes.map((record) => record.id)
+    const { error: deleteError } = await supabase.from('session_history').delete().in('id', deleteIds)
     if (deleteError) {
-      console.warn('Failed to delete removed session history rows from Supabase', deleteError)
+      console.warn('Failed to delete session history rows from Supabase', deleteError)
     } else {
-      idsToDelete.forEach((id) => {
-        knownRemoteIds.delete(id)
-      })
+      for (let index = records.length - 1; index >= 0; index -= 1) {
+        if (deleteIds.includes(records[index].id)) {
+          records.splice(index, 1)
+        }
+      }
     }
   }
+
+  persistRecords(records)
 }

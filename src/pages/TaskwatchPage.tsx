@@ -45,14 +45,10 @@ import {
   HISTORY_EVENT_NAME,
   HISTORY_LIMIT,
   HISTORY_STORAGE_KEY,
-  broadcastHistoryUpdate,
-  fetchHistoryFromSupabase,
-  mergeHistoryEntries,
+  persistHistorySnapshot,
   readStoredHistory as readPersistedHistory,
-  sanitizeHistoryEntries,
-  syncHistoryToSupabase,
+  syncHistoryWithSupabase,
   type HistoryEntry,
-  writeStoredHistory,
 } from '../lib/sessionHistory'
 
 type FocusCandidate = {
@@ -418,6 +414,18 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [isTimeHidden, setIsTimeHidden] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>(() => readPersistedHistory())
   const latestHistoryRef = useRef(history)
+  const applyLocalHistoryChange = useCallback(
+    (updater: (current: HistoryEntry[]) => HistoryEntry[]) => {
+      setHistory((current) => {
+        const next = updater(current)
+        if (historiesAreEqual(current, next)) {
+          return current
+        }
+        return persistHistorySnapshot(next)
+      })
+    },
+    [],
+  )
   const [lastSnapbackSummary, setLastSnapbackSummary] = useState<string | null>(null)
   const [isSnapbackOpen, setIsSnapbackOpen] = useState(false)
   const [snapbackReason, setSnapbackReason] = useState<SnapbackReasonId>('tired')
@@ -528,33 +536,20 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   }, [])
 
   useEffect(() => {
-    writeStoredHistory(history)
-    broadcastHistoryUpdate(history)
-    void syncHistoryToSupabase(history)
-  }, [history])
-
-  useEffect(() => {
     latestHistoryRef.current = history
   }, [history])
 
   useEffect(() => {
-    let isActive = true
+    let cancelled = false
     void (async () => {
-      const remote = await fetchHistoryFromSupabase()
-      if (!isActive || !remote) {
+      const synced = await syncHistoryWithSupabase()
+      if (cancelled || !synced) {
         return
       }
-      setHistory((current) => {
-        const merged = mergeHistoryEntries(current, remote)
-        if (historiesAreEqual(current, merged)) {
-          return current
-        }
-        latestHistoryRef.current = merged
-        return merged
-      })
+      setHistory((current) => (historiesAreEqual(current, synced) ? current : synced))
     })()
     return () => {
-      isActive = false
+      cancelled = true
     }
   }, [])
 
@@ -582,12 +577,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       }
     }
 
-    const handleHistoryBroadcast = (event: Event) => {
-      if (!(event instanceof CustomEvent)) {
-        return
-      }
-      const sanitized = sanitizeHistoryEntries(event.detail)
-      applyIncomingHistory(sanitized)
+    const handleHistoryBroadcast = () => {
+      const next = readPersistedHistory()
+      applyIncomingHistory(next)
     }
 
     window.addEventListener('storage', handleStorage)
@@ -1840,12 +1832,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         bucketSurface: normalizedBucketSurface,
       }
 
-      setHistory((current) => {
+      applyLocalHistoryChange((current) => {
         const next = [entry, ...current]
-        if (next.length > HISTORY_LIMIT) {
-          return next.slice(0, HISTORY_LIMIT)
-        }
-        return next
+        return next.length > HISTORY_LIMIT ? next.slice(0, HISTORY_LIMIT) : next
       })
 
       if (context?.sessionKey !== undefined || sessionMeta.sessionKey !== null) {
@@ -1853,7 +1842,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         sessionMetadataRef.current = createEmptySessionMetadata(nextLabel)
       }
     },
-    [sessionStart],
+    [applyLocalHistoryChange, sessionStart],
   )
 
   const handleOpenSnapback = useCallback(() => {
@@ -1942,7 +1931,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       bucketSurface: markerBucketSurface,
     }
 
-    setHistory((current) => {
+    applyLocalHistoryChange((current) => {
       const next = [markerEntry, ...current]
       return next.length > HISTORY_LIMIT ? next.slice(0, HISTORY_LIMIT) : next
     })
@@ -1966,6 +1955,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       }
   }
   }, [
+    applyLocalHistoryChange,
     deriveSessionMetadata,
     elapsed,
     normalizedCurrentTask,
