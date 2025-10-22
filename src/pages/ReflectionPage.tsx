@@ -3104,7 +3104,6 @@ export default function ReflectionPage() {
                 aria-hidden="true"
               />
             ) : null}
-            {daySegments.length === 0 ? <p className="history-timeline__empty">No sessions logged yet today</p> : null}
             {daySegments.map((segment) => {
               const isSelected = segment.entry.id === selectedHistoryId
               const isActiveSegment = segment.entry.id === 'active-session'
