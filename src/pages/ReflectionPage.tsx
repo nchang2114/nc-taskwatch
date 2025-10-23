@@ -3517,6 +3517,16 @@ export default function ReflectionPage() {
                   onKeyDown={handleTimelineBlockKeyDown(segment.entry)}
                 >
                   <div
+                    className="history-timeline__block-label"
+                    title={`${displayTask} · ${formatTimeOfDay(resolvedStartedAt)} — ${formatTimeOfDay(resolvedEndedAt)}`}
+                    aria-hidden
+                  >
+                    <div className="history-timeline__block-title">{displayTask}</div>
+                    <div className="history-timeline__block-time">
+                      {formatTimeOfDay(resolvedStartedAt)} — {formatTimeOfDay(resolvedEndedAt)}
+                    </div>
+                  </div>
+                  <div
                     className="history-timeline__block-handle history-timeline__block-handle--start"
                     role="presentation"
                     aria-hidden="true"
