@@ -520,8 +520,9 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }
                         return
                       }
                       pointerSelectionRef.current = true
-                      event.preventDefault()
-                      handleOptionSelect(option.value)
+                    }}
+                    onPointerUp={() => {
+                      pointerSelectionRef.current = false
                     }}
                     onClick={(event) => {
                       if (option.disabled) {
@@ -530,6 +531,7 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }
                       }
                       if (pointerSelectionRef.current) {
                         pointerSelectionRef.current = false
+                        handleOptionSelect(option.value)
                         return
                       }
                       event.preventDefault()
