@@ -2923,6 +2923,7 @@ export default function ReflectionPage() {
             next.sort((a, b) => a.startedAt - b.startedAt)
             return next
           })
+          setPendingNewHistoryId(newEntry.id)
           setTimeout(() => {
             handleStartEditingHistoryEntry(newEntry)
           }, 0)
