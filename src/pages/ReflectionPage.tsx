@@ -11,6 +11,7 @@ import {
   type HTMLAttributes,
   type KeyboardEvent,
   type MouseEvent,
+  type TouchEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -1569,6 +1570,7 @@ export default function ReflectionPage() {
   const [historyDayOffset, setHistoryDayOffset] = useState(0)
   const [journal, setJournal] = useState('')
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
+  const [pendingNewHistoryId, setPendingNewHistoryId] = useState<string | null>(null)
   const [hoveredHistoryId, setHoveredHistoryId] = useState<string | null>(null)
   const [historyDraft, setHistoryDraft] = useState<HistoryDraftState>({
     taskName: '',
@@ -2036,7 +2038,12 @@ export default function ReflectionPage() {
   }, [hoveredHistoryId, selectedHistoryId, updateActiveTooltipOffsets])
 
   const handleDeleteHistoryEntry = useCallback(
-    (entryId: string) => (event: MouseEvent<HTMLButtonElement>) => {
+    (entryId: string) => (
+      event:
+        | MouseEvent<HTMLButtonElement>
+        | ReactPointerEvent<HTMLButtonElement>
+        | TouchEvent<HTMLButtonElement>
+    ) => {
       event.preventDefault()
       event.stopPropagation()
       const index = history.findIndex((entry) => entry.id === entryId)
@@ -2050,9 +2057,12 @@ export default function ReflectionPage() {
         setEditingHistoryId(null)
         setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
       }
+      if (pendingNewHistoryId === entryId) {
+        setPendingNewHistoryId(null)
+      }
       updateHistory((current) => [...current.slice(0, index), ...current.slice(index + 1)])
     },
-    [history, selectedHistoryId, updateHistory],
+    [history, selectedHistoryId, updateHistory, pendingNewHistoryId],
   )
 
   const handleAddHistoryEntry = useCallback(() => {
@@ -2093,6 +2103,7 @@ export default function ReflectionPage() {
     setHoveredHistoryId(null)
     setSelectedHistoryId(entry.id)
     setEditingHistoryId(entry.id)
+    setPendingNewHistoryId(entry.id)
     setHistoryDraft({
       taskName: 'New session',
       goalName: '',
@@ -2265,6 +2276,16 @@ export default function ReflectionPage() {
   )
 
   const handleCancelHistoryEdit = useCallback(() => {
+    // If we're cancelling a newly added (pending) entry, remove it entirely
+    if (pendingNewHistoryId && selectedHistoryId === pendingNewHistoryId) {
+      setHistory((current) => current.filter((e) => e.id !== pendingNewHistoryId))
+      setPendingNewHistoryId(null)
+      setSelectedHistoryId(null)
+      setEditingHistoryId(null)
+      setHoveredHistoryId(null)
+      setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
+      return
+    }
     if (selectedHistoryEntry) {
       setHistoryDraft({
         taskName: selectedHistoryEntry.taskName,
@@ -2277,11 +2298,15 @@ export default function ReflectionPage() {
       setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
     }
     setEditingHistoryId(null)
-  }, [selectedHistoryEntry])
+  }, [pendingNewHistoryId, selectedHistoryEntry, selectedHistoryId])
 
   const handleSaveHistoryDraft = useCallback(() => {
+    // If we were editing a newly added entry, it's no longer pending after save
+    if (pendingNewHistoryId && selectedHistoryId === pendingNewHistoryId) {
+      setPendingNewHistoryId(null)
+    }
     commitHistoryDraft()
-  }, [commitHistoryDraft])
+  }, [commitHistoryDraft, pendingNewHistoryId, selectedHistoryId])
 
   const handleStartEditingHistoryEntry = useCallback((entry: HistoryEntry) => {
     setSelectedHistoryId(entry.id)
@@ -3147,6 +3172,7 @@ export default function ReflectionPage() {
               const isEditing = editingHistoryId === segment.entry.id
               const isActiveSessionSegment = segment.entry.id === 'active-session'
               const isDragging = dragPreview?.entryId === segment.entry.id
+              const isNewEntryEditing = isEditing && selectedHistoryId === pendingNewHistoryId
               const trimmedTaskDraft = historyDraft.taskName.trim()
               const displayTask = isSelected
                 ? trimmedTaskDraft.length > 0
@@ -3421,10 +3447,11 @@ export default function ReflectionPage() {
                       ) : null}
                     </>
                   ) : null}
-                  {segment.deletable ? (
+                  {segment.deletable && !isNewEntryEditing ? (
                     <button
                       type="button"
                       className="history-timeline__tooltip-delete"
+                      onPointerUp={handleDeleteHistoryEntry(segment.entry.id)}
                       onClick={handleDeleteHistoryEntry(segment.entry.id)}
                     >
                       Delete session
