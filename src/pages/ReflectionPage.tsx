@@ -1621,6 +1621,8 @@ export default function ReflectionPage() {
   // Double-tap (touch) to edit
   const lastTapRef = useRef<{ time: number; id: string; x: number; y: number } | null>(null)
   const lastTapTimeoutRef = useRef<number | null>(null)
+  // One-time auto-fill guard for session name when selecting Life Routine bucket
+  const taskNameAutofilledRef = useRef(false)
   // Mouse pre-drag detection to preserve click/double-click semantics
   const mousePreDragRef = useRef<{
     pointerId: number
@@ -2058,6 +2060,7 @@ export default function ReflectionPage() {
       endedAt: selectedHistoryEntry.endedAt,
     })
     setEditingHistoryId((current) => (current === selectedHistoryEntry.id ? current : null))
+    taskNameAutofilledRef.current = false
   }, [selectedHistoryEntry])
 
   useEffect(() => {
@@ -2212,17 +2215,17 @@ export default function ReflectionPage() {
     (field: 'taskName' | 'goalName' | 'bucketName', nextValue: string) => {
       setHistoryDraft((draft) => {
         const base = { ...draft, [field]: nextValue }
-        // Auto-fill task name for Life Routines when bucket is chosen, unless user already typed a custom name
-        const trimmedTask = base.taskName.trim()
-        const trimmedGoal = base.goalName.trim()
-        const trimmedBucket = base.bucketName.trim()
-        const isLifeRoutine = trimmedGoal.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
-        const userEditedName =
-          trimmedTask.length > 0 &&
-          // Consider it auto if it matched previous defaults (Session/goal/bucket). If not, treat as user-edited.
-          !['session', trimmedGoal.toLowerCase(), trimmedBucket.toLowerCase()].includes(trimmedTask.toLowerCase())
-        if (isLifeRoutine && trimmedBucket.length > 0 && !userEditedName) {
-          return { ...base, taskName: trimmedBucket }
+        // Only auto-fill once: when choosing a Life Routine bucket, and only if name is effectively empty or default
+        if (field === 'bucketName') {
+          const nextGoal = base.goalName.trim()
+          const nextBucket = nextValue.trim()
+          const isLifeRoutine = nextGoal.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
+          const trimmedTask = base.taskName.trim()
+          const looksDefault = trimmedTask.length === 0 || /^new session$/i.test(trimmedTask)
+          if (isLifeRoutine && nextBucket.length > 0 && looksDefault && !taskNameAutofilledRef.current) {
+            taskNameAutofilledRef.current = true
+            return { ...base, taskName: nextBucket }
+          }
         }
         return base
       })
@@ -2242,9 +2245,8 @@ export default function ReflectionPage() {
     if (!selectedHistoryEntry) {
       return
     }
-    const defaultTaskName = deriveEntryTaskName(selectedHistoryEntry)
-    const nextTaskName =
-      historyDraft.taskName.trim().length > 0 ? historyDraft.taskName.trim() : defaultTaskName
+    // Preserve blank names if the user cleared it intentionally
+    const nextTaskName = historyDraft.taskName.trim()
     const nextGoalName = historyDraft.goalName.trim()
     const nextBucketName = historyDraft.bucketName.trim()
     const draftStartedAt = historyDraft.startedAt ?? selectedHistoryEntry.startedAt
@@ -2400,8 +2402,10 @@ export default function ReflectionPage() {
     setSelectedHistoryId(entry.id)
     setHoveredHistoryId(entry.id)
     setEditingHistoryId(entry.id)
+    taskNameAutofilledRef.current = false
     setHistoryDraft({
-      taskName: deriveEntryTaskName(entry),
+      // Use the stored taskName verbatim so intentional blanks stay blank
+      taskName: entry.taskName,
       goalName: entry.goalName ?? '',
       bucketName: entry.bucketName ?? '',
       startedAt: entry.startedAt,
