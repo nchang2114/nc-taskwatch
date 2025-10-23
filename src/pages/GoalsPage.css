@@ -1695,6 +1695,10 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   text-align: left;
 }
 
+html[data-theme='light'] .goal-task-details__empty-text {
+  color: rgba(70, 82, 138, 0.6);
+}
+
 .goal-task-row.dragging .goal-task-details {
   display: none !important;
 }

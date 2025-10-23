@@ -2720,6 +2720,10 @@ html[data-theme='light'] .nav-links--drawer {
   color: rgba(196, 206, 255, 0.68);
 }
 
+html[data-theme='light'] .taskwatch-notes__empty-text {
+  color: rgba(72, 84, 138, 0.62);
+}
+
 .taskwatch-notes__list {
   list-style: none;
   margin: 0;
