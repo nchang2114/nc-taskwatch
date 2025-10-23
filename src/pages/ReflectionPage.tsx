@@ -742,6 +742,22 @@ const makeHistoryId = () => {
   return `history-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+const deriveEntryTaskName = (entry: HistoryEntry): string => {
+  const name = entry.taskName?.trim()
+  if (name && name.length > 0) {
+    return name
+  }
+  const bucket = entry.bucketName?.trim()
+  if (bucket && bucket.length > 0) {
+    return bucket
+  }
+  const goal = entry.goalName?.trim()
+  if (goal && goal.length > 0) {
+    return goal
+  }
+  return 'Session'
+}
+
 const hashString = (value: string) => {
   let hash = 0
   for (let index = 0; index < value.length; index += 1) {
@@ -2094,7 +2110,7 @@ export default function ReflectionPage() {
         return
       }
       setHistoryDraft({
-        taskName: entry.taskName,
+        taskName: deriveEntryTaskName(entry),
         goalName: entry.goalName ?? '',
         bucketName: entry.bucketName ?? '',
         startedAt: entry.startedAt,
@@ -2125,7 +2141,9 @@ export default function ReflectionPage() {
     if (!selectedHistoryEntry) {
       return
     }
-    const nextTaskName = historyDraft.taskName.trim()
+    const defaultTaskName = deriveEntryTaskName(selectedHistoryEntry)
+    const nextTaskName =
+      historyDraft.taskName.trim().length > 0 ? historyDraft.taskName.trim() : defaultTaskName
     const nextGoalName = historyDraft.goalName.trim()
     const nextBucketName = historyDraft.bucketName.trim()
     const draftStartedAt = historyDraft.startedAt ?? selectedHistoryEntry.startedAt
@@ -2231,7 +2249,7 @@ export default function ReflectionPage() {
         event.preventDefault()
         if (selectedHistoryEntry) {
           setHistoryDraft({
-            taskName: selectedHistoryEntry.taskName,
+            taskName: deriveEntryTaskName(selectedHistoryEntry),
             goalName: selectedHistoryEntry.goalName ?? '',
             bucketName: selectedHistoryEntry.bucketName ?? '',
             startedAt: selectedHistoryEntry.startedAt,
@@ -2268,7 +2286,7 @@ export default function ReflectionPage() {
     setHoveredHistoryId(entry.id)
     setEditingHistoryId(entry.id)
     setHistoryDraft({
-      taskName: entry.taskName,
+      taskName: deriveEntryTaskName(entry),
       goalName: entry.goalName ?? '',
       bucketName: entry.bucketName ?? '',
       startedAt: entry.startedAt,
