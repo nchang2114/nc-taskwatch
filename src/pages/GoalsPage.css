@@ -1522,6 +1522,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 
 .goal-task-details__section-title {
   display: grid;
+  /* Heading now contains the inline caret; let it take the flexible space */
   grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 0.35rem;
@@ -1535,6 +1536,9 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   text-transform: uppercase;
   color: rgba(211, 218, 255, 0.62);
   flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .goal-task-details__section-title--notes {
@@ -1607,6 +1611,77 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   justify-self: end;
 }
 
+/* Subtle inline caret button (solid triangle, like bucket caret) */
+.goal-task-details__collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15em;
+  height: 1.15em;
+  border: none;
+  background: transparent;
+  color: rgba(216, 222, 255, 0.8);
+  cursor: pointer;
+  padding: 0;
+  margin-left: 0.3rem;
+  line-height: 1;
+  vertical-align: middle;
+  transition: color 0.18s ease;
+  position: relative;
+  top: -1px; /* nudge upwards slightly for optical centering */
+}
+
+.goal-task-details__collapse::before {
+  content: '';
+  display: block;
+  width: 0;
+  height: 0;
+  margin: 0 auto;
+  /* Right-pointing triangle (collapsed) */
+  border-top: 0.36em solid transparent;
+  border-bottom: 0.36em solid transparent;
+  border-left: 0.54em solid currentColor;
+}
+
+.goal-task-details__collapse:hover,
+.goal-task-details__collapse:focus-visible {
+  color: #f7fbff;
+}
+
+.goal-task-details__collapse:focus-visible {
+  outline: none;
+}
+
+.goal-task-details__collapse-icon {
+  width: 0.8rem;
+  height: 0.8rem;
+  transition: transform 0.2s ease;
+}
+
+.goal-task-details__subtasks-body {
+  display: grid;
+  gap: 0.25rem;
+}
+
+/* Down-pointing triangle when open */
+.goal-task-details__subtasks:not(.goal-task-details__subtasks--collapsed) .goal-task-details__collapse::before {
+  border-left: 0 solid transparent;
+  border-right: 0 solid transparent;
+  border-top: 0.54em solid currentColor; /* larger downward triangle */
+  border-bottom: 0 solid transparent;
+  /* center base width */
+  border-left: 0.36em solid transparent;
+  border-right: 0.36em solid transparent;
+}
+
+.goal-task-details__subtasks--collapsed .goal-task-details__subtasks-body {
+  display: none;
+}
+
+.goal-task-details__subtasks--collapsed .goal-task-details__add {
+  opacity: 0.82;
+}
+
 
 .goal-task-details__subtask-list {
   list-style: none;
@@ -1631,13 +1706,57 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 }
 
 .goal-task-details__checkbox {
-  width: 0.9rem;
-  height: 0.9rem;
-  border-radius: 0.25rem;
-  border: 1px solid rgba(142, 164, 255, 0.5);
-  background: rgba(18, 24, 60, 0.6);
-  accent-color: #7d8bff;
+  appearance: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 0.3rem;
+  border: 1.5px solid rgba(138, 162, 255, 0.58);
+  background: linear-gradient(135deg, rgba(40, 52, 128, 0.4), rgba(64, 78, 160, 0.58));
   cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.goal-task-details__checkbox::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 86% 86%;
+  /* Reuse the task tick shape (stroke-based) and tint via currentColor */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M20 6L9 17l-5-5' stroke='currentColor' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  transform: scale(0);
+  transform-origin: 50% 50%;
+  transition: transform 0.18s ease;
+}
+
+.goal-task-details__checkbox:hover {
+  border-color: rgba(168, 192, 255, 0.78);
+  background: linear-gradient(135deg, rgba(52, 68, 150, 0.48), rgba(82, 98, 182, 0.62));
+}
+
+.goal-task-details__checkbox:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(136, 156, 255, 0.4);
+}
+
+.goal-task-details__checkbox:checked {
+  border-color: rgba(182, 216, 255, 0.95);
+  background: linear-gradient(135deg, rgba(100, 168, 255, 0.38), rgba(150, 204, 255, 0.58));
+  box-shadow: 0 4px 10px -6px rgba(32, 60, 140, 0.6);
+}
+
+.goal-task-details__checkbox:checked::after {
+  transform: scale(1);
+}
+
+/* Default tick tint (dark theme) */
+.goal-task-details__checkbox:checked::after {
+  color: rgba(248, 250, 255, 0.98);
 }
 
 .goal-task-details__subtask-input {
@@ -1702,6 +1821,37 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 
 html[data-theme='light'] .goal-task-details__empty-text {
   color: rgba(70, 82, 138, 0.6);
+}
+
+html[data-theme='light'] .goal-task-details__collapse {
+  border: none;
+  background: transparent;
+  color: rgba(52, 64, 124, 0.82);
+}
+
+html[data-theme='light'] .goal-task-details__collapse:hover,
+html[data-theme='light'] .goal-task-details__collapse:focus-visible {
+  color: rgba(20, 32, 94, 0.92);
+}
+
+html[data-theme='light'] .goal-task-details__checkbox {
+  border-color: rgba(118, 136, 216, 0.52);
+  background: linear-gradient(135deg, rgba(236, 240, 255, 0.92), rgba(212, 222, 255, 0.92));
+}
+
+html[data-theme='light'] .goal-task-details__checkbox:hover {
+  border-color: rgba(112, 130, 210, 0.72);
+  background: linear-gradient(135deg, rgba(226, 234, 255, 0.94), rgba(204, 214, 255, 0.96));
+}
+
+html[data-theme='light'] .goal-task-details__checkbox:checked {
+  border-color: rgba(104, 132, 228, 0.72);
+  background: linear-gradient(135deg, rgba(188, 212, 255, 0.92), rgba(168, 196, 255, 0.92));
+  box-shadow: 0 4px 12px -6px rgba(86, 122, 204, 0.36);
+}
+
+html[data-theme='light'] .goal-task-details__checkbox:checked::after {
+  color: rgba(20, 36, 96, 0.92);
 }
 
 .goal-task-row.dragging .goal-task-details {

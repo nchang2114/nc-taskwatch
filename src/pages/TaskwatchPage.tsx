@@ -460,6 +460,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       return {}
     }
   })
+  const [, setNotebookSubtasksCollapsed] = useState(false)
   const frameRef = useRef<number | null>(null)
   const lastTickRef = useRef<number | null>(null)
   const selectorButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -933,6 +934,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     () => computeNotebookKey(focusSource, normalizedCurrentTask),
     [focusSource, normalizedCurrentTask],
   )
+  useEffect(() => {
+    setNotebookSubtasksCollapsed(false)
+  }, [notebookKey])
   const updateNotebookForKey = useCallback(
     (key: string, updater: (entry: NotebookEntry) => NotebookEntry) => {
       setNotebookState((current) => {

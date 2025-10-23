@@ -107,6 +107,7 @@ type TaskDetails = {
   notes: string
   subtasks: TaskSubtask[]
   expanded: boolean
+  subtasksCollapsed: boolean
 }
 
 type TaskDetailsState = Record<string, TaskDetails>
@@ -115,6 +116,7 @@ const createTaskDetails = (overrides?: Partial<TaskDetails>): TaskDetails => ({
   notes: '',
   subtasks: [],
   expanded: false,
+  subtasksCollapsed: false,
   ...overrides,
 })
 
@@ -168,7 +170,8 @@ const sanitizeTaskDetailsState = (value: unknown): TaskDetailsState => {
     const notes = typeof candidate.notes === 'string' ? candidate.notes : ''
     const subtasks = sanitizeSubtasks(candidate.subtasks)
     const expanded = Boolean(candidate.expanded)
-    next[taskId] = { notes, subtasks, expanded }
+    const subtasksCollapsed = Boolean((candidate as any).subtasksCollapsed)
+    next[taskId] = { notes, subtasks, expanded, subtasksCollapsed }
   })
   return next
 }
@@ -190,7 +193,7 @@ const readStoredTaskDetails = (): TaskDetailsState => {
 }
 
 const areTaskDetailsEqual = (a: TaskDetails, b: TaskDetails): boolean => {
-  if (a.notes !== b.notes || a.expanded !== b.expanded) {
+  if (a.notes !== b.notes || a.expanded !== b.expanded || a.subtasksCollapsed !== b.subtasksCollapsed) {
     return false
   }
   if (a.subtasks.length !== b.subtasks.length) {
@@ -1228,6 +1231,7 @@ interface GoalRowProps {
   handleAddSubtask: (taskId: string, options?: { focus?: boolean }) => void
   handleSubtaskTextChange: (taskId: string, subtaskId: string, value: string) => void
   handleSubtaskBlur: (taskId: string, subtaskId: string) => void
+  handleToggleSubtaskSection: (taskId: string) => void
   handleToggleSubtaskCompleted: (taskId: string, subtaskId: string) => void
   handleRemoveSubtask: (taskId: string, subtaskId: string) => void
   taskDrafts: Record<string, string>
@@ -1429,6 +1433,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   handleAddSubtask,
   handleSubtaskTextChange,
   handleSubtaskBlur,
+  handleToggleSubtaskSection,
   handleToggleSubtaskCompleted,
   handleRemoveSubtask,
   taskDrafts,
@@ -2697,6 +2702,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
                               const details = showDetails ? taskDetails[task.id] : undefined
                               const notesValue = showDetails ? details?.notes ?? '' : ''
                               const subtasks = showDetails ? details?.subtasks ?? [] : []
+                              const subtaskListId = `goal-task-subtasks-${task.id}`
+                              const isSubtasksCollapsed = showDetails ? Boolean(details?.subtasksCollapsed) : false
                               const trimmedNotesLength = showDetails ? notesValue.trim().length : 0
                               const completedSubtasks = showDetails
                                 ? subtasks.filter((subtask) => subtask.completed).length
@@ -3112,9 +3119,28 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       )}
                                       onPointerDown={(event) => event.stopPropagation()}
                                     >
-                                      <div className="goal-task-details__subtasks">
+                                      <div
+                                        className={classNames(
+                                          'goal-task-details__subtasks',
+                                          isSubtasksCollapsed && 'goal-task-details__subtasks--collapsed',
+                                        )}
+                                      >
                                         <div className="goal-task-details__section-title">
-                                          <p className="goal-task-details__heading">Subtasks</p>
+                                          <p className="goal-task-details__heading">
+                                            Subtasks
+                                            <button
+                                              type="button"
+                                              className="goal-task-details__collapse"
+                                              aria-expanded={!isSubtasksCollapsed}
+                                              aria-controls={subtaskListId}
+                                              onClick={(event) => {
+                                                event.stopPropagation()
+                                                handleToggleSubtaskSection(task.id)
+                                              }}
+                                              onPointerDown={(event) => event.stopPropagation()}
+                                              aria-label={isSubtasksCollapsed ? 'Expand subtasks' : 'Collapse subtasks'}
+                                            />
+                                          </p>
                                           {subtaskProgressLabel ? (
                                             <span
                                               className="goal-task-details__progress"
@@ -3135,70 +3161,72 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                             + Subtask
                                           </button>
                                         </div>
-                                        {hasSubtasks ? (
-                                          <ul className="goal-task-details__subtask-list">
-                                            {subtasks.map((subtask) => (
-                                              <li
-                                                key={subtask.id}
-                                                className={classNames(
-                                                  'goal-task-details__subtask',
-                                                  subtask.completed && 'goal-task-details__subtask--completed',
-                                                )}
-                                              >
-                                                <label className="goal-task-details__subtask-item">
-                                                  <input
-                                                    type="checkbox"
-                                                    className="goal-task-details__checkbox"
-                                                    checked={subtask.completed}
-                                                    onChange={(event) => {
-                                                      event.stopPropagation()
-                                                      handleToggleSubtaskCompleted(task.id, subtask.id)
-                                                    }}
-                                                    onPointerDown={(event) => event.stopPropagation()}
-                                                  />
-                                                  <input
-                                                    id={makeGoalSubtaskInputId(task.id, subtask.id)}
-                                                    type="text"
-                                                    className="goal-task-details__subtask-input"
-                                                    value={subtask.text}
-                                                    onChange={(event) =>
-                                                      handleSubtaskTextChange(task.id, subtask.id, event.target.value)
-                                                    }
-                                                    onKeyDown={(event) => {
-                                                      if (event.key === 'Enter') {
-                                                        event.preventDefault()
-                                                        const value = event.currentTarget.value.trim()
-                                                        if (value.length === 0) {
-                                                          return
-                                                        }
-                                                        handleAddSubtask(task.id, { focus: true })
-                                                      }
-                                                    }}
-                                                    onBlur={() => handleSubtaskBlur(task.id, subtask.id)}
-                                                    onPointerDown={(event) => event.stopPropagation()}
-                                                    placeholder="Describe subtask"
-                                                  />
-                                                </label>
-                                                <button
-                                                  type="button"
-                                                  className="goal-task-details__remove"
-                                                  onClick={(event) => {
-                                                    event.stopPropagation()
-                                                    handleRemoveSubtask(task.id, subtask.id)
-                                                  }}
-                                                  onPointerDown={(event) => event.stopPropagation()}
-                                                  aria-label="Remove subtask"
+                                        <div className="goal-task-details__subtasks-body" id={subtaskListId}>
+                                          {hasSubtasks ? (
+                                            <ul className="goal-task-details__subtask-list">
+                                              {subtasks.map((subtask) => (
+                                                <li
+                                                  key={subtask.id}
+                                                  className={classNames(
+                                                    'goal-task-details__subtask',
+                                                    subtask.completed && 'goal-task-details__subtask--completed',
+                                                  )}
                                                 >
-                                                  ×
-                                                </button>
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        ) : (
-                                          <div className="goal-task-details__empty">
-                                            <p className="goal-task-details__empty-text">No subtasks yet</p>
-                                          </div>
-                                        )}
+                                                  <label className="goal-task-details__subtask-item">
+                                                    <input
+                                                      type="checkbox"
+                                                      className="goal-task-details__checkbox"
+                                                      checked={subtask.completed}
+                                                      onChange={(event) => {
+                                                        event.stopPropagation()
+                                                        handleToggleSubtaskCompleted(task.id, subtask.id)
+                                                      }}
+                                                      onPointerDown={(event) => event.stopPropagation()}
+                                                    />
+                                                    <input
+                                                      id={makeGoalSubtaskInputId(task.id, subtask.id)}
+                                                      type="text"
+                                                      className="goal-task-details__subtask-input"
+                                                      value={subtask.text}
+                                                      onChange={(event) =>
+                                                        handleSubtaskTextChange(task.id, subtask.id, event.target.value)
+                                                      }
+                                                      onKeyDown={(event) => {
+                                                        if (event.key === 'Enter') {
+                                                          event.preventDefault()
+                                                          const value = event.currentTarget.value.trim()
+                                                          if (value.length === 0) {
+                                                            return
+                                                          }
+                                                          handleAddSubtask(task.id, { focus: true })
+                                                        }
+                                                      }}
+                                                      onBlur={() => handleSubtaskBlur(task.id, subtask.id)}
+                                                      onPointerDown={(event) => event.stopPropagation()}
+                                                      placeholder="Describe subtask"
+                                                    />
+                                                  </label>
+                                                  <button
+                                                    type="button"
+                                                    className="goal-task-details__remove"
+                                                    onClick={(event) => {
+                                                      event.stopPropagation()
+                                                      handleRemoveSubtask(task.id, subtask.id)
+                                                    }}
+                                                    onPointerDown={(event) => event.stopPropagation()}
+                                                    aria-label="Remove subtask"
+                                                  >
+                                                    ×
+                                                  </button>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          ) : (
+                                            <div className="goal-task-details__empty">
+                                              <p className="goal-task-details__empty-text">No subtasks yet</p>
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
                                       <div className="goal-task-details__notes">
                                         <div className="goal-task-details__section-title goal-task-details__section-title--notes">
@@ -3325,6 +3353,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                   const details = showDetails ? taskDetails[task.id] : undefined
                                   const notesValue = showDetails ? details?.notes ?? '' : ''
                                   const subtasks = showDetails ? details?.subtasks ?? [] : []
+                                  const subtaskListId = `goal-task-subtasks-${task.id}`
+                                  const isSubtasksCollapsed = showDetails ? Boolean(details?.subtasksCollapsed) : false
                                   const trimmedNotesLength = showDetails ? notesValue.trim().length : 0
                                   const completedSubtasks = showDetails
                                     ? subtasks.filter((subtask) => subtask.completed).length
@@ -3617,8 +3647,42 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           )}
                                           onPointerDown={(event) => event.stopPropagation()}
                                         >
-                                      <div className="goal-task-details__subtasks">
+                                      <div
+                                        className={classNames(
+                                          'goal-task-details__subtasks',
+                                          isSubtasksCollapsed && 'goal-task-details__subtasks--collapsed',
+                                        )}
+                                      >
                                         <div className="goal-task-details__section-title">
+                                          <button
+                                            type="button"
+                                            className="goal-task-details__collapse"
+                                            aria-expanded={!isSubtasksCollapsed}
+                                            aria-controls={subtaskListId}
+                                            onClick={(event) => {
+                                              event.stopPropagation()
+                                              handleToggleSubtaskSection(task.id)
+                                            }}
+                                            onPointerDown={(event) => event.stopPropagation()}
+                                          >
+                                            <span className="sr-only">
+                                              {isSubtasksCollapsed ? 'Expand subtasks' : 'Collapse subtasks'}
+                                            </span>
+                                            <svg
+                                              className="goal-task-details__collapse-icon"
+                                              viewBox="0 0 24 24"
+                                              aria-hidden="true"
+                                            >
+                                              <path
+                                                d="M6 10l6 6 6-6"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="1.8"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                              />
+                                            </svg>
+                                          </button>
                                           <p className="goal-task-details__heading">Subtasks</p>
                                           {subtaskProgressLabel ? (
                                             <span
@@ -3640,70 +3704,72 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                             + Subtask
                                           </button>
                                         </div>
-                                        {hasSubtasks ? (
-                                              <ul className="goal-task-details__subtask-list">
-                                                {subtasks.map((subtask) => (
-                                                  <li
-                                                    key={subtask.id}
-                                                    className={classNames(
-                                                      'goal-task-details__subtask',
-                                                      subtask.completed && 'goal-task-details__subtask--completed',
-                                                    )}
-                                                  >
-                                                    <label className="goal-task-details__subtask-item">
-                                                      <input
-                                                        type="checkbox"
-                                                        className="goal-task-details__checkbox"
-                                                        checked={subtask.completed}
-                                                        onChange={(event) => {
-                                                          event.stopPropagation()
-                                                          handleToggleSubtaskCompleted(task.id, subtask.id)
-                                                        }}
-                                                        onPointerDown={(event) => event.stopPropagation()}
-                                                      />
-                                                      <input
-                                                        id={makeGoalSubtaskInputId(task.id, subtask.id)}
-                                                        type="text"
-                                                        className="goal-task-details__subtask-input"
-                                                        value={subtask.text}
-                                                        onChange={(event) =>
-                                                          handleSubtaskTextChange(task.id, subtask.id, event.target.value)
-                                                        }
-                                                        onKeyDown={(event) => {
-                                                          if (event.key === 'Enter') {
-                                                            event.preventDefault()
-                                                            const value = event.currentTarget.value.trim()
-                                                            if (value.length === 0) {
-                                                              return
-                                                            }
-                                                            handleAddSubtask(task.id, { focus: true })
-                                                          }
-                                                        }}
-                                                        onBlur={() => handleSubtaskBlur(task.id, subtask.id)}
-                                                        onPointerDown={(event) => event.stopPropagation()}
-                                                        placeholder="Describe subtask"
-                                                      />
-                                                    </label>
-                                                    <button
-                                                      type="button"
-                                                      className="goal-task-details__remove"
-                                                      onClick={(event) => {
+                                        <div className="goal-task-details__subtasks-body" id={subtaskListId}>
+                                          {hasSubtasks ? (
+                                            <ul className="goal-task-details__subtask-list">
+                                              {subtasks.map((subtask) => (
+                                                <li
+                                                  key={subtask.id}
+                                                  className={classNames(
+                                                    'goal-task-details__subtask',
+                                                    subtask.completed && 'goal-task-details__subtask--completed',
+                                                  )}
+                                                >
+                                                  <label className="goal-task-details__subtask-item">
+                                                    <input
+                                                      type="checkbox"
+                                                      className="goal-task-details__checkbox"
+                                                      checked={subtask.completed}
+                                                      onChange={(event) => {
                                                         event.stopPropagation()
-                                                        handleRemoveSubtask(task.id, subtask.id)
+                                                        handleToggleSubtaskCompleted(task.id, subtask.id)
                                                       }}
                                                       onPointerDown={(event) => event.stopPropagation()}
-                                                      aria-label="Remove subtask"
-                                                    >
-                                                      ×
-                                                    </button>
-                                                  </li>
-                                                ))}
-                                              </ul>
-                                        ) : (
-                                          <div className="goal-task-details__empty">
-                                            <p className="goal-task-details__empty-text">No subtasks yet</p>
-                                          </div>
-                                        )}
+                                                    />
+                                                    <input
+                                                      id={makeGoalSubtaskInputId(task.id, subtask.id)}
+                                                      type="text"
+                                                      className="goal-task-details__subtask-input"
+                                                      value={subtask.text}
+                                                      onChange={(event) =>
+                                                        handleSubtaskTextChange(task.id, subtask.id, event.target.value)
+                                                      }
+                                                      onKeyDown={(event) => {
+                                                        if (event.key === 'Enter') {
+                                                          event.preventDefault()
+                                                          const value = event.currentTarget.value.trim()
+                                                          if (value.length === 0) {
+                                                            return
+                                                          }
+                                                          handleAddSubtask(task.id, { focus: true })
+                                                        }
+                                                      }}
+                                                      onBlur={() => handleSubtaskBlur(task.id, subtask.id)}
+                                                      onPointerDown={(event) => event.stopPropagation()}
+                                                      placeholder="Describe subtask"
+                                                    />
+                                                  </label>
+                                                  <button
+                                                    type="button"
+                                                    className="goal-task-details__remove"
+                                                    onClick={(event) => {
+                                                      event.stopPropagation()
+                                                      handleRemoveSubtask(task.id, subtask.id)
+                                                    }}
+                                                    onPointerDown={(event) => event.stopPropagation()}
+                                                    aria-label="Remove subtask"
+                                                  >
+                                                    ×
+                                                  </button>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          ) : (
+                                            <div className="goal-task-details__empty">
+                                              <p className="goal-task-details__empty-text">No subtasks yet</p>
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
                                       <div className="goal-task-details__notes">
                                         <div className="goal-task-details__section-title goal-task-details__section-title--notes">
@@ -4285,6 +4351,7 @@ export default function GoalsPage(): ReactElement {
           notes: typeof base.notes === 'string' ? base.notes : '',
           expanded: Boolean(base.expanded),
           subtasks: Array.isArray(base.subtasks) ? base.subtasks : [],
+          subtasksCollapsed: Boolean((base as any).subtasksCollapsed),
         }
         if (!shouldPersistTaskDetails(normalized)) {
           if (!current[taskId]) {
@@ -4440,6 +4507,7 @@ export default function GoalsPage(): ReactElement {
       updateTaskDetails(taskId, (current) => ({
         ...current,
         expanded: true,
+        subtasksCollapsed: false,
         subtasks: [...current.subtasks, newSubtask],
       }))
       if (options?.focus) {
@@ -4527,6 +4595,16 @@ export default function GoalsPage(): ReactElement {
       flushSubtaskPersist(taskId, normalized)
     },
     [cancelPendingSubtaskSave, flushSubtaskPersist, updateTaskDetails],
+  )
+
+  const handleToggleSubtaskSection = useCallback(
+    (taskId: string) => {
+      updateTaskDetails(taskId, (current) => ({
+        ...current,
+        subtasksCollapsed: !current.subtasksCollapsed,
+      }))
+    },
+    [updateTaskDetails],
   )
 
   const handleToggleSubtaskCompleted = useCallback(
@@ -4670,6 +4748,7 @@ export default function GoalsPage(): ReactElement {
                     notes: typeof task.notes === 'string' ? task.notes : '',
                     subtasks,
                     expanded: existing?.expanded ?? false,
+                    subtasksCollapsed: existing?.subtasksCollapsed ?? false,
                   }
                 })
               })
@@ -7189,6 +7268,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     handleAddSubtask={handleAddSubtask}
                     handleSubtaskTextChange={handleSubtaskTextChange}
                     handleSubtaskBlur={handleSubtaskBlur}
+                    handleToggleSubtaskSection={handleToggleSubtaskSection}
                     handleToggleSubtaskCompleted={handleToggleSubtaskCompleted}
                     handleRemoveSubtask={handleRemoveSubtask}
                     taskDrafts={taskDrafts}
@@ -7315,6 +7395,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                         handleAddSubtask={handleAddSubtask}
                         handleSubtaskTextChange={handleSubtaskTextChange}
                         handleSubtaskBlur={handleSubtaskBlur}
+                        handleToggleSubtaskSection={handleToggleSubtaskSection}
                         handleToggleSubtaskCompleted={handleToggleSubtaskCompleted}
                         handleRemoveSubtask={handleRemoveSubtask}
                         taskDrafts={taskDrafts}
