@@ -3776,8 +3776,41 @@ export default function ReflectionPage() {
               const renderedTooltip =
                 (isEditing && typeof document !== 'undefined' && !(shouldSuppressTooltip && showDragBadge))
                   ? createPortal(
-                      <div ref={setEditingTooltipNode} {...tooltipCommonProps} className={`${tooltipClassName} history-timeline__tooltip--portal`}>
-                        {tooltipContent}
+                      <div
+                        className="history-overlay"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Edit session"
+                        onPointerDown={(e) => {
+                          // Block interactions from reaching the page beneath
+                          e.stopPropagation()
+                        }}
+                        onClick={(e) => {
+                          // Prevent stray taps from triggering underlying handlers
+                          e.stopPropagation()
+                        }}
+                      >
+                        <div
+                          className="history-overlay__backdrop"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleCancelHistoryEdit()
+                          }}
+                          onPointerDown={(e) => {
+                            // Consume the event so nothing underneath receives it
+                            e.stopPropagation()
+                            e.preventDefault()
+                          }}
+                        />
+                        <div className="history-overlay__panel">
+                          <div
+                            ref={setEditingTooltipNode}
+                            {...tooltipCommonProps}
+                            className={`${tooltipClassName} history-timeline__tooltip--overlay`}
+                          >
+                            {tooltipContent}
+                          </div>
+                        </div>
                       </div>,
                       document.body,
                     )
