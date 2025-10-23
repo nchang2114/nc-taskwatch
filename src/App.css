@@ -3219,6 +3219,12 @@ html[data-theme='light'] .taskwatch-notes__empty-text {
   -webkit-overflow-scrolling: touch;
 }
 
+/* When flipped below, anchor under the block and keep viewport-fitting via transforms */
+.history-timeline__tooltip.history-timeline__tooltip--below {
+  top: calc(100% + clamp(0.35rem, 1vw, 0.55rem));
+  bottom: auto;
+}
+
 .history-timeline__block:hover .history-timeline__tooltip,
 .history-timeline__block:focus-visible .history-timeline__tooltip {
   opacity: 1;

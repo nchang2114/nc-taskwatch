@@ -1601,7 +1601,9 @@ export default function ReflectionPage() {
   const timelineRef = useRef<HTMLDivElement | null>(null)
   const timelineBarRef = useRef<HTMLDivElement | null>(null)
   const activeTooltipRef = useRef<HTMLDivElement | null>(null)
+  const editingTooltipRef = useRef<HTMLDivElement | null>(null)
   const [activeTooltipOffsets, setActiveTooltipOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [activeTooltipPlacement, setActiveTooltipPlacement] = useState<'above' | 'below'>('above')
   const dragStateRef = useRef<DragState | null>(null)
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null)
   const dragPreviewRef = useRef<DragPreview | null>(null)
@@ -1757,6 +1759,14 @@ export default function ReflectionPage() {
     const viewportHeight = window.innerHeight
     const padding = 16
 
+    // Decide whether to anchor below if there isn't enough space above
+    const shouldBeBelow = rect.top < padding && rect.bottom < viewportHeight - padding
+    if (shouldBeBelow && activeTooltipPlacement !== 'below') {
+      setActiveTooltipPlacement('below')
+    } else if (!shouldBeBelow && activeTooltipPlacement !== 'above') {
+      setActiveTooltipPlacement('above')
+    }
+
     let shiftX = 0
     if (rect.left < padding) {
       shiftX = padding - rect.left
@@ -1780,7 +1790,7 @@ export default function ReflectionPage() {
       }
       return { x: shiftX, y: shiftY }
     })
-  }, [])
+  }, [activeTooltipPlacement])
 
   const setActiveTooltipNode = useCallback(
     (node: HTMLDivElement | null) => {
@@ -1793,6 +1803,10 @@ export default function ReflectionPage() {
     },
     [updateActiveTooltipOffsets],
   )
+
+  const setEditingTooltipNode = useCallback((node: HTMLDivElement | null) => {
+    editingTooltipRef.current = node
+  }, [])
 
   const lifeRoutineSurfaceLookup = useMemo(() => {
     const map = new Map<string, SurfaceStyle>(LIFE_ROUTINE_DEFAULT_SURFACE_LOOKUP)
@@ -2094,7 +2108,7 @@ export default function ReflectionPage() {
       window.removeEventListener('scroll', handleUpdate, true)
       timelineEl?.removeEventListener('scroll', handleUpdate)
     }
-  }, [hoveredHistoryId, selectedHistoryId, updateActiveTooltipOffsets])
+  }, [hoveredHistoryId, selectedHistoryId, activeTooltipPlacement, updateActiveTooltipOffsets])
 
   const handleDeleteHistoryEntry = useCallback(
     (entryId: string) => (
@@ -2401,8 +2415,12 @@ export default function ReflectionPage() {
     }
     const handlePointerDown = (event: PointerEvent) => {
       const timelineEl = timelineRef.current
+      const portalEl = editingTooltipRef.current
       const targetNode = event.target as Node | null
-      if (timelineEl && targetNode && timelineEl.contains(targetNode)) {
+      if (
+        (timelineEl && targetNode && timelineEl.contains(targetNode)) ||
+        (portalEl && targetNode && portalEl.contains(targetNode))
+      ) {
         return
       }
       handleCancelHistoryEdit()
@@ -3524,7 +3542,7 @@ export default function ReflectionPage() {
               const shouldSuppressTooltip = Boolean(dragStateRef.current)
               const tooltipClassName = `history-timeline__tooltip${isSelected ? ' history-timeline__tooltip--pinned' : ''}${
                 isEditing ? ' history-timeline__tooltip--editing' : ''
-              }`
+              }${isAnchoredTooltip && !isEditing && activeTooltipPlacement === 'below' ? ' history-timeline__tooltip--below' : ''}`
               const tooltipContent = (
                 <div className="history-timeline__tooltip-content">
                   {!isEditing ? (
@@ -3754,7 +3772,9 @@ export default function ReflectionPage() {
               const renderedTooltip =
                 (isEditing && typeof document !== 'undefined' && !(shouldSuppressTooltip && showDragBadge))
                   ? createPortal(
-                      <div {...tooltipCommonProps}>{tooltipContent}</div>,
+                      <div ref={setEditingTooltipNode} {...tooltipCommonProps} className={`${tooltipClassName} history-timeline__tooltip--portal`}>
+                        {tooltipContent}
+                      </div>,
                       document.body,
                     )
                   : inlineTooltip
