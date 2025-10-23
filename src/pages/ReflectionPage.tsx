@@ -3234,6 +3234,7 @@ export default function ReflectionPage() {
         </div>
         <div className="history-calendar-header">
           <div className="history-calendar-header__left">
+            <h2 className="history-calendar-header__month">{monthAndYearLabel}</h2>
             <button
               type="button"
               className="history-calendar-header__today"
@@ -3242,7 +3243,6 @@ export default function ReflectionPage() {
             >
               Today
             </button>
-            <h2 className="history-calendar-header__month">{monthAndYearLabel}</h2>
           </div>
           <div className="history-calendar-header__center">
             <button
