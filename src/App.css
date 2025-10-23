@@ -2772,6 +2772,11 @@ html[data-theme='light'] .taskwatch-notes__empty-text {
   outline: none;
 }
 
+.taskwatch-notes__item--completed .taskwatch-notes__input {
+  text-decoration: line-through;
+  color: rgba(190, 200, 250, 0.75);
+}
+
 .taskwatch-notes__remove {
   display: inline-flex;
   align-items: center;
@@ -4368,6 +4373,10 @@ html[data-theme='light'] .taskwatch-notes__empty {
   border-color: rgba(156, 168, 236, 0.45);
   background: rgba(226, 232, 255, 0.6);
   color: rgba(72, 84, 140, 0.68);
+}
+
+html[data-theme='light'] .taskwatch-notes__item--completed .taskwatch-notes__input {
+  color: rgba(86, 98, 150, 0.7);
 }
 
 html[data-theme='light'] .taskwatch-notes__empty:hover,

@@ -1655,6 +1655,11 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   color: rgba(199, 208, 255, 0.6);
 }
 
+.goal-task-details__subtask--completed .goal-task-details__subtask-input {
+  text-decoration: line-through;
+  color: rgba(188, 198, 252, 0.7);
+}
+
 .goal-task-details__subtask-input:focus {
   outline: none;
   border-color: rgba(158, 182, 255, 0.6);
@@ -2172,6 +2177,10 @@ html[data-theme='light'] .goal-task-details__subtask-input {
 
 html[data-theme='light'] .goal-task-details__subtask-input::placeholder {
   color: rgba(89, 100, 158, 0.6);
+}
+
+html[data-theme='light'] .goal-task-details__subtask--completed .goal-task-details__subtask-input {
+  color: rgba(90, 102, 160, 0.7);
 }
 
 html[data-theme='light'] .goal-task-details__subtask-input:focus {

@@ -134,6 +134,14 @@ const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
 const makeSessionKey = (goalId: string | null, bucketId: string | null, taskId: string | null) =>
   goalId && bucketId ? `${goalId}::${bucketId}::${taskId ?? ''}` : null
 
+const classNames = (...values: Array<string | false | null | undefined>): string =>
+  values.filter(Boolean).join(' ')
+
+const sanitizeDomIdSegment = (value: string): string => value.replace(/[^a-z0-9]/gi, '-')
+
+const makeNotebookSubtaskInputId = (entryKey: string, subtaskId: string): string =>
+  `taskwatch-subtask-${sanitizeDomIdSegment(entryKey)}-${sanitizeDomIdSegment(subtaskId)}`
+
 const createEmptySessionMetadata = (taskLabel: string): SessionMetadata => ({
   goalId: null,
   bucketId: null,
@@ -240,8 +248,10 @@ const createNotebookSubtaskId = () => {
   } catch {
     // ignore
   }
-  return `subtask-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  return `notebook-subtask-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
+
+const createNotebookEmptySubtask = () => ({ id: createNotebookSubtaskId(), text: '', completed: false })
 
 const computeNotebookKey = (focusSource: FocusSource | null, taskName: string): string => {
   if (focusSource?.taskId) {
@@ -995,12 +1005,47 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     },
     [notebookKey, updateNotebookForKey],
   )
-  const handleAddNotebookSubtask = useCallback(() => {
-    updateNotebookForKey(notebookKey, (entry) => ({
-      ...entry,
-      subtasks: [...entry.subtasks, { id: createNotebookSubtaskId(), text: '', completed: false }],
-    }))
-  }, [notebookKey, updateNotebookForKey])
+  const pendingNotebookSubtaskFocusRef = useRef<{ notebookKey: string; subtaskId: string } | null>(null)
+  const handleAddNotebookSubtask = useCallback(
+    (options?: { focus?: boolean }) => {
+      const newSubtask = createNotebookEmptySubtask()
+      updateNotebookForKey(notebookKey, (entry) => ({
+        ...entry,
+        subtasks: [...entry.subtasks, newSubtask],
+      }))
+      if (options?.focus) {
+        pendingNotebookSubtaskFocusRef.current = { notebookKey, subtaskId: newSubtask.id }
+      }
+    },
+    [notebookKey, updateNotebookForKey],
+  )
+  useEffect(() => {
+    const pending = pendingNotebookSubtaskFocusRef.current
+    if (!pending || pending.notebookKey !== notebookKey) {
+      return
+    }
+    if (typeof window === 'undefined') {
+      return
+    }
+    const inputId = makeNotebookSubtaskInputId(notebookKey, pending.subtaskId)
+    let attempts = 0
+    const tryFocus = () => {
+      const input = document.getElementById(inputId) as HTMLInputElement | null
+      if (input) {
+        input.focus()
+        input.select()
+        pendingNotebookSubtaskFocusRef.current = null
+        return
+      }
+      if (typeof window.requestAnimationFrame === 'function' && attempts < 2) {
+        attempts += 1
+        window.requestAnimationFrame(tryFocus)
+      } else {
+        pendingNotebookSubtaskFocusRef.current = null
+      }
+    }
+    tryFocus()
+  }, [notebookKey, notebookSubtasks])
   const handleNotebookSubtaskTextChange = useCallback(
     (subtaskId: string, value: string) => {
       updateNotebookForKey(notebookKey, (entry) => {
@@ -1008,10 +1053,27 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         if (index === -1) {
           return entry
         }
+        const target = entry.subtasks[index]
+        if (!target || target.text === value) {
+          return entry
+        }
         const nextSubtasks = entry.subtasks.map((item, idx) =>
           idx === index ? { ...item, text: value } : item,
         )
         return { ...entry, subtasks: nextSubtasks }
+      })
+    },
+    [notebookKey, updateNotebookForKey],
+  )
+  const handleNotebookSubtaskBlur = useCallback(
+    (subtaskId: string) => {
+      updateNotebookForKey(notebookKey, (entry) => {
+        const target = entry.subtasks.find((item) => item.id === subtaskId)
+        if (!target || target.text.trim().length > 0) {
+          return entry
+        }
+        const nextSubtasks = entry.subtasks.filter((item) => item.id !== subtaskId)
+        return nextSubtasks.length === entry.subtasks.length ? entry : { ...entry, subtasks: nextSubtasks }
       })
     },
     [notebookKey, updateNotebookForKey],
@@ -2615,7 +2677,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                 </span>
               ) : null}
             </div>
-            <button type="button" className="taskwatch-notes__add" onClick={handleAddNotebookSubtask}>
+            <button
+              type="button"
+              className="taskwatch-notes__add"
+              onClick={() => handleAddNotebookSubtask({ focus: true })}
+            >
               + Subtask
             </button>
           </div>
@@ -2624,22 +2690,40 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           ) : (
             <ul className="taskwatch-notes__list">
               {notebookSubtasks.map((subtask) => (
-                <li key={subtask.id} className="taskwatch-notes__item">
+                <li
+                  key={subtask.id}
+                  className={classNames(
+                    'taskwatch-notes__item',
+                    subtask.completed && 'taskwatch-notes__item--completed',
+                  )}
+                >
                   <label className="taskwatch-notes__subtask">
                     <input
                       type="checkbox"
                       className="taskwatch-notes__checkbox goal-task-details__checkbox"
                       checked={subtask.completed}
                       onChange={() => handleNotebookSubtaskToggle(subtask.id)}
-                      aria-label={subtask.text.trim().length > 0 ? `Mark "${subtask.text}" complete` : 'Toggle subtask'}
-                    />
-                    <input
-                      type="text"
-                      className="taskwatch-notes__input"
-                      value={subtask.text}
-                      onChange={(event) => handleNotebookSubtaskTextChange(subtask.id, event.target.value)}
-                      placeholder="Describe subtask"
-                    />
+                  aria-label={subtask.text.trim().length > 0 ? `Mark "${subtask.text}" complete` : 'Toggle subtask'}
+                />
+                <input
+                  id={makeNotebookSubtaskInputId(notebookKey, subtask.id)}
+                  type="text"
+                  className="taskwatch-notes__input"
+                  value={subtask.text}
+                  onChange={(event) => handleNotebookSubtaskTextChange(subtask.id, event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      const value = event.currentTarget.value.trim()
+                      if (value.length === 0) {
+                        return
+                      }
+                      handleAddNotebookSubtask({ focus: true })
+                    }
+                  }}
+                  onBlur={() => handleNotebookSubtaskBlur(subtask.id)}
+                  placeholder="Describe subtask"
+                />
                   </label>
                   <button
                     type="button"

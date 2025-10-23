@@ -218,6 +218,13 @@ const createSubtaskId = () => {
   return `subtask-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+const createEmptySubtask = () => ({ id: createSubtaskId(), text: '', completed: false })
+
+const sanitizeDomIdSegment = (value: string): string => value.replace(/[^a-z0-9]/gi, '-')
+
+const makeGoalSubtaskInputId = (taskId: string, subtaskId: string): string =>
+  `goal-subtask-${sanitizeDomIdSegment(taskId)}-${sanitizeDomIdSegment(subtaskId)}`
+
 const SHOW_TASK_DETAILS = true as const
 
 type FocusPromptTarget = {
@@ -1180,8 +1187,9 @@ interface GoalRowProps {
   taskDetails: TaskDetailsState
   handleToggleTaskDetails: (taskId: string) => void
   handleTaskNotesChange: (taskId: string, value: string) => void
-  handleAddSubtask: (taskId: string) => void
+  handleAddSubtask: (taskId: string, options?: { focus?: boolean }) => void
   handleSubtaskTextChange: (taskId: string, subtaskId: string, value: string) => void
+  handleSubtaskBlur: (taskId: string, subtaskId: string) => void
   handleToggleSubtaskCompleted: (taskId: string, subtaskId: string) => void
   handleRemoveSubtask: (taskId: string, subtaskId: string) => void
   taskDrafts: Record<string, string>
@@ -1382,6 +1390,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   handleTaskNotesChange,
   handleAddSubtask,
   handleSubtaskTextChange,
+  handleSubtaskBlur,
   handleToggleSubtaskCompleted,
   handleRemoveSubtask,
   taskDrafts,
@@ -3081,7 +3090,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                             className="goal-task-details__add"
                                             onClick={(event) => {
                                               event.stopPropagation()
-                                              handleAddSubtask(task.id)
+                                              handleAddSubtask(task.id, { focus: true })
                                             }}
                                             onPointerDown={(event) => event.stopPropagation()}
                                           >
@@ -3091,7 +3100,13 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         {hasSubtasks ? (
                                           <ul className="goal-task-details__subtask-list">
                                             {subtasks.map((subtask) => (
-                                              <li key={subtask.id} className="goal-task-details__subtask">
+                                              <li
+                                                key={subtask.id}
+                                                className={classNames(
+                                                  'goal-task-details__subtask',
+                                                  subtask.completed && 'goal-task-details__subtask--completed',
+                                                )}
+                                              >
                                                 <label className="goal-task-details__subtask-item">
                                                   <input
                                                     type="checkbox"
@@ -3104,12 +3119,24 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                     onPointerDown={(event) => event.stopPropagation()}
                                                   />
                                                   <input
+                                                    id={makeGoalSubtaskInputId(task.id, subtask.id)}
                                                     type="text"
                                                     className="goal-task-details__subtask-input"
                                                     value={subtask.text}
                                                     onChange={(event) =>
                                                       handleSubtaskTextChange(task.id, subtask.id, event.target.value)
                                                     }
+                                                    onKeyDown={(event) => {
+                                                      if (event.key === 'Enter') {
+                                                        event.preventDefault()
+                                                        const value = event.currentTarget.value.trim()
+                                                        if (value.length === 0) {
+                                                          return
+                                                        }
+                                                        handleAddSubtask(task.id, { focus: true })
+                                                      }
+                                                    }}
+                                                    onBlur={() => handleSubtaskBlur(task.id, subtask.id)}
                                                     onPointerDown={(event) => event.stopPropagation()}
                                                     placeholder="Describe subtask"
                                                   />
@@ -3568,7 +3595,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                             className="goal-task-details__add"
                                             onClick={(event) => {
                                               event.stopPropagation()
-                                              handleAddSubtask(task.id)
+                                              handleAddSubtask(task.id, { focus: true })
                                             }}
                                             onPointerDown={(event) => event.stopPropagation()}
                                           >
@@ -3576,10 +3603,16 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           </button>
                                         </div>
                                         {hasSubtasks ? (
-                                          <ul className="goal-task-details__subtask-list">
-                                            {subtasks.map((subtask) => (
-                                              <li key={subtask.id} className="goal-task-details__subtask">
-                                                <label className="goal-task-details__subtask-item">
+                                              <ul className="goal-task-details__subtask-list">
+                                                {subtasks.map((subtask) => (
+                                                  <li
+                                                    key={subtask.id}
+                                                    className={classNames(
+                                                      'goal-task-details__subtask',
+                                                      subtask.completed && 'goal-task-details__subtask--completed',
+                                                    )}
+                                                  >
+                                                    <label className="goal-task-details__subtask-item">
                                                       <input
                                                         type="checkbox"
                                                         className="goal-task-details__checkbox"
@@ -3591,12 +3624,24 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                         onPointerDown={(event) => event.stopPropagation()}
                                                       />
                                                       <input
+                                                        id={makeGoalSubtaskInputId(task.id, subtask.id)}
                                                         type="text"
                                                         className="goal-task-details__subtask-input"
                                                         value={subtask.text}
                                                         onChange={(event) =>
                                                           handleSubtaskTextChange(task.id, subtask.id, event.target.value)
                                                         }
+                                                        onKeyDown={(event) => {
+                                                          if (event.key === 'Enter') {
+                                                            event.preventDefault()
+                                                            const value = event.currentTarget.value.trim()
+                                                            if (value.length === 0) {
+                                                              return
+                                                            }
+                                                            handleAddSubtask(task.id, { focus: true })
+                                                          }
+                                                        }}
+                                                        onBlur={() => handleSubtaskBlur(task.id, subtask.id)}
                                                         onPointerDown={(event) => event.stopPropagation()}
                                                         placeholder="Describe subtask"
                                                       />
@@ -4193,6 +4238,8 @@ export default function GoalsPage(): ReactElement {
     [],
   )
 
+  const pendingGoalSubtaskFocusRef = useRef<{ taskId: string; subtaskId: string } | null>(null)
+
   const handleToggleTaskDetails = useCallback(
     (taskId: string) => {
       updateTaskDetails(taskId, (current) => ({
@@ -4219,15 +4266,47 @@ export default function GoalsPage(): ReactElement {
   )
 
   const handleAddSubtask = useCallback(
-    (taskId: string) => {
+    (taskId: string, options?: { focus?: boolean }) => {
+      const newSubtask = createEmptySubtask()
       updateTaskDetails(taskId, (current) => ({
         ...current,
         expanded: true,
-        subtasks: [...current.subtasks, { id: createSubtaskId(), text: '', completed: false }],
+        subtasks: [...current.subtasks, newSubtask],
       }))
+      if (options?.focus) {
+        pendingGoalSubtaskFocusRef.current = { taskId, subtaskId: newSubtask.id }
+      }
     },
     [updateTaskDetails],
   )
+
+  useEffect(() => {
+    const pending = pendingGoalSubtaskFocusRef.current
+    if (!pending) {
+      return
+    }
+    if (typeof window === 'undefined') {
+      return
+    }
+    const inputId = makeGoalSubtaskInputId(pending.taskId, pending.subtaskId)
+    let attempts = 0
+    const tryFocus = () => {
+      const input = document.getElementById(inputId) as HTMLInputElement | null
+      if (input) {
+        input.focus()
+        input.select()
+        pendingGoalSubtaskFocusRef.current = null
+        return
+      }
+      if (typeof window.requestAnimationFrame === 'function' && attempts < 2) {
+        attempts += 1
+        window.requestAnimationFrame(tryFocus)
+      } else {
+        pendingGoalSubtaskFocusRef.current = null
+      }
+    }
+    tryFocus()
+  }, [taskDetails])
 
   const handleSubtaskTextChange = useCallback(
     (taskId: string, subtaskId: string, value: string) => {
@@ -4236,13 +4315,38 @@ export default function GoalsPage(): ReactElement {
         if (index === -1) {
           return current
         }
+        const target = current.subtasks[index]
+        if (!target || target.text === value) {
+          return current
+        }
         const nextSubtasks = current.subtasks.map((item, idx) =>
           idx === index ? { ...item, text: value } : item,
         )
         return {
           ...current,
+          expanded: true,
           subtasks: nextSubtasks,
         }
+      })
+    },
+    [updateTaskDetails],
+  )
+
+  const handleSubtaskBlur = useCallback(
+    (taskId: string, subtaskId: string) => {
+      updateTaskDetails(taskId, (current) => {
+        const subtask = current.subtasks.find((item) => item.id === subtaskId)
+        if (!subtask) return current
+        if (subtask.text.trim().length > 0) {
+          return current
+        }
+        const nextSubtasks = current.subtasks.filter((item) => item.id !== subtaskId)
+        return nextSubtasks.length === current.subtasks.length
+          ? current
+          : {
+              ...current,
+              subtasks: nextSubtasks,
+            }
       })
     },
     [updateTaskDetails],
@@ -6818,6 +6922,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     handleTaskNotesChange={handleTaskNotesChange}
                     handleAddSubtask={handleAddSubtask}
                     handleSubtaskTextChange={handleSubtaskTextChange}
+                    handleSubtaskBlur={handleSubtaskBlur}
                     handleToggleSubtaskCompleted={handleToggleSubtaskCompleted}
                     handleRemoveSubtask={handleRemoveSubtask}
                     taskDrafts={taskDrafts}
@@ -6943,6 +7048,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                         handleTaskNotesChange={handleTaskNotesChange}
                         handleAddSubtask={handleAddSubtask}
                         handleSubtaskTextChange={handleSubtaskTextChange}
+                        handleSubtaskBlur={handleSubtaskBlur}
                         handleToggleSubtaskCompleted={handleToggleSubtaskCompleted}
                         handleRemoveSubtask={handleRemoveSubtask}
                         taskDrafts={taskDrafts}
