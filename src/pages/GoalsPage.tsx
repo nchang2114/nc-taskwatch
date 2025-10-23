@@ -3066,7 +3066,16 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       onPointerDown={(event) => event.stopPropagation()}
                                     >
                                       <div className="goal-task-details__subtasks">
-                                        <div className="goal-task-details__subtasks-header">
+                                        <div className="goal-task-details__section-title">
+                                          <p className="goal-task-details__heading">Subtasks</p>
+                                          {subtaskProgressLabel ? (
+                                            <span
+                                              className="goal-task-details__progress"
+                                              aria-label={`Subtasks complete ${completedSubtasks} of ${subtasks.length}`}
+                                            >
+                                              {subtaskProgressLabel}
+                                            </span>
+                                          ) : null}
                                           <button
                                             type="button"
                                             className="goal-task-details__add"
@@ -3078,14 +3087,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           >
                                             + Subtask
                                           </button>
-                                          {subtaskProgressLabel ? (
-                                            <span
-                                              className="goal-task-details__progress"
-                                              aria-label={`Subtasks complete ${completedSubtasks} of ${subtasks.length}`}
-                                            >
-                                              {subtaskProgressLabel}
-                                            </span>
-                                          ) : null}
                                         </div>
                                         {hasSubtasks ? (
                                           <ul className="goal-task-details__subtask-list">
@@ -3129,23 +3130,15 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                             ))}
                                           </ul>
                                         ) : (
-                                          <button
-                                            type="button"
-                                            className="goal-task-details__empty-add"
-                                            onClick={(event) => {
-                                              event.stopPropagation()
-                                              handleAddSubtask(task.id)
-                                            }}
-                                            onPointerDown={(event) => event.stopPropagation()}
-                                          >
-                                            Start a subtask
-                                          </button>
+                                          <div className="goal-task-details__empty">
+                                            <p className="goal-task-details__empty-text">No subtasks yet</p>
+                                          </div>
                                         )}
                                       </div>
                                       <div className="goal-task-details__notes">
-                                        {trimmedNotesLength > 0 ? (
-                                          <p className="goal-task-details__label">Notes</p>
-                                        ) : null}
+                                        <div className="goal-task-details__section-title goal-task-details__section-title--notes">
+                                          <p className="goal-task-details__heading">Notes</p>
+                                        </div>
                                         <textarea
                                           id={notesFieldId}
                                           className="goal-task-details__textarea"
@@ -3559,33 +3552,34 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           )}
                                           onPointerDown={(event) => event.stopPropagation()}
                                         >
-                                          <div className="goal-task-details__subtasks">
-                                            <div className="goal-task-details__subtasks-header">
-                                              <button
-                                                type="button"
-                                                className="goal-task-details__add"
-                                                onClick={(event) => {
-                                                  event.stopPropagation()
-                                                  handleAddSubtask(task.id)
-                                                }}
-                                                onPointerDown={(event) => event.stopPropagation()}
-                                              >
-                                                + Subtask
-                                              </button>
-                                              {subtaskProgressLabel ? (
-                                                <span
-                                                  className="goal-task-details__progress"
-                                                  aria-label={`Subtasks complete ${completedSubtasks} of ${subtasks.length}`}
-                                                >
-                                                  {subtaskProgressLabel}
-                                                </span>
-                                              ) : null}
-                                            </div>
-                                            {hasSubtasks ? (
-                                              <ul className="goal-task-details__subtask-list">
-                                                {subtasks.map((subtask) => (
-                                                  <li key={subtask.id} className="goal-task-details__subtask">
-                                                    <label className="goal-task-details__subtask-item">
+                                      <div className="goal-task-details__subtasks">
+                                        <div className="goal-task-details__section-title">
+                                          <p className="goal-task-details__heading">Subtasks</p>
+                                          {subtaskProgressLabel ? (
+                                            <span
+                                              className="goal-task-details__progress"
+                                              aria-label={`Subtasks complete ${completedSubtasks} of ${subtasks.length}`}
+                                            >
+                                              {subtaskProgressLabel}
+                                            </span>
+                                          ) : null}
+                                          <button
+                                            type="button"
+                                            className="goal-task-details__add"
+                                            onClick={(event) => {
+                                              event.stopPropagation()
+                                              handleAddSubtask(task.id)
+                                            }}
+                                            onPointerDown={(event) => event.stopPropagation()}
+                                          >
+                                            + Subtask
+                                          </button>
+                                        </div>
+                                        {hasSubtasks ? (
+                                          <ul className="goal-task-details__subtask-list">
+                                            {subtasks.map((subtask) => (
+                                              <li key={subtask.id} className="goal-task-details__subtask">
+                                                <label className="goal-task-details__subtask-item">
                                                       <input
                                                         type="checkbox"
                                                         className="goal-task-details__checkbox"
@@ -3622,29 +3616,21 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                   </li>
                                                 ))}
                                               </ul>
-                                            ) : (
-                                              <button
-                                                type="button"
-                                                className="goal-task-details__empty-add"
-                                                onClick={(event) => {
-                                                  event.stopPropagation()
-                                                  handleAddSubtask(task.id)
-                                                }}
-                                                onPointerDown={(event) => event.stopPropagation()}
-                                              >
-                                                Start a subtask
-                                              </button>
-                                            )}
+                                        ) : (
+                                          <div className="goal-task-details__empty">
+                                            <p className="goal-task-details__empty-text">No subtasks yet</p>
                                           </div>
-                                          <div className="goal-task-details__notes">
-                                            {trimmedNotesLength > 0 ? (
-                                              <p className="goal-task-details__label">Notes</p>
-                                            ) : null}
-                                            <textarea
-                                              id={notesFieldId}
-                                              className="goal-task-details__textarea"
-                                              value={notesValue}
-                                              onChange={(event) => handleTaskNotesChange(task.id, event.target.value)}
+                                        )}
+                                      </div>
+                                      <div className="goal-task-details__notes">
+                                        <div className="goal-task-details__section-title goal-task-details__section-title--notes">
+                                          <p className="goal-task-details__heading">Notes</p>
+                                        </div>
+                                        <textarea
+                                          id={notesFieldId}
+                                          className="goal-task-details__textarea"
+                                          value={notesValue}
+                                          onChange={(event) => handleTaskNotesChange(task.id, event.target.value)}
                                               onPointerDown={(event) => event.stopPropagation()}
                                               placeholder="Add a quick note..."
                                               rows={3}

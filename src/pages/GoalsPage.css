@@ -1517,7 +1517,33 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 .goal-task-details__notes,
 .goal-task-details__subtasks {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.35rem;
+}
+
+.goal-task-details__section-title {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.goal-task-details__heading {
+  margin: 0;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(211, 218, 255, 0.62);
+  flex: 1 1 auto;
+}
+
+.goal-task-details__section-title--notes {
+  grid-template-columns: 1fr;
+}
+
+.goal-task-details__section-title--notes .goal-task-details__heading {
+  flex: 0 0 auto;
+  color: rgba(211, 218, 255, 0.52);
 }
 
 .goal-task-details__label {
@@ -1549,19 +1575,13 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   box-shadow: 0 0 0 2px rgba(134, 154, 255, 0.24);
 }
 
-.goal-task-details__subtasks-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
 .goal-task-details__add {
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.25rem 0.65rem;
-  font-size: 0.75rem;
+  padding: 0.22rem 0.6rem;
+  font-size: 0.72rem;
   font-weight: 600;
   border-radius: 999px;
   border: 1px solid rgba(132, 156, 255, 0.45);
@@ -1580,32 +1600,34 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 }
 
 .goal-task-details__progress {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.03em;
   color: rgba(216, 222, 255, 0.65);
+  justify-self: end;
 }
+
 
 .goal-task-details__subtask-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.45rem;
+  gap: 0.25rem;
 }
 
 .goal-task-details__subtask {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.1rem 0;
+  gap: 0.3rem;
+  padding: 0.05rem 0;
 }
 
 .goal-task-details__subtask-item {
   flex: 1;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .goal-task-details__checkbox {
@@ -1660,28 +1682,17 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   transform: translateY(-1px);
 }
 
-.goal-task-details__empty-add {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: max-content;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  border-radius: 999px;
-  border: 1px dashed rgba(132, 156, 255, 0.45);
-  background: rgba(18, 24, 64, 0.4);
-  color: rgba(208, 216, 255, 0.7);
-  cursor: pointer;
-  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+
+.goal-task-details__empty {
+  padding: 0.3rem 0;
 }
 
-.goal-task-details__empty-add:hover,
-.goal-task-details__empty-add:focus-visible {
-  border-color: rgba(150, 176, 255, 0.58);
-  color: rgba(255, 255, 255, 0.92);
-  background: rgba(132, 156, 255, 0.15);
-  transform: translateY(-1px);
+.goal-task-details__empty-text {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(200, 210, 255, 0.65);
+  padding-inline-start: 1.2rem;
+  text-align: left;
 }
 
 .goal-task-row.dragging .goal-task-details {
@@ -2103,6 +2114,14 @@ html[data-theme='light'] .goal-task-details::before {
     rgba(136, 149, 222, 0.38) 88%,
     rgba(136, 149, 222, 0) 100%
   );
+}
+
+html[data-theme='light'] .goal-task-details__heading {
+  color: rgba(48, 56, 112, 0.72);
+}
+
+html[data-theme='light'] .goal-task-details__section-title--notes .goal-task-details__heading {
+  color: rgba(48, 56, 112, 0.6);
 }
 
 html[data-theme='light'] .goal-task-details__label {
