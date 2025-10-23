@@ -696,6 +696,9 @@ const MINUTE_MS = 60 * 1000
 const DAY_DURATION_MS = 24 * 60 * 60 * 1000
 const DRAG_DETECTION_THRESHOLD_PX = 3
 const MIN_SESSION_DURATION_DRAG_MS = MINUTE_MS
+// Double-tap (touch) detection settings
+const DOUBLE_TAP_DELAY_MS = 280
+const DOUBLE_TAP_DISTANCE_PX = 12
 
 const formatTimeInputValue = (timestamp: number | null): string => {
   if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
@@ -1613,6 +1616,19 @@ export default function ReflectionPage() {
     up: (e: PointerEvent) => void
     cancel: (e: PointerEvent) => void
   } | null>(null)
+  // Double-tap (touch) to edit
+  const lastTapRef = useRef<{ time: number; id: string; x: number; y: number } | null>(null)
+  const lastTapTimeoutRef = useRef<number | null>(null)
+  // Mouse pre-drag detection to preserve click/double-click semantics
+  const mousePreDragRef = useRef<{
+    pointerId: number
+    startX: number
+    segment: TimelineSegment
+  } | null>(null)
+  const mousePreDragHandlersRef = useRef<{
+    move: (e: PointerEvent) => void
+    up: (e: PointerEvent) => void
+  } | null>(null)
 
   const clearLongPressWatch = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -1628,6 +1644,24 @@ export default function ReflectionPage() {
       window.removeEventListener('pointercancel', handlers.cancel)
     }
     longPressCancelHandlersRef.current = null
+  }, [])
+
+  useEffect(() => {
+    // Cleanup double-tap timer on unmount
+    return () => {
+      if (lastTapTimeoutRef.current !== null) {
+        try { window.clearTimeout(lastTapTimeoutRef.current) } catch {}
+      }
+      lastTapTimeoutRef.current = null
+      lastTapRef.current = null
+      // Cleanup mouse pre-drag handlers
+      if (mousePreDragHandlersRef.current) {
+        window.removeEventListener('pointermove', mousePreDragHandlersRef.current.move)
+        window.removeEventListener('pointerup', mousePreDragHandlersRef.current.up)
+      }
+      mousePreDragHandlersRef.current = null
+      mousePreDragRef.current = null
+    }
   }, [])
 
   useEffect(() => {
@@ -3066,6 +3100,55 @@ export default function ReflectionPage() {
     [dayStart, dayEnd, handleWindowPointerMove, handleWindowPointerUp],
   )
 
+  // Start drag from native pointer event (used after mouse moves beyond threshold)
+  const startDragFromPointer = useCallback(
+    (nativeEvent: PointerEvent, segment: TimelineSegment, type: DragKind) => {
+      if (segment.entry.id === 'active-session') {
+        return
+      }
+      // Ensure primary button is pressed for mouse
+      if (nativeEvent.pointerType === 'mouse' && (nativeEvent.buttons & 1) !== 1) {
+        return
+      }
+      if (dragStateRef.current) {
+        return
+      }
+      const bar = timelineBarRef.current
+      if (!bar) {
+        return
+      }
+      const rect = bar.getBoundingClientRect()
+      if (!rect || rect.width <= 0) {
+        return
+      }
+      try {
+        nativeEvent.preventDefault()
+        bar.setPointerCapture?.(nativeEvent.pointerId)
+      } catch {}
+      dragStateRef.current = {
+        entryId: segment.entry.id,
+        type,
+        pointerId: nativeEvent.pointerId,
+        rectWidth: rect.width,
+        startX: nativeEvent.clientX,
+        initialStart: segment.entry.startedAt,
+        initialEnd: segment.entry.endedAt,
+        dayStart,
+        dayEnd,
+        minDurationMs: MIN_SESSION_DURATION_DRAG_MS,
+        hasMoved: false,
+      }
+      dragPreventClickRef.current = false
+      dragPreviewRef.current = null
+      setDragPreview(null)
+      setHoveredDuringDragId(segment.entry.id)
+      window.addEventListener('pointermove', handleWindowPointerMove)
+      window.addEventListener('pointerup', handleWindowPointerUp)
+      window.addEventListener('pointercancel', handleWindowPointerUp)
+    },
+    [dayStart, dayEnd, handleWindowPointerMove, handleWindowPointerUp],
+  )
+
   const startCreateDrag = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>, startTimestamp: number) => {
       if (event.button !== 0) {
@@ -3341,6 +3424,41 @@ export default function ReflectionPage() {
                   }, 360)
                   return
                 }
+                // For mouse/pen: defer starting drag until movement exceeds threshold to preserve click/dblclick
+                if ((event as any).pointerType === 'mouse' || (event as any).pointerType === 'pen') {
+                  mousePreDragRef.current = { pointerId: event.pointerId, startX: event.clientX, segment }
+                  const handleMove = (e: PointerEvent) => {
+                    const pending = mousePreDragRef.current
+                    if (!pending || e.pointerId !== pending.pointerId) return
+                    const dx = e.clientX - pending.startX
+                    if (Math.abs(dx) >= DRAG_DETECTION_THRESHOLD_PX) {
+                      // Begin drag and stop pre-drag listeners
+                      mousePreDragRef.current = null
+                      if (mousePreDragHandlersRef.current) {
+                        window.removeEventListener('pointermove', mousePreDragHandlersRef.current.move)
+                        window.removeEventListener('pointerup', mousePreDragHandlersRef.current.up)
+                        mousePreDragHandlersRef.current = null
+                      }
+                      startDragFromPointer(e, segment, 'move')
+                    }
+                  }
+                  const handleUp = (e: PointerEvent) => {
+                    const pending = mousePreDragRef.current
+                    if (pending && e.pointerId === pending.pointerId) {
+                      mousePreDragRef.current = null
+                      if (mousePreDragHandlersRef.current) {
+                        window.removeEventListener('pointermove', mousePreDragHandlersRef.current.move)
+                        window.removeEventListener('pointerup', mousePreDragHandlersRef.current.up)
+                        mousePreDragHandlersRef.current = null
+                      }
+                    }
+                  }
+                  mousePreDragHandlersRef.current = { move: handleMove, up: handleUp }
+                  window.addEventListener('pointermove', handleMove, { passive: true })
+                  window.addEventListener('pointerup', handleUp, { passive: true })
+                  return
+                }
+                // Fallback: start drag immediately
                 startDrag(event, segment, 'move')
               }
               const handleResizeStartPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -3348,6 +3466,47 @@ export default function ReflectionPage() {
               }
               const handleResizeEndPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
                 startDrag(event, segment, 'resize-end')
+              }
+              const handleBlockPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+                const isTouch = (event as any).pointerType === 'touch'
+                if (!isTouch) {
+                  return
+                }
+                // If a drag is active, ignore
+                if (dragStateRef.current && dragStateRef.current.entryId === segment.entry.id) {
+                  return
+                }
+                const now = typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now()
+                const prev = lastTapRef.current
+                const x = event.clientX
+                const y = event.clientY
+                const id = segment.entry.id
+                if (
+                  prev &&
+                  prev.id === id &&
+                  now - prev.time <= DOUBLE_TAP_DELAY_MS &&
+                  Math.hypot(x - prev.x, y - prev.y) <= DOUBLE_TAP_DISTANCE_PX
+                ) {
+                  // Double-tap detected: open edit panel (if not active session)
+                  lastTapRef.current = null
+                  if (!isActiveSessionSegment) {
+                    // Prevent following click from toggling selection
+                    dragPreventClickRef.current = true
+                    event.preventDefault()
+                    event.stopPropagation()
+                    clearLongPressWatch()
+                    handleStartEditingHistoryEntry(segment.entry)
+                  }
+                  return
+                }
+                lastTapRef.current = { time: now, id, x, y }
+                if (lastTapTimeoutRef.current !== null) {
+                  try { window.clearTimeout(lastTapTimeoutRef.current) } catch {}
+                }
+                lastTapTimeoutRef.current = window.setTimeout(() => {
+                  lastTapRef.current = null
+                  lastTapTimeoutRef.current = null
+                }, DOUBLE_TAP_DELAY_MS + 40)
               }
               const isPreviewEntry = segment.entry.id === 'new-entry'
               const isDragHover = hoveredDuringDragId === segment.entry.id
@@ -3508,6 +3667,21 @@ export default function ReflectionPage() {
                             >
                               Cancel
                             </button>
+                            {!isNewEntryEditing && segment.deletable ? (
+                              <button
+                                type="button"
+                                className="history-timeline__action-button"
+                                onPointerDown={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                }}
+                                onPointerUp={handleDeleteHistoryEntry(segment.entry.id)}
+                                onTouchEnd={handleDeleteHistoryEntry(segment.entry.id) as any}
+                                onClick={handleDeleteHistoryEntry(segment.entry.id)}
+                              >
+                                Delete session
+                              </button>
+                            ) : null}
                           </div>
                         </>
                       ) : (
@@ -3605,10 +3779,18 @@ export default function ReflectionPage() {
                   aria-pressed={isSelected}
                   aria-label={`${segment.tooltipTask} from ${formatTimeOfDay(resolvedStartedAt)} to ${formatTimeOfDay(resolvedEndedAt)}`}
                   onPointerDown={handleBlockPointerDown}
+                  onPointerUp={handleBlockPointerUp}
                   onClick={(event) => {
                     event.stopPropagation()
                     if (dragPreventClickRef.current) {
                       dragPreventClickRef.current = false
+                      return
+                    }
+                    // If this is the second click in a double-click sequence, open edit immediately (desktop reliability)
+                    if (event.detail === 2) {
+                      if (!isActiveSessionSegment) {
+                        handleStartEditingHistoryEntry(segment.entry)
+                      }
                       return
                     }
                     if (event.detail > 1) {
