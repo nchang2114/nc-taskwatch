@@ -2618,7 +2618,20 @@ html[data-theme='light'] .nav-links--drawer {
 .taskwatch-notes__subtasks {
   display: flex;
   flex-direction: column;
-  gap: clamp(0.55rem, 1.4vw, 0.85rem);
+  gap: clamp(0.45rem, 1.1vw, 0.65rem);
+}
+
+.taskwatch-notes__subtasks-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(0.45rem, 1.2vw, 0.8rem);
+}
+
+.taskwatch-notes__subtasks-header {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(0.35rem, 1vw, 0.55rem);
 }
 
 .taskwatch-notes__label {
@@ -2657,7 +2670,7 @@ html[data-theme='light'] .nav-links--drawer {
 .taskwatch-notes__subtasks-header {
   display: flex;
   align-items: center;
-  gap: clamp(0.45rem, 1.4vw, 0.8rem);
+  gap: clamp(0.35rem, 1vw, 0.55rem);
 }
 
 .taskwatch-notes__progress {
@@ -2670,6 +2683,7 @@ html[data-theme='light'] .nav-links--drawer {
 }
 
 .taskwatch-notes__add {
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2700,27 +2714,10 @@ html[data-theme='light'] .nav-links--drawer {
   outline-offset: 3px;
 }
 
-.taskwatch-notes__empty {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(0.45rem, 1.6vw, 0.65rem) clamp(0.8rem, 2.2vw, 1.2rem);
-  border-radius: 14px;
-  border: 1px dashed rgba(128, 150, 255, 0.45);
-  background: rgba(22, 30, 74, 0.54);
-  color: rgba(196, 206, 255, 0.7);
-  font-size: clamp(0.75rem, 1.6vw, 0.9rem);
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease;
-}
-
-.taskwatch-notes__empty:hover,
-.taskwatch-notes__empty:focus-visible {
-  border-color: rgba(154, 174, 255, 0.7);
-  background: rgba(48, 62, 138, 0.58);
-  color: rgba(240, 244, 255, 0.92);
-  transform: translateY(-1px);
+.taskwatch-notes__empty-text {
+  margin: 0;
+  font-size: clamp(0.75rem, 1.5vw, 0.85rem);
+  color: rgba(196, 206, 255, 0.68);
 }
 
 .taskwatch-notes__list {
@@ -2729,22 +2726,22 @@ html[data-theme='light'] .nav-links--drawer {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: clamp(0.55rem, 1.6vw, 0.85rem);
+  gap: clamp(0.45rem, 1.4vw, 0.7rem);
 }
 
 .taskwatch-notes__item {
   display: flex;
   align-items: center;
-  gap: clamp(0.55rem, 1.6vw, 0.85rem);
+  gap: clamp(0.45rem, 1.2vw, 0.7rem);
 }
 
 .taskwatch-notes__subtask {
   flex: 1;
   display: inline-flex;
   align-items: center;
-  gap: clamp(0.55rem, 1.6vw, 0.85rem);
-  padding: clamp(0.45rem, 1.4vw, 0.65rem) clamp(0.65rem, 1.8vw, 0.95rem);
-  border-radius: clamp(12px, 2.4vw, 16px);
+  gap: clamp(0.45rem, 1.2vw, 0.7rem);
+  padding: clamp(0.4rem, 1.2vw, 0.55rem) clamp(0.55rem, 1.6vw, 0.85rem);
+  border-radius: clamp(10px, 2vw, 14px);
   border: 1px solid rgba(122, 146, 255, 0.26);
   background: rgba(14, 20, 52, 0.78);
 }

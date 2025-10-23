@@ -2606,21 +2606,21 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         </div>
 
         <div className="taskwatch-notes__subtasks">
-          <div className="taskwatch-notes__subtasks-header">
-            <p className="taskwatch-notes__label">Subtasks</p>
-            {subtaskProgressLabel ? (
-              <span className="taskwatch-notes__progress" aria-label={`Completed ${subtaskProgressLabel} subtasks`}>
-                {subtaskProgressLabel}
-              </span>
-            ) : null}
+          <div className="taskwatch-notes__subtasks-row">
+            <div className="taskwatch-notes__subtasks-header">
+              <p className="taskwatch-notes__label">Subtasks</p>
+              {subtaskProgressLabel ? (
+                <span className="taskwatch-notes__progress" aria-label={`Completed ${subtaskProgressLabel} subtasks`}>
+                  {subtaskProgressLabel}
+                </span>
+              ) : null}
+            </div>
             <button type="button" className="taskwatch-notes__add" onClick={handleAddNotebookSubtask}>
               + Subtask
             </button>
           </div>
           {notebookSubtasks.length === 0 ? (
-            <button type="button" className="taskwatch-notes__empty" onClick={handleAddNotebookSubtask}>
-              Start a subtask
-            </button>
+            <p className="taskwatch-notes__empty-text">No subtasks yet</p>
           ) : (
             <ul className="taskwatch-notes__list">
               {notebookSubtasks.map((subtask) => (
