@@ -20,12 +20,15 @@ import {
   deleteTaskById as apiDeleteTaskById,
   createTask as apiCreateTask,
   updateTaskText as apiUpdateTaskText,
+  updateTaskNotes as apiUpdateTaskNotes,
   setTaskDifficulty as apiSetTaskDifficulty,
   setTaskCompletedAndResort as apiSetTaskCompletedAndResort,
   setTaskSortIndex as apiSetTaskSortIndex,
   setBucketSortIndex as apiSetBucketSortIndex,
   setGoalSortIndex as apiSetGoalSortIndex,
   setTaskPriorityAndResort as apiSetTaskPriorityAndResort,
+  upsertTaskSubtask as apiUpsertTaskSubtask,
+  deleteTaskSubtask as apiDeleteTaskSubtask,
   seedGoalsIfEmpty,
 } from '../lib/goalsApi'
 import {
@@ -89,12 +92,15 @@ export interface TaskItem {
   difficulty?: 'none' | 'green' | 'yellow' | 'red'
   // Local-only: whether this task is prioritized (not persisted yet)
   priority?: boolean
+  notes?: string | null
+  subtasks?: TaskSubtask[]
 }
 
 type TaskSubtask = {
   id: string
   text: string
   completed: boolean
+  sortIndex: number
 }
 
 type TaskDetails = {
@@ -134,7 +140,13 @@ const sanitizeSubtasks = (value: unknown): TaskSubtask[] => {
       }
       const text = typeof candidate.text === 'string' ? candidate.text : ''
       const completed = Boolean(candidate.completed)
-      return { id, text, completed }
+      const sortIndex =
+        typeof candidate.sortIndex === 'number'
+          ? candidate.sortIndex
+          : typeof (candidate as any).sort_index === 'number'
+            ? ((candidate as any).sort_index as number)
+            : 0
+      return { id, text, completed, sortIndex }
     })
     .filter((item): item is TaskSubtask => Boolean(item))
 }
@@ -190,7 +202,12 @@ const areTaskDetailsEqual = (a: TaskDetails, b: TaskDetails): boolean => {
     if (!right) {
       return false
     }
-    if (left.id !== right.id || left.text !== right.text || left.completed !== right.completed) {
+    if (
+      left.id !== right.id ||
+      left.text !== right.text ||
+      left.completed !== right.completed ||
+      left.sortIndex !== right.sortIndex
+    ) {
       return false
     }
   }
@@ -218,7 +235,28 @@ const createSubtaskId = () => {
   return `subtask-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-const createEmptySubtask = () => ({ id: createSubtaskId(), text: '', completed: false })
+const SUBTASK_SORT_STEP = 1024
+
+const createEmptySubtask = (sortIndex: number) => ({
+  id: createSubtaskId(),
+  text: '',
+  completed: false,
+  sortIndex,
+})
+
+const getNextSubtaskSortIndex = (subtasks: TaskSubtask[]): number => {
+  if (subtasks.length === 0) {
+    return SUBTASK_SORT_STEP
+  }
+  let max = 0
+  for (let index = 0; index < subtasks.length; index += 1) {
+    const candidate = subtasks[index]?.sortIndex ?? 0
+    if (candidate > max) {
+      max = candidate
+    }
+  }
+  return max + SUBTASK_SORT_STEP
+}
 
 const sanitizeDomIdSegment = (value: string): string => value.replace(/[^a-z0-9]/gi, '-')
 
@@ -4165,6 +4203,7 @@ export default function GoalsPage(): ReactElement {
   const goalModalInputRef = useRef<HTMLInputElement | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [taskDetails, setTaskDetails] = useState<TaskDetailsState>(() => readStoredTaskDetails())
+  const taskDetailsRef = useRef<TaskDetailsState>(taskDetails)
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -4175,6 +4214,9 @@ export default function GoalsPage(): ReactElement {
     } catch {
       // Ignore quota or storage errors silently
     }
+  }, [taskDetails])
+  useEffect(() => {
+    taskDetailsRef.current = taskDetails
   }, [taskDetails])
 
   useEffect(() => {
@@ -4198,6 +4240,29 @@ export default function GoalsPage(): ReactElement {
       })
       return changed ? next : current
     })
+    if (typeof window !== 'undefined') {
+      taskNotesLatestRef.current.forEach((_, taskId) => {
+        if (!validTaskIds.has(taskId)) {
+          const timer = taskNotesSaveTimersRef.current.get(taskId)
+          if (timer) {
+            window.clearTimeout(timer)
+            taskNotesSaveTimersRef.current.delete(taskId)
+          }
+          taskNotesLatestRef.current.delete(taskId)
+        }
+      })
+      subtaskLatestRef.current.forEach((_, compositeKey) => {
+        const [taskId] = compositeKey.split(':')
+        if (!taskId || !validTaskIds.has(taskId)) {
+          const timer = subtaskSaveTimersRef.current.get(compositeKey)
+          if (timer) {
+            window.clearTimeout(timer)
+            subtaskSaveTimersRef.current.delete(compositeKey)
+          }
+          subtaskLatestRef.current.delete(compositeKey)
+        }
+      })
+    }
   }, [goals])
 
   useEffect(() => {
@@ -4239,6 +4304,107 @@ export default function GoalsPage(): ReactElement {
   )
 
   const pendingGoalSubtaskFocusRef = useRef<{ taskId: string; subtaskId: string } | null>(null)
+  const taskNotesSaveTimersRef = useRef<Map<string, number>>(new Map())
+  const taskNotesLatestRef = useRef<Map<string, string>>(new Map())
+  const subtaskSaveTimersRef = useRef<Map<string, number>>(new Map())
+  const subtaskLatestRef = useRef<Map<string, TaskSubtask>>(new Map())
+
+  const scheduleTaskNotesPersist = useCallback(
+    (taskId: string, notes: string) => {
+      if (typeof window === 'undefined') {
+        void apiUpdateTaskNotes(taskId, notes).catch((error) =>
+          console.warn('[GoalsPage] Failed to persist task notes:', error),
+        )
+        return
+      }
+      taskNotesLatestRef.current.set(taskId, notes)
+      const timers = taskNotesSaveTimersRef.current
+      const pending = timers.get(taskId)
+      if (pending) {
+        window.clearTimeout(pending)
+      }
+      const handle = window.setTimeout(() => {
+        timers.delete(taskId)
+        const latest = taskNotesLatestRef.current.get(taskId) ?? ''
+        void apiUpdateTaskNotes(taskId, latest).catch((error) =>
+          console.warn('[GoalsPage] Failed to persist task notes:', error),
+        )
+      }, 500)
+      timers.set(taskId, handle)
+    },
+    [apiUpdateTaskNotes],
+  )
+
+  const cancelPendingSubtaskSave = useCallback((taskId: string, subtaskId: string) => {
+    if (typeof window !== 'undefined') {
+      const key = `${taskId}:${subtaskId}`
+      const timers = subtaskSaveTimersRef.current
+      const pending = timers.get(key)
+      if (pending) {
+        window.clearTimeout(pending)
+        timers.delete(key)
+      }
+      subtaskLatestRef.current.delete(key)
+    } else {
+      subtaskLatestRef.current.delete(`${taskId}:${subtaskId}`)
+    }
+  }, [])
+
+  const scheduleSubtaskPersist = useCallback(
+    (taskId: string, subtask: TaskSubtask) => {
+      if (subtask.text.trim().length === 0) {
+        cancelPendingSubtaskSave(taskId, subtask.id)
+        return
+      }
+      const key = `${taskId}:${subtask.id}`
+      subtaskLatestRef.current.set(key, { ...subtask })
+      if (typeof window === 'undefined') {
+        void apiUpsertTaskSubtask(taskId, {
+          id: subtask.id,
+          text: subtask.text,
+          completed: subtask.completed,
+          sort_index: subtask.sortIndex,
+        }).catch((error) => console.warn('[GoalsPage] Failed to persist subtask:', error))
+        return
+      }
+      const timers = subtaskSaveTimersRef.current
+      const pending = timers.get(key)
+      if (pending) {
+        window.clearTimeout(pending)
+      }
+      const handle = window.setTimeout(() => {
+        timers.delete(key)
+        const latest = subtaskLatestRef.current.get(key)
+        if (!latest || latest.text.trim().length === 0) {
+          return
+        }
+        void apiUpsertTaskSubtask(taskId, {
+          id: latest.id,
+          text: latest.text,
+          completed: latest.completed,
+          sort_index: latest.sortIndex,
+        }).catch((error) => console.warn('[GoalsPage] Failed to persist subtask:', error))
+      }, 400)
+      timers.set(key, handle)
+    },
+    [apiUpsertTaskSubtask, cancelPendingSubtaskSave],
+  )
+
+  const flushSubtaskPersist = useCallback(
+    (taskId: string, subtask: TaskSubtask) => {
+      cancelPendingSubtaskSave(taskId, subtask.id)
+      if (subtask.text.trim().length === 0) {
+        return
+      }
+      void apiUpsertTaskSubtask(taskId, {
+        id: subtask.id,
+        text: subtask.text,
+        completed: subtask.completed,
+        sort_index: subtask.sortIndex,
+      }).catch((error) => console.warn('[GoalsPage] Failed to persist subtask:', error))
+    },
+    [apiUpsertTaskSubtask, cancelPendingSubtaskSave],
+  )
 
   const handleToggleTaskDetails = useCallback(
     (taskId: string) => {
@@ -4261,13 +4427,16 @@ export default function GoalsPage(): ReactElement {
           notes: value,
         }
       })
+      scheduleTaskNotesPersist(taskId, value)
     },
-    [updateTaskDetails],
+    [scheduleTaskNotesPersist, updateTaskDetails],
   )
 
   const handleAddSubtask = useCallback(
     (taskId: string, options?: { focus?: boolean }) => {
-      const newSubtask = createEmptySubtask()
+      const currentDetails = taskDetailsRef.current[taskId] ?? createTaskDetails()
+      const sortIndex = getNextSubtaskSortIndex(currentDetails.subtasks ?? [])
+      const newSubtask = createEmptySubtask(sortIndex)
       updateTaskDetails(taskId, (current) => ({
         ...current,
         expanded: true,
@@ -4310,81 +4479,100 @@ export default function GoalsPage(): ReactElement {
 
   const handleSubtaskTextChange = useCallback(
     (taskId: string, subtaskId: string, value: string) => {
-      updateTaskDetails(taskId, (current) => {
-        const index = current.subtasks.findIndex((item) => item.id === subtaskId)
-        if (index === -1) {
-          return current
-        }
-        const target = current.subtasks[index]
-        if (!target || target.text === value) {
-          return current
-        }
-        const nextSubtasks = current.subtasks.map((item, idx) =>
-          idx === index ? { ...item, text: value } : item,
-        )
-        return {
-          ...current,
-          expanded: true,
-          subtasks: nextSubtasks,
-        }
-      })
+      const currentDetails = taskDetailsRef.current[taskId] ?? createTaskDetails()
+      const existing = currentDetails.subtasks.find((item) => item.id === subtaskId)
+      if (!existing || existing.text === value) {
+        return
+      }
+      const updated: TaskSubtask = { ...existing, text: value }
+      updateTaskDetails(taskId, (current) => ({
+        ...current,
+        expanded: true,
+        subtasks: current.subtasks.map((item) => (item.id === subtaskId ? updated : item)),
+      }))
+      if (value.trim().length > 0) {
+        scheduleSubtaskPersist(taskId, updated)
+      } else {
+        cancelPendingSubtaskSave(taskId, subtaskId)
+      }
     },
-    [updateTaskDetails],
+    [cancelPendingSubtaskSave, scheduleSubtaskPersist, updateTaskDetails],
   )
 
   const handleSubtaskBlur = useCallback(
     (taskId: string, subtaskId: string) => {
-      updateTaskDetails(taskId, (current) => {
-        const subtask = current.subtasks.find((item) => item.id === subtaskId)
-        if (!subtask) return current
-        if (subtask.text.trim().length > 0) {
-          return current
-        }
-        const nextSubtasks = current.subtasks.filter((item) => item.id !== subtaskId)
-        return nextSubtasks.length === current.subtasks.length
-          ? current
-          : {
-              ...current,
-              subtasks: nextSubtasks,
-            }
-      })
+      const currentDetails = taskDetailsRef.current[taskId] ?? createTaskDetails()
+      const existing = currentDetails.subtasks.find((item) => item.id === subtaskId)
+      if (!existing) {
+        return
+      }
+      const trimmed = existing.text.trim()
+      if (trimmed.length === 0) {
+        updateTaskDetails(taskId, (current) => ({
+          ...current,
+          subtasks: current.subtasks.filter((item) => item.id !== subtaskId),
+        }))
+        cancelPendingSubtaskSave(taskId, subtaskId)
+        void apiDeleteTaskSubtask(taskId, subtaskId).catch((error) =>
+          console.warn('[GoalsPage] Failed to delete empty subtask:', error),
+        )
+        return
+      }
+      const normalized: TaskSubtask =
+        trimmed === existing.text ? existing : { ...existing, text: trimmed }
+      updateTaskDetails(taskId, (current) => ({
+        ...current,
+        subtasks: current.subtasks.map((item) => (item.id === subtaskId ? normalized : item)),
+      }))
+      flushSubtaskPersist(taskId, normalized)
     },
-    [updateTaskDetails],
+    [cancelPendingSubtaskSave, flushSubtaskPersist, updateTaskDetails],
   )
 
   const handleToggleSubtaskCompleted = useCallback(
     (taskId: string, subtaskId: string) => {
-      updateTaskDetails(taskId, (current) => {
-        const index = current.subtasks.findIndex((item) => item.id === subtaskId)
-        if (index === -1) {
-          return current
-        }
-        const nextSubtasks = current.subtasks.map((item, idx) =>
-          idx === index ? { ...item, completed: !item.completed } : item,
-        )
-        return {
-          ...current,
-          subtasks: nextSubtasks,
-        }
-      })
+      const currentDetails = taskDetailsRef.current[taskId] ?? createTaskDetails()
+      const existing = currentDetails.subtasks.find((item) => item.id === subtaskId)
+      if (!existing) {
+        return
+      }
+      const toggled: TaskSubtask = { ...existing, completed: !existing.completed }
+      updateTaskDetails(taskId, (current) => ({
+        ...current,
+        subtasks: current.subtasks.map((item) => (item.id === subtaskId ? toggled : item)),
+      }))
+      if (toggled.text.trim().length === 0) {
+        cancelPendingSubtaskSave(taskId, toggled.id)
+        return
+      }
+      scheduleSubtaskPersist(taskId, toggled)
     },
-    [updateTaskDetails],
+    [cancelPendingSubtaskSave, scheduleSubtaskPersist, updateTaskDetails],
   )
 
   const handleRemoveSubtask = useCallback(
     (taskId: string, subtaskId: string) => {
+      let removed = false
       updateTaskDetails(taskId, (current) => {
         const nextSubtasks = current.subtasks.filter((item) => item.id !== subtaskId)
         if (nextSubtasks.length === current.subtasks.length) {
           return current
         }
+        removed = true
         return {
           ...current,
           subtasks: nextSubtasks,
         }
       })
+      if (!removed) {
+        return
+      }
+      cancelPendingSubtaskSave(taskId, subtaskId)
+      void apiDeleteTaskSubtask(taskId, subtaskId).catch((error) =>
+        console.warn('[GoalsPage] Failed to remove subtask:', error),
+      )
     },
-    [updateTaskDetails],
+    [cancelPendingSubtaskSave, updateTaskDetails],
   )
   const [nextGoalGradientIndex, setNextGoalGradientIndex] = useState(() => DEFAULT_GOALS.length % GOAL_GRADIENTS.length)
   const [activeCustomizerGoalId, setActiveCustomizerGoalId] = useState<string | null>(null)
@@ -4436,10 +4624,58 @@ export default function GoalsPage(): ReactElement {
                   ...bucket,
                   archived: Boolean(bucket.archived),
                   surfaceStyle: normalizeBucketSurfaceStyle(bucket.surfaceStyle as string | null | undefined),
+                  tasks: Array.isArray(bucket.tasks)
+                    ? bucket.tasks.map((task: any) => ({
+                        ...task,
+                        notes: typeof task.notes === 'string' ? task.notes : '',
+                        subtasks: Array.isArray(task.subtasks)
+                          ? task.subtasks.map((subtask: any, subIndex: number) => ({
+                              id: subtask.id,
+                              text: typeof subtask.text === 'string' ? subtask.text : '',
+                              completed: Boolean(subtask.completed),
+                              sortIndex:
+                                typeof subtask.sortIndex === 'number'
+                                  ? subtask.sortIndex
+                                  : typeof subtask.sort_index === 'number'
+                                    ? subtask.sort_index
+                                    : (subIndex + 1) * SUBTASK_SORT_STEP,
+                            }))
+                          : [],
+                      }))
+                    : [],
                 }))
               : [],
           }))
           setGoals(normalized as any)
+          setTaskDetails((current) => {
+            const next: TaskDetailsState = {}
+            normalized.forEach((goal: any) => {
+              goal.buckets?.forEach((bucket: any) => {
+                bucket.tasks?.forEach((task: any) => {
+                  const existing = current[task.id]
+                  const subtasks = Array.isArray(task.subtasks)
+                    ? task.subtasks.map((subtask: any) => ({
+                        id: subtask.id,
+                        text: typeof subtask.text === 'string' ? subtask.text : '',
+                        completed: Boolean(subtask.completed),
+                        sortIndex:
+                          typeof subtask.sortIndex === 'number'
+                            ? subtask.sortIndex
+                            : typeof subtask.sort_index === 'number'
+                              ? subtask.sort_index
+                              : SUBTASK_SORT_STEP,
+                      }))
+                    : []
+                  next[task.id] = {
+                    notes: typeof task.notes === 'string' ? task.notes : '',
+                    subtasks,
+                    expanded: existing?.expanded ?? false,
+                  }
+                })
+              })
+            })
+            return next
+          })
         }
       } catch {
         // ignore; fall back to local defaults
@@ -4447,6 +4683,36 @@ export default function GoalsPage(): ReactElement {
     })()
     return () => {
       cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined') {
+        taskNotesSaveTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+        subtaskSaveTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+      }
+      taskNotesSaveTimersRef.current.clear()
+      subtaskSaveTimersRef.current.clear()
+      taskNotesLatestRef.current.forEach((notes, taskId) => {
+        void apiUpdateTaskNotes(taskId, notes).catch((error) =>
+          console.warn('[GoalsPage] Failed to flush task notes on cleanup:', error),
+        )
+      })
+      subtaskLatestRef.current.forEach((subtask, compositeKey) => {
+        const [taskId] = compositeKey.split(':')
+        if (!taskId || subtask.text.trim().length === 0) {
+          return
+        }
+        void apiUpsertTaskSubtask(taskId, {
+          id: subtask.id,
+          text: subtask.text,
+          completed: subtask.completed,
+          sort_index: subtask.sortIndex,
+        }).catch((error) => console.warn('[GoalsPage] Failed to flush subtask on cleanup:', error))
+      })
+      taskNotesLatestRef.current.clear()
+      subtaskLatestRef.current.clear()
     }
   }, [])
   const previousExpandedRef = useRef<Record<string, boolean> | null>(null)

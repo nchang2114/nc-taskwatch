@@ -28,6 +28,16 @@ export type DbTask = {
   difficulty: 'none' | 'green' | 'yellow' | 'red'
   priority: boolean
   sort_index: number
+  notes: string | null
+}
+
+export type DbTaskSubtask = {
+  id: string
+  user_id: string
+  task_id: string
+  text: string
+  completed: boolean
+  sort_index: number
 }
 
 type TaskSeed = {
@@ -35,6 +45,7 @@ type TaskSeed = {
   completed?: boolean
   difficulty?: DbTask['difficulty']
   priority?: boolean
+  notes?: string
 }
 
 type BucketSeed = {
@@ -77,6 +88,13 @@ export async function fetchGoalsHierarchy(): Promise<
             completed: boolean
             difficulty?: 'none' | 'green' | 'yellow' | 'red'
             priority?: boolean
+            notes?: string | null
+            subtasks?: Array<{
+              id: string
+              text: string
+              completed: boolean
+              sort_index?: number | null
+            }>
           }>
         }>
       }>
@@ -110,13 +128,38 @@ export async function fetchGoalsHierarchy(): Promise<
   const { data: tasks, error: tErr } = bucketIds.length
     ? await supabase
         .from('tasks')
-        .select('id, user_id, bucket_id, text, completed, difficulty, priority, sort_index')
+        .select('id, user_id, bucket_id, text, completed, difficulty, priority, sort_index, notes')
         .in('bucket_id', bucketIds)
         .order('completed', { ascending: true })
         .order('priority', { ascending: false })
         .order('sort_index', { ascending: true })
     : { data: [], error: null as any }
-  if (tErr) return null
+  if (tErr) {
+    console.error('[goalsApi] fetchGoalsHierarchy tasks error', tErr.message ?? tErr, tErr)
+    return null
+  }
+
+  const taskIds = (tasks ?? []).map((task) => task.id)
+
+  const { data: taskSubtasks, error: sErr } = taskIds.length
+    ? await supabase
+        .from('task_subtasks')
+        .select('id, user_id, task_id, text, completed, sort_index')
+        .in('task_id', taskIds)
+        .order('task_id', { ascending: true })
+        .order('sort_index', { ascending: true })
+    : { data: [], error: null as any }
+  if (sErr) {
+    console.error('[goalsApi] fetchGoalsHierarchy subtasks error', sErr.message ?? sErr, sErr)
+    return null
+  }
+
+  const subtasksByTaskId = new Map<string, DbTaskSubtask[]>()
+  ;(taskSubtasks ?? []).forEach((subtask) => {
+    const list = subtasksByTaskId.get(subtask.task_id) ?? []
+    list.push(subtask as DbTaskSubtask)
+    subtasksByTaskId.set(subtask.task_id, list)
+  })
 
   // Build hierarchy
   const bucketsByGoal = new Map<
@@ -145,12 +188,20 @@ export async function fetchGoalsHierarchy(): Promise<
   ;(tasks ?? []).forEach((t) => {
     const bucket = bucketMap.get(t.bucket_id)
     if (bucket) {
+      const subtasks = subtasksByTaskId.get(t.id) ?? []
       bucket.tasks.push({
         id: t.id,
         text: t.text,
         completed: !!t.completed,
         difficulty: (t.difficulty as any) ?? 'none',
         priority: !!(t as any).priority,
+        notes: typeof (t as any).notes === 'string' ? (t as any).notes : null,
+        subtasks: subtasks.map((subtask) => ({
+          id: subtask.id,
+          text: subtask.text ?? '',
+          completed: !!subtask.completed,
+          sort_index: subtask.sort_index ?? 0,
+        })),
       })
     }
   })
@@ -483,19 +534,47 @@ export async function createTask(bucketId: string, text: string) {
   const sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed: false })
   const { data, error } = await supabase
     .from('tasks')
-    .insert([{ user_id: session.user.id, bucket_id: bucketId, text, completed: false, difficulty: 'none', priority: false, sort_index }])
-    .select('id, text, completed, difficulty, priority, sort_index')
+    .insert([
+      {
+        user_id: session.user.id,
+        bucket_id: bucketId,
+        text,
+        completed: false,
+        difficulty: 'none',
+        priority: false,
+        sort_index,
+        notes: '',
+      },
+    ])
+    .select('id, text, completed, difficulty, priority, sort_index, notes')
     .single()
   if (error || !data) {
     throw error ?? new Error('Failed to create task')
   }
-  return data as { id: string; text: string; completed: boolean; difficulty: DbTask['difficulty']; priority: boolean; sort_index: number }
+  return data as {
+    id: string
+    text: string
+    completed: boolean
+    difficulty: DbTask['difficulty']
+    priority: boolean
+    sort_index: number
+    notes: string | null
+  }
 }
 
 export async function updateTaskText(taskId: string, text: string) {
   if (!supabase) throw new Error('Supabase client unavailable')
   await ensureSingleUserSession()
   const { error } = await supabase.from('tasks').update({ text }).eq('id', taskId)
+  if (error) {
+    throw error
+  }
+}
+
+export async function updateTaskNotes(taskId: string, notes: string) {
+  if (!supabase) throw new Error('Supabase client unavailable')
+  await ensureSingleUserSession()
+  const { error } = await supabase.from('tasks').update({ notes }).eq('id', taskId)
   if (error) {
     throw error
   }
@@ -633,6 +712,46 @@ export async function setTaskSortIndex(bucketId: string, section: 'active' | 'co
   await updateTaskWithGuard(taskId, bucketId, { sort_index: newSort }, 'id')
 }
 
+export async function upsertTaskSubtask(
+  taskId: string,
+  subtask: { id: string; text: string; completed: boolean; sort_index: number },
+) {
+  if (!supabase) throw new Error('Supabase client unavailable')
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) {
+    throw new Error('[goalsApi] Missing Supabase session for subtask upsert')
+  }
+  const payload = {
+    id: subtask.id,
+    task_id: taskId,
+    user_id: session.user.id,
+    text: subtask.text,
+    completed: subtask.completed,
+    sort_index: subtask.sort_index,
+  }
+  const { error } = await supabase.from('task_subtasks').upsert(payload, { onConflict: 'id' })
+  if (error) {
+    throw error
+  }
+}
+
+export async function deleteTaskSubtask(taskId: string, subtaskId: string) {
+  if (!supabase) throw new Error('Supabase client unavailable')
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) {
+    throw new Error('[goalsApi] Missing Supabase session for subtask delete')
+  }
+  const { error } = await supabase
+    .from('task_subtasks')
+    .delete()
+    .eq('id', subtaskId)
+    .eq('task_id', taskId)
+    .eq('user_id', session.user.id)
+  if (error) {
+    throw error
+  }
+}
+
 export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
   if (!supabase) return false
   if (!seeds || seeds.length === 0) return false
@@ -724,6 +843,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       difficulty: DbTask['difficulty']
       priority: boolean
       sort_index: number
+      notes: string
     }> = []
 
     seeds.forEach((goal) => {
@@ -743,6 +863,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
             difficulty: task.difficulty ?? 'none',
             priority: Boolean(task.priority),
             sort_index: (taskIndex + 1) * STEP,
+            notes: task.notes ?? '',
           })
         })
       })
