@@ -3033,6 +3033,10 @@ export default function ReflectionPage() {
       if (!bar) {
         return
       }
+      try {
+        event.preventDefault()
+        bar.setPointerCapture?.(event.pointerId)
+      } catch {}
       const rect = bar.getBoundingClientRect()
       if (!rect || rect.width <= 0) {
         return
@@ -3521,28 +3525,27 @@ export default function ReflectionPage() {
                           >
                             Edit details
                           </button>
+                          {!isNewEntryEditing ? (
+                            <button
+                              type="button"
+                              className="history-timeline__action-button"
+                              onPointerDown={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                              }}
+                              onPointerUp={handleDeleteHistoryEntry(segment.entry.id)}
+                              onTouchEnd={handleDeleteHistoryEntry(segment.entry.id) as any}
+                              onClick={handleDeleteHistoryEntry(segment.entry.id)}
+                            >
+                              Delete session
+                            </button>
+                          ) : null}
                         </div>
                       )}
                       {isActiveSessionSegment ? (
                         <p className="history-timeline__tooltip-note">Active session updates live; finish to edit details.</p>
                       ) : null}
                     </>
-                  ) : null}
-                  {segment.deletable && !isNewEntryEditing ? (
-                    <button
-                      type="button"
-                      className="history-timeline__tooltip-delete"
-                      onPointerDown={(e) => {
-                        // Prevent the background click from clearing selection on mobile
-                        e.preventDefault()
-                        e.stopPropagation()
-                      }}
-                      onPointerUp={handleDeleteHistoryEntry(segment.entry.id)}
-                      onTouchEnd={handleDeleteHistoryEntry(segment.entry.id) as any}
-                      onClick={handleDeleteHistoryEntry(segment.entry.id)}
-                    >
-                      Delete session
-                    </button>
                   ) : null}
                 </div>
               )
