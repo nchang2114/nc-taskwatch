@@ -3226,6 +3226,10 @@ export default function ReflectionPage() {
                 })
               }
               const handleBlockPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+                // On touch devices, prioritize tap-to-select and editing; avoid starting a move-drag from the block body.
+                if ((event as any).pointerType === 'touch') {
+                  return
+                }
                 startDrag(event, segment, 'move')
               }
               const handleResizeStartPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {

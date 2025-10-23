@@ -67,6 +67,7 @@
   width: 100%;
   display: flex;
   background: linear-gradient(164deg, rgba(6, 10, 29, 0.96) 0%, rgba(12, 18, 40, 0.9) 52%, rgba(8, 14, 36, 0.94) 100%);
+  overflow-x: hidden; /* prevent horizontal scroll from overflowing children on mobile */
 }
 
 .tab-panel {
@@ -86,6 +87,7 @@
   gap: clamp(1.4rem, 3.2vw, 2.4rem);
   padding-block: clamp(2.5rem, 7vw, 4.5rem);
   width: 100%;
+  overflow-x: hidden; /* contain wide children like tooltips */
 }
 
 .task-heading {

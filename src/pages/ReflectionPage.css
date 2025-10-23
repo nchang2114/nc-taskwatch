@@ -16,6 +16,7 @@ html[data-theme='light'] {
   width: 100%;
   max-width: min(1140px, 100%);
   align-items: center;
+  overflow-x: hidden; /* avoid any horizontal scroll on mobile */
 }
 
 /* --- Intro --- */
@@ -56,6 +57,7 @@ html[data-theme='light'] {
   gap: clamp(1.25rem, 2.5vw, 1.5rem);
   width: 100%;
   align-items: center;
+  overflow-x: hidden;
 }
 
 .reflection-section__title {
