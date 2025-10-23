@@ -1602,6 +1602,28 @@ export default function ReflectionPage() {
   const timelineBarRef = useRef<HTMLDivElement | null>(null)
   const activeTooltipRef = useRef<HTMLDivElement | null>(null)
   const editingTooltipRef = useRef<HTMLDivElement | null>(null)
+  // Detect coarse pointer (touch) devices to adapt UI behavior (use overlay instead of hover tooltips)
+  const [isCoarsePointer, setIsCoarsePointer] = useState<boolean>(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const mq = window.matchMedia('(pointer: coarse)')
+    const update = () => setIsCoarsePointer(mq.matches)
+    update()
+    try {
+      mq.addEventListener?.('change', update)
+    } catch {
+      // Safari fallback
+      mq.addListener?.(update as any)
+    }
+    return () => {
+      try {
+        mq.removeEventListener?.('change', update)
+      } catch {
+        mq.removeListener?.(update as any)
+      }
+    }
+  }, [])
   const [activeTooltipOffsets, setActiveTooltipOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [activeTooltipPlacement, setActiveTooltipPlacement] = useState<'above' | 'below'>('above')
   const dragStateRef = useRef<DragState | null>(null)
@@ -3754,27 +3776,31 @@ export default function ReflectionPage() {
               }
 
               const inlineTooltip =
-                shouldSuppressTooltip && showDragBadge
+                // On touch devices, avoid inline/hover tooltips entirely
+                isCoarsePointer
                   ? null
-                  : (
-                    <div
-                      {...tooltipCommonProps}
-                      ref={isAnchoredTooltip && !isEditing ? setActiveTooltipNode : null}
-                      style={
-                        isAnchoredTooltip && !isEditing
-                          ? ({
-                              '--history-tooltip-shift-x': `${activeTooltipOffsets.x}px`,
-                              '--history-tooltip-shift-y': `${activeTooltipOffsets.y}px`,
-                            } as CSSProperties)
-                          : undefined
-                      }
-                    >
-                      {tooltipContent}
-                    </div>
-                  )
+                  : shouldSuppressTooltip && showDragBadge
+                    ? null
+                    : (
+                      <div
+                        {...tooltipCommonProps}
+                        ref={isAnchoredTooltip && !isEditing ? setActiveTooltipNode : null}
+                        style={
+                          isAnchoredTooltip && !isEditing
+                            ? ({
+                                '--history-tooltip-shift-x': `${activeTooltipOffsets.x}px`,
+                                '--history-tooltip-shift-y': `${activeTooltipOffsets.y}px`,
+                              } as CSSProperties)
+                            : undefined
+                        }
+                      >
+                        {tooltipContent}
+                      </div>
+                    )
 
+              const renderAsOverlay = (isEditing || (isCoarsePointer && isSelected)) && typeof document !== 'undefined'
               const renderedTooltip =
-                (isEditing && typeof document !== 'undefined' && !(shouldSuppressTooltip && showDragBadge))
+                (renderAsOverlay && !(shouldSuppressTooltip && showDragBadge))
                   ? createPortal(
                       <div
                         className="history-overlay"
@@ -3794,7 +3820,11 @@ export default function ReflectionPage() {
                           className="history-overlay__backdrop"
                           onClick={(e) => {
                             e.stopPropagation()
-                            handleCancelHistoryEdit()
+                            if (isEditing) {
+                              handleCancelHistoryEdit()
+                            } else {
+                              setSelectedHistoryId(null)
+                            }
                           }}
                           onPointerDown={(e) => {
                             // Consume the event so nothing underneath receives it
