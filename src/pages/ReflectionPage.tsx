@@ -2162,7 +2162,22 @@ export default function ReflectionPage() {
 
   const updateHistoryDraftField = useCallback(
     (field: 'taskName' | 'goalName' | 'bucketName', nextValue: string) => {
-      setHistoryDraft((draft) => ({ ...draft, [field]: nextValue }))
+      setHistoryDraft((draft) => {
+        const base = { ...draft, [field]: nextValue }
+        // Auto-fill task name for Life Routines when bucket is chosen, unless user already typed a custom name
+        const trimmedTask = base.taskName.trim()
+        const trimmedGoal = base.goalName.trim()
+        const trimmedBucket = base.bucketName.trim()
+        const isLifeRoutine = trimmedGoal.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
+        const userEditedName =
+          trimmedTask.length > 0 &&
+          // Consider it auto if it matched previous defaults (Session/goal/bucket). If not, treat as user-edited.
+          !['session', trimmedGoal.toLowerCase(), trimmedBucket.toLowerCase()].includes(trimmedTask.toLowerCase())
+        if (isLifeRoutine && trimmedBucket.length > 0 && !userEditedName) {
+          return { ...base, taskName: trimmedBucket }
+        }
+        return base
+      })
     },
     [],
   )
@@ -3517,7 +3532,13 @@ export default function ReflectionPage() {
                     <button
                       type="button"
                       className="history-timeline__tooltip-delete"
+                      onPointerDown={(e) => {
+                        // Prevent the background click from clearing selection on mobile
+                        e.preventDefault()
+                        e.stopPropagation()
+                      }}
                       onPointerUp={handleDeleteHistoryEntry(segment.entry.id)}
+                      onTouchEnd={handleDeleteHistoryEntry(segment.entry.id) as any}
                       onClick={handleDeleteHistoryEntry(segment.entry.id)}
                     >
                       Delete session
