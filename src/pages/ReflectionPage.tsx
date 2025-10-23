@@ -2495,7 +2495,11 @@ export default function ReflectionPage() {
     const safeStartedAt = Number.isFinite(startedAt) ? startedAt : defaultStart
     const endedAt = activeSession.isRunning ? now : safeStartedAt + totalElapsed
     const taskLabel =
-      activeSession.taskName.length > 0 ? activeSession.taskName : activeSession.goalName ?? UNCATEGORISED_LABEL
+      activeSession.taskName.length > 0
+        ? activeSession.taskName
+        : activeSession.bucketName && activeSession.bucketName.trim().length > 0
+          ? activeSession.bucketName
+          : activeSession.goalName ?? UNCATEGORISED_LABEL
     const activeEntry: HistoryEntry = {
       id: 'active-session',
       taskName: taskLabel,
@@ -3307,6 +3311,12 @@ export default function ReflectionPage() {
 
                   longPressTimerRef.current = window.setTimeout(() => {
                     // Start move-drag after long press
+                    try {
+                      if (typeof (event as any).preventDefault === 'function') {
+                        (event as any).preventDefault()
+                      }
+                      ;(event.currentTarget as any)?.setPointerCapture?.(event.pointerId)
+                    } catch {}
                     clearLongPressWatch()
                     startDrag(event, segment, 'move')
                   }, 360)
