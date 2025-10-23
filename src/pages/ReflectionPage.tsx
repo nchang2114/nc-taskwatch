@@ -704,22 +704,24 @@ const formatTimeInputValue = (timestamp: number | null): string => {
   return `${hours}:${minutes}`
 }
 
-const applyTimeToTimestamp = (reference: number, timeValue: string): number | null => {
-  if (!Number.isFinite(reference) || typeof timeValue !== 'string') {
+const formatDateInputValue = (timestamp: number | null): string => {
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
+    return ''
+  }
+  const date = new Date(timestamp)
+  const year = date.getFullYear().toString().padStart(4, '0')
+  const month = (date.getMonth() + 1).toString().padStart(2, '0')
+  const day = date.getDate().toString().padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const parseLocalDateTime = (dateValue: string, timeValue: string): number | null => {
+  if (typeof dateValue !== 'string' || dateValue.trim().length === 0) {
     return null
   }
-  const [hoursStr, minutesStr] = timeValue.split(':')
-  if (hoursStr === undefined || minutesStr === undefined) {
-    return null
-  }
-  const hours = Number(hoursStr)
-  const minutes = Number(minutesStr)
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
-    return null
-  }
-  const base = new Date(reference)
-  base.setHours(hours, minutes, 0, 0)
-  return base.getTime()
+  const time = typeof timeValue === 'string' && timeValue.trim().length > 0 ? timeValue : '00:00'
+  const parsed = Date.parse(`${dateValue}T${time}`)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 const resolveTimestamp = (value: number | null | undefined, fallback: number): number => {
@@ -2053,7 +2055,7 @@ export default function ReflectionPage() {
     const elapsed = Math.max(endedAt - startedAt, 1)
     const entry: HistoryEntry = {
       id: makeHistoryId(),
-      taskName: '',
+      taskName: 'New session',
       goalName: null,
       bucketName: null,
       goalId: null,
@@ -2074,7 +2076,7 @@ export default function ReflectionPage() {
     setSelectedHistoryId(entry.id)
     setEditingHistoryId(entry.id)
     setHistoryDraft({
-      taskName: '',
+      taskName: 'New session',
       goalName: '',
       bucketName: '',
       startedAt,
@@ -3170,6 +3172,8 @@ export default function ReflectionPage() {
               })()
               const durationLabel = formatDuration(resolvedDurationMs)
               const overlayTitleId = !isEditing ? `history-tooltip-title-${segment.id}` : undefined
+              const startDateInputValue = formatDateInputValue(resolveTimestamp(historyDraft.startedAt, resolvedStartedAt))
+              const endDateInputValue = formatDateInputValue(resolveTimestamp(historyDraft.endedAt, resolvedEndedAt))
               const startTimeInputValue = formatTimeInputValue(resolvedStartedAt)
               const endTimeInputValue = formatTimeInputValue(resolvedEndedAt)
               const durationMinutesValue = Math.max(1, Math.round(resolvedDurationMs / MINUTE_MS)).toString()
@@ -3178,7 +3182,7 @@ export default function ReflectionPage() {
                 setHistoryDraft((draft) => {
                   if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
                   if (value.trim().length === 0) return { ...draft, startedAt: null }
-                  const parsed = applyTimeToTimestamp(resolveTimestamp(draft.startedAt, baseStartedAt), value)
+                  const parsed = parseLocalDateTime(startDateInputValue, value)
                   return parsed === null ? draft : { ...draft, startedAt: parsed }
                 })
               }
@@ -3187,7 +3191,7 @@ export default function ReflectionPage() {
                 setHistoryDraft((draft) => {
                   if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
                   if (value.trim().length === 0) return { ...draft, endedAt: null }
-                  const parsed = applyTimeToTimestamp(resolveTimestamp(draft.endedAt, baseEndedAt), value)
+                  const parsed = parseLocalDateTime(endDateInputValue, value)
                   return parsed === null ? draft : { ...draft, endedAt: parsed }
                 })
               }
@@ -3264,16 +3268,14 @@ export default function ReflectionPage() {
                                 <input
                                   className="history-timeline__field-input"
                                   type="date"
-                                  value={new Date(resolveTimestamp(historyDraft.startedAt, resolvedStartedAt))
-                                    .toISOString()
-                                    .slice(0, 10)}
+                                  value={startDateInputValue}
                                   onChange={(event) => {
                                     const value = event.target.value
                                     setHistoryDraft((draft) => {
                                       if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
                                       if (value.trim().length === 0) return draft
-                                      const parsed = Date.parse(`${value}T${startTimeInputValue}`)
-                                      return Number.isFinite(parsed) ? { ...draft, startedAt: parsed } : draft
+                                      const parsed = parseLocalDateTime(value, startTimeInputValue)
+                                      return parsed === null ? draft : { ...draft, startedAt: parsed }
                                     })
                                   }}
                                   onKeyDown={handleHistoryFieldKeyDown}
@@ -3294,16 +3296,14 @@ export default function ReflectionPage() {
                                 <input
                                   className="history-timeline__field-input"
                                   type="date"
-                                  value={new Date(resolveTimestamp(historyDraft.endedAt, resolvedEndedAt))
-                                    .toISOString()
-                                    .slice(0, 10)}
+                                  value={endDateInputValue}
                                   onChange={(event) => {
                                     const value = event.target.value
                                     setHistoryDraft((draft) => {
                                       if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
                                       if (value.trim().length === 0) return draft
-                                      const parsed = Date.parse(`${value}T${endTimeInputValue}`)
-                                      return Number.isFinite(parsed) ? { ...draft, endedAt: parsed } : draft
+                                      const parsed = parseLocalDateTime(value, endTimeInputValue)
+                                      return parsed === null ? draft : { ...draft, endedAt: parsed }
                                     })
                                   }}
                                   onKeyDown={handleHistoryFieldKeyDown}
