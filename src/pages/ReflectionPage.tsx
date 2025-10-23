@@ -694,36 +694,6 @@ const DAY_DURATION_MS = 24 * 60 * 60 * 1000
 const DRAG_DETECTION_THRESHOLD_PX = 3
 const MIN_SESSION_DURATION_DRAG_MS = MINUTE_MS
 
-const formatDateInputValue = (timestamp: number | null): string => {
-  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
-    return ''
-  }
-  const date = new Date(timestamp)
-  const year = date.getFullYear().toString().padStart(4, '0')
-  const month = (date.getMonth() + 1).toString().padStart(2, '0')
-  const day = date.getDate().toString().padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-const applyDateToTimestamp = (reference: number, dateValue: string): number | null => {
-  if (!Number.isFinite(reference) || typeof dateValue !== 'string') {
-    return null
-  }
-  const [yearStr, monthStr, dayStr] = dateValue.split('-')
-  if (!yearStr || !monthStr || !dayStr) {
-    return null
-  }
-  const year = Number(yearStr)
-  const month = Number(monthStr)
-  const day = Number(dayStr)
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-    return null
-  }
-  const base = new Date(reference)
-  base.setFullYear(year, month - 1, day)
-  return base.getTime()
-}
-
 const formatTimeInputValue = (timestamp: number | null): string => {
   if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
     return ''
@@ -3161,130 +3131,71 @@ export default function ReflectionPage() {
                   ? trimmedTaskDraft
                   : segment.tooltipTask
                 : segment.tooltipTask
-              const trimmedGoalDraft = historyDraft.goalName.trim()
-              const displayGoal = isSelected
-                ? trimmedGoalDraft.length > 0
-                  ? trimmedGoalDraft
-                  : segment.goalLabel
-                : segment.goalLabel
-              const trimmedBucketDraft = historyDraft.bucketName.trim()
-              const displayBucket = isSelected
-                ? trimmedBucketDraft.length > 0
-                  ? trimmedBucketDraft
-                  : segment.bucketLabel
-                : segment.bucketLabel
               const baseStartedAt = segment.entry.startedAt
               const baseEndedAt = segment.entry.endedAt
-              
-              // Use drag preview timestamps if this segment is being dragged
               const draggedStartedAt = isDragging && dragPreview ? dragPreview.startedAt : baseStartedAt
               const draggedEndedAt = isDragging && dragPreview ? dragPreview.endedAt : baseEndedAt
-              
-              // For active sessions, use live timestamp unless user has explicitly modified the start time, but prioritize drag preview
-              const shouldUseLiveStartTime = isActiveSessionSegment && activeSession?.isRunning && historyDraft.startedAt === null && !isDragging
-              const resolvedStartedAt = isSelected 
-                ? isDragging 
-                  ? draggedStartedAt  // During drag, always use drag preview
-                  : shouldUseLiveStartTime 
-                    ? baseStartedAt  // Use live timestamp from the active session
-                    : resolveTimestamp(historyDraft.startedAt, baseStartedAt) 
+              const shouldUseLiveStart = isActiveSessionSegment && activeSession?.isRunning && historyDraft.startedAt === null && !isDragging
+              const resolvedStartedAt = isSelected
+                ? isDragging
+                  ? draggedStartedAt
+                  : shouldUseLiveStart
+                    ? baseStartedAt
+                    : resolveTimestamp(historyDraft.startedAt, baseStartedAt)
                 : draggedStartedAt
-              // For active sessions, use live timestamp unless user has explicitly modified the end time, but prioritize drag preview
-              const shouldUseLiveEndTime = isActiveSessionSegment && activeSession?.isRunning && historyDraft.endedAt === null && !isDragging
-              const resolvedEndedAt = isSelected 
-                ? isDragging 
-                  ? draggedEndedAt  // During drag, always use drag preview
-                  : shouldUseLiveEndTime 
-                    ? baseEndedAt  // Use live timestamp from the active session
-                    : resolveTimestamp(historyDraft.endedAt, baseEndedAt) 
+              const shouldUseLiveEnd = isActiveSessionSegment && activeSession?.isRunning && historyDraft.endedAt === null && !isDragging
+              const resolvedEndedAt = isSelected
+                ? isDragging
+                  ? draggedEndedAt
+                  : shouldUseLiveEnd
+                    ? baseEndedAt
+                    : resolveTimestamp(historyDraft.endedAt, baseEndedAt)
                 : draggedEndedAt
+              const trimmedGoalDraft = historyDraft.goalName.trim()
+              const trimmedBucketDraft = historyDraft.bucketName.trim()
               const resolvedDurationMs = Math.max(resolvedEndedAt - resolvedStartedAt, 0)
-              const startDateInputValue = formatDateInputValue(resolvedStartedAt)
-              const endDateInputValue = formatDateInputValue(resolvedEndedAt)
+              const displayGoal = trimmedGoalDraft.length > 0 ? trimmedGoalDraft : segment.goalLabel
+              const displayBucket = trimmedBucketDraft.length > 0 ? trimmedBucketDraft : segment.bucketLabel
+              const timeRangeLabel = (() => {
+                const startDate = new Date(resolvedStartedAt)
+                const endDate = new Date(resolvedEndedAt)
+                const sameDay =
+                  startDate.getFullYear() === endDate.getFullYear() &&
+                  startDate.getMonth() === endDate.getMonth() &&
+                  startDate.getDate() === endDate.getDate()
+                if (sameDay) {
+                  return `${formatTimeOfDay(resolvedStartedAt)} — ${formatTimeOfDay(resolvedEndedAt)}`
+                }
+                return formatDateRange(resolvedStartedAt, resolvedEndedAt)
+              })()
+              const durationLabel = formatDuration(resolvedDurationMs)
+              const overlayTitleId = !isEditing ? `history-tooltip-title-${segment.id}` : undefined
               const startTimeInputValue = formatTimeInputValue(resolvedStartedAt)
               const endTimeInputValue = formatTimeInputValue(resolvedEndedAt)
               const durationMinutesValue = Math.max(1, Math.round(resolvedDurationMs / MINUTE_MS)).toString()
-              const handleStartDateInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-                const { value } = event.target
-                setHistoryDraft((draft) => {
-                  if (!isEditing || selectedHistoryId !== segment.entry.id) {
-                    return draft
-                  }
-                  if (value.trim().length === 0) {
-                    return draft
-                  }
-                  const reference = resolveTimestamp(draft.startedAt, baseStartedAt)
-                  const parsed = applyDateToTimestamp(reference, value)
-                  if (parsed === null) {
-                    return draft
-                  }
-                  return { ...draft, startedAt: parsed }
-                })
-              }
               const handleStartTimeInputChange = (event: ChangeEvent<HTMLInputElement>) => {
                 const { value } = event.target
                 setHistoryDraft((draft) => {
-                  if (!isEditing || selectedHistoryId !== segment.entry.id) {
-                    return draft
-                  }
-                  if (value.trim().length === 0) {
-                    return { ...draft, startedAt: null }
-                  }
-                  const reference = resolveTimestamp(draft.startedAt, baseStartedAt)
-                  const parsed = applyTimeToTimestamp(reference, value)
-                  if (parsed === null) {
-                    return draft
-                  }
-                  return { ...draft, startedAt: parsed }
-                })
-              }
-              const handleEndDateInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-                const { value } = event.target
-                setHistoryDraft((draft) => {
-                  if (!isEditing || selectedHistoryId !== segment.entry.id) {
-                    return draft
-                  }
-                  if (value.trim().length === 0) {
-                    return draft
-                  }
-                  const reference = resolveTimestamp(draft.endedAt, baseEndedAt)
-                  const parsed = applyDateToTimestamp(reference, value)
-                  if (parsed === null) {
-                    return draft
-                  }
-                  return { ...draft, endedAt: parsed }
+                  if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
+                  if (value.trim().length === 0) return { ...draft, startedAt: null }
+                  const parsed = applyTimeToTimestamp(resolveTimestamp(draft.startedAt, baseStartedAt), value)
+                  return parsed === null ? draft : { ...draft, startedAt: parsed }
                 })
               }
               const handleEndTimeInputChange = (event: ChangeEvent<HTMLInputElement>) => {
                 const { value } = event.target
                 setHistoryDraft((draft) => {
-                  if (!isEditing || selectedHistoryId !== segment.entry.id) {
-                    return draft
-                  }
-                  if (value.trim().length === 0) {
-                    return { ...draft, endedAt: null }
-                  }
-                  const reference = resolveTimestamp(draft.endedAt, baseEndedAt)
-                  const parsed = applyTimeToTimestamp(reference, value)
-                  if (parsed === null) {
-                    return draft
-                  }
-                  return { ...draft, endedAt: parsed }
+                  if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
+                  if (value.trim().length === 0) return { ...draft, endedAt: null }
+                  const parsed = applyTimeToTimestamp(resolveTimestamp(draft.endedAt, baseEndedAt), value)
+                  return parsed === null ? draft : { ...draft, endedAt: parsed }
                 })
               }
               const handleDurationInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-                const value = event.target.value
+                const minutes = Number(event.target.value)
                 setHistoryDraft((draft) => {
-                  if (!isEditing || selectedHistoryId !== segment.entry.id) {
-                    return draft
-                  }
-                  if (value.trim().length === 0) {
-                    return draft
-                  }
-                  const minutes = Number(value)
-                  if (!Number.isFinite(minutes) || minutes <= 0) {
-                    return draft
-                  }
+                  if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
+                  if (!Number.isFinite(minutes) || minutes <= 0) return draft
                   const normalizedMinutes = Math.max(1, Math.round(minutes))
                   const baseStart = resolveTimestamp(draft.startedAt, baseStartedAt)
                   return { ...draft, endedAt: baseStart + normalizedMinutes * MINUTE_MS }
@@ -3316,20 +3227,21 @@ export default function ReflectionPage() {
               const tooltipClassName = `history-timeline__tooltip${isSelected ? ' history-timeline__tooltip--pinned' : ''}${
                 isEditing ? ' history-timeline__tooltip--editing' : ''
               }`
-              const overlayTitleId = `history-tooltip-title-${segment.id}`
               const tooltipContent = (
                 <div className="history-timeline__tooltip-content">
-                  <p className="history-timeline__tooltip-task" id={overlayTitleId}>
-                    {displayTask}
-                  </p>
-                  <p className="history-timeline__tooltip-time">
-                    {formatTimeOfDay(resolvedStartedAt)} — {formatTimeOfDay(resolvedEndedAt)}
-                  </p>
-                  <p className="history-timeline__tooltip-meta">
-                    {displayGoal}
-                    {displayBucket && displayBucket !== displayGoal ? ` → ${displayBucket}` : ''}
-                  </p>
-                  <p className="history-timeline__tooltip-duration">{formatDuration(resolvedDurationMs)}</p>
+                  {!isEditing ? (
+                    <>
+                      <p className="history-timeline__tooltip-task" id={overlayTitleId}>
+                        {displayTask}
+                      </p>
+                      <p className="history-timeline__tooltip-time">{timeRangeLabel}</p>
+                      <p className="history-timeline__tooltip-meta">
+                        {displayGoal}
+                        {displayBucket && displayBucket !== displayGoal ? ` → ${displayBucket}` : ''}
+                      </p>
+                      <p className="history-timeline__tooltip-duration">{durationLabel}</p>
+                    </>
+                  ) : null}
                   {isSelected ? (
                     <>
                       {isEditing ? (
@@ -3341,36 +3253,31 @@ export default function ReflectionPage() {
                                 className="history-timeline__field-input"
                                 type="text"
                                 value={historyDraft.taskName}
-                                placeholder={segment.tooltipTask}
+                                placeholder="Describe the focus block"
                                 onChange={handleHistoryFieldChange('taskName')}
                                 onKeyDown={handleHistoryFieldKeyDown}
                               />
                             </label>
-                            <div className="history-timeline__field-group">
-                              <label className="history-timeline__field">
-                                <span className="history-timeline__field-text">Start date</span>
+                            <label className="history-timeline__field">
+                              <span className="history-timeline__field-text">Start</span>
+                              <div className="history-timeline__field-row">
                                 <input
                                   className="history-timeline__field-input"
                                   type="date"
-                                  value={startDateInputValue}
-                                  onChange={handleStartDateInputChange}
+                                  value={new Date(resolveTimestamp(historyDraft.startedAt, resolvedStartedAt))
+                                    .toISOString()
+                                    .slice(0, 10)}
+                                  onChange={(event) => {
+                                    const value = event.target.value
+                                    setHistoryDraft((draft) => {
+                                      if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
+                                      if (value.trim().length === 0) return draft
+                                      const parsed = Date.parse(`${value}T${startTimeInputValue}`)
+                                      return Number.isFinite(parsed) ? { ...draft, startedAt: parsed } : draft
+                                    })
+                                  }}
                                   onKeyDown={handleHistoryFieldKeyDown}
                                 />
-                              </label>
-                              <label className="history-timeline__field">
-                                <span className="history-timeline__field-text">End date</span>
-                                <input
-                                  className="history-timeline__field-input"
-                                  type="date"
-                                  value={endDateInputValue}
-                                  onChange={handleEndDateInputChange}
-                                  onKeyDown={handleHistoryFieldKeyDown}
-                                />
-                              </label>
-                            </div>
-                            <div className="history-timeline__field-group">
-                              <label className="history-timeline__field">
-                                <span className="history-timeline__field-text">Start time</span>
                                 <input
                                   className="history-timeline__field-input"
                                   type="time"
@@ -3379,9 +3286,28 @@ export default function ReflectionPage() {
                                   onChange={handleStartTimeInputChange}
                                   onKeyDown={handleHistoryFieldKeyDown}
                                 />
-                              </label>
-                              <label className="history-timeline__field">
-                                <span className="history-timeline__field-text">End time</span>
+                              </div>
+                            </label>
+                            <label className="history-timeline__field">
+                              <span className="history-timeline__field-text">End</span>
+                              <div className="history-timeline__field-row">
+                                <input
+                                  className="history-timeline__field-input"
+                                  type="date"
+                                  value={new Date(resolveTimestamp(historyDraft.endedAt, resolvedEndedAt))
+                                    .toISOString()
+                                    .slice(0, 10)}
+                                  onChange={(event) => {
+                                    const value = event.target.value
+                                    setHistoryDraft((draft) => {
+                                      if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
+                                      if (value.trim().length === 0) return draft
+                                      const parsed = Date.parse(`${value}T${endTimeInputValue}`)
+                                      return Number.isFinite(parsed) ? { ...draft, endedAt: parsed } : draft
+                                    })
+                                  }}
+                                  onKeyDown={handleHistoryFieldKeyDown}
+                                />
                                 <input
                                   className="history-timeline__field-input"
                                   type="time"
@@ -3390,43 +3316,41 @@ export default function ReflectionPage() {
                                   onChange={handleEndTimeInputChange}
                                   onKeyDown={handleHistoryFieldKeyDown}
                                 />
-                              </label>
-                              <label className="history-timeline__field">
-                                <span className="history-timeline__field-text">Duration (minutes)</span>
-                                <input
-                                  className="history-timeline__field-input"
-                                  type="number"
-                                  min={1}
-                                  inputMode="numeric"
-                                  value={durationMinutesValue}
-                                  onChange={handleDurationInputChange}
-                                  onKeyDown={handleHistoryFieldKeyDown}
-                                />
-                              </label>
-                            </div>
-                            <div className="history-timeline__field-group">
-                              <label className="history-timeline__field">
-                                <span className="history-timeline__field-text">Goal</span>
-                                <HistoryDropdown
-                                  id={goalDropdownId}
-                                  value={historyDraft.goalName}
-                                  placeholder="Select goal"
-                                  options={goalDropdownOptions}
-                                  onChange={(nextValue) => updateHistoryDraftField('goalName', nextValue)}
-                                />
-                              </label>
-                              <label className="history-timeline__field">
-                                <span className="history-timeline__field-text">Bucket</span>
-                                <HistoryDropdown
-                                  id={bucketDropdownId}
-                                  value={historyDraft.bucketName}
-                                  placeholder="Select bucket"
-                                  options={bucketDropdownOptions}
-                                  onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
-                                  disabled={availableBucketOptions.length === 0}
-                                />
-                              </label>
-                            </div>
+                              </div>
+                            </label>
+                            <label className="history-timeline__field">
+                              <span className="history-timeline__field-text">Duration (minutes)</span>
+                              <input
+                                className="history-timeline__field-input history-timeline__field-input--compact"
+                                type="number"
+                                min={1}
+                                inputMode="numeric"
+                                value={durationMinutesValue}
+                                onChange={handleDurationInputChange}
+                                onKeyDown={handleHistoryFieldKeyDown}
+                              />
+                            </label>
+                            <label className="history-timeline__field">
+                              <span className="history-timeline__field-text">Goal</span>
+                              <HistoryDropdown
+                                id={goalDropdownId}
+                                value={historyDraft.goalName}
+                                placeholder="Select goal"
+                                options={goalDropdownOptions}
+                                onChange={(nextValue) => updateHistoryDraftField('goalName', nextValue)}
+                              />
+                            </label>
+                            <label className="history-timeline__field">
+                              <span className="history-timeline__field-text">Bucket</span>
+                              <HistoryDropdown
+                                id={bucketDropdownId}
+                                value={historyDraft.bucketName}
+                                placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
+                                options={bucketDropdownOptions}
+                                onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
+                                disabled={availableBucketOptions.length === 0}
+                              />
+                            </label>
                           </div>
                           <div className="history-timeline__actions">
                             <button

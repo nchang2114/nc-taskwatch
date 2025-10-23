@@ -3163,6 +3163,8 @@ html[data-theme='light'] .nav-links--drawer {
   border-radius: clamp(0.6rem, 1.4vw, 0.8rem);
   padding: clamp(0.45rem, 1.2vw, 0.65rem) clamp(0.6rem, 1.6vw, 0.85rem);
   min-width: clamp(220px, 32vw, 320px);
+  max-width: clamp(240px, 45vw, 360px);
+  max-height: clamp(16rem, 48vh, 20rem);
   color: #f9fbff;
   display: flex;
   flex-direction: column;
@@ -3172,6 +3174,8 @@ html[data-theme='light'] .nav-links--drawer {
   pointer-events: none;
   transition: opacity 140ms ease, transform 140ms ease;
   z-index: 12;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .history-timeline__block:hover .history-timeline__tooltip,
@@ -3267,6 +3271,31 @@ html[data-theme='light'] .nav-links--drawer {
   flex-direction: column;
   gap: clamp(0.35rem, 1vw, 0.6rem);
   margin-top: clamp(0.25rem, 0.8vw, 0.45rem);
+  max-height: clamp(15rem, 46vh, 18rem);
+  overflow-y: auto;
+  padding-right: clamp(0.1rem, 0.6vw, 0.25rem);
+}
+
+.history-timeline__field-row {
+  display: flex;
+  gap: clamp(0.3rem, 1vw, 0.45rem);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.history-timeline__field-separator {
+  font-size: clamp(0.72rem, 1.4vw, 0.85rem);
+  color: rgba(200, 210, 255, 0.7);
+}
+
+.history-timeline__field-input--compact {
+  max-width: clamp(4.5rem, 12vw, 5.5rem);
+}
+
+.history-timeline__duration {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
 .history-timeline__field {
