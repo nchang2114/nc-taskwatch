@@ -1140,22 +1140,31 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   useEffect(() => {
     setFocusSource((current) => {
+      // If nothing to update, keep as-is
       if (!current) {
+        return current
+      }
+      // Never downgrade/clear focus linkage during an active or paused session
+      // This prevents the focus entry from reverting when navigating back
+      if (isRunning || elapsed > 0) {
         return current
       }
       if (!current.goalId) {
         return current
       }
       const goal = goalsSnapshot.find((g) => g.id === current.goalId)
+      // Be conservative: if the snapshot doesn't include the goal (yet), keep current linkage
       if (!goal) {
-        return null
+        return current
       }
       const bucket = current.bucketId ? goal.buckets.find((b) => b.id === current.bucketId) : null
+      // Likewise, if bucket is missing or archived in this snapshot, avoid clearing;
+      // maintain the existing linkage and let completion flows clear explicitly.
       if (bucket && bucket.archived) {
-        return null
+        return current
       }
       if (current.bucketId && !bucket) {
-        return null
+        return current
       }
       const candidate = activeFocusCandidate
       let nextGoalName = current.goalName
@@ -1186,9 +1195,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           nextBucketSurface = bucketSurfaceValue
           changed = true
         }
-      } else if (current.bucketSurface !== null) {
-        nextBucketSurface = null
-        changed = true
       }
       if (candidate) {
         if (candidate.taskId !== current.taskId) {
@@ -1218,7 +1224,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         bucketSurface: nextBucketSurface,
       }
     })
-  }, [activeFocusCandidate, goalsSnapshot])
+  }, [activeFocusCandidate, goalsSnapshot, isRunning, elapsed])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
