@@ -1604,6 +1604,31 @@ export default function ReflectionPage() {
   const dragPreviewRef = useRef<DragPreview | null>(null)
   const dragPreventClickRef = useRef(false)
   const selectedHistoryIdRef = useRef<string | null>(selectedHistoryId)
+  // Long-press to move on touch
+  const longPressTimerRef = useRef<number | null>(null)
+  const longPressPointerIdRef = useRef<number | null>(null)
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null)
+  const longPressCancelHandlersRef = useRef<{
+    move: (e: PointerEvent) => void
+    up: (e: PointerEvent) => void
+    cancel: (e: PointerEvent) => void
+  } | null>(null)
+
+  const clearLongPressWatch = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      try { window.clearTimeout(longPressTimerRef.current) } catch {}
+    }
+    longPressTimerRef.current = null
+    longPressPointerIdRef.current = null
+    longPressStartRef.current = null
+    const handlers = longPressCancelHandlersRef.current
+    if (handlers) {
+      window.removeEventListener('pointermove', handlers.move)
+      window.removeEventListener('pointerup', handlers.up)
+      window.removeEventListener('pointercancel', handlers.cancel)
+    }
+    longPressCancelHandlersRef.current = null
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -3253,8 +3278,38 @@ export default function ReflectionPage() {
                 })
               }
               const handleBlockPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-                // On touch devices, prioritize tap-to-select and editing; avoid starting a move-drag from the block body.
-                if ((event as any).pointerType === 'touch') {
+                const isTouch = (event as any).pointerType === 'touch'
+                if (isTouch) {
+                  // Enable long-press to move on touch; short tap will select (handled by onClick)
+                  event.persist?.()
+                  clearLongPressWatch()
+                  longPressPointerIdRef.current = event.pointerId
+                  longPressStartRef.current = { x: event.clientX, y: event.clientY }
+
+                  const threshold = 8
+                  const handleMove = (e: PointerEvent) => {
+                    if (e.pointerId !== longPressPointerIdRef.current || !longPressStartRef.current) return
+                    const dx = e.clientX - longPressStartRef.current.x
+                    const dy = e.clientY - longPressStartRef.current.y
+                    if (Math.hypot(dx, dy) > threshold) {
+                      clearLongPressWatch()
+                    }
+                  }
+                  const handleUpOrCancel = (e: PointerEvent) => {
+                    if (e.pointerId !== longPressPointerIdRef.current) return
+                    clearLongPressWatch()
+                  }
+
+                  window.addEventListener('pointermove', handleMove, { passive: true })
+                  window.addEventListener('pointerup', handleUpOrCancel, { passive: true })
+                  window.addEventListener('pointercancel', handleUpOrCancel, { passive: true })
+                  longPressCancelHandlersRef.current = { move: handleMove, up: handleUpOrCancel, cancel: handleUpOrCancel }
+
+                  longPressTimerRef.current = window.setTimeout(() => {
+                    // Start move-drag after long press
+                    clearLongPressWatch()
+                    startDrag(event, segment, 'move')
+                  }, 360)
                   return
                 }
                 startDrag(event, segment, 'move')
