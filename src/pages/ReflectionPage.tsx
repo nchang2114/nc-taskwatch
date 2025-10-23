@@ -1563,6 +1563,8 @@ const computeRangeOverview = (
 }
 
 export default function ReflectionPage() {
+  type CalendarViewMode = 'day' | '3d' | 'week' | 'month' | 'year'
+  const [calendarView, setCalendarView] = useState<CalendarViewMode>('month')
   const [activeRange, setActiveRange] = useState<ReflectionRangeKey>('24h')
   const [history, setHistory] = useState<HistoryEntry[]>(() => readPersistedHistory())
   const latestHistoryRef = useRef(history)
@@ -2784,6 +2786,7 @@ export default function ReflectionPage() {
     return date.getTime()
   }, [nowTick, historyDayOffset])
   const dayEnd = dayStart + DAY_DURATION_MS
+  const anchorDate = useMemo(() => new Date(dayStart), [dayStart])
   const currentTimePercent = useMemo(() => {
     if (nowTick < dayStart || nowTick > dayEnd) {
       return null
@@ -2898,21 +2901,133 @@ export default function ReflectionPage() {
   const anchoredTooltipId = hoveredHistoryId ?? selectedHistoryId
   const dayEntryCount = daySegments.length
   const monthAndYearLabel = useMemo(() => {
-    const date = new Date(dayStart)
-    return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-  }, [dayStart])
+    return anchorDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  }, [anchorDate])
   const dayLabel = useMemo(() => {
     const date = new Date(dayStart)
     const weekday = date.toLocaleDateString(undefined, { weekday: 'long' })
     const dayNumber = date.getDate().toString().padStart(2, '0')
     return `${weekday} · ${dayNumber}`
   }, [dayStart])
-  const handlePreviousDay = useCallback(() => {
-    setHistoryDayOffset((offset) => offset - 1)
+  const daysInMonth = useMemo(() => {
+    const d = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0)
+    return d.getDate()
+  }, [anchorDate])
+
+  const stepSizeByView: Record<CalendarViewMode, number> = useMemo(
+    () => ({ day: 1, '3d': 3, week: 7, month: daysInMonth, year: 365 }),
+    [daysInMonth],
+  )
+
+  const handlePrevWindow = useCallback(() => {
+    setHistoryDayOffset((offset) => offset - stepSizeByView[calendarView])
+  }, [calendarView, stepSizeByView])
+
+  const handleNextWindow = useCallback(() => {
+    setHistoryDayOffset((offset) => Math.min(offset + stepSizeByView[calendarView], 0))
+  }, [calendarView, stepSizeByView])
+
+  const handleJumpToToday = useCallback(() => {
+    setHistoryDayOffset(0)
   }, [])
-  const handleNextDay = useCallback(() => {
-    setHistoryDayOffset((offset) => Math.min(offset + 1, 0))
+
+  const setView = useCallback((view: CalendarViewMode) => {
+    setCalendarView(view)
   }, [])
+
+  // Build minimal calendar content for non-day views
+  const renderCalendarContent = useCallback(() => {
+    const entries = effectiveHistory
+    const dayHasSessions = (startMs: number, endMs: number) =>
+      entries.some((e) => Math.min(e.endedAt, endMs) > Math.max(e.startedAt, startMs))
+
+    const renderCell = (date: Date, isCurrentMonth: boolean) => {
+      const start = new Date(date)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(start)
+      end.setDate(end.getDate() + 1)
+      const has = dayHasSessions(start.getTime(), end.getTime())
+      return (
+        <div
+          key={`cell-${start.toISOString()}`}
+          className={`calendar-cell${isCurrentMonth ? '' : ' calendar-cell--muted'}`}
+          aria-label={start.toDateString()}
+        >
+          <div className="calendar-day-number">{start.getDate()}</div>
+          {has ? <div className="calendar-session-dot" aria-hidden="true" /> : null}
+        </div>
+      )
+    }
+
+    if (calendarView === '3d' || calendarView === 'week') {
+      const days = calendarView === '3d' ? 3 : 7
+      // Start at beginning of window: for week, start on Sunday; for 3d, start at anchor
+      const start = new Date(anchorDate)
+      if (calendarView === 'week') {
+        const dow = start.getDay() // 0=Sun
+        start.setDate(start.getDate() - dow)
+      }
+      const cols = Array.from({ length: days }).map((_, i) => {
+        const d = new Date(start)
+        d.setDate(start.getDate() + i)
+        const label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+        return (
+          <div key={`col-${i}`} className="calendar-col">
+            <div className="calendar-col-header">{label}</div>
+            {renderCell(d, true)}
+          </div>
+        )
+      })
+      return <div className="calendar-grid calendar-grid--cols">{cols}</div>
+    }
+
+    if (calendarView === 'month') {
+      const firstOfMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
+      const lastOfMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0)
+      const start = new Date(firstOfMonth)
+      const startDow = start.getDay() // 0=Sun
+      start.setDate(start.getDate() - startDow)
+      const end = new Date(lastOfMonth)
+      const endDow = end.getDay()
+      end.setDate(end.getDate() + (6 - endDow))
+  const cells: any[] = []
+      const headers = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      const headerRow = (
+        <div className="calendar-week-headers" key="hdr">
+          {headers.map((h) => (
+            <div className="calendar-week-header" key={h} aria-hidden>
+              {h}
+            </div>
+          ))}
+        </div>
+      )
+      cells.push(headerRow)
+      const iter = new Date(start)
+      while (iter <= end) {
+        for (let i = 0; i < 7; i += 1) {
+          const current = new Date(iter)
+          cells.push(renderCell(current, current.getMonth() === anchorDate.getMonth()))
+          iter.setDate(iter.getDate() + 1)
+        }
+      }
+      return <div className="calendar-grid calendar-grid--month">{cells}</div>
+    }
+
+    if (calendarView === 'year') {
+      const months = Array.from({ length: 12 }).map((_, idx) => {
+        const d = new Date(anchorDate.getFullYear(), idx, 1)
+        const label = d.toLocaleDateString(undefined, { month: 'short' })
+        return (
+          <div key={`m-${idx}`} className="calendar-year-cell">
+            <div className="calendar-year-label">{label}</div>
+          </div>
+        )
+      })
+      return <div className="calendar-grid calendar-grid--year">{months}</div>
+    }
+
+    return null
+  }, [calendarView, anchorDate, effectiveHistory])
 
   const handleWindowPointerMove = useCallback(
     (event: PointerEvent) => {
@@ -3232,40 +3347,69 @@ export default function ReflectionPage() {
             Review today’s focus sessions, fine-tune their timing, and capture what made each block productive.
           </p>
         </div>
-        <div className="history-calendar-header">
-          <div className="history-calendar-header__left">
+        <div className="calendar-toolbar">
+          <div className="calendar-toolbar__left">
             <button
               type="button"
-              className="history-calendar-header__today"
-              onClick={() => setHistoryDayOffset(0)}
+              className="calendar-nav-button"
+              onClick={handlePrevWindow}
+              aria-label="Previous"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className="calendar-nav-button"
+              onClick={handleNextWindow}
+              disabled={historyDayOffset >= 0}
+              aria-label="Next"
+            >
+              ›
+            </button>
+            <h2 className="calendar-title" aria-live="polite">{monthAndYearLabel}</h2>
+          </div>
+          <div className="calendar-toolbar__right">
+            <button
+              type="button"
+              className="calendar-today-button"
+              onClick={handleJumpToToday}
               aria-label="Jump to today"
             >
               Today
             </button>
-            <h2 className="history-calendar-header__month">{monthAndYearLabel}</h2>
-          </div>
-          <div className="history-calendar-header__center">
-            <button
-              type="button"
-              className="history-calendar-header__arrow"
-              onClick={handlePreviousDay}
-              aria-label="View previous day"
-            >
-              <span aria-hidden="true">‹</span>
-            </button>
-            <button
-              type="button"
-              className="history-calendar-header__arrow"
-              onClick={handleNextDay}
-              disabled={historyDayOffset >= 0}
-              aria-label="View next day"
-            >
-              <span aria-hidden="true">›</span>
-            </button>
+            <div className="calendar-toggle-group" role="tablist" aria-label="Calendar views">
+              {(
+                [
+                  { key: 'day', label: 'Day' },
+                  { key: '3d', label: '3 days' },
+                  { key: 'week', label: 'Week' },
+                  { key: 'month', label: 'Month' },
+                  { key: 'year', label: 'Year' },
+                ] as Array<{ key: CalendarViewMode; label: string }>
+              ).map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={calendarView === opt.key}
+                  className={`calendar-toggle${calendarView === opt.key ? ' calendar-toggle--active' : ''}`}
+                  onClick={() => setView(opt.key)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        <section className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`} aria-label="Session History">
+        {calendarView !== 'day' ? (
+          <div className="history-calendar" aria-label="Calendar display">
+            {renderCalendarContent()}
+          </div>
+        ) : null}
+
+  {calendarView === 'day' ? (
+  <section className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`} aria-label="Session History">
           <div className="history-controls history-controls--floating">
             <button
               type="button"
@@ -3903,6 +4047,7 @@ export default function ReflectionPage() {
           </div>
         </div>
       </section>
+        ) : null}
     </div>
 
       <section className="reflection-section reflection-section--overview">

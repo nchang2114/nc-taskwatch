@@ -698,3 +698,197 @@ html[data-theme='light'] .history-timeline__block.history-timeline__block--drag-
 .history-timeline__block.history-timeline__block--drag-hover .history-timeline__tooltip.history-timeline__tooltip--pinned {
   display: none !important;
 }
+
+/* --- Calendar toolbar & grid (Session History calendar setup) --- */
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  margin-block: 0.5rem 0.75rem;
+}
+
+.calendar-toolbar__left,
+.calendar-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.calendar-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2.2vw, 1.25rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.calendar-today-button {
+  border: 1px solid rgba(118, 134, 232, 0.25);
+  background: rgba(18, 24, 56, 0.4);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.calendar-today-button:hover,
+.calendar-today-button:focus-visible {
+  border-color: rgba(150, 168, 255, 0.4);
+  color: var(--text-primary);
+}
+
+.calendar-nav-button {
+  border: 1px solid rgba(118, 134, 232, 0.25);
+  background: rgba(18, 24, 56, 0.4);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.calendar-nav-button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.calendar-toggle-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(118, 134, 232, 0.25);
+  border-radius: 999px;
+  padding: 0.25rem;
+  background: rgba(18, 24, 56, 0.35);
+}
+
+.calendar-toggle {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.calendar-toggle--active {
+  background: rgba(104, 124, 255, 0.85);
+  color: #fff;
+}
+
+html[data-theme='light'] .calendar-today-button,
+html[data-theme='light'] .calendar-nav-button {
+  border-color: rgba(180, 190, 255, 0.5);
+  background: rgba(245, 247, 255, 0.85);
+  color: rgba(50, 58, 108, 0.78);
+}
+
+html[data-theme='light'] .calendar-toggle-group {
+  border-color: rgba(180, 190, 255, 0.5);
+  background: rgba(245, 247, 255, 0.85);
+}
+
+html[data-theme='light'] .calendar-toggle--active {
+  background: rgba(152, 168, 252, 0.9);
+  color: rgba(22, 28, 70, 0.92);
+}
+
+.history-calendar {
+  width: 100%;
+  border: 1px solid rgba(124, 138, 220, 0.22);
+  background: rgba(14, 18, 36, 0.5);
+  border-radius: 0.75rem;
+  padding: 0.5rem;
+}
+
+html[data-theme='light'] .history-calendar {
+  border-color: rgba(176, 186, 240, 0.35);
+  background: rgba(248, 250, 255, 0.9);
+}
+
+.calendar-grid--cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem;
+}
+
+.calendar-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.calendar-col-header {
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 0.25rem 0.35rem;
+}
+
+.calendar-grid--month {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+
+.calendar-week-headers {
+  display: contents;
+}
+
+.calendar-week-header {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  padding: 0.25rem 0.35rem;
+}
+
+.calendar-cell {
+  min-height: 80px;
+  border: 1px solid rgba(124, 138, 220, 0.22);
+  background: rgba(14, 18, 36, 0.35);
+  border-radius: 0.5rem;
+  padding: 0.35rem;
+  position: relative;
+}
+
+.calendar-cell--muted {
+  opacity: 0.6;
+}
+
+.calendar-day-number {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.calendar-session-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(104, 124, 255, 0.9);
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+}
+
+.calendar-grid--year {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+.calendar-year-cell {
+  min-height: 64px;
+  border: 1px solid rgba(124, 138, 220, 0.22);
+  background: rgba(14, 18, 36, 0.35);
+  border-radius: 0.5rem;
+  padding: 0.35rem;
+}
+
+.calendar-year-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
