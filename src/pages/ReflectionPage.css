@@ -1423,3 +1423,10 @@ body.scroll-lock {
   overscroll-behavior: none;
   touch-action: none;
 }
+/* Ensure calendar elements don't advertise pan gestures while locked */
+html.scroll-lock .calendar-days-area,
+html.scroll-lock .calendar-day-column,
+body.scroll-lock .calendar-days-area,
+body.scroll-lock .calendar-day-column {
+  touch-action: none !important;
+}
