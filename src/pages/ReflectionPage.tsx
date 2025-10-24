@@ -2915,6 +2915,109 @@ export default function ReflectionPage() {
     }
     return ticks
   }, [])
+
+  // --- Calendar event preview (popover) ---
+  const [calendarPreview, setCalendarPreview] = useState<
+    | null
+    | {
+        entryId: string
+        top: number
+        left: number
+        anchorEl: HTMLElement | null
+      }
+  >(null)
+  const calendarPreviewRef = useRef<HTMLDivElement | null>(null)
+
+  const positionCalendarPreview = useCallback((anchorEl: HTMLElement | null) => {
+    if (!anchorEl) return
+    const rect = anchorEl.getBoundingClientRect()
+    // Default place to the right of the anchor, vertically aligned with its top
+    const viewportPadding = 8
+    const assumedWidth = 280 // matches CSS max-width
+    const assumedHeight = 140 // rough default; will be clamped again after mount
+    let left = Math.round(rect.right + viewportPadding)
+    let top = Math.round(rect.top)
+    // If it would overflow right, place to the left of the anchor
+    if (left + assumedWidth > window.innerWidth - viewportPadding) {
+      left = Math.max(viewportPadding, Math.round(rect.left - assumedWidth - viewportPadding))
+    }
+    // Clamp vertically within viewport
+    if (top + assumedHeight > window.innerHeight - viewportPadding) {
+      top = Math.max(viewportPadding, window.innerHeight - viewportPadding - assumedHeight)
+    }
+    if (top < viewportPadding) top = viewportPadding
+    setCalendarPreview((current) => (current ? { ...current, top, left } : current))
+  }, [])
+
+  const handleOpenCalendarPreview = useCallback(
+    (entry: HistoryEntry, targetEl: HTMLElement) => {
+      // Select entry for consistency with other flows
+      handleSelectHistorySegment(entry)
+      // Compute an initial position immediately
+      const rect = targetEl.getBoundingClientRect()
+      const viewportPadding = 8
+      const assumedWidth = 280
+      const assumedHeight = 140
+      let left = Math.round(rect.right + viewportPadding)
+      let top = Math.round(rect.top)
+      if (left + assumedWidth > window.innerWidth - viewportPadding) {
+        left = Math.max(viewportPadding, Math.round(rect.left - assumedWidth - viewportPadding))
+      }
+      if (top + assumedHeight > window.innerHeight - viewportPadding) {
+        top = Math.max(viewportPadding, window.innerHeight - viewportPadding - assumedHeight)
+      }
+      if (top < viewportPadding) top = viewportPadding
+      setCalendarPreview({ entryId: entry.id, top, left, anchorEl: targetEl })
+      // Position on next frame to refine based on actual size
+      requestAnimationFrame(() => positionCalendarPreview(targetEl))
+    },
+    [handleSelectHistorySegment, positionCalendarPreview],
+  )
+
+  const handleCloseCalendarPreview = useCallback(() => setCalendarPreview(null), [])
+
+  useEffect(() => {
+    if (!calendarPreview) return
+    const onDocPointerDown = (e: PointerEvent) => {
+      const node = e.target as Node | null
+      if (!node) return
+      // Ignore clicks inside the popover
+      if (calendarPreviewRef.current && calendarPreviewRef.current.contains(node)) return
+      handleCloseCalendarPreview()
+    }
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') handleCloseCalendarPreview()
+    }
+    const onReposition = () => {
+      positionCalendarPreview(calendarPreview.anchorEl || null)
+      // After moving, clamp again based on actual size
+      const pop = calendarPreviewRef.current
+      if (!pop) return
+      const rect = pop.getBoundingClientRect()
+      const padding = 8
+      let top = rect.top
+      let left = rect.left
+      if (rect.right > window.innerWidth - padding) {
+        left = Math.max(padding, window.innerWidth - padding - rect.width)
+      }
+      if (rect.bottom > window.innerHeight - padding) {
+        top = Math.max(padding, window.innerHeight - padding - rect.height)
+      }
+      if (top !== rect.top || left !== rect.left) {
+        setCalendarPreview((current) => (current ? { ...current, top, left } : current))
+      }
+    }
+    document.addEventListener('pointerdown', onDocPointerDown, true)
+    document.addEventListener('keydown', onKeyDown as any)
+    window.addEventListener('resize', onReposition)
+    window.addEventListener('scroll', onReposition, true)
+    return () => {
+      document.removeEventListener('pointerdown', onDocPointerDown, true)
+      document.removeEventListener('keydown', onKeyDown as any)
+      window.removeEventListener('resize', onReposition)
+      window.removeEventListener('scroll', onReposition, true)
+    }
+  }, [calendarPreview, handleCloseCalendarPreview, positionCalendarPreview])
   const anchoredTooltipId = hoveredHistoryId ?? selectedHistoryId
   const dayEntryCount = daySegments.length
   const monthAndYearLabel = useMemo(() => {
@@ -2964,6 +3067,48 @@ export default function ReflectionPage() {
     }
     document.addEventListener('pointerdown', onDocPointerDown)
     return () => document.removeEventListener('pointerdown', onDocPointerDown)
+  }, [showMultiDayChooser])
+
+  // Clamp the multi-day chooser popover within the viewport
+  useEffect(() => {
+    if (!showMultiDayChooser) return
+    const node = multiChooserRef.current
+    if (!node) return
+    const clamp = () => {
+      const rect = node.getBoundingClientRect()
+      const pad = 8
+      // Reset any previous overrides
+      node.style.left = ''
+      node.style.right = ''
+      node.style.top = ''
+      node.style.bottom = ''
+      node.style.transform = ''
+      // Horizontal clamping: if overflowing right, align to left
+      if (rect.right > window.innerWidth - pad) {
+        node.style.left = '0px'
+        node.style.right = 'auto'
+      }
+      // Vertical clamping: if overflowing bottom, flip above the toggle
+      if (rect.bottom > window.innerHeight - pad) {
+        node.style.top = 'auto'
+        node.style.bottom = 'calc(100% + 6px)'
+      }
+      // Ensure it doesn't start off-screen to the left
+      const rect2 = node.getBoundingClientRect()
+      if (rect2.left < pad) {
+        node.style.left = `${pad - rect2.left}px`
+      }
+    }
+    // Clamp now and on resize/scroll
+    const raf = requestAnimationFrame(clamp)
+    const onReflow = () => clamp()
+    window.addEventListener('resize', onReflow)
+    window.addEventListener('scroll', onReflow, true)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', onReflow)
+      window.removeEventListener('scroll', onReflow, true)
+    }
   }, [showMultiDayChooser])
 
   const handleMultiDayDoubleClick = useCallback(() => {
@@ -3199,6 +3344,7 @@ export default function ReflectionPage() {
           durationMs: number
           kind: DragKind
           columns: Array<{ rect: DOMRect; dayStart: number }>
+          moved?: boolean
         },
       }
 
@@ -3243,12 +3389,12 @@ export default function ReflectionPage() {
           durationMs: Math.max(entry.endedAt - entry.startedAt, MIN_SESSION_DURATION_DRAG_MS),
           kind,
           columns,
+          moved: false,
         }
         calendarEventDragRef.current = state
         try {
+          // Do not preventDefault/stopPropagation here so a simple click still triggers onClick to open preview.
           ev.currentTarget.setPointerCapture?.(ev.pointerId)
-          ev.preventDefault()
-          ev.stopPropagation()
         } catch {}
         const onMove = (e: PointerEvent) => {
           const s = calendarEventDragRef.current
@@ -3302,6 +3448,7 @@ export default function ReflectionPage() {
           const preview = { entryId: s.entryId, startedAt: newStart, endedAt: newEnd }
           dragPreviewRef.current = preview
           setDragPreview(preview)
+          s.moved = true
         }
         const onUp = (e: PointerEvent) => {
           const s = calendarEventDragRef.current
@@ -3325,6 +3472,9 @@ export default function ReflectionPage() {
               }
               return next
             })
+          } else {
+            // Treat as a click: open preview anchored to the event element
+            handleOpenCalendarPreview(entry, ev.currentTarget as HTMLElement)
           }
           calendarEventDragRef.current = null
           dragPreviewRef.current = null
@@ -3375,8 +3525,217 @@ export default function ReflectionPage() {
               {dayStarts.map((start, di) => {
                 const events = computeDayEvents(start)
                 const laneWidthPct = (100 / Math.max(1, events[0]?.lanes ?? 1))
+                const handleCalendarColumnPointerDown = (ev: ReactPointerEvent<HTMLDivElement>) => {
+                  if (ev.button !== 0) return
+                  const targetEl = ev.currentTarget as HTMLDivElement
+                  // Ignore if starting on an existing event
+                  const rawTarget = ev.target as HTMLElement | null
+                  if (rawTarget && rawTarget.closest('.calendar-event')) return
+                  const daysRoot = calendarDaysRef.current
+                  const area = calendarDaysAreaRef.current
+                  if (!daysRoot || !area) return
+                  const columnEls = Array.from(daysRoot.querySelectorAll<HTMLDivElement>('.calendar-day-column'))
+                  if (columnEls.length === 0) return
+                  const columns = columnEls.map((el, idx) => ({ rect: el.getBoundingClientRect(), dayStart: dayStarts[idx] }))
+                  // Identify column where drag begins
+                  const startColIdx = columns.findIndex((c) => ev.clientX >= c.rect.left && ev.clientX <= c.rect.right)
+                  const col = startColIdx >= 0 ? columns[startColIdx] : columns[0]
+                  const colHeight = col.rect.height
+                  if (!(Number.isFinite(colHeight) && colHeight > 0)) return
+                  const yRatio = Math.min(Math.max((ev.clientY - col.rect.top) / colHeight, 0), 1)
+                  const timeOfDayMs0 = Math.round(yRatio * DAY_DURATION_MS)
+                  const initialStart = Math.round(col.dayStart + timeOfDayMs0)
+
+                  // Intent detection: wait to decide between horizontal pan vs vertical create
+                  const pointerId = ev.pointerId
+                  const startX = ev.clientX
+                  const startY = ev.clientY
+                  let startedCreate = false
+                  let startedPan = false
+
+                  const startCreate = () => {
+                    if (startedCreate) return
+                    startedCreate = true
+                    const state = {
+                      pointerId,
+                      entryId: 'new-entry',
+                      startX,
+                      startY,
+                      initialStart,
+                      initialEnd: initialStart + MIN_SESSION_DURATION_DRAG_MS,
+                      initialTimeOfDayMs: timeOfDayMs0,
+                      durationMs: MIN_SESSION_DURATION_DRAG_MS,
+                      kind: 'resize-end' as DragKind,
+                      columns,
+                    }
+                    calendarEventDragRef.current = state as any
+                    dragPreviewRef.current = { entryId: 'new-entry', startedAt: state.initialStart, endedAt: state.initialEnd }
+                    setDragPreview(dragPreviewRef.current)
+                    try { targetEl.setPointerCapture?.(pointerId) } catch {}
+                  }
+
+                  const startPan = () => {
+                    if (startedPan) return
+                    startedPan = true
+                    const rect = area.getBoundingClientRect()
+                    if (rect.width <= 0) return
+                    const dayCount = calendarView === '3d'
+                      ? Math.max(2, Math.min(multiDayCount, 14))
+                      : calendarView === 'week'
+                        ? 7
+                        : 1
+                    calendarDragRef.current = {
+                      pointerId,
+                      startX,
+                      startY,
+                      areaWidth: rect.width,
+                      dayCount,
+                      baseOffset: historyDayOffset,
+                      appliedSnap: 0,
+                      mode: 'hdrag',
+                    }
+                    try { area.setPointerCapture?.(pointerId) } catch {}
+                  }
+
+                  const onMove = (e: PointerEvent) => {
+                    if (e.pointerId !== pointerId) return
+                    const dx = e.clientX - startX
+                    const dy = e.clientY - startY
+                    const absX = Math.abs(dx)
+                    const absY = Math.abs(dy)
+                    const threshold = 8
+                    if (!startedCreate && !startedPan) {
+                      if (absX > threshold && absX > absY) {
+                        startPan()
+                      } else if (absY > threshold && absY > absX) {
+                        startCreate()
+                      } else {
+                        return
+                      }
+                    }
+                    if (startedPan) {
+                      // Mirror handleCalendarAreaPointerDown's move behavior
+                      const state = calendarDragRef.current
+                      if (!state || e.pointerId !== state.pointerId) return
+                      const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
+                      if (!Number.isFinite(dayWidth) || dayWidth <= 0) return
+                      try { e.preventDefault() } catch {}
+                      const rawDays = dx / dayWidth
+                      const translatePx = rawDays * dayWidth
+                      const totalPx = calendarBaseTranslateRef.current + translatePx
+                      const daysEl = calendarDaysRef.current
+                      if (daysEl) daysEl.style.transform = `translateX(${totalPx}px)`
+                      const hdrEl = calendarHeadersRef.current
+                      if (hdrEl) hdrEl.style.transform = `translateX(${totalPx}px)`
+                      return
+                    }
+                    if (startedCreate) {
+                      const s = calendarEventDragRef.current as any
+                      if (!s || e.pointerId !== s.pointerId) return
+                      const baseIdx = s.columns.findIndex((c: any) => e.clientX >= c.rect.left && e.clientX <= c.rect.right)
+                      const nearestIdx = baseIdx >= 0 ? baseIdx : (e.clientX < s.columns[0].rect.left ? 0 : s.columns.length - 1)
+                      const baseCol = s.columns[nearestIdx]
+                      const colH = baseCol.rect.height
+                      if (!(Number.isFinite(colH) && colH > 0)) return
+                      const deltaMsRaw = (dy / colH) * DAY_DURATION_MS
+                      const deltaMinutes = Math.round(deltaMsRaw / MINUTE_MS)
+                      const deltaMs = deltaMinutes * MINUTE_MS
+                      let desiredTimeOfDay = s.initialTimeOfDayMs + deltaMs
+                      let dayShift = 0
+                      if (desiredTimeOfDay <= -MINUTE_MS || desiredTimeOfDay >= DAY_DURATION_MS + MINUTE_MS) {
+                        dayShift = Math.floor(desiredTimeOfDay / DAY_DURATION_MS)
+                        desiredTimeOfDay = desiredTimeOfDay - dayShift * DAY_DURATION_MS
+                      }
+                      const targetIdx = Math.min(Math.max(nearestIdx + dayShift, 0), s.columns.length - 1)
+                      const target = s.columns[targetIdx]
+                      const timeOfDay = Math.min(Math.max(desiredTimeOfDay, 0), DAY_DURATION_MS)
+                      const newStart = s.initialStart
+                      let newEnd = s.initialEnd
+                      newEnd = Math.round(target.dayStart + timeOfDay)
+                      if (newEnd < newStart + MIN_SESSION_DURATION_DRAG_MS) {
+                        newEnd = newStart + MIN_SESSION_DURATION_DRAG_MS
+                      }
+                      const current = dragPreviewRef.current
+                      if (current && current.entryId === 'new-entry' && current.startedAt === newStart && current.endedAt === newEnd) return
+                      const preview = { entryId: 'new-entry', startedAt: newStart, endedAt: newEnd }
+                      dragPreviewRef.current = preview
+                      setDragPreview(preview)
+                      return
+                    }
+                  }
+                  const onUp = (e: PointerEvent) => {
+                    if (e.pointerId !== pointerId) return
+                    window.removeEventListener('pointermove', onMove)
+                    window.removeEventListener('pointerup', onUp)
+                    window.removeEventListener('pointercancel', onUp)
+
+                    if (startedPan) {
+                      const state = calendarDragRef.current
+                      if (state && e.pointerId === state.pointerId) {
+                        area.releasePointerCapture?.(state.pointerId)
+                        const dx = e.clientX - state.startX
+                        const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
+                        if (Number.isFinite(dayWidth) && dayWidth > 0) {
+                          const rawDays = dx / dayWidth
+                          const finalSnap = Math.round(rawDays)
+                          const targetOffset = state.baseOffset - finalSnap
+                          setHistoryDayOffset(targetOffset)
+                        }
+                      }
+                      const base = calendarBaseTranslateRef.current
+                      const daysEl = calendarDaysRef.current
+                      if (daysEl) daysEl.style.transform = `translateX(${base}px)`
+                      const hdrEl = calendarHeadersRef.current
+                      if (hdrEl) hdrEl.style.transform = `translateX(${base}px)`
+                      calendarDragRef.current = null
+                      return
+                    }
+
+                    if (startedCreate) {
+                      try { targetEl.releasePointerCapture?.(pointerId) } catch {}
+                      const preview = dragPreviewRef.current
+                      if (preview && preview.entryId === 'new-entry') {
+                        const startedAt = Math.min(preview.startedAt, preview.endedAt)
+                        const endedAt = Math.max(preview.startedAt, preview.endedAt)
+                        const elapsed = Math.max(endedAt - startedAt, MIN_SESSION_DURATION_DRAG_MS)
+                        const newId = makeHistoryId()
+                        const newEntry: HistoryEntry = {
+                          id: newId,
+                          taskName: '',
+                          goalName: null,
+                          bucketName: null,
+                          goalId: null,
+                          bucketId: null,
+                          taskId: null,
+                          elapsed,
+                          startedAt,
+                          endedAt,
+                          goalSurface: DEFAULT_SURFACE_STYLE,
+                          bucketSurface: null,
+                        }
+                        updateHistory((current) => {
+                          const next = [...current, newEntry]
+                          next.sort((a, b) => a.startedAt - b.startedAt)
+                          return next
+                        })
+                        setPendingNewHistoryId(newId)
+                        setTimeout(() => {
+                          handleStartEditingHistoryEntry(newEntry)
+                        }, 0)
+                      }
+                      calendarEventDragRef.current = null
+                      dragPreviewRef.current = null
+                      setDragPreview(null)
+                      return
+                    }
+                    // No intent detected (tap) — do nothing
+                  }
+                  window.addEventListener('pointermove', onMove)
+                  window.addEventListener('pointerup', onUp)
+                  window.addEventListener('pointercancel', onUp)
+                }
                 return (
-                  <div key={`col-${di}`} className="calendar-day-column">
+                  <div key={`col-${di}`} className="calendar-day-column" onPointerDown={handleCalendarColumnPointerDown}>
                     {events.map((ev, idx) => {
                       const isDragging = dragPreview?.entryId === ev.entry.id
                       const dragTime = isDragging ? ev.rangeLabel : undefined
@@ -3395,7 +3754,7 @@ export default function ReflectionPage() {
                         role="button"
                         aria-label={`${ev.label} ${ev.rangeLabel}`}
                         title={`${ev.label} · ${ev.rangeLabel}`}
-                        onClick={() => handleSelectHistorySegment(ev.entry)}
+                        onClick={(e) => handleOpenCalendarPreview(ev.entry, e.currentTarget)}
                         onDoubleClick={() => handleStartEditingHistoryEntry(ev.entry)}
                         onPointerDown={(pev) => {
                           // Clear any hover-set cursor before deciding drag kind
@@ -3430,10 +3789,104 @@ export default function ReflectionPage() {
                         <div className="calendar-event__time">{ev.rangeLabel}</div>
                       </div>
                     )})}
+                    {(() => {
+                      // Render creation preview if present and overlapping this day
+                      const preview = dragPreview
+                      if (!preview || preview.entryId !== 'new-entry') return null
+                      const dayStart = start
+                      const dayEnd = start + DAY_DURATION_MS
+                      const startClamped = Math.max(Math.min(preview.startedAt, preview.endedAt), dayStart)
+                      const endClamped = Math.min(Math.max(preview.startedAt, preview.endedAt), dayEnd)
+                      if (endClamped <= startClamped) return null
+                      const topPct = ((startClamped - dayStart) / DAY_DURATION_MS) * 100
+                      const heightPct = Math.max(((endClamped - startClamped) / DAY_DURATION_MS) * 100, (MINUTE_MS / DAY_DURATION_MS) * 100)
+                      const label = `${formatTimeOfDay(startClamped)} — ${formatTimeOfDay(endClamped)}`
+                      return (
+                        <div
+                          className="calendar-event calendar-event--dragging"
+                          style={{
+                            top: `${topPct}%`,
+                            height: `${heightPct}%`,
+                            left: `0%`,
+                            width: `calc(100% - 4px)`,
+                            background: 'rgba(104, 124, 255, 0.6)',
+                          }}
+                          data-drag-kind="resize"
+                          aria-hidden
+                        >
+                          <div className="calendar-event__title">New session</div>
+                          <div className="calendar-event__time">{label}</div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })}
             </div>
+            {(() => {
+              if (!calendarPreview || typeof document === 'undefined') return null
+              const entry = effectiveHistory.find((h) => h.id === calendarPreview.entryId) || null
+              if (!entry) return null
+              const dateLabel = (() => {
+                const startD = new Date(entry.startedAt)
+                const endD = new Date(entry.endedAt)
+                const sameDay =
+                  startD.getFullYear() === endD.getFullYear() &&
+                  startD.getMonth() === endD.getMonth() &&
+                  startD.getDate() === endD.getDate()
+                if (sameDay) {
+                  const dateFmt = startD.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+                  return `${dateFmt} · ${formatTimeOfDay(entry.startedAt)} — ${formatTimeOfDay(entry.endedAt)}`
+                }
+                return formatDateRange(entry.startedAt, entry.endedAt)
+              })()
+              const title = deriveEntryTaskName(entry)
+              const goal = entry.goalName || 'No goal'
+              const bucket = entry.bucketName || 'No bucket'
+              return createPortal(
+                <div
+                  className="calendar-popover"
+                  ref={calendarPreviewRef}
+                  style={{ top: `${calendarPreview.top}px`, left: `${calendarPreview.left}px` }}
+                  role="dialog"
+                  aria-label="Session details"
+                >
+                  <div className="calendar-popover__header">
+                    <div className="calendar-popover__title" title={title}>{title || 'Untitled session'}</div>
+                    <div className="calendar-popover__actions">
+                      <button
+                        type="button"
+                        className="calendar-popover__action calendar-popover__action--danger"
+                        title="Delete session"
+                        onClick={(ev) => {
+                          ev.stopPropagation()
+                          handleDeleteHistoryEntry(entry.id)(ev as any)
+                          handleCloseCalendarPreview()
+                        }}
+                      >
+                        🗑
+                      </button>
+                      <button
+                        type="button"
+                        className="calendar-popover__action"
+                        title="Close"
+                        onClick={(ev) => {
+                          ev.stopPropagation()
+                          handleCloseCalendarPreview()
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                  <div className="calendar-popover__meta">
+                    <div className="calendar-popover__time">{dateLabel}</div>
+                    <div className="calendar-popover__goal">{goal}{bucket ? ` → ${bucket}` : ''}</div>
+                  </div>
+                </div>,
+                document.body,
+              )
+            })()}
           </div>
         </div>
       )
@@ -3443,7 +3896,7 @@ export default function ReflectionPage() {
         <div className="calendar-vertical" aria-label="Time grid" style={styleVars}>
           <div className="calendar-vertical__header">
             <div className="calendar-axis-header" />
-            <div className="calendar-header-wrapper">
+            <div className="calendar-header-wrapper" onPointerDown={handleCalendarAreaPointerDown}>
               <div
                 className="calendar-header-track"
                 ref={calendarHeadersRef}
