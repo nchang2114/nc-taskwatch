@@ -2998,12 +2998,17 @@ export default function ReflectionPage() {
     const handleMove = (e: PointerEvent) => {
       const state = calendarDragRef.current
       if (!state || e.pointerId !== state.pointerId) return
-  const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
+      // Prevent native scrolling/gestures interfering with horizontal drag
+      try { e.preventDefault() } catch {}
+      const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
       if (!Number.isFinite(dayWidth) || dayWidth <= 0) return
       const dx = e.clientX - state.startX
       const rawDays = dx / dayWidth
-      // step only when crossing whole days
-      const desiredSnap = rawDays > 0 ? Math.floor(rawDays) : Math.ceil(rawDays)
+      // Step when crossing whole days, but clamp per-move to avoid large jumps on touch
+      let desiredSnap = rawDays > 0 ? Math.floor(rawDays) : Math.ceil(rawDays)
+      const diff = desiredSnap - state.appliedSnap
+      if (diff > 1) desiredSnap = state.appliedSnap + 1
+      if (diff < -1) desiredSnap = state.appliedSnap - 1
       let appliedSnap = state.appliedSnap
       if (desiredSnap !== appliedSnap) {
         const targetOffset = state.baseOffset - desiredSnap
@@ -3052,7 +3057,7 @@ export default function ReflectionPage() {
       }
       calendarDragRef.current = null
     }
-    window.addEventListener('pointermove', handleMove, { passive: true })
+    window.addEventListener('pointermove', handleMove)
     window.addEventListener('pointerup', handleUp)
     window.addEventListener('pointercancel', handleUp)
   }, [calendarView, multiDayCount, historyDayOffset, setHistoryDayOffset])
