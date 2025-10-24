@@ -1575,10 +1575,12 @@ export default function ReflectionPage() {
   const calendarDragRef = useRef<{
     pointerId: number
     startX: number
+    startY: number
     areaWidth: number
     dayCount: number
     baseOffset: number
     appliedSnap: number
+    mode: 'pending' | 'hdrag'
   } | null>(null)
   const [activeRange, setActiveRange] = useState<ReflectionRangeKey>('24h')
   const [history, setHistory] = useState<HistoryEntry[]>(() => readPersistedHistory())
@@ -2986,25 +2988,44 @@ export default function ReflectionPage() {
     calendarDragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
+      startY: event.clientY,
       areaWidth: rect.width,
       dayCount,
       baseOffset: historyDayOffset,
       appliedSnap: 0,
+      mode: 'pending',
     }
-    try {
-      area.setPointerCapture?.(event.pointerId)
-    } catch {}
-    event.preventDefault()
+    // Don't capture or preventDefault yet; wait until we detect horizontal intent
     const handleMove = (e: PointerEvent) => {
       const state = calendarDragRef.current
       if (!state || e.pointerId !== state.pointerId) return
-      // Prevent native scrolling/gestures interfering with horizontal drag
-      try { e.preventDefault() } catch {}
+      const dy = e.clientY - state.startY
       const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
       if (!Number.isFinite(dayWidth) || dayWidth <= 0) return
       const dx = e.clientX - state.startX
-      // Small dead zone to avoid twitch on touch
-      if (Math.abs(dx) < 6) return
+      // Intent detection
+      if (state.mode === 'pending') {
+        const absX = Math.abs(dx)
+        const absY = Math.abs(dy)
+        const threshold = 8
+        if (absY > threshold && absY > absX) {
+          // Vertical scroll intent: abort calendar drag and let page scroll
+          window.removeEventListener('pointermove', handleMove)
+          window.removeEventListener('pointerup', handleUp)
+          window.removeEventListener('pointercancel', handleUp)
+          calendarDragRef.current = null
+          return
+        }
+        if (absX > threshold && absX > absY) {
+          // Horizontal drag confirmed: capture and prevent default
+          try { area.setPointerCapture?.(e.pointerId) } catch {}
+          state.mode = 'hdrag'
+        } else {
+          return
+        }
+      }
+      // From here, horizontal drag is active
+      try { e.preventDefault() } catch {}
       const rawDays = dx / dayWidth
       // Smooth pan: do not update historyDayOffset while dragging to avoid re-renders
       const translatePx = rawDays * dayWidth
@@ -3027,7 +3048,7 @@ export default function ReflectionPage() {
       window.removeEventListener('pointercancel', handleUp)
       const dx = e.clientX - state.startX
       const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
-      if (Number.isFinite(dayWidth) && dayWidth > 0) {
+      if (state.mode === 'hdrag' && Number.isFinite(dayWidth) && dayWidth > 0) {
         const rawDays = dx / dayWidth
         const finalSnap = Math.round(rawDays)
         const targetOffset = state.baseOffset - finalSnap
