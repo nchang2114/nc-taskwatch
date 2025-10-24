@@ -2143,10 +2143,7 @@ export default function ReflectionPage() {
     ) => {
       event.preventDefault()
       event.stopPropagation()
-      const index = history.findIndex((entry) => entry.id === entryId)
-      if (index === -1) {
-        return
-      }
+      // Delete by id against the latest state to avoid stale-index bugs when multiple events fire
       setHoveredHistoryId((current) => (current === entryId ? null : current))
       setHoveredDuringDragId((current) => (current === entryId ? null : current))
       if (selectedHistoryId === entryId) {
@@ -2157,9 +2154,12 @@ export default function ReflectionPage() {
       if (pendingNewHistoryId === entryId) {
         setPendingNewHistoryId(null)
       }
-      updateHistory((current) => [...current.slice(0, index), ...current.slice(index + 1)])
+      updateHistory((current) => {
+        if (!current.some((e) => e.id === entryId)) return current
+        return current.filter((e) => e.id !== entryId)
+      })
     },
-    [history, selectedHistoryId, updateHistory, pendingNewHistoryId],
+    [selectedHistoryId, updateHistory, pendingNewHistoryId],
   )
 
   const handleAddHistoryEntry = useCallback(() => {
@@ -4920,12 +4920,6 @@ export default function ReflectionPage() {
                               <button
                                 type="button"
                                 className="history-timeline__action-button"
-                                onPointerDown={(e) => {
-                                  e.preventDefault()
-                                  e.stopPropagation()
-                                }}
-                                onPointerUp={handleDeleteHistoryEntry(segment.entry.id)}
-                                onTouchEnd={handleDeleteHistoryEntry(segment.entry.id) as any}
                                 onClick={handleDeleteHistoryEntry(segment.entry.id)}
                               >
                                 Delete session
@@ -4952,12 +4946,6 @@ export default function ReflectionPage() {
                             <button
                               type="button"
                               className="history-timeline__action-button"
-                              onPointerDown={(e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                              }}
-                              onPointerUp={handleDeleteHistoryEntry(segment.entry.id)}
-                              onTouchEnd={handleDeleteHistoryEntry(segment.entry.id) as any}
                               onClick={handleDeleteHistoryEntry(segment.entry.id)}
                             >
                               Delete session
