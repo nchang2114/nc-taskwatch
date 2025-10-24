@@ -1565,6 +1565,21 @@ const computeRangeOverview = (
 export default function ReflectionPage() {
   type CalendarViewMode = 'day' | '3d' | 'week' | 'month' | 'year'
   const [calendarView, setCalendarView] = useState<CalendarViewMode>('month')
+  const [multiDayCount, setMultiDayCount] = useState<number>(3)
+  const [showMultiDayChooser, setShowMultiDayChooser] = useState(false)
+  const multiChooserRef = useRef<HTMLDivElement | null>(null)
+  const calendarDaysAreaRef = useRef<HTMLDivElement | null>(null)
+  const calendarDaysRef = useRef<HTMLDivElement | null>(null)
+  const calendarHeadersRef = useRef<HTMLDivElement | null>(null)
+  const calendarBaseTranslateRef = useRef<number>(0)
+  const calendarDragRef = useRef<{
+    pointerId: number
+    startX: number
+    areaWidth: number
+    dayCount: number
+    baseOffset: number
+    appliedSnap: number
+  } | null>(null)
   const [activeRange, setActiveRange] = useState<ReflectionRangeKey>('24h')
   const [history, setHistory] = useState<HistoryEntry[]>(() => readPersistedHistory())
   const latestHistoryRef = useRef(history)
@@ -2915,8 +2930,8 @@ export default function ReflectionPage() {
   }, [anchorDate])
 
   const stepSizeByView: Record<CalendarViewMode, number> = useMemo(
-    () => ({ day: 1, '3d': 3, week: 7, month: daysInMonth, year: 365 }),
-    [daysInMonth],
+    () => ({ day: 1, '3d': Math.max(2, Math.min(multiDayCount, 14)), week: 7, month: daysInMonth, year: 365 }),
+    [daysInMonth, multiDayCount],
   )
 
   const handlePrevWindow = useCallback(() => {
@@ -2924,7 +2939,7 @@ export default function ReflectionPage() {
   }, [calendarView, stepSizeByView])
 
   const handleNextWindow = useCallback(() => {
-    setHistoryDayOffset((offset) => Math.min(offset + stepSizeByView[calendarView], 0))
+    setHistoryDayOffset((offset) => offset + stepSizeByView[calendarView])
   }, [calendarView, stepSizeByView])
 
   const handleJumpToToday = useCallback(() => {
@@ -2934,6 +2949,113 @@ export default function ReflectionPage() {
   const setView = useCallback((view: CalendarViewMode) => {
     setCalendarView(view)
   }, [])
+
+  useEffect(() => {
+    if (!showMultiDayChooser) return
+    const onDocPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null
+      const container = multiChooserRef.current
+      if (container && target && container.contains(target)) {
+        return
+      }
+      setShowMultiDayChooser(false)
+    }
+    document.addEventListener('pointerdown', onDocPointerDown)
+    return () => document.removeEventListener('pointerdown', onDocPointerDown)
+  }, [showMultiDayChooser])
+
+  const handleMultiDayDoubleClick = useCallback(() => {
+    setView('3d')
+    setShowMultiDayChooser(true)
+  }, [setView])
+
+  const handleCalendarAreaPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!(calendarView === 'day' || calendarView === '3d' || calendarView === 'week')) {
+      return
+    }
+    if (event.button !== 0) return
+    const target = event.target as HTMLElement | null
+    if (target && (target.closest('.calendar-event') || target.closest('button'))) {
+      return
+    }
+    const area = calendarDaysAreaRef.current
+    if (!area) return
+    const rect = area.getBoundingClientRect()
+    if (rect.width <= 0) return
+    const dayCount = calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
+    calendarDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      areaWidth: rect.width,
+      dayCount,
+      baseOffset: historyDayOffset,
+      appliedSnap: 0,
+    }
+    try {
+      area.setPointerCapture?.(event.pointerId)
+    } catch {}
+    event.preventDefault()
+    const handleMove = (e: PointerEvent) => {
+      const state = calendarDragRef.current
+      if (!state || e.pointerId !== state.pointerId) return
+  const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
+      if (!Number.isFinite(dayWidth) || dayWidth <= 0) return
+      const dx = e.clientX - state.startX
+      const rawDays = dx / dayWidth
+      // step only when crossing whole days
+      const desiredSnap = rawDays > 0 ? Math.floor(rawDays) : Math.ceil(rawDays)
+      let appliedSnap = state.appliedSnap
+      if (desiredSnap !== appliedSnap) {
+        const targetOffset = state.baseOffset - desiredSnap
+        const effectiveSnap = state.baseOffset - targetOffset
+        if (effectiveSnap !== appliedSnap) {
+          setHistoryDayOffset(targetOffset)
+          state.appliedSnap = effectiveSnap
+          appliedSnap = effectiveSnap
+        }
+      }
+      const residualDays = rawDays - appliedSnap
+      const translatePx = residualDays * dayWidth
+      const totalPx = calendarBaseTranslateRef.current + translatePx
+      const daysEl = calendarDaysRef.current
+      if (daysEl) {
+        daysEl.style.transform = `translateX(${totalPx}px)`
+      }
+      const hdrEl = calendarHeadersRef.current
+      if (hdrEl) {
+        hdrEl.style.transform = `translateX(${totalPx}px)`
+      }
+    }
+    const handleUp = (e: PointerEvent) => {
+      const state = calendarDragRef.current
+      if (!state || e.pointerId !== state.pointerId) return
+      area.releasePointerCapture?.(e.pointerId)
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+      window.removeEventListener('pointercancel', handleUp)
+      const dx = e.clientX - state.startX
+      const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
+      if (Number.isFinite(dayWidth) && dayWidth > 0) {
+        const rawDays = dx / dayWidth
+        const finalSnap = Math.round(rawDays)
+        const targetOffset = state.baseOffset - finalSnap
+        setHistoryDayOffset(targetOffset)
+      }
+      const base = calendarBaseTranslateRef.current
+      const daysEl = calendarDaysRef.current
+      if (daysEl) {
+        daysEl.style.transform = `translateX(${base}px)`
+      }
+      const hdrEl = calendarHeadersRef.current
+      if (hdrEl) {
+        hdrEl.style.transform = `translateX(${base}px)`
+      }
+      calendarDragRef.current = null
+    }
+    window.addEventListener('pointermove', handleMove, { passive: true })
+    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointercancel', handleUp)
+  }, [calendarView, multiDayCount, historyDayOffset, setHistoryDayOffset])
 
   // Build minimal calendar content for non-day views
   const renderCalendarContent = useCallback(() => {
@@ -2959,26 +3081,182 @@ export default function ReflectionPage() {
       )
     }
 
-    if (calendarView === '3d' || calendarView === 'week') {
-      const days = calendarView === '3d' ? 3 : 7
-      // Start at beginning of window: for week, start on Sunday; for 3d, start at anchor
-      const start = new Date(anchorDate)
+    if (calendarView === 'day' || calendarView === '3d' || calendarView === 'week') {
+      const visibleDayCount = calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
+      const bufferDays = 2
+      const totalCount = visibleDayCount + bufferDays * 2
+      // Determine range start (shifted by buffer)
+      const windowStart = new Date(anchorDate)
       if (calendarView === 'week') {
-        const dow = start.getDay() // 0=Sun
-        start.setDate(start.getDate() - dow)
+        const dow = windowStart.getDay() // 0=Sun
+        windowStart.setDate(windowStart.getDate() - dow)
       }
-      const cols = Array.from({ length: days }).map((_, i) => {
+      windowStart.setDate(windowStart.getDate() - bufferDays)
+      const dayStarts: number[] = []
+      for (let i = 0; i < totalCount; i += 1) {
+        const d = new Date(windowStart)
+        d.setDate(windowStart.getDate() + i)
+        d.setHours(0, 0, 0, 0)
+        dayStarts.push(d.getTime())
+      }
+      type DayEvent = {
+        entry: HistoryEntry
+        topPct: number
+        heightPct: number
+        lane: number
+        lanes: number
+        color: string
+        gradientCss?: string
+        label: string
+        startLabel: string
+        endLabel: string
+      }
+
+      const computeDayEvents = (startMs: number): DayEvent[] => {
+        const endMs = startMs + DAY_DURATION_MS
+        // Collect events that overlap this day and clamp
+        const raw = effectiveHistory
+          .map((e) => {
+            const start = Math.max(Math.min(e.startedAt, e.endedAt), startMs)
+            const end = Math.min(Math.max(e.startedAt, e.endedAt), endMs)
+            if (end <= start) return null
+            return { entry: e, start, end }
+          })
+          .filter((v): v is { entry: HistoryEntry; start: number; end: number } => Boolean(v))
+          .sort((a, b) => a.start - b.start)
+
+        // Assign lanes to avoid overlap (like Google Calendar)
+        const laneEnds: number[] = []
+        const temp: Array<{ entry: HistoryEntry; start: number; end: number; lane: number }> = []
+        raw.forEach(({ entry, start, end }) => {
+          let lane = laneEnds.findIndex((le) => start >= le - 1000)
+          if (lane === -1) {
+            lane = laneEnds.length
+            laneEnds.push(end)
+          } else {
+            laneEnds[lane] = end
+          }
+          temp.push({ entry, start, end, lane })
+        })
+
+        const lanes = Math.max(1, laneEnds.length)
+        return temp.map(({ entry, start, end, lane }) => {
+          const metadata = resolveGoalMetadata(entry, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup)
+          const gradientCss = metadata.colorInfo?.gradient?.css
+          const solidColor = metadata.colorInfo?.solidColor
+          const fallbackLabel = deriveEntryTaskName(entry)
+          const color = gradientCss ?? solidColor ?? getPaletteColorForLabel(fallbackLabel)
+          const topPct = ((start - startMs) / DAY_DURATION_MS) * 100
+          const heightPct = Math.max(((end - start) / DAY_DURATION_MS) * 100, (MINUTE_MS / DAY_DURATION_MS) * 100)
+          return {
+            entry,
+            topPct: Math.min(Math.max(topPct, 0), 100),
+            heightPct: Math.min(Math.max(heightPct, 0.4), 100),
+            lane,
+            lanes,
+            color,
+            gradientCss,
+            label: fallbackLabel,
+            startLabel: formatTimeOfDay(start),
+            endLabel: formatTimeOfDay(end),
+          }
+        })
+      }
+
+      // Set CSS var for column count via inline style on container later
+      const todayMidnight = (() => {
+        const t = new Date()
+        t.setHours(0, 0, 0, 0)
+        return t.getTime()
+      })()
+      const headers = dayStarts.map((start, i) => {
         const d = new Date(start)
-        d.setDate(start.getDate() + i)
-        const label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+        const dow = d.toLocaleDateString(undefined, { weekday: 'short' })
+        const dateNum = d.getDate()
+        const isToday = start === todayMidnight
         return (
-          <div key={`col-${i}`} className="calendar-col">
-            <div className="calendar-col-header">{label}</div>
-            {renderCell(d, true)}
+          <div key={`hdr-${i}`} className={`calendar-day-header${isToday ? ' is-today' : ''}`} aria-label={d.toDateString()}>
+            <div className="calendar-day-header__dow">{dow}</div>
+            <div className="calendar-day-header__date">
+              <span className="calendar-day-header__date-number" aria-current={isToday ? 'date' : undefined}>{dateNum}</span>
+            </div>
           </div>
         )
       })
-      return <div className="calendar-grid calendar-grid--cols">{cols}</div>
+
+      const hours = Array.from({ length: 25 }).map((_, h) => h) // 0..24 (24 for bottom line)
+      const body = (
+        <div className="calendar-vertical__body">
+          <div className="calendar-time-axis" aria-hidden>
+            {hours.map((h) => (
+              <div key={`t-${h}`} className="calendar-time-label" style={{ top: `${(h / 24) * 100}%` }}>
+                {h < 24 ? formatHourLabel(h) : ''}
+              </div>
+            ))}
+          </div>
+          <div className="calendar-days-area" ref={calendarDaysAreaRef} onPointerDown={handleCalendarAreaPointerDown}>
+            <div className="calendar-gridlines" aria-hidden>
+              {hours.map((h) => (
+                <div key={`g-${h}`} className="calendar-gridline" style={{ top: `${(h / 24) * 100}%` }} />
+              ))}
+            </div>
+            <div
+              className="calendar-days"
+              ref={calendarDaysRef}
+              style={{ width: `${(dayStarts.length / visibleDayCount) * 100}%` }}
+            >
+              {dayStarts.map((start, di) => {
+                const events = computeDayEvents(start)
+                const laneWidthPct = (100 / Math.max(1, events[0]?.lanes ?? 1))
+                return (
+                  <div key={`col-${di}`} className="calendar-day-column">
+                    {events.map((ev, idx) => (
+                      <div
+                        key={`ev-${di}-${idx}-${ev.entry.id}`}
+                        className="calendar-event"
+                        style={{
+                          top: `${ev.topPct}%`,
+                          height: `${ev.heightPct}%`,
+                          left: `${ev.lane * laneWidthPct}%`,
+                          width: `calc(${laneWidthPct}% - 4px)`,
+                          background: ev.gradientCss ?? ev.color,
+                        }}
+                        role="button"
+                        aria-label={`${ev.label} ${ev.startLabel}–${ev.endLabel}`}
+                        title={`${ev.label} · ${ev.startLabel} — ${ev.endLabel}`}
+                        onClick={() => handleSelectHistorySegment(ev.entry)}
+                        onDoubleClick={() => handleStartEditingHistoryEntry(ev.entry)}
+                      >
+                        <div className="calendar-event__title">{ev.label}</div>
+                        <div className="calendar-event__time">{ev.startLabel} — {ev.endLabel}</div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )
+
+      const styleVars = { ['--calendar-day-count' as any]: String(dayStarts.length) } as CSSProperties
+      return (
+        <div className="calendar-vertical" aria-label="Time grid" style={styleVars}>
+          <div className="calendar-vertical__header">
+            <div className="calendar-axis-header" />
+            <div className="calendar-header-wrapper">
+              <div
+                className="calendar-header-track"
+                ref={calendarHeadersRef}
+                style={{ width: `${(dayStarts.length / visibleDayCount) * 100}%` }}
+              >
+                {headers}
+              </div>
+            </div>
+          </div>
+          {body}
+        </div>
+      )
     }
 
     if (calendarView === 'month') {
@@ -3028,6 +3306,22 @@ export default function ReflectionPage() {
 
     return null
   }, [calendarView, anchorDate, effectiveHistory])
+
+  // Keep the buffered track centered on the visible window (apply base translate)
+  useLayoutEffect(() => {
+    if (!(calendarView === 'day' || calendarView === '3d' || calendarView === 'week')) return
+    const area = calendarDaysAreaRef.current
+    const daysEl = calendarDaysRef.current
+    const hdrEl = calendarHeadersRef.current
+    if (!area || !daysEl || !hdrEl) return
+    const visibleDayCount = calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
+    const bufferDays = 2
+    const dayWidth = area.clientWidth / Math.max(1, visibleDayCount)
+    const base = -bufferDays * dayWidth
+    calendarBaseTranslateRef.current = base
+    daysEl.style.transform = `translateX(${base}px)`
+    hdrEl.style.transform = `translateX(${base}px)`
+  }, [calendarView, multiDayCount, anchorDate])
 
   const handleWindowPointerMove = useCallback(
     (event: PointerEvent) => {
@@ -3361,7 +3655,6 @@ export default function ReflectionPage() {
               type="button"
               className="calendar-nav-button"
               onClick={handleNextWindow}
-              disabled={historyDayOffset >= 0}
               aria-label="Next"
             >
               ›
@@ -3381,7 +3674,7 @@ export default function ReflectionPage() {
               {(
                 [
                   { key: 'day', label: 'Day' },
-                  { key: '3d', label: '3 days' },
+                  { key: '3d', label: `${Math.max(2, Math.min(multiDayCount, 14))} days` },
                   { key: 'week', label: 'Week' },
                   { key: 'month', label: 'Month' },
                   { key: 'year', label: 'Year' },
@@ -3394,21 +3687,38 @@ export default function ReflectionPage() {
                   aria-selected={calendarView === opt.key}
                   className={`calendar-toggle${calendarView === opt.key ? ' calendar-toggle--active' : ''}`}
                   onClick={() => setView(opt.key)}
+                  onDoubleClick={opt.key === '3d' ? handleMultiDayDoubleClick : undefined}
                 >
                   {opt.label}
                 </button>
               ))}
             </div>
+            {/* Multi-day segmented control removed in favor of double-click chooser */}
+            {calendarView === '3d' && showMultiDayChooser ? (
+              <div className="calendar-multi-day-chooser" ref={multiChooserRef} role="dialog" aria-label="Choose day count">
+                {[2, 3, 4, 5, 6].map((n) => (
+                  <button
+                    key={`chooser-${n}`}
+                    type="button"
+                    className={`calendar-multi-day-chooser__option${multiDayCount === n ? ' is-active' : ''}`}
+                    onClick={() => {
+                      setMultiDayCount(n)
+                      setShowMultiDayChooser(false)
+                    }}
+                  >
+                    {n} days
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
 
-        {calendarView !== 'day' ? (
-          <div className="history-calendar" aria-label="Calendar display">
-            {renderCalendarContent()}
-          </div>
-        ) : null}
+        <div className="history-calendar" aria-label="Calendar display">
+          {renderCalendarContent()}
+        </div>
 
-  {calendarView === 'day' ? (
+  {false ? (
   <section className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`} aria-label="Session History">
           <div className="history-controls history-controls--floating">
             <button
