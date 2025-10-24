@@ -825,6 +825,12 @@ html[data-theme='light'] .calendar-day-header.is-today .calendar-day-header__dow
   white-space: nowrap; /* keep toggle labels on one line */
 }
 
+/* Wrap a toggle to anchor a popover directly under it */
+.calendar-toggle-wrap {
+  position: relative;
+  display: inline-block;
+}
+
 .calendar-toggle {
   border: none;
   background: transparent;
@@ -1120,6 +1126,12 @@ html[data-theme='light'] .calendar-gridline {
   background: rgba(18, 24, 58, 0.96);
   box-shadow: 0 12px 24px rgba(8, 12, 36, 0.35);
   z-index: 30;
+}
+
+/* When rendered under a specific toggle, align to that button's left edge */
+.calendar-toggle-wrap > .calendar-multi-day-chooser {
+  left: 0;
+  right: auto;
 }
 
 .calendar-multi-day-chooser__option {

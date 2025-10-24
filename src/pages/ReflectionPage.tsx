@@ -3684,43 +3684,58 @@ export default function ReflectionPage() {
                   { key: 'month', full: 'Month', short: 'M' },
                   { key: 'year', full: 'Year', short: 'Y' },
                 ]
-                return options.map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={calendarView === opt.key}
-                    aria-label={opt.full}
-                    className={`calendar-toggle${calendarView === opt.key ? ' calendar-toggle--active' : ''}`}
-                    onClick={() => setView(opt.key)}
-                    onDoubleClick={opt.key === '3d' ? handleMultiDayDoubleClick : undefined}
-                  >
-                    <span className="calendar-toggle__label calendar-toggle__label--full">{opt.full}</span>
-                    <span className="calendar-toggle__label calendar-toggle__label--short" aria-hidden>
-                      {opt.short}
-                    </span>
-                  </button>
-                ))
+                return options.map((opt) => {
+                  const button = (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={calendarView === opt.key}
+                      aria-label={opt.full}
+                      className={`calendar-toggle${calendarView === opt.key ? ' calendar-toggle--active' : ''}`}
+                      onClick={() => setView(opt.key)}
+                      onDoubleClick={opt.key === '3d' ? handleMultiDayDoubleClick : undefined}
+                    >
+                      <span className="calendar-toggle__label calendar-toggle__label--full">{opt.full}</span>
+                      <span className="calendar-toggle__label calendar-toggle__label--short" aria-hidden>
+                        {opt.short}
+                      </span>
+                    </button>
+                  )
+                  if (opt.key !== '3d') {
+                    return button
+                  }
+                  // Wrap the 3-day toggle so the chooser anchors under this button
+                  return (
+                    <div key={opt.key} className="calendar-toggle-wrap">
+                      {button}
+                      {calendarView === '3d' && showMultiDayChooser ? (
+                        <div
+                          className="calendar-multi-day-chooser"
+                          ref={multiChooserRef}
+                          role="dialog"
+                          aria-label="Choose day count"
+                        >
+                          {[2, 3, 4, 5, 6].map((n) => (
+                            <button
+                              key={`chooser-${n}`}
+                              type="button"
+                              className={`calendar-multi-day-chooser__option${multiDayCount === n ? ' is-active' : ''}`}
+                              onClick={() => {
+                                setMultiDayCount(n)
+                                setShowMultiDayChooser(false)
+                              }}
+                            >
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })
               })()}
             </div>
-            {/* Multi-day segmented control removed in favor of double-click chooser */}
-            {calendarView === '3d' && showMultiDayChooser ? (
-              <div className="calendar-multi-day-chooser" ref={multiChooserRef} role="dialog" aria-label="Choose day count">
-                {[2, 3, 4, 5, 6].map((n) => (
-                  <button
-                    key={`chooser-${n}`}
-                    type="button"
-                    className={`calendar-multi-day-chooser__option${multiDayCount === n ? ' is-active' : ''}`}
-                    onClick={() => {
-                      setMultiDayCount(n)
-                      setShowMultiDayChooser(false)
-                    }}
-                  >
-                    {n} days
-                  </button>
-                ))}
-              </div>
-            ) : null}
           </div>
         </div>
 
