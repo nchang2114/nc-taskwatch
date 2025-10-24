@@ -3514,6 +3514,8 @@ export default function ReflectionPage() {
               handleCloseCalendarPreview()
             }
           }
+          // Prevent page/area scrolling while dragging an event
+          try { e.preventDefault() } catch {}
           // Base column by X position (nearest if outside bounds)
           const baseIdx = s.columns.findIndex((c) => e.clientX >= c.rect.left && e.clientX <= c.rect.right)
           const nearestIdx = baseIdx >= 0 ? baseIdx : (e.clientX < s.columns[0].rect.left ? 0 : s.columns.length - 1)
@@ -3776,6 +3778,8 @@ export default function ReflectionPage() {
                       return
                     }
                     if (startedCreate) {
+                      // Prevent page/area scrolling while dragging to create
+                      try { e.preventDefault() } catch {}
                       const s = calendarEventDragRef.current as any
                       if (!s || e.pointerId !== s.pointerId) return
                       const baseIdx = s.columns.findIndex((c: any) => e.clientX >= c.rect.left && e.clientX <= c.rect.right)
