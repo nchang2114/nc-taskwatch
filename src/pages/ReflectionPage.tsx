@@ -3416,6 +3416,20 @@ export default function ReflectionPage() {
         return t.getTime()
       })()
 
+      // Helper: toggle global scroll lock (prevents page scroll on touch during active drags)
+      const setPageScrollLock = (locked: boolean) => {
+        if (typeof document === 'undefined') return
+        const root = document.documentElement
+        const body = document.body
+        if (locked) {
+          root.classList.add('scroll-lock')
+          body.classList.add('scroll-lock')
+        } else {
+          root.classList.remove('scroll-lock')
+          body.classList.remove('scroll-lock')
+        }
+      }
+
       // Drag state for calendar events (move only, vertical + cross-day)
       const calendarEventDragRef = {
         current: null as null | {
@@ -3494,6 +3508,8 @@ export default function ReflectionPage() {
           s.activated = true
           // Close any open calendar popover as soon as a drag is activated
           handleCloseCalendarPreview()
+          // Lock page scroll on touch while dragging an event
+          if (isTouch) setPageScrollLock(true)
           try { targetEl.setPointerCapture?.(ev.pointerId) } catch {}
         }
         const onMove = (e: PointerEvent) => {
@@ -3610,6 +3626,8 @@ export default function ReflectionPage() {
           setDragPreview(null)
           // Clear drag kind marker so cursor returns to default/hover affordances
           delete targetEl.dataset.dragKind
+          // Always release scroll lock at the end of a drag (noop if not locked)
+          if (isTouch) setPageScrollLock(false)
         }
         // For touch, arm the hold timer to activate dragging
         if (isTouch) {
@@ -3717,6 +3735,8 @@ export default function ReflectionPage() {
                     calendarEventDragRef.current = state as any
                     dragPreviewRef.current = { entryId: 'new-entry', startedAt: state.initialStart, endedAt: state.initialEnd }
                     setDragPreview(dragPreviewRef.current)
+                    // Lock page scroll while dragging to create (touch only)
+                    if (isTouch) setPageScrollLock(true)
                     try { targetEl.setPointerCapture?.(pointerId) } catch {}
                   }
 
@@ -3852,6 +3872,8 @@ export default function ReflectionPage() {
                     }
 
                     if (startedCreate) {
+                      // Release page scroll lock at the end of create drag (noop if not locked)
+                      if (isTouch) setPageScrollLock(false)
                       try { targetEl.releasePointerCapture?.(pointerId) } catch {}
                       const preview = dragPreviewRef.current
                       if (preview && preview.entryId === 'new-entry') {

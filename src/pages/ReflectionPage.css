@@ -1415,3 +1415,11 @@ html[data-theme='light'] .calendar-editor {
   background: rgba(245, 248, 255, 0.98);
   box-shadow: 0 18px 42px rgba(118, 130, 206, 0.32);
 }
+
+/* --- Global scroll lock during touch drags --- */
+html.scroll-lock,
+body.scroll-lock {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+  touch-action: none;
+}
