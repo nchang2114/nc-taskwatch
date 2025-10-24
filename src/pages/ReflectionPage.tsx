@@ -3431,6 +3431,7 @@ export default function ReflectionPage() {
       ) => (ev: ReactPointerEvent<HTMLDivElement>) => {
         if (entry.id === 'active-session') return
         if (ev.button !== 0) return
+        const isTouch = (ev as any).pointerType === 'touch'
         const daysRoot = calendarDaysRef.current
         if (!daysRoot) return
         const columnEls = Array.from(daysRoot.querySelectorAll<HTMLDivElement>('.calendar-day-column'))
@@ -3470,10 +3471,22 @@ export default function ReflectionPage() {
           activated: false,
         }
         calendarEventDragRef.current = state
-        try {
-          // Do not preventDefault/stopPropagation here so a simple click still triggers onClick to open preview.
-          targetEl.setPointerCapture?.(ev.pointerId)
-        } catch {}
+        // For mouse/pen: capture immediately. For touch: defer capture until long-press activates drag.
+        if (!isTouch) {
+          try {
+            targetEl.setPointerCapture?.(ev.pointerId)
+          } catch {}
+        }
+        // For touch, require a short hold before activating drag to prevent accidental drags while scrolling
+        let touchHoldTimer: number | null = null
+        const activateDrag = () => {
+          const s = calendarEventDragRef.current
+          if (!s || s.activated) return
+          s.activated = true
+          // Close any open calendar popover as soon as a drag is activated
+          handleCloseCalendarPreview()
+          try { targetEl.setPointerCapture?.(ev.pointerId) } catch {}
+        }
         const onMove = (e: PointerEvent) => {
           const s = calendarEventDragRef.current
           if (!s || e.pointerId !== s.pointerId) return
@@ -3482,12 +3495,24 @@ export default function ReflectionPage() {
           const dy = e.clientY - s.startY
           const threshold = 6
           if (!s.activated) {
-            if (Math.hypot(dx, dy) <= threshold) {
+            if (isTouch) {
+              // If finger moves before hold completes, cancel the long-press activation
+              if (Math.hypot(dx, dy) > threshold) {
+                if (touchHoldTimer !== null) {
+                  try { window.clearTimeout(touchHoldTimer) } catch {}
+                  touchHoldTimer = null
+                }
+                return
+              }
+              // Not activated yet, and not moved enough — keep waiting for hold
               return
+            } else {
+              if (Math.hypot(dx, dy) <= threshold) {
+                return
+              }
+              s.activated = true
+              handleCloseCalendarPreview()
             }
-            s.activated = true
-            // Close any open calendar popover as soon as a drag is activated
-            handleCloseCalendarPreview()
           }
           // Base column by X position (nearest if outside bounds)
           const baseIdx = s.columns.findIndex((c) => e.clientX >= c.rect.left && e.clientX <= c.rect.right)
@@ -3575,9 +3600,17 @@ export default function ReflectionPage() {
           // Clear drag kind marker so cursor returns to default/hover affordances
           delete targetEl.dataset.dragKind
         }
+        // For touch, arm the hold timer to activate dragging
+        if (isTouch) {
+          touchHoldTimer = window.setTimeout(() => {
+            touchHoldTimer = null
+            activateDrag()
+          }, 360)
+        }
         window.addEventListener('pointermove', onMove)
         window.addEventListener('pointerup', onUp)
         window.addEventListener('pointercancel', onUp)
+        // Timer is cleared in onMove (when movement occurs) and onUp (when finishing)
       }
       const headers = dayStarts.map((start, i) => {
         const d = new Date(start)
@@ -3652,6 +3685,8 @@ export default function ReflectionPage() {
                   const startY = ev.clientY
                   let startedCreate = false
                   let startedPan = false
+                  const isTouch = (ev as any).pointerType === 'touch'
+                  let touchHoldTimer: number | null = null
 
                   const startCreate = () => {
                     if (startedCreate) return
@@ -3705,12 +3740,23 @@ export default function ReflectionPage() {
                     const absY = Math.abs(dy)
                     const threshold = 8
                     if (!startedCreate && !startedPan) {
-                      if (absX > threshold && absX > absY) {
-                        startPan()
-                      } else if (absY > threshold && absY > absX) {
-                        startCreate()
-                      } else {
+                      if (isTouch) {
+                        // On touch, require a hold before creating; allow horizontal pan if user slides before hold
+                        if (absX > threshold && absX > absY) {
+                          if (touchHoldTimer !== null) { try { window.clearTimeout(touchHoldTimer) } catch {} ; touchHoldTimer = null }
+                          startPan()
+                          return
+                        }
+                        // Vertical movement before hold — do nothing (avoid accidental create)
                         return
+                      } else {
+                        if (absX > threshold && absX > absY) {
+                          startPan()
+                        } else if (absY > threshold && absY > absX) {
+                          startCreate()
+                        } else {
+                          return
+                        }
                       }
                     }
                     if (startedPan) {
@@ -3768,6 +3814,7 @@ export default function ReflectionPage() {
                     window.removeEventListener('pointermove', onMove)
                     window.removeEventListener('pointerup', onUp)
                     window.removeEventListener('pointercancel', onUp)
+                    if (touchHoldTimer !== null) { try { window.clearTimeout(touchHoldTimer) } catch {} ; touchHoldTimer = null }
 
                     if (startedPan) {
                       const state = calendarDragRef.current
@@ -3833,6 +3880,13 @@ export default function ReflectionPage() {
                   window.addEventListener('pointermove', onMove)
                   window.addEventListener('pointerup', onUp)
                   window.addEventListener('pointercancel', onUp)
+                  // For touch, require a brief hold to start creation; allow pan to start immediately
+                  if (isTouch) {
+                    touchHoldTimer = window.setTimeout(() => {
+                      touchHoldTimer = null
+                      startCreate()
+                    }, 360)
+                  }
                 }
                 return (
                   <div key={`col-${di}`} className="calendar-day-column" onPointerDown={handleCalendarColumnPointerDown}>
