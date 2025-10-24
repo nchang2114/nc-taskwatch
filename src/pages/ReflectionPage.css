@@ -592,7 +592,7 @@ html[data-theme='light'] .reflection-save:hover {
   top: 0;
   left: 0;
   right: auto;
-  z-index: 100;
+  z-index: 6000;
   backdrop-filter: blur(2px);
 }
 
@@ -1355,4 +1355,63 @@ html[data-theme='light'] .calendar-multi-day-chooser__option.is-active {
   .calendar-toggle__label--short {
     display: inline;
   }
+}
+
+/* --- Calendar editor modal --- */
+.calendar-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 20, 0.7);
+  padding: clamp(0.75rem, 3vw, 1.25rem);
+}
+
+.calendar-editor {
+  width: min(560px, 100%);
+  max-height: calc(100% - clamp(1.5rem, 6vw, 2.5rem));
+  overflow: auto;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 160, 255, 0.45);
+  background: rgba(18, 24, 58, 0.98);
+  color: var(--text-primary);
+  box-shadow: 0 22px 48px rgba(8, 12, 36, 0.5);
+  padding: clamp(0.85rem, 2.6vw, 1.15rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 2vw, 0.8rem);
+}
+
+.calendar-editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.calendar-editor__title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.calendar-editor__body {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.35rem, 1.2vw, 0.6rem);
+}
+
+.calendar-editor__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+html[data-theme='light'] .calendar-editor {
+  border-color: rgba(160, 172, 236, 0.45);
+  background: rgba(245, 248, 255, 0.98);
+  box-shadow: 0 18px 42px rgba(118, 130, 206, 0.32);
 }

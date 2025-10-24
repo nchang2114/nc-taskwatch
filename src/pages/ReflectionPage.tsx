@@ -1602,6 +1602,8 @@ export default function ReflectionPage() {
     endedAt: null,
   })
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
+  // When set, shows a modal editor for a calendar entry
+  const [calendarEditorEntryId, setCalendarEditorEntryId] = useState<string | null>(null)
   const [hoveredDuringDragId, setHoveredDuringDragId] = useState<string | null>(null)
   const pieCanvasRef = useRef<HTMLCanvasElement | null>(null)
   // Ref to the live-updating current-time line in the calendar view (DOM-updated to avoid React re-renders)
@@ -1623,6 +1625,8 @@ export default function ReflectionPage() {
   const timelineBarRef = useRef<HTMLDivElement | null>(null)
   const activeTooltipRef = useRef<HTMLDivElement | null>(null)
   const editingTooltipRef = useRef<HTMLDivElement | null>(null)
+  // Ref to the calendar editor panel so global outside-click handlers don't cancel edits when interacting with the modal
+  const calendarEditorRef = useRef<HTMLDivElement | null>(null)
   const [activeTooltipOffsets, setActiveTooltipOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [activeTooltipPlacement, setActiveTooltipPlacement] = useState<'above' | 'below'>('above')
   const dragStateRef = useRef<DragState | null>(null)
@@ -2369,6 +2373,10 @@ export default function ReflectionPage() {
       if (event.key === 'Enter') {
         event.preventDefault()
         commitHistoryDraft()
+        // If the calendar editor modal is open, close it after saving via Enter
+        if (calendarEditorEntryId) {
+          setCalendarEditorEntryId(null)
+        }
       } else if (event.key === 'Escape') {
         event.preventDefault()
         if (selectedHistoryEntry) {
@@ -2383,7 +2391,7 @@ export default function ReflectionPage() {
         setEditingHistoryId(null)
       }
     },
-    [commitHistoryDraft, selectedHistoryEntry],
+    [calendarEditorEntryId, commitHistoryDraft, selectedHistoryEntry],
   )
 
   const handleCancelHistoryEdit = useCallback(() => {
@@ -2440,10 +2448,27 @@ export default function ReflectionPage() {
     const handlePointerDown = (event: PointerEvent) => {
       const timelineEl = timelineRef.current
       const portalEl = editingTooltipRef.current
+      const editorEl = calendarEditorRef.current
       const targetNode = event.target as Node | null
+      // Ignore clicks inside the dropdown overlay menu (rendered via portal)
+      let withinDropdown = false
+      if (targetNode instanceof HTMLElement) {
+        let el: HTMLElement | null = targetNode
+        while (el) {
+          if (el.classList && el.classList.contains('history-dropdown__menu')) {
+            withinDropdown = true
+            break
+          }
+          el = el.parentElement
+        }
+      }
+      if (withinDropdown) {
+        return
+      }
       if (
         (timelineEl && targetNode && timelineEl.contains(targetNode)) ||
-        (portalEl && targetNode && portalEl.contains(targetNode))
+        (portalEl && targetNode && portalEl.contains(targetNode)) ||
+        (editorEl && targetNode && editorEl.contains(targetNode))
       ) {
         return
       }
@@ -4037,6 +4062,32 @@ export default function ReflectionPage() {
           <div className="calendar-popover__actions">
             <button
               type="button"
+              className="calendar-popover__action"
+              title="Edit session"
+              onClick={(ev) => {
+                ev.stopPropagation()
+                // Prepare draft + selection state
+                setSelectedHistoryId(entry.id)
+                setHoveredHistoryId(entry.id)
+                setEditingHistoryId(entry.id)
+                taskNameAutofilledRef.current = false
+                setHistoryDraft({
+                  // Use stored taskName verbatim so intentional blanks stay blank
+                  taskName: entry.taskName,
+                  goalName: entry.goalName ?? '',
+                  bucketName: entry.bucketName ?? '',
+                  startedAt: entry.startedAt,
+                  endedAt: entry.endedAt,
+                })
+                // Open calendar editor modal and close preview
+                setCalendarEditorEntryId(entry.id)
+                handleCloseCalendarPreview()
+              }}
+            >
+              ✏️
+            </button>
+            <button
+              type="button"
               className="calendar-popover__action calendar-popover__action--danger"
               title="Delete session"
               onClick={(ev) => {
@@ -4067,7 +4118,195 @@ export default function ReflectionPage() {
       </div>,
       document.body,
     )
-  }, [calendarPreview, effectiveHistory, handleCloseCalendarPreview, handleDeleteHistoryEntry])
+  }, [calendarPreview, effectiveHistory, handleCloseCalendarPreview, handleDeleteHistoryEntry, handleStartEditingHistoryEntry])
+
+  // Calendar editor modal
+  useEffect(() => {
+    if (!calendarEditorEntryId) return
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        // Cancel editing, reset draft
+        handleCancelHistoryEdit()
+        setCalendarEditorEntryId(null)
+      }
+    }
+    document.addEventListener('keydown', onKeyDown as EventListener)
+    return () => document.removeEventListener('keydown', onKeyDown as EventListener)
+  }, [calendarEditorEntryId, handleCancelHistoryEdit])
+
+  const renderCalendarEditor = useCallback(() => {
+    if (!calendarEditorEntryId || typeof document === 'undefined') return null
+    const entry = history.find((h) => h.id === calendarEditorEntryId) || null
+    if (!entry) return null
+    // Resolve current values
+    const startBase = entry.startedAt
+    const endBase = entry.endedAt
+    const resolvedStart = resolveTimestamp(historyDraft.startedAt, startBase)
+    const resolvedEnd = resolveTimestamp(historyDraft.endedAt, endBase)
+    const startDateInputValue = formatDateInputValue(resolvedStart)
+    const endDateInputValue = formatDateInputValue(resolvedEnd)
+    const startTimeInputValue = formatTimeInputValue(resolvedStart)
+    const endTimeInputValue = formatTimeInputValue(resolvedEnd)
+
+    return createPortal(
+      <div
+        className="calendar-editor-backdrop"
+        role="dialog"
+        aria-label="Edit session"
+        onClick={() => {
+          handleCancelHistoryEdit()
+          setCalendarEditorEntryId(null)
+        }}
+      >
+        <div
+          className="calendar-editor"
+          ref={calendarEditorRef}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="calendar-editor__header">
+            <h4 className="calendar-editor__title">Edit session</h4>
+            <button
+              type="button"
+              className="calendar-popover__action"
+              title="Close"
+              onClick={() => {
+                handleCancelHistoryEdit()
+                setCalendarEditorEntryId(null)
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div className="calendar-editor__body">
+            <label className="history-timeline__field">
+              <span className="history-timeline__field-text">Session name</span>
+              <input
+                className="history-timeline__field-input"
+                type="text"
+                value={historyDraft.taskName}
+                placeholder="Describe the focus block"
+                onChange={handleHistoryFieldChange('taskName')}
+                onKeyDown={handleHistoryFieldKeyDown}
+              />
+            </label>
+            <label className="history-timeline__field">
+              <span className="history-timeline__field-text">Start</span>
+              <div className="history-timeline__field-row">
+                <input
+                  className="history-timeline__field-input"
+                  type="date"
+                  value={startDateInputValue}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setHistoryDraft((draft) => {
+                      if (value.trim().length === 0) return draft
+                      const parsed = parseLocalDateTime(value, startTimeInputValue)
+                      return parsed === null ? draft : { ...draft, startedAt: parsed }
+                    })
+                  }}
+                  onKeyDown={handleHistoryFieldKeyDown}
+                />
+                <input
+                  className="history-timeline__field-input"
+                  type="time"
+                  step={60}
+                  value={startTimeInputValue}
+                  onChange={(event) => {
+                    const { value } = event.target
+                    setHistoryDraft((draft) => {
+                      if (value.trim().length === 0) return { ...draft, startedAt: null }
+                      const parsed = parseLocalDateTime(startDateInputValue, value)
+                      return parsed === null ? draft : { ...draft, startedAt: parsed }
+                    })
+                  }}
+                  onKeyDown={handleHistoryFieldKeyDown}
+                />
+              </div>
+            </label>
+            <label className="history-timeline__field">
+              <span className="history-timeline__field-text">End</span>
+              <div className="history-timeline__field-row">
+                <input
+                  className="history-timeline__field-input"
+                  type="date"
+                  value={endDateInputValue}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setHistoryDraft((draft) => {
+                      if (value.trim().length === 0) return draft
+                      const parsed = parseLocalDateTime(value, endTimeInputValue)
+                      return parsed === null ? draft : { ...draft, endedAt: parsed }
+                    })
+                  }}
+                  onKeyDown={handleHistoryFieldKeyDown}
+                />
+                <input
+                  className="history-timeline__field-input"
+                  type="time"
+                  step={60}
+                  value={endTimeInputValue}
+                  onChange={(event) => {
+                    const { value } = event.target
+                    setHistoryDraft((draft) => {
+                      if (value.trim().length === 0) return { ...draft, endedAt: null }
+                      const parsed = parseLocalDateTime(endDateInputValue, value)
+                      return parsed === null ? draft : { ...draft, endedAt: parsed }
+                    })
+                  }}
+                  onKeyDown={handleHistoryFieldKeyDown}
+                />
+              </div>
+            </label>
+            <label className="history-timeline__field">
+              <span className="history-timeline__field-text">Goal</span>
+              <HistoryDropdown
+                id={goalDropdownId}
+                value={historyDraft.goalName}
+                placeholder="Select goal"
+                options={goalDropdownOptions}
+                onChange={(nextValue) => updateHistoryDraftField('goalName', nextValue)}
+              />
+            </label>
+            <label className="history-timeline__field">
+              <span className="history-timeline__field-text">Bucket</span>
+              <HistoryDropdown
+                id={bucketDropdownId}
+                value={historyDraft.bucketName}
+                placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
+                options={bucketDropdownOptions}
+                onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
+                disabled={availableBucketOptions.length === 0}
+              />
+            </label>
+          </div>
+          <div className="calendar-editor__footer">
+            <button
+              type="button"
+              className="history-timeline__action-button history-timeline__action-button--primary"
+              onClick={() => {
+                handleSaveHistoryDraft()
+                setCalendarEditorEntryId(null)
+              }}
+            >
+              Save changes
+            </button>
+            <button
+              type="button"
+              className="history-timeline__action-button"
+              onClick={() => {
+                handleCancelHistoryEdit()
+                setCalendarEditorEntryId(null)
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    )
+  }, [calendarEditorEntryId, history, historyDraft.bucketName, historyDraft.goalName, historyDraft.taskName, availableBucketOptions.length, bucketDropdownId, bucketDropdownOptions, goalDropdownId, goalDropdownOptions, handleCancelHistoryEdit, handleHistoryFieldChange, handleHistoryFieldKeyDown, handleSaveHistoryDraft, updateHistoryDraftField])
 
   // Keep the buffered track centered on the visible window (apply base translate)
   useLayoutEffect(() => {
@@ -4509,6 +4748,7 @@ export default function ReflectionPage() {
           {renderCalendarContent()}
         </div>
         {renderCalendarPopover()}
+        {renderCalendarEditor()}
 
   {false ? (
   <section className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`} aria-label="Session History">
