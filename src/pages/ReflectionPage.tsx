@@ -2989,6 +2989,8 @@ export default function ReflectionPage() {
       if (!node) return
       // Ignore clicks inside the popover
       if (calendarPreviewRef.current && calendarPreviewRef.current.contains(node)) return
+      // If the click is on a calendar event, let the event's own click handler decide (open/toggle)
+      if (node instanceof Element && node.closest('.calendar-event')) return
       handleCloseCalendarPreview()
     }
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
@@ -3459,6 +3461,8 @@ export default function ReflectionPage() {
               return
             }
             s.activated = true
+            // Close any open calendar popover as soon as a drag is activated
+            handleCloseCalendarPreview()
           }
           // Base column by X position (nearest if outside bounds)
           const baseIdx = s.columns.findIndex((c) => e.clientX >= c.rect.left && e.clientX <= c.rect.right)
@@ -3849,6 +3853,11 @@ export default function ReflectionPage() {
                             dragPreventClickRef.current = false
                             return
                           }
+                          // If clicking the same entry that's already previewed, toggle it closed
+                          if (calendarPreview && calendarPreview.entryId === ev.entry.id) {
+                            handleCloseCalendarPreview()
+                            return
+                          }
                           handleOpenCalendarPreview(ev.entry, e.currentTarget)
                         }}
                         onDoubleClick={() => handleStartEditingHistoryEntry(ev.entry)}
@@ -3992,7 +4001,7 @@ export default function ReflectionPage() {
     }
 
     return null
-  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup])
+  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview])
 
   // Render the popover outside the heavy calendar grid to avoid re-running grid computations on open/close
   const renderCalendarPopover = useCallback(() => {
@@ -4255,6 +4264,8 @@ export default function ReflectionPage() {
         event.preventDefault()
         bar.setPointerCapture?.(event.pointerId)
       } catch {}
+      // Close any open calendar popover when starting a drag from timeline blocks
+      handleCloseCalendarPreview()
       const rect = bar.getBoundingClientRect()
       if (!rect || rect.width <= 0) {
         return
@@ -4309,6 +4320,8 @@ export default function ReflectionPage() {
         nativeEvent.preventDefault()
         bar.setPointerCapture?.(nativeEvent.pointerId)
       } catch {}
+      // Close any open calendar popover when starting a drag via native pointer (timeline)
+      handleCloseCalendarPreview()
       dragStateRef.current = {
         entryId: segment.entry.id,
         type,
