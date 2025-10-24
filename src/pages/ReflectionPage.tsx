@@ -3221,9 +3221,13 @@ export default function ReflectionPage() {
         // Determine drag kind by edge proximity (top/bottom = resize, else move)
         const evRect = (ev.currentTarget as HTMLElement).getBoundingClientRect()
         const edgePx = Math.min(12, Math.max(6, evRect.height * 0.2))
-        let kind: DragKind = 'move'
+  let kind: DragKind = 'move'
         if (ev.clientY - evRect.top <= edgePx) kind = 'resize-start'
         else if (evRect.bottom - ev.clientY <= edgePx) kind = 'resize-end'
+  // Mark intended drag kind on the element so CSS can show the right cursor once dragging begins
+  const targetEl = ev.currentTarget as HTMLDivElement
+  if (kind === 'move') targetEl.dataset.dragKind = 'move'
+  else targetEl.dataset.dragKind = 'resize'
         // Compute time-of-day at drag start (use visible edge for resize)
         const clampedStart = Math.max(Math.min(entry.startedAt, entry.endedAt), entryDayStart)
         const clampedEnd = Math.min(Math.max(entry.startedAt, entry.endedAt), entryDayStart + DAY_DURATION_MS)
@@ -3325,6 +3329,8 @@ export default function ReflectionPage() {
           calendarEventDragRef.current = null
           dragPreviewRef.current = null
           setDragPreview(null)
+          // Clear drag kind marker so cursor returns to default/hover affordances
+          delete targetEl.dataset.dragKind
         }
         window.addEventListener('pointermove', onMove)
         window.addEventListener('pointerup', onUp)
@@ -3386,13 +3392,16 @@ export default function ReflectionPage() {
                           background: ev.gradientCss ?? ev.color,
                         }}
                         data-drag-time={dragTime}
-                        data-cursor="move"
                         role="button"
                         aria-label={`${ev.label} ${ev.rangeLabel}`}
                         title={`${ev.label} · ${ev.rangeLabel}`}
                         onClick={() => handleSelectHistorySegment(ev.entry)}
                         onDoubleClick={() => handleStartEditingHistoryEntry(ev.entry)}
-                        onPointerDown={handleCalendarEventPointerDown(ev.entry, start)}
+                        onPointerDown={(pev) => {
+                          // Clear any hover-set cursor before deciding drag kind
+                          delete (pev.currentTarget as HTMLDivElement).dataset.cursor
+                          handleCalendarEventPointerDown(ev.entry, start)(pev)
+                        }}
                         onPointerMove={(pev) => {
                           // Update cursor affordance based on proximity to top/bottom edge
                           const target = pev.currentTarget as HTMLDivElement
@@ -3400,16 +3409,20 @@ export default function ReflectionPage() {
                           const edgePx = Math.min(12, Math.max(6, rect.height * 0.2))
                           const nearTop = pev.clientY - rect.top <= edgePx
                           const nearBottom = rect.bottom - pev.clientY <= edgePx
-                          const next = nearTop || nearBottom ? 'ns-resize' : 'move'
-                          if (target.dataset.cursor !== next) {
-                            target.dataset.cursor = next
+                          if (nearTop || nearBottom) {
+                            if (target.dataset.cursor !== 'ns-resize') {
+                              target.dataset.cursor = 'ns-resize'
+                            }
+                          } else if (target.dataset.cursor) {
+                            // Use default arrow when not near edges
+                            delete target.dataset.cursor
                           }
                         }}
                         onPointerLeave={(pev) => {
                           // Restore default cursor when leaving the block
                           const target = pev.currentTarget as HTMLDivElement
-                          if (target.dataset.cursor !== 'move') {
-                            target.dataset.cursor = 'move'
+                          if (target.dataset.cursor) {
+                            delete target.dataset.cursor
                           }
                         }}
                       >

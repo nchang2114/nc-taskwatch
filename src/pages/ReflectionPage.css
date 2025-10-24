@@ -1091,8 +1091,8 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
   line-height: 1.2;
   box-shadow: 0 6px 18px rgba(8, 12, 36, 0.35);
   overflow: hidden;
-  /* Default to move cursor for dragging sessions */
-  cursor: move;
+  /* Default cursor remains arrow until actual drag begins */
+  cursor: default;
 }
 
 .calendar-event__title {
@@ -1115,12 +1115,19 @@ html[data-theme='light'] .calendar-gridline {
   background: rgba(160, 172, 236, 0.35);
 }
 
-/* Cursor affordances for resize vs move on calendar events */
+/* Cursor affordances: show resize near edges on hover */
 .calendar-event[data-cursor='ns-resize'] {
   cursor: ns-resize;
 }
-.calendar-event[data-cursor='move'] {
+
+/* During an active drag, indicate move vs resize explicitly */
+.calendar-event.calendar-event--dragging[data-drag-kind='move'] {
+  /* Use a four-directional arrow while moving, not a hand */
   cursor: move;
+  cursor: all-scroll; /* fallback variant */
+}
+.calendar-event.calendar-event--dragging[data-drag-kind='resize'] {
+  cursor: ns-resize;
 }
 
 /* Multi-day chooser popover */
