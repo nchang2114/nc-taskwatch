@@ -3502,11 +3502,12 @@ export default function ReflectionPage() {
         if (entry.id === 'active-session') return
         if (ev.button !== 0) return
         const isTouch = (ev as any).pointerType === 'touch'
-        const daysRoot = calendarDaysRef.current
+  const daysRoot = calendarDaysRef.current
         if (!daysRoot) return
         const columnEls = Array.from(daysRoot.querySelectorAll<HTMLDivElement>('.calendar-day-column'))
         if (columnEls.length === 0) return
         const columns = columnEls.map((el, idx) => ({ rect: el.getBoundingClientRect(), dayStart: dayStarts[idx] }))
+  const area = calendarDaysAreaRef.current
         // Find the column we started in
         const startColIdx = columns.findIndex((c) => ev.clientX >= c.rect.left && ev.clientX <= c.rect.right)
         const col = startColIdx >= 0 ? columns[startColIdx] : columns[0]
@@ -3548,7 +3549,8 @@ export default function ReflectionPage() {
           } catch {}
         }
         // For touch, require a short hold before activating drag to prevent accidental drags while scrolling
-        let touchHoldTimer: number | null = null
+  let touchHoldTimer: number | null = null
+  let panningFromEvent = false
         const activateDrag = () => {
           const s = calendarEventDragRef.current
           if (!s || s.activated) return
@@ -3573,6 +3575,49 @@ export default function ReflectionPage() {
                 if (touchHoldTimer !== null) {
                   try { window.clearTimeout(touchHoldTimer) } catch {}
                   touchHoldTimer = null
+                }
+                // If horizontal movement dominates, treat this as a calendar pan even though we started on an event
+                const absX = Math.abs(dx)
+                const absY = Math.abs(dy)
+                if (absX > absY && area) {
+                  if (!panningFromEvent) {
+                    const rect = area.getBoundingClientRect()
+                    if (rect.width > 0) {
+                      const dayCount = calendarView === '3d'
+                        ? Math.max(2, Math.min(multiDayCount, 14))
+                        : calendarView === 'week'
+                          ? 7
+                          : 1
+                      calendarDragRef.current = {
+                        pointerId: s.pointerId,
+                        startX: s.startX,
+                        startY: s.startY,
+                        areaWidth: rect.width,
+                        dayCount,
+                        baseOffset: historyDayOffset,
+                        appliedSnap: 0,
+                        mode: 'hdrag',
+                      }
+                      try { area.setPointerCapture?.(s.pointerId) } catch {}
+                      panningFromEvent = true
+                    }
+                  }
+                  // Perform pan move
+                  const state = calendarDragRef.current
+                  if (state && state.mode === 'hdrag') {
+                    const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
+                    if (Number.isFinite(dayWidth) && dayWidth > 0) {
+                      try { e.preventDefault() } catch {}
+                      const rawDays = dx / dayWidth
+                      const translatePx = rawDays * dayWidth
+                      const totalPx = calendarBaseTranslateRef.current + translatePx
+                      const daysEl = calendarDaysRef.current
+                      if (daysEl) daysEl.style.transform = `translateX(${totalPx}px)`
+                      const hdrEl = calendarHeadersRef.current
+                      if (hdrEl) hdrEl.style.transform = `translateX(${totalPx}px)`
+                    }
+                  }
+                  return
                 }
                 return
               }
@@ -3645,6 +3690,30 @@ export default function ReflectionPage() {
           window.removeEventListener('pointerup', onUp)
           window.removeEventListener('pointercancel', onUp)
           try { (targetEl as any).releasePointerCapture?.(s.pointerId) } catch {}
+          if (panningFromEvent) {
+            // Finish calendar pan gesture
+            const state = calendarDragRef.current
+            if (state && area) {
+              try { area.releasePointerCapture?.(state.pointerId) } catch {}
+              const dx = e.clientX - state.startX
+              const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
+              if (Number.isFinite(dayWidth) && dayWidth > 0) {
+                const rawDays = dx / dayWidth
+                const finalSnap = Math.round(rawDays)
+                const targetOffset = state.baseOffset - finalSnap
+                setHistoryDayOffset(targetOffset)
+              }
+              const base = calendarBaseTranslateRef.current
+              const daysEl = calendarDaysRef.current
+              if (daysEl) daysEl.style.transform = `translateX(${base}px)`
+              const hdrEl = calendarHeadersRef.current
+              if (hdrEl) hdrEl.style.transform = `translateX(${base}px)`
+            }
+            calendarDragRef.current = null
+            // Suppress click opening preview after a pan
+            dragPreventClickRef.current = true
+            return
+          }
           const preview = dragPreviewRef.current
           if (preview && preview.entryId === s.entryId && (preview.startedAt !== s.initialStart || preview.endedAt !== s.initialEnd)) {
             // A drag occurred and resulted in a time change; commit the change and suppress the click
