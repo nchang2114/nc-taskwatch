@@ -1565,7 +1565,7 @@ const computeRangeOverview = (
 export default function ReflectionPage() {
   type CalendarViewMode = 'day' | '3d' | 'week' | 'month' | 'year'
   const [calendarView, setCalendarView] = useState<CalendarViewMode>('month')
-  const [multiDayCount, setMultiDayCount] = useState<number>(3)
+  const [multiDayCount, setMultiDayCount] = useState<number>(4)
   const [showMultiDayChooser, setShowMultiDayChooser] = useState(false)
   const multiChooserRef = useRef<HTMLDivElement | null>(null)
   const calendarDaysAreaRef = useRef<HTMLDivElement | null>(null)
@@ -3151,7 +3151,6 @@ export default function ReflectionPage() {
     const node = multiChooserRef.current
     if (!node) return
     const clamp = () => {
-      const rect = node.getBoundingClientRect()
       const pad = 8
       // Reset any previous overrides
       node.style.left = ''
@@ -3159,20 +3158,30 @@ export default function ReflectionPage() {
       node.style.top = ''
       node.style.bottom = ''
       node.style.transform = ''
-      // Horizontal clamping: if overflowing right, align to left
-      if (rect.right > window.innerWidth - pad) {
-        node.style.left = '0px'
-        node.style.right = 'auto'
-      }
-      // Vertical clamping: if overflowing bottom, flip above the toggle
+      let rect = node.getBoundingClientRect()
+      // If overflowing bottom, flip above the toggle
       if (rect.bottom > window.innerHeight - pad) {
         node.style.top = 'auto'
         node.style.bottom = 'calc(100% + 6px)'
+        rect = node.getBoundingClientRect()
       }
-      // Ensure it doesn't start off-screen to the left
-      const rect2 = node.getBoundingClientRect()
-      if (rect2.left < pad) {
-        node.style.left = `${pad - rect2.left}px`
+      // Compute translation needed to fully fit within viewport horizontally and vertically
+      let dx = 0
+      let dy = 0
+      if (rect.right > window.innerWidth - pad) {
+        dx = Math.min(dx, (window.innerWidth - pad) - rect.right)
+      }
+      if (rect.left < pad) {
+        dx = Math.max(dx, pad - rect.left)
+      }
+      if (rect.top < pad) {
+        dy = Math.max(dy, pad - rect.top)
+      }
+      if (rect.bottom > window.innerHeight - pad) {
+        dy = Math.min(dy, (window.innerHeight - pad) - rect.bottom)
+      }
+      if (dx !== 0 || dy !== 0) {
+        node.style.transform = `translate(${Math.round(dx)}px, ${Math.round(dy)}px)`
       }
     }
     // Clamp now and on resize/scroll

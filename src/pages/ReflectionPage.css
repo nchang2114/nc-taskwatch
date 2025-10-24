@@ -1044,7 +1044,7 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
 
 .calendar-days-area {
   position: relative;
-  overflow-y: auto;
+  overflow-y: hidden; /* no vertical scrollbar; content fits in fixed height */
   overflow-x: hidden; /* prevent horizontal scrollbar; use drag to pan */
 }
 
