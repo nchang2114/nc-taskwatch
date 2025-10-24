@@ -3386,12 +3386,32 @@ export default function ReflectionPage() {
                           background: ev.gradientCss ?? ev.color,
                         }}
                         data-drag-time={dragTime}
+                        data-cursor="move"
                         role="button"
                         aria-label={`${ev.label} ${ev.rangeLabel}`}
                         title={`${ev.label} · ${ev.rangeLabel}`}
                         onClick={() => handleSelectHistorySegment(ev.entry)}
                         onDoubleClick={() => handleStartEditingHistoryEntry(ev.entry)}
                         onPointerDown={handleCalendarEventPointerDown(ev.entry, start)}
+                        onPointerMove={(pev) => {
+                          // Update cursor affordance based on proximity to top/bottom edge
+                          const target = pev.currentTarget as HTMLDivElement
+                          const rect = target.getBoundingClientRect()
+                          const edgePx = Math.min(12, Math.max(6, rect.height * 0.2))
+                          const nearTop = pev.clientY - rect.top <= edgePx
+                          const nearBottom = rect.bottom - pev.clientY <= edgePx
+                          const next = nearTop || nearBottom ? 'ns-resize' : 'move'
+                          if (target.dataset.cursor !== next) {
+                            target.dataset.cursor = next
+                          }
+                        }}
+                        onPointerLeave={(pev) => {
+                          // Restore default cursor when leaving the block
+                          const target = pev.currentTarget as HTMLDivElement
+                          if (target.dataset.cursor !== 'move') {
+                            target.dataset.cursor = 'move'
+                          }
+                        }}
                       >
                         <div className="calendar-event__title">{ev.label}</div>
                         <div className="calendar-event__time">{ev.rangeLabel}</div>

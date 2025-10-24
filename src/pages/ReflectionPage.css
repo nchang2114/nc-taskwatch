@@ -1091,6 +1091,8 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
   line-height: 1.2;
   box-shadow: 0 6px 18px rgba(8, 12, 36, 0.35);
   overflow: hidden;
+  /* Default to move cursor for dragging sessions */
+  cursor: move;
 }
 
 .calendar-event__title {
@@ -1111,6 +1113,14 @@ html[data-theme='light'] .calendar-year-cell {
 
 html[data-theme='light'] .calendar-gridline {
   background: rgba(160, 172, 236, 0.35);
+}
+
+/* Cursor affordances for resize vs move on calendar events */
+.calendar-event[data-cursor='ns-resize'] {
+  cursor: ns-resize;
+}
+.calendar-event[data-cursor='move'] {
+  cursor: move;
 }
 
 /* Multi-day chooser popover */
