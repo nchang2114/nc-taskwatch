@@ -1139,9 +1139,9 @@ html[data-theme='light'] .calendar-now-line::before {
   position: fixed;
   z-index: 4000; /* ensure above calendar layers and toolbars */
   pointer-events: auto;
-  min-width: 240px;
-  max-width: 280px;
-  padding: 0.5rem 0.6rem;
+  min-width: 300px;
+  max-width: 420px;
+  padding: 0.65rem 0.75rem;
   border-radius: 0.6rem;
   border: 1px solid rgba(148, 160, 255, 0.45);
   background: rgba(18, 24, 58, 0.98);
@@ -1155,8 +1155,8 @@ html[data-theme='light'] .calendar-now-line::before {
   gap: 0.5rem;
 }
 .calendar-popover__title {
-  font-weight: 600;
-  font-size: 0.95rem;
+  font-weight: 700;
+  font-size: 1.05rem;
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1164,14 +1164,14 @@ html[data-theme='light'] .calendar-now-line::before {
 }
 .calendar-popover__actions {
   display: inline-flex;
-  gap: 0.25rem;
+  gap: 0.35rem;
 }
 .calendar-popover__action {
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   border-radius: 6px;
   cursor: pointer;
 }
@@ -1180,10 +1180,27 @@ html[data-theme='light'] .calendar-now-line::before {
   background: rgba(86, 104, 198, 0.32);
   color: #fff;
 }
+.calendar-popover__action svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  margin: 0 auto;
+}
 .calendar-popover__action--danger:hover,
 .calendar-popover__action--danger:focus-visible {
   background: rgba(220, 38, 38, 0.2);
   color: #fecaca;
+}
+/* Slightly larger close target as requested */
+.calendar-popover__action--close {
+  width: 32px;
+  height: 32px;
+  font-size: 1.1rem;
 }
 .calendar-popover__meta {
   display: flex;
@@ -1213,6 +1230,53 @@ html[data-theme='light'] .calendar-popover__action--danger:hover,
 html[data-theme='light'] .calendar-popover__action--danger:focus-visible {
   background: rgba(248, 113, 113, 0.25);
   color: #991b1b;
+}
+
+/* Kebab (3-dot) dropdown menu inside popover */
+.calendar-popover__kebab-wrap {
+  position: relative;
+}
+.calendar-popover__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 160px;
+  padding: 0.35rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 160, 255, 0.45);
+  background: rgba(18, 24, 58, 0.98);
+  color: var(--text-primary);
+  box-shadow: 0 12px 24px rgba(8, 12, 36, 0.4);
+  z-index: 1;
+}
+.calendar-popover__menu-item {
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+.calendar-popover__menu-item:hover,
+.calendar-popover__menu-item:focus-visible {
+  background: rgba(86, 104, 198, 0.32);
+  color: #fff;
+  outline: none;
+}
+
+html[data-theme='light'] .calendar-popover__menu {
+  border-color: rgba(160, 172, 236, 0.45);
+  background: rgba(245, 248, 255, 0.98);
+  box-shadow: 0 12px 24px rgba(118, 130, 206, 0.28);
+}
+html[data-theme='light'] .calendar-popover__menu-item:hover,
+html[data-theme='light'] .calendar-popover__menu-item:focus-visible {
+  background: rgba(180, 192, 252, 0.65);
+  color: rgba(26, 34, 82, 0.92);
 }
 
 html[data-theme='light'] .calendar-vertical,

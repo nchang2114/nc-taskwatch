@@ -4233,6 +4233,77 @@ export default function ReflectionPage() {
     return null
   }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview])
 
+  // Small inline component: kebab actions menu inside calendar popover
+  const CalendarActionsKebab = ({ onDuplicate }: { onDuplicate: () => void }) => {
+    const [open, setOpen] = useState(false)
+    const btnRef = useRef<HTMLButtonElement | null>(null)
+    useEffect(() => {
+      if (!open) return
+      const onDocDown = (e: Event) => {
+        const target = e.target as HTMLElement | null
+        if (!target) return
+        const menu = document.querySelector('.calendar-popover__menu') as HTMLElement | null
+        if (btnRef.current && btnRef.current.contains(target)) return
+        if (menu && menu.contains(target)) return
+        setOpen(false)
+      }
+      window.addEventListener('pointerdown', onDocDown as EventListener, true)
+      return () => window.removeEventListener('pointerdown', onDocDown as EventListener, true)
+    }, [open])
+    return (
+      <div className="calendar-popover__kebab-wrap">
+        <button
+          ref={btnRef}
+          type="button"
+          className="calendar-popover__action"
+          title="More actions"
+          onPointerDown={(ev) => {
+            ev.preventDefault()
+            ev.stopPropagation()
+            setOpen((v) => !v)
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="12" cy="19" r="1.75"/></svg>
+        </button>
+        {open ? (
+          <div className="calendar-popover__menu" role="menu" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="calendar-popover__menu-item"
+              onClick={(ev) => {
+                ev.stopPropagation()
+                try { onDuplicate() } finally { setOpen(false) }
+              }}
+            >
+              Duplicate entry
+            </button>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
+  // Simple inline icons for popover actions
+  const IconEdit = () => (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 20h9"/>
+      <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"/>
+    </svg>
+  )
+  const IconTrash = () => (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 6h18"/>
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      <path d="M10 11v6M14 11v6"/>
+    </svg>
+  )
+  const IconClose = () => (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M18 6L6 18M6 6l12 12"/>
+    </svg>
+  )
+
   // Render the popover outside the heavy calendar grid to avoid re-running grid computations on open/close
   const renderCalendarPopover = useCallback(() => {
     if (!calendarPreview || typeof document === 'undefined') return null
@@ -4289,7 +4360,7 @@ export default function ReflectionPage() {
                 handleCloseCalendarPreview()
               }}
             >
-              ✏️
+              <IconEdit />
             </button>
             <button
               type="button"
@@ -4301,18 +4372,30 @@ export default function ReflectionPage() {
                 handleCloseCalendarPreview()
               }}
             >
-              🗑
+              <IconTrash />
             </button>
+            {/* Kebab menu: duplicate entry (placed between delete and close) */}
+            <CalendarActionsKebab
+              onDuplicate={() => {
+                const newId = makeHistoryId()
+                const dup: HistoryEntry = { ...entry, id: newId }
+                updateHistory((current) => {
+                  const next = [...current, dup]
+                  next.sort((a, b) => a.startedAt - b.startedAt)
+                  return next
+                })
+              }}
+            />
             <button
               type="button"
-              className="calendar-popover__action"
+              className="calendar-popover__action calendar-popover__action--close"
               title="Close"
               onClick={(ev) => {
                 ev.stopPropagation()
                 handleCloseCalendarPreview()
               }}
             >
-              ×
+              <IconClose />
             </button>
           </div>
         </div>
