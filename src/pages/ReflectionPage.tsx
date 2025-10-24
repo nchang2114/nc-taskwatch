@@ -3519,6 +3519,8 @@ export default function ReflectionPage() {
           try { (targetEl as any).releasePointerCapture?.(s.pointerId) } catch {}
           const preview = dragPreviewRef.current
           if (preview && preview.entryId === s.entryId && (preview.startedAt !== s.initialStart || preview.endedAt !== s.initialEnd)) {
+            // A drag occurred and resulted in a time change; commit the change and suppress the click
+            dragPreventClickRef.current = true
             updateHistory((current) => {
               const idx = current.findIndex((h) => h.id === s.entryId)
               if (idx === -1) return current
@@ -3533,8 +3535,10 @@ export default function ReflectionPage() {
               return next
             })
           } else {
-            // Treat as a click: open preview anchored to the event element
-            handleOpenCalendarPreview(entry, targetEl)
+            // If drag intent was activated (even if it snapped back to original), suppress the click-preview
+            if (s.activated) {
+              dragPreventClickRef.current = true
+            }
           }
           calendarEventDragRef.current = null
           dragPreviewRef.current = null
@@ -3839,15 +3843,17 @@ export default function ReflectionPage() {
                         role="button"
                         aria-label={`${ev.label} ${ev.rangeLabel}`}
                         title={`${ev.label} · ${ev.rangeLabel}`}
-                        onClick={(e) => handleOpenCalendarPreview(ev.entry, e.currentTarget)}
-                        onDoubleClick={() => handleStartEditingHistoryEntry(ev.entry)}
-                        onPointerUp={(pe) => {
-                          // Extra safeguard: if no drag occurred, treat as click and open preview
-                          const s = (calendarEventDragRef.current as any) || null
-                          if (s && s.entryId === ev.entry.id && s.moved) {
+                        onClick={(e) => {
+                          // Only open the preview on genuine clicks; suppress after any drag intent
+                          if (dragPreventClickRef.current) {
+                            dragPreventClickRef.current = false
                             return
                           }
-                          handleOpenCalendarPreview(ev.entry, pe.currentTarget as HTMLElement)
+                          handleOpenCalendarPreview(ev.entry, e.currentTarget)
+                        }}
+                        onDoubleClick={() => handleStartEditingHistoryEntry(ev.entry)}
+                        onPointerUp={() => {
+                          // No-op: click handler will decide whether to open based on dragPreventClickRef
                         }}
                         onPointerDown={(pev) => {
                           // Clear any hover-set cursor before deciding drag kind
