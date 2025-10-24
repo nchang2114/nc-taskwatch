@@ -3345,6 +3345,7 @@ export default function ReflectionPage() {
           kind: DragKind
           columns: Array<{ rect: DOMRect; dayStart: number }>
           moved?: boolean
+          activated?: boolean
         },
       }
 
@@ -3390,15 +3391,26 @@ export default function ReflectionPage() {
           kind,
           columns,
           moved: false,
+          activated: false,
         }
         calendarEventDragRef.current = state
         try {
           // Do not preventDefault/stopPropagation here so a simple click still triggers onClick to open preview.
-          ev.currentTarget.setPointerCapture?.(ev.pointerId)
+          targetEl.setPointerCapture?.(ev.pointerId)
         } catch {}
         const onMove = (e: PointerEvent) => {
           const s = calendarEventDragRef.current
           if (!s || e.pointerId !== s.pointerId) return
+          // Movement threshold to preserve click semantics
+          const dx = e.clientX - s.startX
+          const dy = e.clientY - s.startY
+          const threshold = 6
+          if (!s.activated) {
+            if (Math.hypot(dx, dy) <= threshold) {
+              return
+            }
+            s.activated = true
+          }
           // Base column by X position (nearest if outside bounds)
           const baseIdx = s.columns.findIndex((c) => e.clientX >= c.rect.left && e.clientX <= c.rect.right)
           const nearestIdx = baseIdx >= 0 ? baseIdx : (e.clientX < s.columns[0].rect.left ? 0 : s.columns.length - 1)
@@ -3406,7 +3418,6 @@ export default function ReflectionPage() {
           const colH = baseCol.rect.height
           if (!(Number.isFinite(colH) && colH > 0)) return
           // Vertical delta to time delta
-          const dy = e.clientY - s.startY
           const deltaMsRaw = (dy / colH) * DAY_DURATION_MS
           // Snap to minute for stable movement
           const deltaMinutes = Math.round(deltaMsRaw / MINUTE_MS)
@@ -3456,7 +3467,7 @@ export default function ReflectionPage() {
           window.removeEventListener('pointermove', onMove)
           window.removeEventListener('pointerup', onUp)
           window.removeEventListener('pointercancel', onUp)
-          try { (ev.currentTarget as any).releasePointerCapture?.(s.pointerId) } catch {}
+          try { (targetEl as any).releasePointerCapture?.(s.pointerId) } catch {}
           const preview = dragPreviewRef.current
           if (preview && preview.entryId === s.entryId && (preview.startedAt !== s.initialStart || preview.endedAt !== s.initialEnd)) {
             updateHistory((current) => {
@@ -3474,7 +3485,7 @@ export default function ReflectionPage() {
             })
           } else {
             // Treat as a click: open preview anchored to the event element
-            handleOpenCalendarPreview(entry, ev.currentTarget as HTMLElement)
+            handleOpenCalendarPreview(entry, targetEl)
           }
           calendarEventDragRef.current = null
           dragPreviewRef.current = null
@@ -3756,6 +3767,14 @@ export default function ReflectionPage() {
                         title={`${ev.label} · ${ev.rangeLabel}`}
                         onClick={(e) => handleOpenCalendarPreview(ev.entry, e.currentTarget)}
                         onDoubleClick={() => handleStartEditingHistoryEntry(ev.entry)}
+                        onPointerUp={(pe) => {
+                          // Extra safeguard: if no drag occurred, treat as click and open preview
+                          const s = (calendarEventDragRef.current as any) || null
+                          if (s && s.entryId === ev.entry.id && s.moved) {
+                            return
+                          }
+                          handleOpenCalendarPreview(ev.entry, pe.currentTarget as HTMLElement)
+                        }}
                         onPointerDown={(pev) => {
                           // Clear any hover-set cursor before deciding drag kind
                           delete (pev.currentTarget as HTMLDivElement).dataset.cursor
