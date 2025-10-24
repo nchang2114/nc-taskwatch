@@ -1150,7 +1150,7 @@ html[data-theme='light'] .calendar-now-line::before {
 }
 .calendar-popover__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.5rem;
 }
@@ -1158,13 +1158,16 @@ html[data-theme='light'] .calendar-now-line::before {
   font-weight: 700;
   font-size: 1.05rem;
   line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .calendar-popover__actions {
   display: inline-flex;
   gap: 0.35rem;
+  align-self: flex-start;
 }
 .calendar-popover__action {
   border: none;

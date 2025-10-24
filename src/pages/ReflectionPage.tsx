@@ -2959,8 +2959,8 @@ export default function ReflectionPage() {
     const rect = anchorEl.getBoundingClientRect()
     // Default place to the right of the anchor, vertically aligned with its top
     const viewportPadding = 8
-    const assumedWidth = 280 // matches CSS max-width
-    const assumedHeight = 140 // rough default; will be clamped again after mount
+    const assumedWidth = 420 // match CSS max-width for better initial placement
+    const assumedHeight = 220 // more realistic height; will be clamped again after mount
     let left = Math.round(rect.right + viewportPadding)
     let top = Math.round(rect.top)
     // If it would overflow right, place to the left of the anchor
@@ -2986,9 +2986,9 @@ export default function ReflectionPage() {
       handleSelectHistorySegment(entry)
       // Compute an initial position immediately
       const rect = targetEl.getBoundingClientRect()
-      const viewportPadding = 8
-      const assumedWidth = 280
-      const assumedHeight = 140
+  const viewportPadding = 8
+  const assumedWidth = 420
+  const assumedHeight = 220
       let left = Math.round(rect.right + viewportPadding)
       let top = Math.round(rect.top)
       if (left + assumedWidth > window.innerWidth - viewportPadding) {
@@ -4256,7 +4256,7 @@ export default function ReflectionPage() {
           ref={btnRef}
           type="button"
           className="calendar-popover__action"
-          title="More actions"
+          aria-label="More actions"
           onPointerDown={(ev) => {
             ev.preventDefault()
             ev.stopPropagation()
@@ -4334,12 +4334,12 @@ export default function ReflectionPage() {
         aria-label="Session details"
       >
         <div className="calendar-popover__header">
-          <div className="calendar-popover__title" title={title}>{title || 'Untitled session'}</div>
+          <div className="calendar-popover__title" aria-label="Session title">{title || 'Untitled session'}</div>
           <div className="calendar-popover__actions">
             <button
               type="button"
               className="calendar-popover__action"
-              title="Edit session"
+              aria-label="Edit session"
               onClick={(ev) => {
                 ev.stopPropagation()
                 // Prepare draft + selection state
@@ -4365,7 +4365,7 @@ export default function ReflectionPage() {
             <button
               type="button"
               className="calendar-popover__action calendar-popover__action--danger"
-              title="Delete session"
+              aria-label="Delete session"
               onClick={(ev) => {
                 ev.stopPropagation()
                 handleDeleteHistoryEntry(entry.id)(ev as any)
@@ -4389,7 +4389,7 @@ export default function ReflectionPage() {
             <button
               type="button"
               className="calendar-popover__action calendar-popover__action--close"
-              title="Close"
+              aria-label="Close"
               onClick={(ev) => {
                 ev.stopPropagation()
                 handleCloseCalendarPreview()
