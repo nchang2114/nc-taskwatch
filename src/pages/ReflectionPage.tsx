@@ -3121,8 +3121,7 @@ export default function ReflectionPage() {
         color: string
         gradientCss?: string
         label: string
-        startLabel: string
-        endLabel: string
+        rangeLabel: string
       }
 
       const computeDayEvents = (startMs: number): DayEvent[] => {
@@ -3137,15 +3136,15 @@ export default function ReflectionPage() {
             const start = Math.max(Math.min(previewStart, previewEnd), startMs)
             const end = Math.min(Math.max(previewStart, previewEnd), endMs)
             if (end <= start) return null
-            return { entry: e, start, end }
+            return { entry: e, start, end, previewStart, previewEnd }
           })
-          .filter((v): v is { entry: HistoryEntry; start: number; end: number } => Boolean(v))
+          .filter((v): v is { entry: HistoryEntry; start: number; end: number; previewStart: number; previewEnd: number } => Boolean(v))
           .sort((a, b) => a.start - b.start)
 
         // Assign lanes to avoid overlap (like Google Calendar)
         const laneEnds: number[] = []
-        const temp: Array<{ entry: HistoryEntry; start: number; end: number; lane: number }> = []
-        raw.forEach(({ entry, start, end }) => {
+        const temp: Array<{ entry: HistoryEntry; start: number; end: number; lane: number; previewStart: number; previewEnd: number }> = []
+        raw.forEach(({ entry, start, end, previewStart, previewEnd }) => {
           let lane = laneEnds.findIndex((le) => start >= le - 1000)
           if (lane === -1) {
             lane = laneEnds.length
@@ -3153,11 +3152,11 @@ export default function ReflectionPage() {
           } else {
             laneEnds[lane] = end
           }
-          temp.push({ entry, start, end, lane })
+          temp.push({ entry, start, end, lane, previewStart, previewEnd })
         })
 
         const lanes = Math.max(1, laneEnds.length)
-        return temp.map(({ entry, start, end, lane }) => {
+        return temp.map(({ entry, start, end, lane, previewStart, previewEnd }) => {
           const metadata = resolveGoalMetadata(entry, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup)
           const gradientCss = metadata.colorInfo?.gradient?.css
           const solidColor = metadata.colorInfo?.solidColor
@@ -3165,6 +3164,7 @@ export default function ReflectionPage() {
           const color = gradientCss ?? solidColor ?? getPaletteColorForLabel(fallbackLabel)
           const topPct = ((start - startMs) / DAY_DURATION_MS) * 100
           const heightPct = Math.max(((end - start) / DAY_DURATION_MS) * 100, (MINUTE_MS / DAY_DURATION_MS) * 100)
+          const rangeLabel = `${formatTimeOfDay(previewStart)} — ${formatTimeOfDay(previewEnd)}`
           return {
             entry,
             topPct: Math.min(Math.max(topPct, 0), 100),
@@ -3174,8 +3174,7 @@ export default function ReflectionPage() {
             color,
             gradientCss,
             label: fallbackLabel,
-            startLabel: formatTimeOfDay(start),
-            endLabel: formatTimeOfDay(end),
+            rangeLabel,
           }
         })
       }
@@ -3198,6 +3197,7 @@ export default function ReflectionPage() {
           initialEnd: number
           initialTimeOfDayMs: number
           durationMs: number
+          kind: DragKind
           columns: Array<{ rect: DOMRect; dayStart: number }>
         },
       }
@@ -3218,9 +3218,16 @@ export default function ReflectionPage() {
         const col = startColIdx >= 0 ? columns[startColIdx] : columns[0]
         const colHeight = col.rect.height
         if (!(Number.isFinite(colHeight) && colHeight > 0)) return
-        // Compute time-of-day at drag start
+        // Determine drag kind by edge proximity (top/bottom = resize, else move)
+        const evRect = (ev.currentTarget as HTMLElement).getBoundingClientRect()
+        const edgePx = Math.min(12, Math.max(6, evRect.height * 0.2))
+        let kind: DragKind = 'move'
+        if (ev.clientY - evRect.top <= edgePx) kind = 'resize-start'
+        else if (evRect.bottom - ev.clientY <= edgePx) kind = 'resize-end'
+        // Compute time-of-day at drag start (use visible edge for resize)
         const clampedStart = Math.max(Math.min(entry.startedAt, entry.endedAt), entryDayStart)
-        const timeOfDayMs0 = clampedStart - entryDayStart
+        const clampedEnd = Math.min(Math.max(entry.startedAt, entry.endedAt), entryDayStart + DAY_DURATION_MS)
+        const timeOfDayMs0 = (kind === 'resize-end' ? clampedEnd : clampedStart) - entryDayStart
         const state = {
           pointerId: ev.pointerId,
           entryId: entry.id,
@@ -3230,6 +3237,7 @@ export default function ReflectionPage() {
           initialEnd: entry.endedAt,
           initialTimeOfDayMs: timeOfDayMs0,
           durationMs: Math.max(entry.endedAt - entry.startedAt, MIN_SESSION_DURATION_DRAG_MS),
+          kind,
           columns,
         }
         calendarEventDragRef.current = state
@@ -3241,23 +3249,48 @@ export default function ReflectionPage() {
         const onMove = (e: PointerEvent) => {
           const s = calendarEventDragRef.current
           if (!s || e.pointerId !== s.pointerId) return
-          // Pick target column by X
-          const colIdx = s.columns.findIndex((c) => e.clientX >= c.rect.left && e.clientX <= c.rect.right)
-          const target = colIdx >= 0 ? s.columns[colIdx] : s.columns[e.clientX < s.columns[0].rect.left ? 0 : s.columns.length - 1]
-          const colH = target.rect.height
+          // Base column by X position (nearest if outside bounds)
+          const baseIdx = s.columns.findIndex((c) => e.clientX >= c.rect.left && e.clientX <= c.rect.right)
+          const nearestIdx = baseIdx >= 0 ? baseIdx : (e.clientX < s.columns[0].rect.left ? 0 : s.columns.length - 1)
+          const baseCol = s.columns[nearestIdx]
+          const colH = baseCol.rect.height
           if (!(Number.isFinite(colH) && colH > 0)) return
-          // Vertical delta -> time delta within the day
+          // Vertical delta to time delta
           const dy = e.clientY - s.startY
           const deltaMsRaw = (dy / colH) * DAY_DURATION_MS
-          // Snap to minute
+          // Snap to minute for stable movement
           const deltaMinutes = Math.round(deltaMsRaw / MINUTE_MS)
           const deltaMs = deltaMinutes * MINUTE_MS
-          let timeOfDay = s.initialTimeOfDayMs + deltaMs
-          // Clamp time-of-day within a day window so the duration fits
-          const maxStartWithinDay = Math.max(0, DAY_DURATION_MS - s.durationMs)
-          timeOfDay = Math.min(Math.max(timeOfDay, 0), maxStartWithinDay)
-          const newStart = Math.round(target.dayStart + timeOfDay)
-          const newEnd = Math.round(newStart + s.durationMs)
+          // Allow crossing midnight by converting overflow into day shifts
+          let desiredTimeOfDay = s.initialTimeOfDayMs + deltaMs
+          let dayShift = 0
+          if (desiredTimeOfDay <= -MINUTE_MS || desiredTimeOfDay >= DAY_DURATION_MS + MINUTE_MS) {
+            dayShift = Math.floor(desiredTimeOfDay / DAY_DURATION_MS)
+            desiredTimeOfDay = desiredTimeOfDay - dayShift * DAY_DURATION_MS
+          }
+          // Compute target column after applying vertical overflow
+          const targetIdx = Math.min(Math.max(nearestIdx + dayShift, 0), s.columns.length - 1)
+          const target = s.columns[targetIdx]
+          // Clamp within the day bounds; allow duration to overflow to adjacent day
+          const timeOfDay = Math.min(Math.max(desiredTimeOfDay, 0), DAY_DURATION_MS)
+          let newStart = s.initialStart
+          let newEnd = s.initialEnd
+          if (s.kind === 'move') {
+            newStart = Math.round(target.dayStart + timeOfDay)
+            newEnd = Math.round(newStart + s.durationMs)
+          } else if (s.kind === 'resize-start') {
+            newStart = Math.round(target.dayStart + timeOfDay)
+            // Keep end fixed unless violating minimum duration
+            if (newStart > newEnd - MIN_SESSION_DURATION_DRAG_MS) {
+              newStart = newEnd - MIN_SESSION_DURATION_DRAG_MS
+            }
+          } else {
+            // resize-end
+            newEnd = Math.round(target.dayStart + timeOfDay)
+            if (newEnd < newStart + MIN_SESSION_DURATION_DRAG_MS) {
+              newEnd = newStart + MIN_SESSION_DURATION_DRAG_MS
+            }
+          }
           const current = dragPreviewRef.current
           if (current && current.entryId === s.entryId && current.startedAt === newStart && current.endedAt === newEnd) {
             return
@@ -3340,9 +3373,7 @@ export default function ReflectionPage() {
                   <div key={`col-${di}`} className="calendar-day-column">
                     {events.map((ev, idx) => {
                       const isDragging = dragPreview?.entryId === ev.entry.id
-                      const dragTime = isDragging
-                        ? `${ev.startLabel} — ${ev.endLabel}`
-                        : undefined
+                      const dragTime = isDragging ? ev.rangeLabel : undefined
                       return (
                       <div
                         key={`ev-${di}-${idx}-${ev.entry.id}`}
@@ -3356,14 +3387,14 @@ export default function ReflectionPage() {
                         }}
                         data-drag-time={dragTime}
                         role="button"
-                        aria-label={`${ev.label} ${ev.startLabel}–${ev.endLabel}`}
-                        title={`${ev.label} · ${ev.startLabel} — ${ev.endLabel}`}
+                        aria-label={`${ev.label} ${ev.rangeLabel}`}
+                        title={`${ev.label} · ${ev.rangeLabel}`}
                         onClick={() => handleSelectHistorySegment(ev.entry)}
                         onDoubleClick={() => handleStartEditingHistoryEntry(ev.entry)}
                         onPointerDown={handleCalendarEventPointerDown(ev.entry, start)}
                       >
                         <div className="calendar-event__title">{ev.label}</div>
-                        <div className="calendar-event__time">{ev.startLabel} — {ev.endLabel}</div>
+                        <div className="calendar-event__time">{ev.rangeLabel}</div>
                       </div>
                     )})}
                   </div>
