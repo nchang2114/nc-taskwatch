@@ -3420,13 +3420,41 @@ export default function ReflectionPage() {
       const setPageScrollLock = (locked: boolean) => {
         if (typeof document === 'undefined') return
         const root = document.documentElement
-        const body = document.body
+        const body = document.body as HTMLBodyElement & { dataset: DOMStringMap }
         if (locked) {
+          // If already locked, no-op
+          if (body.dataset.scrollLockActive === '1') return
+          body.dataset.scrollLockActive = '1'
+          const y = (window.scrollY || root.scrollTop || (document.scrollingElement?.scrollTop ?? 0) || 0)
+          body.dataset.scrollLockY = String(y)
           root.classList.add('scroll-lock')
           body.classList.add('scroll-lock')
+          // Fallback: freeze body to prevent any viewport scroll on iOS/Android
+          body.style.position = 'fixed'
+          body.style.top = `-${y}px`
+          body.style.left = '0'
+          body.style.right = '0'
+          body.style.width = '100%'
+          body.style.overflow = 'hidden'
         } else {
+          // If not locked, no-op
+          if (body.dataset.scrollLockActive !== '1') return
+          delete body.dataset.scrollLockActive
+          const yStr = body.dataset.scrollLockY || root.dataset.scrollLockY
+          delete body.dataset.scrollLockY
+          delete root.dataset.scrollLockY
           root.classList.remove('scroll-lock')
           body.classList.remove('scroll-lock')
+          // Restore body styles
+          body.style.position = ''
+          body.style.top = ''
+          body.style.left = ''
+          body.style.right = ''
+          body.style.width = ''
+          body.style.overflow = ''
+          // Restore scroll position
+          const y = yStr ? parseInt(yStr, 10) : (window.scrollY || 0)
+          try { window.scrollTo(0, y) } catch {}
         }
       }
 
