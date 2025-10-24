@@ -1062,6 +1062,35 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
   background: rgba(124, 138, 220, 0.22);
 }
 
+/* Current time indicator line */
+.calendar-now-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #ef4444 0%, #ec4899 100%);
+  transform: translateY(-50%);
+  z-index: 20;
+  pointer-events: none; /* purely informational */
+}
+.calendar-now-line::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 10px solid #ef4444; /* red triangle pointing into the line */
+}
+
+/* Same red triangle in light theme */
+html[data-theme='light'] .calendar-now-line::before {
+  border-left-color: #ef4444;
+}
+
 .calendar-days {
   position: relative;
   display: grid;
@@ -1108,7 +1137,8 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
 /* --- Calendar popover (event preview) --- */
 .calendar-popover {
   position: fixed;
-  z-index: 1000;
+  z-index: 4000; /* ensure above calendar layers and toolbars */
+  pointer-events: auto;
   min-width: 240px;
   max-width: 280px;
   padding: 0.5rem 0.6rem;

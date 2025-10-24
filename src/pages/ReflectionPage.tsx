@@ -1604,6 +1604,8 @@ export default function ReflectionPage() {
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
   const [hoveredDuringDragId, setHoveredDuringDragId] = useState<string | null>(null)
   const pieCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  // Ref to the live-updating current-time line in the calendar view (DOM-updated to avoid React re-renders)
+  const calendarNowLineRef = useRef<HTMLDivElement | null>(null)
   const [supportsConicGradient, setSupportsConicGradient] = useState(() => {
     if (typeof window === 'undefined') {
       return false
@@ -2556,7 +2558,7 @@ export default function ReflectionPage() {
     }
     const intervalId = window.setInterval(() => {
       setNowTick(Date.now())
-    }, 1000)
+    }, 60000) // update once per minute to reduce render churn
     return () => {
       window.clearInterval(intervalId)
     }
@@ -2628,7 +2630,7 @@ export default function ReflectionPage() {
         goalColorLookup,
         lifeRoutineSurfaceLookup,
       ),
-    [effectiveHistory, activeRange, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, nowTick],
+    [effectiveHistory, activeRange, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup],
   )
   const activeRangeConfig = RANGE_DEFS[activeRange]
   const loggedSegments = useMemo(() => segments.filter((segment) => !segment.isUnlogged), [segments])
@@ -3068,6 +3070,50 @@ export default function ReflectionPage() {
     document.addEventListener('pointerdown', onDocPointerDown)
     return () => document.removeEventListener('pointerdown', onDocPointerDown)
   }, [showMultiDayChooser])
+
+  // Outside-React updater for the calendar now-line to keep UI smooth without full re-renders
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let rafId: number | null = null
+    let intervalId: number | null = null
+    const update = () => {
+      const el = calendarNowLineRef.current
+      if (!el) return
+      const ds = Number((el as any).dataset.dayStart || 0)
+      if (!Number.isFinite(ds) || ds <= 0) {
+        el.style.display = 'none'
+        return
+      }
+      const now = Date.now()
+      const pct = ((now - ds) / DAY_DURATION_MS) * 100
+      if (pct < 0 || pct > 100) {
+        el.style.display = 'none'
+        return
+      }
+      if (el.style.display === 'none') {
+        el.style.display = ''
+      }
+      el.style.top = `${Math.min(Math.max(pct, 0), 100)}%`
+    }
+    const tick = () => {
+      if (rafId !== null) {
+        try { window.cancelAnimationFrame(rafId) } catch {}
+      }
+      rafId = window.requestAnimationFrame(update)
+    }
+    // Initial paint
+    tick()
+    // Update roughly once per second for smoothness without heavy cost
+    intervalId = window.setInterval(tick, 1000)
+    return () => {
+      if (intervalId !== null) {
+        try { window.clearInterval(intervalId) } catch {}
+      }
+      if (rafId !== null) {
+        try { window.cancelAnimationFrame(rafId) } catch {}
+      }
+    }
+  }, [calendarView, historyDayOffset])
 
   // Clamp the multi-day chooser popover within the viewport
   useEffect(() => {
@@ -3536,6 +3582,13 @@ export default function ReflectionPage() {
               {dayStarts.map((start, di) => {
                 const events = computeDayEvents(start)
                 const laneWidthPct = (100 / Math.max(1, events[0]?.lanes ?? 1))
+                const isTodayColumn = start === todayMidnight
+                const initialNowTopPct = (() => {
+                  if (!isTodayColumn) return null as number | null
+                  const now = Date.now()
+                  const raw = ((now - start) / DAY_DURATION_MS) * 100
+                  return Math.min(Math.max(raw, 0), 100)
+                })()
                 const handleCalendarColumnPointerDown = (ev: ReactPointerEvent<HTMLDivElement>) => {
                   if (ev.button !== 0) return
                   const targetEl = ev.currentTarget as HTMLDivElement
@@ -3747,6 +3800,24 @@ export default function ReflectionPage() {
                 }
                 return (
                   <div key={`col-${di}`} className="calendar-day-column" onPointerDown={handleCalendarColumnPointerDown}>
+                    {isTodayColumn ? (
+                      <div
+                        className="calendar-now-line"
+                        ref={(node) => {
+                          calendarNowLineRef.current = node
+                          if (node) {
+                            ;(node as any).dataset.dayStart = String(start)
+                            if (typeof initialNowTopPct === 'number') {
+                              node.style.top = `${initialNowTopPct}%`
+                              node.style.display = ''
+                            } else {
+                              node.style.display = 'none'
+                            }
+                          }
+                        }}
+                        aria-hidden
+                      />
+                    ) : null}
                     {events.map((ev, idx) => {
                       const isDragging = dragPreview?.entryId === ev.entry.id
                       const dragTime = isDragging ? ev.rangeLabel : undefined
