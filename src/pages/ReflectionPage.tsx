@@ -3429,8 +3429,6 @@ export default function ReflectionPage() {
           body.dataset.scrollLockActive = '1'
           const y = (window.scrollY || root.scrollTop || (document.scrollingElement?.scrollTop ?? 0) || 0)
           body.dataset.scrollLockY = String(y)
-          root.classList.add('scroll-lock')
-          body.classList.add('scroll-lock')
           if (isIOS) {
             // iOS Safari: avoid position:fixed to prevent address bar/UI jumps; block scrolling via global touchmove preventer
             const preventer: EventListener = (e: Event) => {
@@ -3439,6 +3437,8 @@ export default function ReflectionPage() {
             ;(window as any).__scrollLockTouchPreventer = preventer
             try { window.addEventListener('touchmove', preventer, { passive: false }) } catch {}
           } else {
+            root.classList.add('scroll-lock')
+            body.classList.add('scroll-lock')
             // Non-iOS fallback: freeze body to prevent any viewport scroll reliably
             body.style.position = 'fixed'
             body.style.top = `-${y}px`
@@ -3454,8 +3454,6 @@ export default function ReflectionPage() {
           const yStr = body.dataset.scrollLockY || root.dataset.scrollLockY
           delete body.dataset.scrollLockY
           delete root.dataset.scrollLockY
-          root.classList.remove('scroll-lock')
-          body.classList.remove('scroll-lock')
           // Remove iOS touchmove preventer if present
           const preventer = (window as any).__scrollLockTouchPreventer as EventListener | undefined
           if (preventer) {
@@ -3463,12 +3461,16 @@ export default function ReflectionPage() {
             delete (window as any).__scrollLockTouchPreventer
           }
           // Restore body styles (for non-iOS fallback)
-          body.style.position = ''
-          body.style.top = ''
-          body.style.left = ''
-          body.style.right = ''
-          body.style.width = ''
-          body.style.overflow = ''
+          if (body.style.position === 'fixed') {
+            body.style.position = ''
+            body.style.top = ''
+            body.style.left = ''
+            body.style.right = ''
+            body.style.width = ''
+            body.style.overflow = ''
+            root.classList.remove('scroll-lock')
+            body.classList.remove('scroll-lock')
+          }
           // Restore scroll position
           const y = yStr ? parseInt(yStr, 10) : (window.scrollY || 0)
           try { window.scrollTo(0, y) } catch {}
