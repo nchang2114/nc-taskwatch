@@ -3671,27 +3671,37 @@ export default function ReflectionPage() {
               Today
             </button>
             <div className="calendar-toggle-group" role="tablist" aria-label="Calendar views">
-              {(
-                [
-                  { key: 'day', label: 'Day' },
-                  { key: '3d', label: `${Math.max(2, Math.min(multiDayCount, 14))} days` },
-                  { key: 'week', label: 'Week' },
-                  { key: 'month', label: 'Month' },
-                  { key: 'year', label: 'Year' },
-                ] as Array<{ key: CalendarViewMode; label: string }>
-              ).map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={calendarView === opt.key}
-                  className={`calendar-toggle${calendarView === opt.key ? ' calendar-toggle--active' : ''}`}
-                  onClick={() => setView(opt.key)}
-                  onDoubleClick={opt.key === '3d' ? handleMultiDayDoubleClick : undefined}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              {(() => {
+                const nDays = Math.max(2, Math.min(multiDayCount, 14))
+                const options: Array<{
+                  key: CalendarViewMode
+                  full: string
+                  short: string
+                }> = [
+                  { key: 'day', full: 'Day', short: 'D' },
+                  { key: '3d', full: `${nDays} days`, short: `${nDays}D` },
+                  { key: 'week', full: 'Week', short: 'W' },
+                  { key: 'month', full: 'Month', short: 'M' },
+                  { key: 'year', full: 'Year', short: 'Y' },
+                ]
+                return options.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={calendarView === opt.key}
+                    aria-label={opt.full}
+                    className={`calendar-toggle${calendarView === opt.key ? ' calendar-toggle--active' : ''}`}
+                    onClick={() => setView(opt.key)}
+                    onDoubleClick={opt.key === '3d' ? handleMultiDayDoubleClick : undefined}
+                  >
+                    <span className="calendar-toggle__label calendar-toggle__label--full">{opt.full}</span>
+                    <span className="calendar-toggle__label calendar-toggle__label--short" aria-hidden>
+                      {opt.short}
+                    </span>
+                  </button>
+                ))
+              })()}
             </div>
             {/* Multi-day segmented control removed in favor of double-click chooser */}
             {calendarView === '3d' && showMultiDayChooser ? (

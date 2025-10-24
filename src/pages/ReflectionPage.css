@@ -836,6 +836,14 @@ html[data-theme='light'] .calendar-day-header.is-today .calendar-day-header__dow
   cursor: pointer;
 }
 
+/* Dual labels for responsive toggles (full vs short) */
+.calendar-toggle__label {
+  line-height: 1;
+}
+.calendar-toggle__label--short {
+  display: none;
+}
+
 .calendar-toggle--active {
   background: rgba(104, 124, 255, 0.85);
   color: #fff;
@@ -1151,4 +1159,41 @@ html[data-theme='light'] .calendar-multi-day-chooser__option:focus-visible {
 html[data-theme='light'] .calendar-multi-day-chooser__option.is-active {
   background: rgba(152, 168, 252, 0.9);
   color: rgba(22, 28, 70, 0.92);
+}
+
+/* Compact toolbar adjustments for narrow viewports */
+@media (max-width: 560px) {
+  .calendar-title {
+    font-size: clamp(1rem, 4.2vw, 1.1rem);
+  }
+  .calendar-toolbar {
+    gap: 0.5rem;
+  }
+  .calendar-toolbar__left,
+  .calendar-toolbar__right {
+    gap: 0.35rem;
+  }
+  .calendar-nav-button {
+    padding: 0.28rem 0.48rem;
+    font-size: 0.95rem;
+  }
+  .calendar-today-button {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.85rem;
+  }
+  .calendar-toggle-group {
+    gap: 0.2rem;
+    padding: 0.18rem;
+  }
+  .calendar-toggle {
+    padding: 0.28rem 0.5rem;
+    font-size: 0.85rem;
+  }
+  /* Swap toggle labels to compact form */
+  .calendar-toggle__label--full {
+    display: none;
+  }
+  .calendar-toggle__label--short {
+    display: inline;
+  }
 }
