@@ -2387,9 +2387,8 @@ export default function ReflectionPage() {
   )
 
   const handleCancelHistoryEdit = useCallback(() => {
-    // If we're cancelling a newly added (pending) entry, remove it entirely
+    // If we're cancelling a newly added (pending) entry, KEEP it (persist), just stop editing
     if (pendingNewHistoryId && selectedHistoryId === pendingNewHistoryId) {
-      setHistory((current) => current.filter((e) => e.id !== pendingNewHistoryId))
       setPendingNewHistoryId(null)
       setSelectedHistoryId(null)
       setEditingHistoryId(null)
@@ -2948,7 +2947,12 @@ export default function ReflectionPage() {
       top = Math.max(viewportPadding, window.innerHeight - viewportPadding - assumedHeight)
     }
     if (top < viewportPadding) top = viewportPadding
-    setCalendarPreview((current) => (current ? { ...current, top, left } : current))
+    // Apply directly to DOM to avoid extra React re-renders
+    const pop = calendarPreviewRef.current
+    if (pop) {
+      pop.style.top = `${top}px`
+      pop.style.left = `${left}px`
+    }
   }, [])
 
   const handleOpenCalendarPreview = useCallback(
@@ -2992,7 +2996,7 @@ export default function ReflectionPage() {
     }
     const onReposition = () => {
       positionCalendarPreview(calendarPreview.anchorEl || null)
-      // After moving, clamp again based on actual size
+      // After moving, clamp again based on actual size (DOM-only)
       const pop = calendarPreviewRef.current
       if (!pop) return
       const rect = pop.getBoundingClientRect()
@@ -3005,9 +3009,8 @@ export default function ReflectionPage() {
       if (rect.bottom > window.innerHeight - padding) {
         top = Math.max(padding, window.innerHeight - padding - rect.height)
       }
-      if (top !== rect.top || left !== rect.left) {
-        setCalendarPreview((current) => (current ? { ...current, top, left } : current))
-      }
+      pop.style.top = `${top}px`
+      pop.style.left = `${left}px`
     }
     document.addEventListener('pointerdown', onDocPointerDown, true)
     document.addEventListener('keydown', onKeyDown as any)
@@ -3913,70 +3916,6 @@ export default function ReflectionPage() {
                 )
               })}
             </div>
-            {(() => {
-              if (!calendarPreview || typeof document === 'undefined') return null
-              const entry = effectiveHistory.find((h) => h.id === calendarPreview.entryId) || null
-              if (!entry) return null
-              const dateLabel = (() => {
-                const startD = new Date(entry.startedAt)
-                const endD = new Date(entry.endedAt)
-                const sameDay =
-                  startD.getFullYear() === endD.getFullYear() &&
-                  startD.getMonth() === endD.getMonth() &&
-                  startD.getDate() === endD.getDate()
-                if (sameDay) {
-                  const dateFmt = startD.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-                  return `${dateFmt} · ${formatTimeOfDay(entry.startedAt)} — ${formatTimeOfDay(entry.endedAt)}`
-                }
-                return formatDateRange(entry.startedAt, entry.endedAt)
-              })()
-              const title = deriveEntryTaskName(entry)
-              const goal = entry.goalName || 'No goal'
-              const bucket = entry.bucketName || 'No bucket'
-              return createPortal(
-                <div
-                  className="calendar-popover"
-                  ref={calendarPreviewRef}
-                  style={{ top: `${calendarPreview.top}px`, left: `${calendarPreview.left}px` }}
-                  role="dialog"
-                  aria-label="Session details"
-                >
-                  <div className="calendar-popover__header">
-                    <div className="calendar-popover__title" title={title}>{title || 'Untitled session'}</div>
-                    <div className="calendar-popover__actions">
-                      <button
-                        type="button"
-                        className="calendar-popover__action calendar-popover__action--danger"
-                        title="Delete session"
-                        onClick={(ev) => {
-                          ev.stopPropagation()
-                          handleDeleteHistoryEntry(entry.id)(ev as any)
-                          handleCloseCalendarPreview()
-                        }}
-                      >
-                        🗑
-                      </button>
-                      <button
-                        type="button"
-                        className="calendar-popover__action"
-                        title="Close"
-                        onClick={(ev) => {
-                          ev.stopPropagation()
-                          handleCloseCalendarPreview()
-                        }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                  <div className="calendar-popover__meta">
-                    <div className="calendar-popover__time">{dateLabel}</div>
-                    <div className="calendar-popover__goal">{goal}{bucket ? ` → ${bucket}` : ''}</div>
-                  </div>
-                </div>,
-                document.body,
-              )
-            })()}
           </div>
         </div>
       )
@@ -4048,6 +3987,72 @@ export default function ReflectionPage() {
 
     return null
   }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup])
+
+  // Render the popover outside the heavy calendar grid to avoid re-running grid computations on open/close
+  const renderCalendarPopover = useCallback(() => {
+    if (!calendarPreview || typeof document === 'undefined') return null
+    const entry = effectiveHistory.find((h) => h.id === calendarPreview.entryId) || null
+    if (!entry) return null
+    const dateLabel = (() => {
+      const startD = new Date(entry.startedAt)
+      const endD = new Date(entry.endedAt)
+      const sameDay =
+        startD.getFullYear() === endD.getFullYear() &&
+        startD.getMonth() === endD.getMonth() &&
+        startD.getDate() === endD.getDate()
+      if (sameDay) {
+        const dateFmt = startD.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+        return `${dateFmt} · ${formatTimeOfDay(entry.startedAt)} — ${formatTimeOfDay(entry.endedAt)}`
+      }
+      return formatDateRange(entry.startedAt, entry.endedAt)
+    })()
+    const title = deriveEntryTaskName(entry)
+    const goal = entry.goalName || 'No goal'
+    const bucket = entry.bucketName || 'No bucket'
+    return createPortal(
+      <div
+        className="calendar-popover"
+        ref={calendarPreviewRef}
+        style={{ top: `${calendarPreview.top}px`, left: `${calendarPreview.left}px` }}
+        role="dialog"
+        aria-label="Session details"
+      >
+        <div className="calendar-popover__header">
+          <div className="calendar-popover__title" title={title}>{title || 'Untitled session'}</div>
+          <div className="calendar-popover__actions">
+            <button
+              type="button"
+              className="calendar-popover__action calendar-popover__action--danger"
+              title="Delete session"
+              onClick={(ev) => {
+                ev.stopPropagation()
+                handleDeleteHistoryEntry(entry.id)(ev as any)
+                handleCloseCalendarPreview()
+              }}
+            >
+              🗑
+            </button>
+            <button
+              type="button"
+              className="calendar-popover__action"
+              title="Close"
+              onClick={(ev) => {
+                ev.stopPropagation()
+                handleCloseCalendarPreview()
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        <div className="calendar-popover__meta">
+          <div className="calendar-popover__time">{dateLabel}</div>
+          <div className="calendar-popover__goal">{goal}{bucket ? ` → ${bucket}` : ''}</div>
+        </div>
+      </div>,
+      document.body,
+    )
+  }, [calendarPreview, effectiveHistory, handleCloseCalendarPreview, handleDeleteHistoryEntry])
 
   // Keep the buffered track centered on the visible window (apply base translate)
   useLayoutEffect(() => {
@@ -4484,6 +4489,7 @@ export default function ReflectionPage() {
         <div className="history-calendar" aria-label="Calendar display">
           {renderCalendarContent()}
         </div>
+        {renderCalendarPopover()}
 
   {false ? (
   <section className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`} aria-label="Session History">
