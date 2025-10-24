@@ -1119,8 +1119,8 @@ html[data-theme='light'] .calendar-gridline {
   top: calc(100% + 6px);
   right: 0;
   display: flex;
-  gap: 0.5rem;
-  padding: 0.5rem 0.6rem;
+  gap: 0.35rem;
+  padding: 0.35rem 0.45rem;
   border-radius: 0.6rem;
   border: 1px solid rgba(148, 160, 255, 0.45);
   background: rgba(18, 24, 58, 0.96);
@@ -1138,21 +1138,21 @@ html[data-theme='light'] .calendar-gridline {
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  padding: 0.44rem 0.8rem;
+  padding: 0.35rem 0.6rem;
   border-radius: 999px;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   cursor: pointer;
-  min-width: 2rem; /* adequate hit target for single digits */
-  min-height: 34px;
+  min-width: 1.8rem; /* compact, but still tappable */
+  min-height: 30px;
 }
 
 /* Larger touch targets on coarse pointers (e.g., mobile) */
 @media (pointer: coarse) {
   .calendar-multi-day-chooser__option {
-    min-width: 42px;
-    min-height: 38px;
-    font-size: 1rem;
-    padding: 0.5rem 0.9rem;
+    min-width: 40px;
+    min-height: 36px;
+    font-size: 0.95rem;
+    padding: 0.44rem 0.85rem;
   }
 }
 

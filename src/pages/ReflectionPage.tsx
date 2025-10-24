@@ -3003,24 +3003,11 @@ export default function ReflectionPage() {
       const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
       if (!Number.isFinite(dayWidth) || dayWidth <= 0) return
       const dx = e.clientX - state.startX
+      // Small dead zone to avoid twitch on touch
+      if (Math.abs(dx) < 6) return
       const rawDays = dx / dayWidth
-      // Step when crossing whole days, but clamp per-move to avoid large jumps on touch
-      let desiredSnap = rawDays > 0 ? Math.floor(rawDays) : Math.ceil(rawDays)
-      const diff = desiredSnap - state.appliedSnap
-      if (diff > 1) desiredSnap = state.appliedSnap + 1
-      if (diff < -1) desiredSnap = state.appliedSnap - 1
-      let appliedSnap = state.appliedSnap
-      if (desiredSnap !== appliedSnap) {
-        const targetOffset = state.baseOffset - desiredSnap
-        const effectiveSnap = state.baseOffset - targetOffset
-        if (effectiveSnap !== appliedSnap) {
-          setHistoryDayOffset(targetOffset)
-          state.appliedSnap = effectiveSnap
-          appliedSnap = effectiveSnap
-        }
-      }
-      const residualDays = rawDays - appliedSnap
-      const translatePx = residualDays * dayWidth
+      // Smooth pan: do not update historyDayOffset while dragging to avoid re-renders
+      const translatePx = rawDays * dayWidth
       const totalPx = calendarBaseTranslateRef.current + translatePx
       const daysEl = calendarDaysRef.current
       if (daysEl) {
