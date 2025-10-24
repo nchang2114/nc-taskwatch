@@ -3421,6 +3421,8 @@ export default function ReflectionPage() {
         if (typeof document === 'undefined') return
         const root = document.documentElement
         const body = document.body as HTMLBodyElement & { dataset: DOMStringMap }
+        const ua = navigator.userAgent || ''
+        const isIOS = /iP(ad|hone|od)/.test(ua) || (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1)
         if (locked) {
           // If already locked, no-op
           if (body.dataset.scrollLockActive === '1') return
@@ -3429,13 +3431,22 @@ export default function ReflectionPage() {
           body.dataset.scrollLockY = String(y)
           root.classList.add('scroll-lock')
           body.classList.add('scroll-lock')
-          // Fallback: freeze body to prevent any viewport scroll on iOS/Android
-          body.style.position = 'fixed'
-          body.style.top = `-${y}px`
-          body.style.left = '0'
-          body.style.right = '0'
-          body.style.width = '100%'
-          body.style.overflow = 'hidden'
+          if (isIOS) {
+            // iOS Safari: avoid position:fixed to prevent address bar/UI jumps; block scrolling via global touchmove preventer
+            const preventer: EventListener = (e: Event) => {
+              try { e.preventDefault() } catch {}
+            }
+            ;(window as any).__scrollLockTouchPreventer = preventer
+            try { window.addEventListener('touchmove', preventer, { passive: false }) } catch {}
+          } else {
+            // Non-iOS fallback: freeze body to prevent any viewport scroll reliably
+            body.style.position = 'fixed'
+            body.style.top = `-${y}px`
+            body.style.left = '0'
+            body.style.right = '0'
+            body.style.width = '100%'
+            body.style.overflow = 'hidden'
+          }
         } else {
           // If not locked, no-op
           if (body.dataset.scrollLockActive !== '1') return
@@ -3445,7 +3456,13 @@ export default function ReflectionPage() {
           delete root.dataset.scrollLockY
           root.classList.remove('scroll-lock')
           body.classList.remove('scroll-lock')
-          // Restore body styles
+          // Remove iOS touchmove preventer if present
+          const preventer = (window as any).__scrollLockTouchPreventer as EventListener | undefined
+          if (preventer) {
+            try { window.removeEventListener('touchmove', preventer) } catch {}
+            delete (window as any).__scrollLockTouchPreventer
+          }
+          // Restore body styles (for non-iOS fallback)
           body.style.position = ''
           body.style.top = ''
           body.style.left = ''

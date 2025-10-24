@@ -1422,6 +1422,7 @@ body.scroll-lock {
   overflow: hidden !important;
   overscroll-behavior: none;
   touch-action: none;
+  height: 100dvh; /* stabilize viewport height while locked on modern mobile browsers */
 }
 /* Ensure calendar elements don't advertise pan gestures while locked */
 html.scroll-lock .calendar-days-area,
