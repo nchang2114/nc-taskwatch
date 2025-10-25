@@ -4270,7 +4270,8 @@ export default function ReflectionPage() {
             <button
               type="button"
               className="calendar-popover__menu-item"
-              onClick={(ev) => {
+              onPointerDown={(ev) => {
+                ev.preventDefault()
                 ev.stopPropagation()
                 try { onDuplicate() } finally { setOpen(false) }
               }}
@@ -4340,7 +4341,8 @@ export default function ReflectionPage() {
               type="button"
               className="calendar-popover__action"
               aria-label="Edit session"
-              onClick={(ev) => {
+              onPointerDown={(ev) => {
+                ev.preventDefault()
                 ev.stopPropagation()
                 // Prepare draft + selection state
                 setSelectedHistoryId(entry.id)
@@ -4366,7 +4368,8 @@ export default function ReflectionPage() {
               type="button"
               className="calendar-popover__action calendar-popover__action--danger"
               aria-label="Delete session"
-              onClick={(ev) => {
+              onPointerDown={(ev) => {
+                ev.preventDefault()
                 ev.stopPropagation()
                 handleDeleteHistoryEntry(entry.id)(ev as any)
                 handleCloseCalendarPreview()
@@ -4390,7 +4393,8 @@ export default function ReflectionPage() {
               type="button"
               className="calendar-popover__action calendar-popover__action--close"
               aria-label="Close"
-              onClick={(ev) => {
+              onPointerDown={(ev) => {
+                ev.preventDefault()
                 ev.stopPropagation()
                 handleCloseCalendarPreview()
               }}

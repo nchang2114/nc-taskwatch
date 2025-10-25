@@ -1177,6 +1177,7 @@ html[data-theme='light'] .calendar-now-line::before {
   height: 32px;
   border-radius: 6px;
   cursor: pointer;
+  touch-action: manipulation; /* ensure single-tap activation on mobile */
 }
 .calendar-popover__action:hover,
 .calendar-popover__action:focus-visible {
@@ -1263,6 +1264,7 @@ html[data-theme='light'] .calendar-popover__action--danger:focus-visible {
   padding: 0.4rem 0.5rem;
   border-radius: 0.4rem;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .calendar-popover__menu-item:hover,
 .calendar-popover__menu-item:focus-visible {
