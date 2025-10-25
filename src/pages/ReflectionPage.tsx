@@ -4478,6 +4478,7 @@ export default function ReflectionPage() {
         aria-label="Session details"
       >
         <div className="calendar-popover__header">
+          <div className="calendar-popover__title" aria-label="Session title">{title || 'Untitled session'}</div>
           <div className="calendar-popover__actions">
             <button
               type="button"
@@ -4545,7 +4546,6 @@ export default function ReflectionPage() {
               <IconClose />
             </button>
           </div>
-          <div className="calendar-popover__title" aria-label="Session title">{title || 'Untitled session'}</div>
         </div>
         <div className="calendar-popover__meta">
           <div className="calendar-popover__time">{dateLabel}</div>
