@@ -4533,6 +4533,9 @@ export default function ReflectionPage() {
               onPointerDown={(ev) => {
                 ev.preventDefault()
                 ev.stopPropagation()
+                // Suppress any subsequent click from hitting the underlying calendar event
+                // after the popover closes (prevents click-through re-open)
+                suppressNextEventOpen()
                 handleDeleteHistoryEntry(entry.id)(ev as any)
                 handleCloseCalendarPreview()
               }}
