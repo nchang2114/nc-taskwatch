@@ -288,6 +288,23 @@ const toGoalColorInfo = (info: SurfaceGradientInfo): GoalColorInfo => ({
   solidColor: info.base,
 })
 
+const hexToRgba = (hex: string, alpha: number): string => {
+  const normalized = hex.startsWith('#') ? hex.slice(1) : hex
+  if (normalized.length !== 6) {
+    return hex
+  }
+  const value = Number.parseInt(normalized, 16)
+  const r = (value >> 16) & 255
+  const g = (value >> 8) & 255
+  const b = value & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+const deriveLifeRoutineSolidColor = (surface: SurfaceStyle): string => {
+  const info = LIFE_ROUTINE_SURFACE_GRADIENT_INFO[surface] ?? SURFACE_GRADIENT_INFO[surface]
+  return hexToRgba(info.base, 0.78)
+}
+
 type HistoryDropdownOption = {
   value: string
   label: string
@@ -650,8 +667,9 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }
 const getSurfaceColorInfo = (surface: SurfaceStyle): GoalColorInfo => toGoalColorInfo(SURFACE_GRADIENT_INFO[surface])
 
 const getLifeRoutineSurfaceColorInfo = (surface: SurfaceStyle): GoalColorInfo => {
-  const info = LIFE_ROUTINE_SURFACE_GRADIENT_INFO[surface] ?? SURFACE_GRADIENT_INFO[surface]
-  return toGoalColorInfo(info)
+  return {
+    solidColor: deriveLifeRoutineSolidColor(surface),
+  }
 }
 
 type GoalLookup = Map<string, { goalName: string; colorInfo?: GoalColorInfo }>
