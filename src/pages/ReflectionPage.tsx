@@ -3089,7 +3089,7 @@ export default function ReflectionPage() {
   const calendarPreviewRef = useRef<HTMLDivElement | null>(null)
   const [calendarPopoverEditing, setCalendarPopoverEditing] = useState<CalendarPopoverEditingState | null>(null)
   const calendarPopoverFocusedEntryRef = useRef<string | null>(null)
-  const calendarPopoverEditableRef = useRef<HTMLDivElement | null>(null)
+  const calendarPopoverTitleRef = useRef<HTMLDivElement | null>(null)
   // Suppress one subsequent open caused by bubbling/click-after-close on mobile
   const suppressEventOpenRef = useRef(false)
   const suppressNextEventOpen = useCallback(() => {
@@ -3352,7 +3352,7 @@ export default function ReflectionPage() {
     }
     calendarPopoverFocusedEntryRef.current = calendarPopoverEditing.entryId
     const raf = window.requestAnimationFrame(() => {
-      const editableEl = calendarPopoverEditableRef.current
+      const editableEl = calendarPopoverTitleRef.current
       if (!editableEl) {
         return
       }
@@ -3377,13 +3377,12 @@ export default function ReflectionPage() {
   }, [calendarPopoverEditing])
 
   useLayoutEffect(() => {
-    const editableEl = calendarPopoverEditableRef.current
+    const editableEl = calendarPopoverTitleRef.current
     const editingState = calendarPopoverEditing
     if (!editableEl) {
       return
     }
     if (!editingState) {
-      editableEl.textContent = ''
       return
     }
     const desired = editingState.value
@@ -4922,9 +4921,7 @@ export default function ReflectionPage() {
     const editingState = calendarPopoverEditing && calendarPopoverEditing.entryId === entry.id ? calendarPopoverEditing : null
     const startValue = entry.taskName ?? ''
     const initialDisplayValue = title || ''
-    const handleTitleButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault()
-      event.stopPropagation()
+    const startEditingTitle = () => {
       setCalendarPopoverEditing({
         entryId: entry.id,
         value: initialDisplayValue,
@@ -4932,6 +4929,20 @@ export default function ReflectionPage() {
         initialDisplayValue,
         dirty: false,
       })
+    }
+    const handleTitlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      startEditingTitle()
+    }
+    const handleTitleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+      if (editingState) {
+        return
+      }
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        startEditingTitle()
+      }
     }
     const handleTitleEditableInput = (event: FormEvent<HTMLDivElement>) => {
       if (!editingState) {
@@ -5036,29 +5047,28 @@ export default function ReflectionPage() {
         aria-label="Session details"
       >
         <div className="calendar-popover__header">
-          {editingState ? (
-            <div
-              ref={calendarPopoverEditableRef}
-              className="calendar-popover__title calendar-popover__title--editing"
-              contentEditable
-              suppressContentEditableWarning
-              role="textbox"
-              aria-label="Edit session title"
-              aria-multiline="true"
-              onInput={handleTitleEditableInput}
-              onBlur={handleTitleEditableBlur}
-              onKeyDown={handleTitleEditableKeyDown}
-            />
-          ) : (
-            <button
-              type="button"
-              className="calendar-popover__title calendar-popover__title-button"
-              aria-label="Edit session title"
-              onClick={handleTitleButtonClick}
-            >
-              {title || 'Untitled session'}
-            </button>
-          )}
+          <div
+            ref={calendarPopoverTitleRef}
+            className={`calendar-popover__title${editingState ? ' calendar-popover__title--editing' : ' calendar-popover__title--interactive'}`}
+            role={editingState ? 'textbox' : 'button'}
+            tabIndex={0}
+            contentEditable={editingState ? 'true' : undefined}
+            suppressContentEditableWarning
+            aria-label="Session title"
+            aria-multiline={editingState ? 'true' : undefined}
+            onPointerDown={editingState ? undefined : handleTitlePointerDown}
+            onKeyDown={(event) => {
+              if (editingState) {
+                handleTitleEditableKeyDown(event)
+              } else {
+                handleTitleKeyDown(event)
+              }
+            }}
+            onInput={editingState ? handleTitleEditableInput : undefined}
+            onBlur={editingState ? handleTitleEditableBlur : undefined}
+          >
+            {editingState ? undefined : title || 'Untitled session'}
+          </div>
           <div className="calendar-popover__actions">
             <button
               type="button"

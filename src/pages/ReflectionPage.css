@@ -1191,23 +1191,18 @@ html[data-theme='light'] .calendar-now-line::before {
   flex: 1 1 auto;
   min-width: 0;
 }
-.calendar-popover__title-button {
-  background: transparent;
-  border: none;
-  padding: 0;
-  margin: 0;
-  text-align: left;
-  color: inherit;
-  font: inherit;
+.calendar-popover__title--interactive,
+.calendar-popover__title--editing {
   cursor: text;
-  width: 100%;
+  background: transparent;
+  color: inherit;
 }
-.calendar-popover__title-button:focus-visible {
+.calendar-popover__title--interactive:focus-visible,
+.calendar-popover__title--editing:focus-visible {
   outline: 2px solid rgba(118, 134, 232, 0.65);
   outline-offset: 2px;
 }
 .calendar-popover__title--editing {
-  cursor: text;
   font-family: inherit;
   font-weight: 700;
   font-size: 1.1rem;
@@ -1216,10 +1211,7 @@ html[data-theme='light'] .calendar-now-line::before {
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-.calendar-popover__title--editing:focus-visible {
-  outline: 2px solid rgba(118, 134, 232, 0.65);
-  outline-offset: 2px;
+  -webkit-user-modify: read-write-plaintext-only;
 }
 .calendar-popover__actions {
   display: inline-flex;
