@@ -4233,7 +4233,25 @@ export default function ReflectionPage() {
                           }
                           handleOpenCalendarPreview(ev.entry, e.currentTarget)
                         }}
-                        onDoubleClick={() => handleStartEditingHistoryEntry(ev.entry)}
+                        onDoubleClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          // Prepare draft + selection state and open the full editor modal
+                          setSelectedHistoryId(ev.entry.id)
+                          setHoveredHistoryId(ev.entry.id)
+                          setEditingHistoryId(ev.entry.id)
+                          taskNameAutofilledRef.current = false
+                          setHistoryDraft({
+                            taskName: ev.entry.taskName,
+                            goalName: ev.entry.goalName ?? '',
+                            bucketName: ev.entry.bucketName ?? '',
+                            startedAt: ev.entry.startedAt,
+                            endedAt: ev.entry.endedAt,
+                          })
+                          setCalendarEditorEntryId(ev.entry.id)
+                          // Close any open preview popover to avoid stacking
+                          handleCloseCalendarPreview()
+                        }}
                         onPointerUp={() => {
                           // No-op: click handler will decide whether to open based on dragPreventClickRef
                         }}
@@ -5440,6 +5458,7 @@ export default function ReflectionPage() {
                     event.stopPropagation()
                     clearLongPressWatch()
                     handleStartEditingHistoryEntry(segment.entry)
+                    setCalendarEditorEntryId(segment.entry.id)
                   }
                   return
                 }
@@ -5724,6 +5743,8 @@ export default function ReflectionPage() {
                     if (event.detail === 2) {
                       if (!isActiveSessionSegment) {
                         handleStartEditingHistoryEntry(segment.entry)
+                        // Open full-screen editor modal on double-click
+                        setCalendarEditorEntryId(segment.entry.id)
                       }
                       return
                     }
@@ -5739,6 +5760,7 @@ export default function ReflectionPage() {
                     }
                     if (!isActiveSessionSegment) {
                       handleStartEditingHistoryEntry(segment.entry)
+                      setCalendarEditorEntryId(segment.entry.id)
                     }
                   }}
                   onMouseEnter={() =>
