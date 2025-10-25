@@ -3608,65 +3608,283 @@ export default function ReflectionPage() {
         entry: HistoryEntry
         topPct: number
         heightPct: number
-        lane: number
-        lanes: number
         color: string
         gradientCss?: string
         label: string
         rangeLabel: string
+        clipPath?: string
+        zIndex: number
+        showLabel: boolean
+        showTime: boolean
       }
 
       const computeDayEvents = (startMs: number): DayEvent[] => {
         const endMs = startMs + DAY_DURATION_MS
-        // Collect events that overlap this day and clamp
-        const raw = effectiveHistory
-          .map((e) => {
-            // If a drag preview is active for this entry, use the previewed times
-            const isPreviewed = dragPreview && dragPreview.entryId === e.id
-            const previewStart = isPreviewed ? dragPreview.startedAt : e.startedAt
-            const previewEnd = isPreviewed ? dragPreview.endedAt : e.endedAt
-            const start = Math.max(Math.min(previewStart, previewEnd), startMs)
-            const end = Math.min(Math.max(previewStart, previewEnd), endMs)
-            if (end <= start) return null
-            return { entry: e, start, end, previewStart, previewEnd }
-          })
-          .filter((v): v is { entry: HistoryEntry; start: number; end: number; previewStart: number; previewEnd: number } => Boolean(v))
-          .sort((a, b) => a.start - b.start)
+        const START_GROUP_EPS = 60 * 1000
 
-        // Assign lanes to avoid overlap (like Google Calendar)
-        const laneEnds: number[] = []
-        const temp: Array<{ entry: HistoryEntry; start: number; end: number; lane: number; previewStart: number; previewEnd: number }> = []
-        raw.forEach(({ entry, start, end, previewStart, previewEnd }) => {
-          let lane = laneEnds.findIndex((le) => start >= le - 1000)
-          if (lane === -1) {
-            lane = laneEnds.length
-            laneEnds.push(end)
-          } else {
-            laneEnds[lane] = end
-          }
-          temp.push({ entry, start, end, lane, previewStart, previewEnd })
+        type RawEvent = {
+          entry: HistoryEntry
+          start: number
+          end: number
+          previewStart: number
+          previewEnd: number
+        }
+
+        type Segment = { start: number; end: number; left: number; right: number }
+        type SliceAssignment = { left: number; right: number }
+
+        const raw: RawEvent[] = effectiveHistory
+          .map((entry) => {
+            const isPreviewed = dragPreview && dragPreview.entryId === entry.id
+            const previewStart = isPreviewed ? dragPreview.startedAt : entry.startedAt
+            const previewEnd = isPreviewed ? dragPreview.endedAt : entry.endedAt
+            const clampedStart = Math.max(Math.min(previewStart, previewEnd), startMs)
+            const clampedEnd = Math.min(Math.max(previewStart, previewEnd), endMs)
+            if (clampedEnd <= clampedStart) {
+              return null
+            }
+            return {
+              entry,
+              start: clampedStart,
+              end: clampedEnd,
+              previewStart,
+              previewEnd,
+            }
+          })
+          .filter((v): v is RawEvent => Boolean(v))
+          .sort((a, b) => (a.start === b.start ? a.end - b.end : a.start - b.start))
+
+        if (raw.length === 0) {
+          return []
+        }
+
+        const breakpointsSet = new Set<number>([startMs, endMs])
+        raw.forEach(({ start, end }) => {
+          breakpointsSet.add(start)
+          breakpointsSet.add(end)
+        })
+        const breakpoints = Array.from(breakpointsSet).sort((a, b) => a - b)
+
+        const allEvents = new Map<string, RawEvent>()
+        raw.forEach((info) => {
+          allEvents.set(info.entry.id, info)
         })
 
-        const lanes = Math.max(1, laneEnds.length)
-        return temp.map(({ entry, start, end, lane, previewStart, previewEnd }) => {
-          const metadata = resolveGoalMetadata(entry, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup)
+        const eventSlices = new Map<string, Segment[]>()
+        const prevAssignments = new Map<string, SliceAssignment>()
+
+        const clampSegment = (segment: Segment): Segment => ({
+          start: clamp01(segment.start),
+          end: clamp01(segment.end),
+          left: clamp01(segment.left),
+          right: clamp01(segment.right),
+        })
+
+        const approxEqual = (a: number, b: number, epsilon = 1e-6) => Math.abs(a - b) <= epsilon
+
+        const mergeSegments = (segments: Segment[]): Segment[] => {
+          if (segments.length === 0) {
+            return [{ start: 0, end: 1, left: 0, right: 1 }]
+          }
+          const sorted = segments
+            .map(clampSegment)
+            .filter((segment) => segment.end > segment.start)
+            .sort((a, b) => a.start - b.start)
+          if (sorted.length === 0) {
+            return [{ start: 0, end: 1, left: 0, right: 1 }]
+          }
+          const merged: Segment[] = []
+          sorted.forEach((segment) => {
+            const current = { ...segment }
+            if (merged.length === 0) {
+              merged.push(current)
+              return
+            }
+            const last = merged[merged.length - 1]
+            if (
+              approxEqual(last.right, current.right, 1e-4) &&
+              approxEqual(last.left, current.left, 1e-4) &&
+              approxEqual(last.end, current.start, 1e-4)
+            ) {
+              last.end = current.end
+            } else {
+              merged.push(current)
+            }
+          })
+          // Ensure spans start at 0 and end at 1 for stable clip paths
+          merged[0].start = 0
+          merged[merged.length - 1].end = 1
+          return merged
+        }
+
+        const buildClipPath = (segments: Segment[]): string | undefined => {
+          if (segments.length === 1) {
+            const [segment] = segments
+            if (approxEqual(segment.left, 0) && approxEqual(segment.right, 1)) {
+              return undefined
+            }
+          }
+          const points: Array<{ x: number; y: number }> = []
+          const first = segments[0]
+          points.push({ x: clamp01(first.left), y: clamp01(first.start) })
+          points.push({ x: clamp01(first.right), y: clamp01(first.start) })
+          segments.forEach((segment) => {
+            points.push({ x: clamp01(segment.right), y: clamp01(segment.end) })
+          })
+          const last = segments[segments.length - 1]
+          points.push({ x: clamp01(last.left), y: clamp01(last.end) })
+          for (let i = segments.length - 1; i >= 0; i -= 1) {
+            const segment = segments[i]
+            points.push({ x: clamp01(segment.left), y: clamp01(segment.start) })
+          }
+
+          const filtered: Array<{ x: number; y: number }> = []
+          points.forEach((point, index) => {
+            if (index === 0) {
+              filtered.push(point)
+              return
+            }
+            const prev = filtered[filtered.length - 1]
+            if (!approxEqual(prev.x, point.x, 1e-4) || !approxEqual(prev.y, point.y, 1e-4)) {
+              filtered.push(point)
+            }
+          })
+          if (filtered.length > 0) {
+            const firstPoint = filtered[0]
+            const lastPoint = filtered[filtered.length - 1]
+            if (approxEqual(firstPoint.x, lastPoint.x, 1e-4) && approxEqual(firstPoint.y, lastPoint.y, 1e-4)) {
+              filtered.pop()
+            }
+          }
+          if (filtered.length < 3) {
+            return undefined
+          }
+          return `polygon(${filtered
+            .map((point) => `${(point.x * 100).toFixed(3)}% ${(point.y * 100).toFixed(3)}%`)
+            .join(', ')})`
+        }
+
+        for (let i = 0; i < breakpoints.length - 1; i += 1) {
+          const sliceStart = breakpoints[i]
+          const sliceEnd = breakpoints[i + 1]
+          if (sliceEnd - sliceStart <= 0) {
+            continue
+          }
+
+          const active = raw.filter(({ start, end }) => end > sliceStart && start < sliceEnd)
+          if (active.length === 0) {
+            continue
+          }
+
+          const sliceAssignments = new Map<string, SliceAssignment>()
+          const continuing = active.filter(({ start }) => start < sliceStart - START_GROUP_EPS)
+          const newStarters = active.filter(({ start }) => Math.abs(start - sliceStart) <= START_GROUP_EPS)
+
+          continuing.forEach(({ entry }) => {
+            const prev = prevAssignments.get(entry.id)
+            if (prev) {
+              sliceAssignments.set(entry.id, prev)
+            } else {
+              sliceAssignments.set(entry.id, { left: 0, right: 1 })
+            }
+          })
+
+          if (continuing.length === 0) {
+            const sorted = active
+              .slice()
+              .sort((a, b) => (a.start === b.start ? (b.end - b.start) - (a.end - a.start) : a.start - b.start))
+            const width = sorted.length > 0 ? 1 / sorted.length : 1
+            sorted.forEach((ev, index) => {
+              const left = index * width
+              sliceAssignments.set(ev.entry.id, { left, right: Math.min(1, left + width) })
+            })
+          } else if (newStarters.length > 0) {
+            const sortedNew = newStarters
+              .slice()
+              .sort((a, b) => {
+                const durationA = a.end - a.start
+                const durationB = b.end - b.start
+                if (durationA === durationB) {
+                  return a.entry.id.localeCompare(b.entry.id)
+                }
+                return durationA - durationB
+              })
+            sortedNew.forEach((ev) => {
+              sliceAssignments.set(ev.entry.id, { left: 0, right: 1 })
+            })
+          }
+
+          active.forEach((ev) => {
+            if (!sliceAssignments.has(ev.entry.id)) {
+              const prev = prevAssignments.get(ev.entry.id) ?? { left: 0, right: 1 }
+              sliceAssignments.set(ev.entry.id, prev)
+            }
+          })
+
+          sliceAssignments.forEach((assignment, entryId) => {
+            const info = allEvents.get(entryId)
+            if (!info) {
+              return
+            }
+            const clampedStart = Math.max(sliceStart, info.start)
+            const clampedEnd = Math.min(sliceEnd, info.end)
+            if (clampedEnd - clampedStart <= 0) {
+              return
+            }
+            const duration = Math.max(info.end - info.start, 1)
+            const segmentStart = (clampedStart - info.start) / duration
+            const segmentEnd = (clampedEnd - info.start) / duration
+            const segments = eventSlices.get(entryId) ?? []
+            segments.push({
+              start: segmentStart,
+              end: segmentEnd,
+              left: assignment.left,
+              right: assignment.right,
+            })
+            eventSlices.set(entryId, segments)
+          })
+
+          prevAssignments.clear()
+          sliceAssignments.forEach((assignment, entryId) => {
+            prevAssignments.set(entryId, assignment)
+          })
+        }
+
+        return raw.map((info, index) => {
+          const metadata = resolveGoalMetadata(info.entry, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup)
           const gradientCss = metadata.colorInfo?.gradient?.css
           const solidColor = metadata.colorInfo?.solidColor
-          const fallbackLabel = deriveEntryTaskName(entry)
+          const fallbackLabel = deriveEntryTaskName(info.entry)
           const color = gradientCss ?? solidColor ?? getPaletteColorForLabel(fallbackLabel)
-          const topPct = ((start - startMs) / DAY_DURATION_MS) * 100
-          const heightPct = Math.max(((end - start) / DAY_DURATION_MS) * 100, (MINUTE_MS / DAY_DURATION_MS) * 100)
-          const rangeLabel = `${formatTimeOfDay(previewStart)} — ${formatTimeOfDay(previewEnd)}`
+
+          const segments = mergeSegments(eventSlices.get(info.entry.id) ?? [{ start: 0, end: 1, left: 0, right: 1 }])
+          const clipPath = buildClipPath(segments)
+
+          const topPct = ((info.start - startMs) / DAY_DURATION_MS) * 100
+          const heightPct = Math.max(((info.end - info.start) / DAY_DURATION_MS) * 100, (MINUTE_MS / DAY_DURATION_MS) * 100)
+          const rangeLabel = `${formatTimeOfDay(info.previewStart)} — ${formatTimeOfDay(info.previewEnd)}`
+
+          const duration = Math.max(info.end - info.start, 1)
+          const durationScore = Math.max(0, Math.round((DAY_DURATION_MS - duration) / MINUTE_MS))
+          const startScore = Math.max(0, Math.round((info.start - startMs) / MINUTE_MS))
+          const zIndex = 100000 + durationScore * 1000 - startScore + index
+
+          const durationMinutes = duration / MINUTE_MS
+          const showLabel = durationMinutes >= 8
+          const showTime = durationMinutes >= 20
+
           return {
-            entry,
+            entry: info.entry,
             topPct: Math.min(Math.max(topPct, 0), 100),
             heightPct: Math.min(Math.max(heightPct, 0.4), 100),
-            lane,
-            lanes,
             color,
             gradientCss,
             label: fallbackLabel,
             rangeLabel,
+            clipPath,
+            zIndex,
+            showLabel,
+            showTime,
           }
         })
       }
@@ -4057,7 +4275,6 @@ export default function ReflectionPage() {
             >
               {dayStarts.map((start, di) => {
                 const events = computeDayEvents(start)
-                const laneWidthPct = (100 / Math.max(1, events[0]?.lanes ?? 1))
                 const isTodayColumn = start === todayMidnight
                 const initialNowTopPct = (() => {
                   if (!isTodayColumn) return null as number | null
@@ -4326,6 +4543,12 @@ export default function ReflectionPage() {
                     {events.map((ev, idx) => {
                       const isDragging = dragPreview?.entryId === ev.entry.id
                       const dragTime = isDragging ? ev.rangeLabel : undefined
+                      const backgroundStyle: CSSProperties = {
+                        background: ev.gradientCss ?? ev.color,
+                      }
+                      if (ev.clipPath) {
+                        backgroundStyle.clipPath = ev.clipPath
+                      }
                       return (
                       <div
                         key={`ev-${di}-${idx}-${ev.entry.id}`}
@@ -4333,15 +4556,14 @@ export default function ReflectionPage() {
                         style={{
                           top: `${ev.topPct}%`,
                           height: `${ev.heightPct}%`,
-                          left: `${ev.lane * laneWidthPct}%`,
-                          width: `calc(${laneWidthPct}% - 4px)`,
-                          background: ev.gradientCss ?? ev.color,
+                          left: '2px',
+                          width: 'calc(100% - 4px)',
+                          zIndex: ev.zIndex,
                         }}
                         data-drag-time={dragTime}
                         data-entry-id={ev.entry.id}
                         role="button"
                         aria-label={`${ev.label} ${ev.rangeLabel}`}
-                        title={`${ev.label} · ${ev.rangeLabel}`}
                         onClick={(e) => {
                           // Only open the preview on genuine clicks; suppress after any drag intent
                           if (dragPreventClickRef.current) {
@@ -4411,8 +4633,13 @@ export default function ReflectionPage() {
                           }
                         }}
                       >
-                        <div className="calendar-event__title">{ev.label}</div>
-                        <div className="calendar-event__time">{ev.rangeLabel}</div>
+                        <div className="calendar-event__background" style={backgroundStyle} aria-hidden />
+                        {ev.showLabel ? (
+                          <div className="calendar-event__content" style={{ justifyContent: ev.showTime ? 'flex-start' : 'center' }}>
+                            <div className="calendar-event__title">{ev.label}</div>
+                            {ev.showTime ? <div className="calendar-event__time">{ev.rangeLabel}</div> : null}
+                          </div>
+                        ) : null}
                       </div>
                     )})}
                     {(() => {

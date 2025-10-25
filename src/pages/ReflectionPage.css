@@ -1070,7 +1070,7 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
   height: 2px;
   background: linear-gradient(90deg, #ef4444 0%, #ec4899 100%);
   transform: translateY(-50%);
-  z-index: 20;
+  z-index: 2000000;
   pointer-events: none; /* purely informational */
 }
 .calendar-now-line::before {
@@ -1124,14 +1124,37 @@ html[data-theme='light'] .calendar-now-line::before {
   cursor: default;
 }
 
+.calendar-event__background {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: transparent;
+  transition: clip-path 160ms ease;
+}
+
+.calendar-event__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  max-height: 100%;
+  overflow: hidden;
+}
+
 .calendar-event__title {
   font-weight: 600;
   margin-bottom: 0.1rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .calendar-event__time {
   font-size: 0.72rem;
   opacity: 0.92;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* --- Calendar popover (event preview) --- */
