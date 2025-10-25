@@ -697,8 +697,9 @@ const DAY_DURATION_MS = 24 * 60 * 60 * 1000
 const DRAG_DETECTION_THRESHOLD_PX = 3
 const MIN_SESSION_DURATION_DRAG_MS = MINUTE_MS
 // Double-tap (touch) detection settings
-const DOUBLE_TAP_DELAY_MS = 280
-const DOUBLE_TAP_DISTANCE_PX = 12
+// Double-tap (touch) detection thresholds (tighter to reduce accidental triggers)
+const DOUBLE_TAP_DELAY_MS = 220
+const DOUBLE_TAP_DISTANCE_PX = 8
 
 const formatTimeInputValue = (timestamp: number | null): string => {
   if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
