@@ -51,7 +51,7 @@ const LIFE_ROUTINE_DEFAULT_DATA: LifeRoutineConfig[] = [
     bucketId: 'life-screen-break',
     title: 'Screen Break',
     blurb: 'Step away from devices—move, stretch, or rest your eyes.',
-    surfaceStyle: 'lagoon',
+    surfaceStyle: 'linen',
     sortIndex: 4,
   },
   {
@@ -59,7 +59,7 @@ const LIFE_ROUTINE_DEFAULT_DATA: LifeRoutineConfig[] = [
     bucketId: 'life-meditate',
     title: 'Meditate',
     blurb: 'Give your mind 10 minutes of quiet focus.',
-    surfaceStyle: 'lagoon',
+    surfaceStyle: 'glass',
     sortIndex: 5,
   },
 ]

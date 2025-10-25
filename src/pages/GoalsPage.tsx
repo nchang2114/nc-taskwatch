@@ -1029,6 +1029,11 @@ const formatGradientLabel = (value: string) =>
     .replace(' to-', ' → ')
     .replace(/-/g, ' ')
 
+const LIFE_ROUTINE_THEME_OPTIONS: BucketSurfaceStyle[] = ['midnight', 'charcoal', 'ember', 'grove', 'linen', 'glass']
+
+const getSurfaceLabel = (surface: BucketSurfaceStyle): string =>
+  BUCKET_SURFACE_PRESETS.find((preset) => preset.id === surface)?.label ?? surface
+
 // Components
 const ThinProgress: React.FC<{ value: number; gradient: string; className?: string }> = ({ value, gradient, className }) => {
   const isCustomGradient = gradient.startsWith('custom:')
@@ -1288,11 +1293,16 @@ const LifeRoutineCustomizer = React.forwardRef<HTMLDivElement, LifeRoutineCustom
     const surfaceStyle = normalizeBucketSurfaceStyle(routine.surfaceStyle)
 
     return (
-      <div ref={ref} className="goal-customizer" role="region" aria-label={`Customise routine ${routine.title}`}>
+      <div
+        ref={ref}
+        className="goal-customizer goal-customizer--life-routine"
+        role="region"
+        aria-label={`Customise routine ${routine.title}`}
+      >
         <div className="goal-customizer__header">
           <div>
-            <p className="goal-customizer__title">Routine gradient</p>
-            <p className="goal-customizer__subtitle">Pick the tint that best matches this ritual.</p>
+            <p className="goal-customizer__title">Theme colour</p>
+            <p className="goal-customizer__subtitle">Pick a hue to match this routine.</p>
           </div>
           <button
             type="button"
@@ -1306,23 +1316,27 @@ const LifeRoutineCustomizer = React.forwardRef<HTMLDivElement, LifeRoutineCustom
         </div>
 
         <div className="goal-customizer__section">
-          <p className="goal-customizer__label">Gradient palette</p>
-          <div className="goal-customizer__surface-grid">
-            {BUCKET_SURFACE_PRESETS.map((preset) => {
-              const isActive = surfaceStyle === preset.id
+          <p className="goal-customizer__label">Colour choices</p>
+          <div className="goal-customizer__swatches">
+            {LIFE_ROUTINE_THEME_OPTIONS.map((option) => {
+              const isActive = surfaceStyle === option
               return (
                 <button
-                  key={preset.id}
+                  key={option}
                   type="button"
-                  className={classNames('goal-customizer__surface', isActive && 'goal-customizer__surface--active')}
-                  onClick={() => onUpdate(preset.id)}
+                  className={classNames('goal-customizer__swatch', isActive && 'goal-customizer__swatch--active')}
+                  onClick={() => onUpdate(option)}
+                  aria-label={`Select ${getSurfaceLabel(option)} theme colour`}
+                  aria-pressed={isActive}
                 >
                   <span
                     aria-hidden="true"
-                    className={classNames('goal-customizer__surface-preview', `goal-customizer__surface-preview--${preset.id}`)}
+                    className={classNames(
+                      'goal-customizer__swatch-fill',
+                      'goal-customizer__surface-preview',
+                      `goal-customizer__surface-preview--${option}`,
+                    )}
                   />
-                  <span className="goal-customizer__surface-title">{preset.label}</span>
-                  <span className="goal-customizer__surface-caption">{preset.description}</span>
                 </button>
               )
             })}
