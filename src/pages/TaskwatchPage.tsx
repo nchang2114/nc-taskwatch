@@ -230,6 +230,14 @@ const sanitizeNotebookSubtasks = (value: unknown): NotebookSubtask[] => {
     .filter((item): item is NotebookSubtask => Boolean(item))
 }
 
+const cloneNotebookSubtasks = (subtasks: NotebookSubtask[]): NotebookSubtask[] =>
+  subtasks.map((subtask) => ({ ...subtask }))
+
+const cloneNotebookEntry = (entry: NotebookEntry): NotebookEntry => ({
+  notes: entry.notes,
+  subtasks: cloneNotebookSubtasks(entry.subtasks),
+})
+
 const sanitizeNotebookEntry = (value: unknown): NotebookEntry => {
   if (typeof value !== 'object' || value === null) {
     return createNotebookEntry()
@@ -534,7 +542,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const currentSessionKeyRef = useRef<string | null>(null)
   const lastLoggedSessionKeyRef = useRef<string | null>(null)
   const [isSelectorOpen, setIsSelectorOpen] = useState(false)
-  const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
+  const goalsSnapshotSignatureRef = useRef<string | null>(null)
+  const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => {
+    const stored = readStoredGoalsSnapshot()
+    goalsSnapshotSignatureRef.current = JSON.stringify(stored)
+    return stored
+  })
   const activeGoalSnapshots = useMemo(
     () => goalsSnapshot.filter((goal) => !goal.archived),
     [goalsSnapshot],
@@ -546,6 +559,46 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const lifeRoutineBucketIds = useMemo(
     () => new Set(lifeRoutineTasks.map((task) => task.bucketId)),
     [lifeRoutineTasks],
+  )
+  useEffect(() => {
+    goalsSnapshotSignatureRef.current = JSON.stringify(goalsSnapshot)
+  }, [goalsSnapshot])
+  const goalsSnapshotRefreshInFlightRef = useRef(false)
+  const goalsSnapshotRefreshPendingRef = useRef(false)
+  const refreshGoalsSnapshotFromSupabase = useCallback(
+    (reason?: string) => {
+      if (goalsSnapshotRefreshInFlightRef.current) {
+        goalsSnapshotRefreshPendingRef.current = true
+        return
+      }
+      goalsSnapshotRefreshInFlightRef.current = true
+      ;(async () => {
+        try {
+          const result = await fetchGoalsHierarchy()
+          if (result?.goals) {
+            const snapshot = createGoalsSnapshot(result.goals)
+            const signature = JSON.stringify(snapshot)
+            if (signature !== goalsSnapshotSignatureRef.current) {
+              goalsSnapshotSignatureRef.current = signature
+              setGoalsSnapshot(snapshot)
+              publishGoalsSnapshot(snapshot)
+            }
+          }
+        } catch (error) {
+          console.warn(
+            `[Taskwatch] Failed to refresh goals from Supabase${reason ? ` (${reason})` : ''}:`,
+            error,
+          )
+        } finally {
+          goalsSnapshotRefreshInFlightRef.current = false
+          if (goalsSnapshotRefreshPendingRef.current) {
+            goalsSnapshotRefreshPendingRef.current = false
+            refreshGoalsSnapshotFromSupabase(reason)
+          }
+        }
+      })()
+    },
+    [setGoalsSnapshot],
   )
   const [focusSource, setFocusSource] = useState<FocusSource | null>(() => readStoredFocusSource())
   const [customTaskDraft, setCustomTaskDraft] = useState('')
@@ -566,6 +619,10 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    refreshGoalsSnapshotFromSupabase('initial-load')
+  }, [refreshGoalsSnapshotFromSupabase])
 
   useEffect(() => {
     setCurrentTime(Date.now())
@@ -791,29 +848,39 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   useEffect(() => {
     const unsubscribe = subscribeToGoalsSnapshot((snapshot) => {
       setGoalsSnapshot(snapshot)
+      refreshGoalsSnapshotFromSupabase('snapshot-event')
     })
     return unsubscribe
-  }, [])
+  }, [refreshGoalsSnapshotFromSupabase])
 
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const result = await fetchGoalsHierarchy()
-        if (cancelled || !result || !Array.isArray(result.goals)) {
-          return
-        }
-        const snapshot = createGoalsSnapshot(result.goals)
-        setGoalsSnapshot(snapshot)
-        publishGoalsSnapshot(snapshot)
-      } catch {
-        // Ignore offline or auth failures; fall back to stored snapshot.
-      }
-    })()
-    return () => {
-      cancelled = true
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return
     }
-  }, [])
+    const handleFocus = () => {
+      if (!document.hidden) {
+        refreshGoalsSnapshotFromSupabase('window-focus')
+      }
+    }
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        refreshGoalsSnapshotFromSupabase('document-visible')
+      }
+    }
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibility)
+    const interval = window.setInterval(() => {
+      if (!document.hidden) {
+        refreshGoalsSnapshotFromSupabase('interval')
+      }
+    }, 60000)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.clearInterval(interval)
+    }
+  }, [refreshGoalsSnapshotFromSupabase])
+
 
   useEffect(() => {
     if (!isSelectorOpen || typeof window === 'undefined') {
@@ -1085,6 +1152,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const notebookNotesLatestRef = useRef<Map<string, string>>(new Map())
   const notebookSubtaskSaveTimersRef = useRef<Map<string, number>>(new Map())
   const notebookSubtaskLatestRef = useRef<Map<string, NotebookSubtask>>(new Map())
+  const lastPersistedNotebookRef = useRef<{ taskId: string; entry: NotebookEntry } | null>(null)
   const scheduleNotebookNotesPersist = useCallback(
     (taskId: string, notes: string) => {
       if (!taskId) {
@@ -1092,9 +1160,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       }
       notebookNotesLatestRef.current.set(taskId, notes)
       if (typeof window === 'undefined') {
-        void apiUpdateTaskNotes(taskId, notes).catch((error) =>
-          console.warn('[Taskwatch] Failed to persist notes for task:', error),
-        )
+        void apiUpdateTaskNotes(taskId, notes)
+          .then(() => refreshGoalsSnapshotFromSupabase('taskwatch-notes-save'))
+          .catch((error) => console.warn('[Taskwatch] Failed to persist notes for task:', error))
         return
       }
       const timers = notebookNotesSaveTimersRef.current
@@ -1105,13 +1173,13 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       const handle = window.setTimeout(() => {
         timers.delete(taskId)
         const latest = notebookNotesLatestRef.current.get(taskId) ?? ''
-        void apiUpdateTaskNotes(taskId, latest).catch((error) =>
-          console.warn('[Taskwatch] Failed to persist notes for task:', error),
-        )
+        void apiUpdateTaskNotes(taskId, latest)
+          .then(() => refreshGoalsSnapshotFromSupabase('taskwatch-notes-save'))
+          .catch((error) => console.warn('[Taskwatch] Failed to persist notes for task:', error))
       }, 500)
       timers.set(taskId, handle)
     },
-    [apiUpdateTaskNotes],
+    [apiUpdateTaskNotes, refreshGoalsSnapshotFromSupabase],
   )
   const cancelNotebookSubtaskPersist = useCallback((taskId: string, subtaskId: string) => {
     const key = `${taskId}:${subtaskId}`
@@ -1142,7 +1210,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           text: subtask.text,
           completed: subtask.completed,
           sort_index: subtask.sortIndex,
-        }).catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
+        })
+          .then(() => refreshGoalsSnapshotFromSupabase('taskwatch-subtask-save'))
+          .catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
         return
       }
       const timers = notebookSubtaskSaveTimersRef.current
@@ -1161,11 +1231,13 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           text: latest.text,
           completed: latest.completed,
           sort_index: latest.sortIndex,
-        }).catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
+        })
+          .then(() => refreshGoalsSnapshotFromSupabase('taskwatch-subtask-save'))
+          .catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
       }, 400)
       timers.set(key, handle)
     },
-    [apiUpsertTaskSubtask, cancelNotebookSubtaskPersist],
+    [apiUpsertTaskSubtask, cancelNotebookSubtaskPersist, refreshGoalsSnapshotFromSupabase],
   )
   const notebookSubtasksToSnapshot = useCallback(
     (subtasks: NotebookSubtask[]): GoalTaskSnapshot['subtasks'] =>
@@ -1299,6 +1371,65 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   )
   useEffect(() => {
     if (!activeTaskId) {
+      lastPersistedNotebookRef.current = null
+      return
+    }
+    const previous = lastPersistedNotebookRef.current
+    if (!previous || previous.taskId !== activeTaskId) {
+      lastPersistedNotebookRef.current = {
+        taskId: activeTaskId,
+        entry: cloneNotebookEntry(activeNotebookEntry),
+      }
+      return
+    }
+    if (areNotebookEntriesEqual(previous.entry, activeNotebookEntry)) {
+      return
+    }
+    if (previous.entry.notes !== activeNotebookEntry.notes) {
+      scheduleNotebookNotesPersist(activeTaskId, activeNotebookEntry.notes)
+    }
+    const prevSubtasks = previous.entry.subtasks
+    const nextSubtasks = activeNotebookEntry.subtasks
+    nextSubtasks.forEach((subtask) => {
+      const prevMatch = prevSubtasks.find((item) => item.id === subtask.id)
+      const changed =
+        !prevMatch ||
+        prevMatch.text !== subtask.text ||
+        prevMatch.completed !== subtask.completed ||
+        prevMatch.sortIndex !== subtask.sortIndex
+      if (!changed) {
+        return
+      }
+      if (subtask.text.trim().length === 0) {
+        cancelNotebookSubtaskPersist(activeTaskId, subtask.id)
+        return
+      }
+      scheduleNotebookSubtaskPersist(activeTaskId, subtask)
+    })
+    prevSubtasks.forEach((subtask) => {
+      if (!nextSubtasks.some((item) => item.id === subtask.id)) {
+        cancelNotebookSubtaskPersist(activeTaskId, subtask.id)
+        void apiDeleteTaskSubtask(activeTaskId, subtask.id)
+          .then(() => refreshGoalsSnapshotFromSupabase('taskwatch-subtask-delete'))
+          .catch((error) => console.warn('[Taskwatch] Failed to remove subtask during sync:', error))
+      }
+    })
+    lastPersistedNotebookRef.current = {
+      taskId: activeTaskId,
+      entry: cloneNotebookEntry(activeNotebookEntry),
+    }
+  }, [
+    activeNotebookEntry,
+    activeTaskId,
+    apiDeleteTaskSubtask,
+    refreshGoalsSnapshotFromSupabase,
+    areNotebookEntriesEqual,
+    cancelNotebookSubtaskPersist,
+    scheduleNotebookNotesPersist,
+    scheduleNotebookSubtaskPersist,
+  ])
+  useEffect(() => {
+    if (!activeTaskId) {
       return
     }
     let snapshotTask: GoalTaskSnapshot | null = null
@@ -1371,7 +1502,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       }
       const entry = result.entry
       if (activeTaskId) {
-        scheduleNotebookNotesPersist(activeTaskId, entry.notes)
         updateGoalSnapshotTask(activeTaskId, entry)
       }
       updateFocusSourceFromEntry(entry)
@@ -1379,7 +1509,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     [
       activeTaskId,
       notebookKey,
-      scheduleNotebookNotesPersist,
       updateFocusSourceFromEntry,
       updateGoalSnapshotTask,
       updateNotebookForKey,
@@ -1463,9 +1592,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       }
       const updatedSubtask: NotebookSubtask = updated
       if (activeTaskId) {
-        if (updatedSubtask.text.trim().length > 0) {
-          scheduleNotebookSubtaskPersist(activeTaskId, updatedSubtask)
-        } else {
+        if (updatedSubtask.text.trim().length === 0) {
           cancelNotebookSubtaskPersist(activeTaskId, updatedSubtask.id)
         }
         updateGoalSnapshotTask(activeTaskId, result.entry)
@@ -1476,7 +1603,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       activeTaskId,
       cancelNotebookSubtaskPersist,
       notebookKey,
-      scheduleNotebookSubtaskPersist,
       updateFocusSourceFromEntry,
       updateGoalSnapshotTask,
       updateNotebookForKey,
@@ -1503,9 +1629,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       const removedSubtask: NotebookSubtask = removed
       if (activeTaskId) {
         cancelNotebookSubtaskPersist(activeTaskId, removedSubtask.id)
-        void apiDeleteTaskSubtask(activeTaskId, removedSubtask.id).catch((error) =>
-          console.warn('[Taskwatch] Failed to delete empty subtask:', error),
-        )
         updateGoalSnapshotTask(activeTaskId, result.entry)
       }
       updateFocusSourceFromEntry(result.entry)
@@ -1540,9 +1663,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       if (!result || !result.changed || !toggled) {
         return
       }
-      const toggledSubtask: NotebookSubtask = toggled
       if (activeTaskId) {
-        scheduleNotebookSubtaskPersist(activeTaskId, toggledSubtask)
         updateGoalSnapshotTask(activeTaskId, result.entry)
       }
       updateFocusSourceFromEntry(result.entry)
@@ -1550,7 +1671,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     [
       activeTaskId,
       notebookKey,
-      scheduleNotebookSubtaskPersist,
       updateFocusSourceFromEntry,
       updateGoalSnapshotTask,
       updateNotebookForKey,
@@ -1574,9 +1694,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       const removedSubtask: NotebookSubtask = removed
       if (activeTaskId) {
         cancelNotebookSubtaskPersist(activeTaskId, removedSubtask.id)
-        void apiDeleteTaskSubtask(activeTaskId, removedSubtask.id).catch((error) =>
-          console.warn('[Taskwatch] Failed to remove subtask:', error),
-        )
         updateGoalSnapshotTask(activeTaskId, result.entry)
       }
       updateFocusSourceFromEntry(result.entry)
@@ -1597,13 +1714,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       return
     }
     if (activeTaskId) {
-      scheduleNotebookNotesPersist(activeTaskId, '')
       if (previous.subtasks.length > 0) {
         previous.subtasks.forEach((subtask) => {
           cancelNotebookSubtaskPersist(activeTaskId, subtask.id)
-          void apiDeleteTaskSubtask(activeTaskId, subtask.id).catch((error) =>
-            console.warn('[Taskwatch] Failed to remove subtask during clear:', error),
-          )
         })
       }
       updateGoalSnapshotTask(activeTaskId, result.entry)
@@ -1614,7 +1727,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     activeTaskId,
     cancelNotebookSubtaskPersist,
     notebookKey,
-    scheduleNotebookNotesPersist,
     updateFocusSourceFromEntry,
     updateGoalSnapshotTask,
     updateNotebookForKey,
@@ -2255,9 +2367,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
     const timeoutId = window.setTimeout(() => {
       setIsCompletingFocus(false)
-      setCurrentTaskName('')
-      setFocusSource(null)
-      setCustomTaskDraft('')
       setIsSelectorOpen(false)
       focusCompletionTimeoutRef.current = null
     }, FOCUS_COMPLETION_RESET_DELAY_MS)
