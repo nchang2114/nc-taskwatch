@@ -539,7 +539,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     () => goalsSnapshot.filter((goal) => !goal.archived),
     [goalsSnapshot],
   )
-  const [hasRequestedGoals, setHasRequestedGoals] = useState(false)
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(() => new Set())
   const [expandedBuckets, setExpandedBuckets] = useState<Set<string>>(() => new Set())
   const [lifeRoutinesExpanded, setLifeRoutinesExpanded] = useState(false)
@@ -797,11 +796,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   }, [])
 
   useEffect(() => {
-    if (goalsSnapshot.length > 0 || hasRequestedGoals) {
-      return
-    }
     let cancelled = false
-    setHasRequestedGoals(true)
     ;(async () => {
       try {
         const result = await fetchGoalsHierarchy()
@@ -818,7 +813,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     return () => {
       cancelled = true
     }
-  }, [goalsSnapshot.length, hasRequestedGoals])
+  }, [])
 
   useEffect(() => {
     if (!isSelectorOpen || typeof window === 'undefined') {

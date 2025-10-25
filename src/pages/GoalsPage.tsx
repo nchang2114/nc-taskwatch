@@ -217,6 +217,33 @@ const areTaskDetailsEqual = (a: TaskDetails, b: TaskDetails): boolean => {
   return true
 }
 
+const cloneTaskSubtasks = (subtasks: TaskSubtask[]): TaskSubtask[] =>
+  subtasks.map((subtask) => ({ ...subtask }))
+
+const areGoalTaskSubtasksEqual = (
+  left: TaskSubtask[] | undefined,
+  right: TaskSubtask[],
+): boolean => {
+  const a = Array.isArray(left) ? left : []
+  if (a.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < a.length; index += 1) {
+    const nextLeft = a[index]
+    const nextRight = right[index]
+    if (
+      !nextRight ||
+      nextLeft.id !== nextRight.id ||
+      nextLeft.text !== nextRight.text ||
+      nextLeft.completed !== nextRight.completed ||
+      nextLeft.sortIndex !== nextRight.sortIndex
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 const shouldPersistTaskDetails = (details: TaskDetails): boolean => {
   if (details.expanded) {
     return true
@@ -3954,6 +3981,69 @@ export default function GoalsPage(): ReactElement {
     lastSnapshotSignatureRef.current = signature
     publishGoalsSnapshot(snapshot)
   }, [goals])
+
+  const updateGoalTask = useCallback(
+    (taskId: string, transformer: (task: TaskItem) => TaskItem | null) => {
+      setGoals((current) => {
+        let changed = false
+        const nextGoals = current.map((goal) => {
+          let goalChanged = false
+          const nextBuckets = goal.buckets.map((bucket) => {
+            const index = bucket.tasks.findIndex((task) => task.id === taskId)
+            if (index === -1) {
+              return bucket
+            }
+            const candidate = bucket.tasks[index]
+            const updated = transformer(candidate)
+            if (!updated || updated === candidate) {
+              return bucket
+            }
+            goalChanged = true
+            changed = true
+            const nextTasks = [...bucket.tasks]
+            nextTasks[index] = updated
+            return { ...bucket, tasks: nextTasks }
+          })
+          if (!goalChanged) {
+            return goal
+          }
+          return { ...goal, buckets: nextBuckets }
+        })
+        return changed ? nextGoals : current
+      })
+    },
+    [setGoals],
+  )
+
+  const syncGoalTaskNotes = useCallback(
+    (taskId: string, notes: string) => {
+      updateGoalTask(taskId, (task) => {
+        const existing = typeof task.notes === 'string' ? task.notes : ''
+        if (existing === notes) {
+          return null
+        }
+        return { ...task, notes }
+      })
+    },
+    [updateGoalTask],
+  )
+
+  const updateGoalTaskSubtasks = useCallback(
+    (taskId: string, derive: (subtasks: TaskSubtask[]) => TaskSubtask[]) => {
+      updateGoalTask(taskId, (task) => {
+        const previous = Array.isArray(task.subtasks) ? task.subtasks : []
+        const next = derive(previous)
+        if (areGoalTaskSubtasksEqual(previous, next)) {
+          return null
+        }
+        return {
+          ...task,
+          subtasks: cloneTaskSubtasks(next),
+        }
+      })
+    },
+    [updateGoalTask],
+  )
   // Goal rename state
   const [renamingGoalId, setRenamingGoalId] = useState<string | null>(null)
   const [goalRenameDraft, setGoalRenameDraft] = useState<string>('')
@@ -4559,9 +4649,10 @@ export default function GoalsPage(): ReactElement {
           notes: value,
         }
       })
+      syncGoalTaskNotes(taskId, value)
       scheduleTaskNotesPersist(taskId, value)
     },
-    [scheduleTaskNotesPersist, updateTaskDetails],
+    [scheduleTaskNotesPersist, syncGoalTaskNotes, updateTaskDetails],
   )
 
   const handleAddSubtask = useCallback(
@@ -4575,11 +4666,12 @@ export default function GoalsPage(): ReactElement {
         subtasksCollapsed: false,
         subtasks: [...current.subtasks, newSubtask],
       }))
+      updateGoalTaskSubtasks(taskId, (current) => [...current, newSubtask])
       if (options?.focus) {
         pendingGoalSubtaskFocusRef.current = { taskId, subtaskId: newSubtask.id }
       }
     },
-    [updateTaskDetails],
+    [updateGoalTaskSubtasks, updateTaskDetails],
   )
 
   useEffect(() => {
@@ -4623,13 +4715,16 @@ export default function GoalsPage(): ReactElement {
         expanded: true,
         subtasks: current.subtasks.map((item) => (item.id === subtaskId ? updated : item)),
       }))
+      updateGoalTaskSubtasks(taskId, (current) =>
+        current.map((item) => (item.id === subtaskId ? updated : item)),
+      )
       if (value.trim().length > 0) {
         scheduleSubtaskPersist(taskId, updated)
       } else {
         cancelPendingSubtaskSave(taskId, subtaskId)
       }
     },
-    [cancelPendingSubtaskSave, scheduleSubtaskPersist, updateTaskDetails],
+    [cancelPendingSubtaskSave, scheduleSubtaskPersist, updateGoalTaskSubtasks, updateTaskDetails],
   )
 
   const handleSubtaskBlur = useCallback(
@@ -4645,6 +4740,7 @@ export default function GoalsPage(): ReactElement {
           ...current,
           subtasks: current.subtasks.filter((item) => item.id !== subtaskId),
         }))
+        updateGoalTaskSubtasks(taskId, (current) => current.filter((item) => item.id !== subtaskId))
         cancelPendingSubtaskSave(taskId, subtaskId)
         void apiDeleteTaskSubtask(taskId, subtaskId).catch((error) =>
           console.warn('[GoalsPage] Failed to delete empty subtask:', error),
@@ -4657,9 +4753,12 @@ export default function GoalsPage(): ReactElement {
         ...current,
         subtasks: current.subtasks.map((item) => (item.id === subtaskId ? normalized : item)),
       }))
+      updateGoalTaskSubtasks(taskId, (current) =>
+        current.map((item) => (item.id === subtaskId ? normalized : item)),
+      )
       flushSubtaskPersist(taskId, normalized)
     },
-    [cancelPendingSubtaskSave, flushSubtaskPersist, updateTaskDetails],
+    [cancelPendingSubtaskSave, flushSubtaskPersist, updateGoalTaskSubtasks, updateTaskDetails],
   )
 
   const handleToggleSubtaskSection = useCallback(
@@ -4684,13 +4783,16 @@ export default function GoalsPage(): ReactElement {
         ...current,
         subtasks: current.subtasks.map((item) => (item.id === subtaskId ? toggled : item)),
       }))
+      updateGoalTaskSubtasks(taskId, (current) =>
+        current.map((item) => (item.id === subtaskId ? toggled : item)),
+      )
       if (toggled.text.trim().length === 0) {
         cancelPendingSubtaskSave(taskId, toggled.id)
         return
       }
       scheduleSubtaskPersist(taskId, toggled)
     },
-    [cancelPendingSubtaskSave, scheduleSubtaskPersist, updateTaskDetails],
+    [cancelPendingSubtaskSave, scheduleSubtaskPersist, updateGoalTaskSubtasks, updateTaskDetails],
   )
 
   const handleRemoveSubtask = useCallback(
@@ -4710,12 +4812,13 @@ export default function GoalsPage(): ReactElement {
       if (!removed) {
         return
       }
+      updateGoalTaskSubtasks(taskId, (current) => current.filter((item) => item.id !== subtaskId))
       cancelPendingSubtaskSave(taskId, subtaskId)
       void apiDeleteTaskSubtask(taskId, subtaskId).catch((error) =>
         console.warn('[GoalsPage] Failed to remove subtask:', error),
       )
     },
-    [cancelPendingSubtaskSave, updateTaskDetails],
+    [cancelPendingSubtaskSave, updateGoalTaskSubtasks, updateTaskDetails],
   )
   const [nextGoalGradientIndex, setNextGoalGradientIndex] = useState(() => DEFAULT_GOALS.length % GOAL_GRADIENTS.length)
   const [activeCustomizerGoalId, setActiveCustomizerGoalId] = useState<string | null>(null)
