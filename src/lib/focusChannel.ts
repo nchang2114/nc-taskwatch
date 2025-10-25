@@ -2,6 +2,13 @@ import type { SurfaceStyle } from './surfaceStyles'
 
 export const FOCUS_EVENT_TYPE = 'nc-taskwatch:set-focus'
 
+export type FocusBroadcastSubtaskDetail = {
+  id: string
+  text: string
+  completed: boolean
+  sortIndex?: number | null
+}
+
 export type FocusBroadcastDetail = {
   goalId: string
   goalName: string
@@ -14,6 +21,8 @@ export type FocusBroadcastDetail = {
   goalSurface?: SurfaceStyle | null
   bucketSurface?: SurfaceStyle | null
   autoStart?: boolean
+  notes?: string | null
+  subtasks?: FocusBroadcastSubtaskDetail[] | null
 }
 
 export type FocusBroadcastEvent = CustomEvent<FocusBroadcastDetail>

@@ -4,12 +4,21 @@ import { DEFAULT_SURFACE_STYLE, ensureSurfaceStyle, type SurfaceStyle } from './
 const STORAGE_KEY = 'nc-taskwatch-goals-snapshot'
 const EVENT_NAME = 'nc-taskwatch:goals-update'
 
+export type GoalTaskSubtaskSnapshot = {
+  id: string
+  text: string
+  completed: boolean
+  sortIndex: number
+}
+
 export type GoalTaskSnapshot = {
   id: string
   text: string
   completed: boolean
   priority: boolean
   difficulty: 'none' | 'green' | 'yellow' | 'red'
+  notes: string
+  subtasks: GoalTaskSubtaskSnapshot[]
 }
 
 export type GoalBucketSnapshot = {
@@ -38,6 +47,33 @@ const ensureDifficulty = (value: unknown): GoalTaskSnapshot['difficulty'] => {
   return 'none'
 }
 
+const coerceTaskSubtasks = (value: unknown): GoalTaskSubtaskSnapshot[] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .map((subtask) => {
+      if (typeof subtask !== 'object' || subtask === null) {
+        return null
+      }
+      const candidate = subtask as Record<string, unknown>
+      const id = typeof candidate.id === 'string' ? candidate.id : null
+      const text = typeof candidate.text === 'string' ? candidate.text : ''
+      if (!id) {
+        return null
+      }
+      const completed = Boolean(candidate.completed)
+      const sortIndex =
+        typeof candidate.sortIndex === 'number'
+          ? candidate.sortIndex
+          : typeof (candidate as any).sort_index === 'number'
+            ? ((candidate as any).sort_index as number)
+            : 0
+      return { id, text, completed, sortIndex }
+    })
+    .filter((subtask): subtask is GoalTaskSubtaskSnapshot => Boolean(subtask))
+}
+
 const coerceTasks = (value: unknown): GoalTaskSnapshot[] => {
   if (!Array.isArray(value)) {
     return []
@@ -56,7 +92,9 @@ const coerceTasks = (value: unknown): GoalTaskSnapshot[] => {
       const completed = Boolean(candidate.completed)
       const priority = Boolean(candidate.priority)
       const difficulty = ensureDifficulty(candidate.difficulty)
-      return { id, text, completed, priority, difficulty }
+      const notes = typeof candidate.notes === 'string' ? candidate.notes : ''
+      const subtasks = coerceTaskSubtasks(candidate.subtasks)
+      return { id, text, completed, priority, difficulty, notes, subtasks }
     })
     .filter((task): task is GoalTaskSnapshot => Boolean(task))
 }

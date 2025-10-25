@@ -739,18 +739,80 @@ function reconcileGoalsWithSnapshot(snapshot: GoalSnapshot[], current: Goal[]): 
           surfaceStyle: bucket.surfaceStyle,
           tasks: bucket.tasks.map((task) => {
             const existingTask = existingBucket?.tasks.find((item) => item.id === task.id)
+            const normalizedSubtasks = Array.isArray(task.subtasks)
+              ? task.subtasks.map((subtask) => {
+                  const fallbackSort =
+                    existingTask?.subtasks?.find((item) => item.id === subtask.id)?.sortIndex ??
+                    SUBTASK_SORT_STEP
+                  const sortIndex =
+                    typeof subtask.sortIndex === 'number' ? subtask.sortIndex : fallbackSort
+                  return {
+                    id: subtask.id,
+                    text: subtask.text,
+                    completed: subtask.completed,
+                    sortIndex,
+                  }
+                })
+              : []
             return {
               id: task.id,
               text: task.text,
               completed: task.completed,
               difficulty: task.difficulty,
               priority: task.priority ?? existingTask?.priority ?? false,
+              notes: typeof task.notes === 'string' ? task.notes : existingTask?.notes ?? '',
+              subtasks:
+                normalizedSubtasks.length > 0
+                  ? normalizedSubtasks
+                  : existingTask?.subtasks
+                    ? existingTask.subtasks.map((item) => ({
+                        ...item,
+                        sortIndex:
+                          typeof item.sortIndex === 'number' ? item.sortIndex : SUBTASK_SORT_STEP,
+                      }))
+                    : [],
             }
           }),
         }
       }),
     }
   })
+}
+
+function createTaskDetailsFromSnapshot(
+  snapshot: GoalSnapshot[],
+  previous: TaskDetailsState,
+): TaskDetailsState {
+  const next: TaskDetailsState = {}
+  snapshot.forEach((goal) => {
+    goal.buckets.forEach((bucket) => {
+      bucket.tasks.forEach((task) => {
+        const existing = previous[task.id]
+        const normalizedSubtasks = Array.isArray(task.subtasks)
+          ? task.subtasks.map((subtask, index) => {
+              const fallback =
+                existing?.subtasks.find((item) => item.id === subtask.id)?.sortIndex ??
+                (index + 1) * SUBTASK_SORT_STEP
+              const sortIndex =
+                typeof subtask.sortIndex === 'number' ? subtask.sortIndex : fallback
+              return {
+                id: subtask.id,
+                text: subtask.text,
+                completed: subtask.completed,
+                sortIndex,
+              }
+            })
+          : []
+        next[task.id] = {
+          notes: typeof task.notes === 'string' ? task.notes : existing?.notes ?? '',
+          subtasks: normalizedSubtasks,
+          expanded: existing?.expanded ?? false,
+          subtasksCollapsed: existing?.subtasksCollapsed ?? false,
+        }
+      })
+    })
+  })
+  return next
 }
 
 const BASE_GRADIENT_PREVIEW: Record<string, string> = {
@@ -3892,35 +3954,6 @@ export default function GoalsPage(): ReactElement {
     lastSnapshotSignatureRef.current = signature
     publishGoalsSnapshot(snapshot)
   }, [goals])
-  useEffect(() => {
-    let cancelled = false
-    const unsubscribe = subscribeToGoalsSnapshot((snapshot) => {
-      const signature = computeSnapshotSignature(snapshot)
-      if (lastSnapshotSignatureRef.current === signature) {
-        return
-      }
-      skipNextPublishRef.current = true
-      lastSnapshotSignatureRef.current = signature
-      const run = () => {
-        if (cancelled) {
-          return
-        }
-        setGoals((current) => reconcileGoalsWithSnapshot(snapshot, current))
-      }
-      if (typeof queueMicrotask === 'function') {
-        queueMicrotask(run)
-      } else {
-        Promise.resolve().then(run).catch(() => {
-          // ignore
-        })
-      }
-    })
-    return () => {
-      cancelled = true
-      unsubscribe()
-    }
-  }, [])
-
   // Goal rename state
   const [renamingGoalId, setRenamingGoalId] = useState<string | null>(null)
   const [goalRenameDraft, setGoalRenameDraft] = useState<string>('')
@@ -4284,6 +4317,38 @@ export default function GoalsPage(): ReactElement {
   useEffect(() => {
     taskDetailsRef.current = taskDetails
   }, [taskDetails])
+
+  useEffect(() => {
+    let cancelled = false
+    const unsubscribe = subscribeToGoalsSnapshot((snapshot) => {
+      const signature = computeSnapshotSignature(snapshot)
+      if (lastSnapshotSignatureRef.current === signature) {
+        return
+      }
+      skipNextPublishRef.current = true
+      lastSnapshotSignatureRef.current = signature
+      const run = () => {
+        if (cancelled) {
+          return
+        }
+        setGoals((current) => reconcileGoalsWithSnapshot(snapshot, current))
+        setTaskDetails((current) => createTaskDetailsFromSnapshot(snapshot, current))
+      }
+      if (typeof queueMicrotask === 'function') {
+        queueMicrotask(run)
+      } else {
+        Promise.resolve()
+          .then(run)
+          .catch(() => {
+            // ignore
+          })
+      }
+    })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [])
 
   useEffect(() => {
     const validTaskIds = new Set<string>()
@@ -6012,6 +6077,18 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
 
   const handleStartFocusTask = useCallback(
     (goal: Goal, bucket: Bucket, task: TaskItem) => {
+      const details = taskDetailsRef.current[task.id]
+      const fallbackSubtasks = Array.isArray(task.subtasks) ? task.subtasks : []
+      const effectiveNotes =
+        details?.notes ?? (typeof task.notes === 'string' ? task.notes : '') ?? ''
+      const effectiveSubtasks =
+        (details?.subtasks && details.subtasks.length > 0 ? details.subtasks : fallbackSubtasks) ?? []
+      const broadcastSubtasks = effectiveSubtasks.map((subtask) => ({
+        id: subtask.id,
+        text: subtask.text,
+        completed: subtask.completed,
+        sortIndex: subtask.sortIndex,
+      }))
       broadcastFocusTask({
         goalId: goal.id,
         goalName: goal.name,
@@ -6024,6 +6101,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
         goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
         bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
         autoStart: true,
+        notes: effectiveNotes,
+        subtasks: broadcastSubtasks,
       })
       setFocusPromptTarget(null)
     },
@@ -6042,6 +6121,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
       goalSurface: LIFE_ROUTINES_SURFACE,
       bucketSurface: routine.surfaceStyle,
       autoStart: true,
+      notes: '',
+      subtasks: [],
     })
     setFocusPromptTarget(null)
   }, [])

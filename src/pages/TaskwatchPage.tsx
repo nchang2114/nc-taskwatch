@@ -17,6 +17,9 @@ import {
   setTaskCompletedAndResort,
   setTaskDifficulty,
   setTaskPriorityAndResort,
+  updateTaskNotes as apiUpdateTaskNotes,
+  upsertTaskSubtask as apiUpsertTaskSubtask,
+  deleteTaskSubtask as apiDeleteTaskSubtask,
 } from '../lib/goalsApi'
 import { FOCUS_EVENT_TYPE, type FocusBroadcastDetail, type FocusBroadcastEvent } from '../lib/focusChannel'
 import {
@@ -25,6 +28,7 @@ import {
   readStoredGoalsSnapshot,
   subscribeToGoalsSnapshot,
   type GoalSnapshot,
+  type GoalTaskSnapshot,
 } from '../lib/goalsSync'
 import {
   DEFAULT_SURFACE_STYLE,
@@ -64,6 +68,8 @@ type FocusCandidate = {
   difficulty: 'none' | 'green' | 'yellow' | 'red'
   goalSurface: SurfaceStyle
   bucketSurface: SurfaceStyle
+  notes: string
+  subtasks: NotebookSubtask[]
 }
 
 type FocusSource = {
@@ -76,6 +82,8 @@ type FocusSource = {
   priority: boolean | null
   goalSurface: SurfaceStyle | null
   bucketSurface: SurfaceStyle | null
+  notes?: string | null
+  subtasks?: NotebookSubtask[]
 }
 
 type SessionMetadata = {
@@ -176,6 +184,7 @@ type NotebookSubtask = {
   id: string
   text: string
   completed: boolean
+  sortIndex: number
 }
 
 type NotebookEntry = {
@@ -191,12 +200,14 @@ const createNotebookEntry = (overrides?: Partial<NotebookEntry>): NotebookEntry 
   ...overrides,
 })
 
+const NOTEBOOK_SUBTASK_SORT_STEP = 1024
+
 const sanitizeNotebookSubtasks = (value: unknown): NotebookSubtask[] => {
   if (!Array.isArray(value)) {
     return []
   }
   return value
-    .map((item) => {
+    .map((item, index) => {
       if (typeof item !== 'object' || item === null) {
         return null
       }
@@ -207,7 +218,14 @@ const sanitizeNotebookSubtasks = (value: unknown): NotebookSubtask[] => {
       }
       const text = typeof candidate.text === 'string' ? candidate.text : ''
       const completed = Boolean(candidate.completed)
-      return { id, text, completed }
+      const rawSort =
+        typeof candidate.sortIndex === 'number'
+          ? candidate.sortIndex
+          : typeof (candidate as any).sort_index === 'number'
+            ? ((candidate as any).sort_index as number)
+            : (index + 1) * NOTEBOOK_SUBTASK_SORT_STEP
+      const sortIndex = Number.isFinite(rawSort) ? (rawSort as number) : (index + 1) * NOTEBOOK_SUBTASK_SORT_STEP
+      return { id, text, completed, sortIndex }
     })
     .filter((item): item is NotebookSubtask => Boolean(item))
 }
@@ -251,7 +269,26 @@ const createNotebookSubtaskId = () => {
   return `notebook-subtask-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-const createNotebookEmptySubtask = () => ({ id: createNotebookSubtaskId(), text: '', completed: false })
+const createNotebookEmptySubtask = (sortIndex: number): NotebookSubtask => ({
+  id: createNotebookSubtaskId(),
+  text: '',
+  completed: false,
+  sortIndex,
+})
+
+const getNextNotebookSubtaskSortIndex = (subtasks: NotebookSubtask[]): number => {
+  if (subtasks.length === 0) {
+    return NOTEBOOK_SUBTASK_SORT_STEP
+  }
+  let max = 0
+  for (let index = 0; index < subtasks.length; index += 1) {
+    const candidate = subtasks[index]?.sortIndex ?? 0
+    if (candidate > max) {
+      max = candidate
+    }
+  }
+  return max + NOTEBOOK_SUBTASK_SORT_STEP
+}
 
 const computeNotebookKey = (focusSource: FocusSource | null, taskName: string): string => {
   if (focusSource?.taskId) {
@@ -361,6 +398,8 @@ const readStoredFocusSource = (): FocusSource | null => {
           : null
     const goalSurface = sanitizeSurfaceStyle(candidate.goalSurface)
     const bucketSurface = sanitizeSurfaceStyle(candidate.bucketSurface)
+    const notes = typeof candidate.notes === 'string' ? candidate.notes : ''
+    const subtasks = sanitizeNotebookSubtasks(candidate.subtasks)
     return {
       goalId,
       bucketId,
@@ -371,6 +410,8 @@ const readStoredFocusSource = (): FocusSource | null => {
       priority,
       goalSurface,
       bucketSurface,
+      notes,
+      subtasks,
     }
   } catch {
     return null
@@ -627,6 +668,35 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       console.warn('Failed to persist Taskwatch notebook state', error)
     }
   }, [notebookState])
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined') {
+        notebookNotesSaveTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+        notebookSubtaskSaveTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+      }
+      notebookNotesSaveTimersRef.current.clear()
+      notebookSubtaskSaveTimersRef.current.clear()
+      notebookNotesLatestRef.current.forEach((notes, taskId) => {
+        void apiUpdateTaskNotes(taskId, notes).catch((error) =>
+          console.warn('[Taskwatch] Failed to flush pending notes on unload:', error),
+        )
+      })
+      notebookNotesLatestRef.current.clear()
+      notebookSubtaskLatestRef.current.forEach((subtask, compositeKey) => {
+        const [taskId] = compositeKey.split(':')
+        if (!taskId || subtask.text.trim().length === 0) {
+          return
+        }
+        void apiUpsertTaskSubtask(taskId, {
+          id: subtask.id,
+          text: subtask.text,
+          completed: subtask.completed,
+          sort_index: subtask.sortIndex,
+        }).catch((error) => console.warn('[Taskwatch] Failed to flush pending subtask on unload:', error))
+      })
+      notebookSubtaskLatestRef.current.clear()
+    }
+  }, [apiUpdateTaskNotes, apiUpsertTaskSubtask])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -799,20 +869,34 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         .filter((bucket) => !bucket.archived)
         .forEach((bucket) => {
           bucket.tasks.forEach((task) => {
+            const candidateSubtasks =
+              Array.isArray(task.subtasks)
+                ? task.subtasks.map((subtask) => ({
+                    id: subtask.id,
+                    text: subtask.text,
+                    completed: subtask.completed,
+                    sortIndex:
+                      typeof subtask.sortIndex === 'number'
+                        ? subtask.sortIndex
+                        : NOTEBOOK_SUBTASK_SORT_STEP,
+                  }))
+                : []
             candidates.push({
-            goalId: goal.id,
-            goalName: goal.name,
-            bucketId: bucket.id,
-            bucketName: bucket.name,
-            taskId: task.id,
-            taskName: task.text,
-            completed: task.completed,
-            priority: task.priority,
-            difficulty: task.difficulty,
-            goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
-            bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+              goalId: goal.id,
+              goalName: goal.name,
+              bucketId: bucket.id,
+              bucketName: bucket.name,
+              taskId: task.id,
+              taskName: task.text,
+              completed: task.completed,
+              priority: task.priority,
+              difficulty: task.difficulty,
+              goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+              bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+              notes: typeof task.notes === 'string' ? task.notes : '',
+              subtasks: candidateSubtasks,
+            })
           })
-        })
         })
     })
     return candidates
@@ -937,46 +1021,325 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   useEffect(() => {
     setNotebookSubtasksCollapsed(false)
   }, [notebookKey])
+  const areNotebookSubtasksEqual = useCallback((a: NotebookSubtask[], b: NotebookSubtask[]) => {
+    if (a.length !== b.length) {
+      return false
+    }
+    for (let index = 0; index < a.length; index += 1) {
+      const left = a[index]
+      const right = b[index]
+      if (
+        !right ||
+        left.id !== right.id ||
+        left.text !== right.text ||
+        left.completed !== right.completed ||
+        left.sortIndex !== right.sortIndex
+      ) {
+        return false
+      }
+    }
+    return true
+  }, [])
+  const areNotebookEntriesEqual = useCallback(
+    (a: NotebookEntry, b: NotebookEntry) => a.notes === b.notes && areNotebookSubtasksEqual(a.subtasks, b.subtasks),
+    [areNotebookSubtasksEqual],
+  )
+  type NotebookUpdateResult = { entry: NotebookEntry; entryExists: boolean; changed: boolean }
   const updateNotebookForKey = useCallback(
-    (key: string, updater: (entry: NotebookEntry) => NotebookEntry) => {
+    (key: string, updater: (entry: NotebookEntry) => NotebookEntry): NotebookUpdateResult | null => {
+      let outcome: NotebookUpdateResult | null = null
       setNotebookState((current) => {
-        const previous = current[key] ?? createNotebookEntry()
+        const existing = current[key]
+        const previous = existing ?? createNotebookEntry()
         const updated = sanitizeNotebookEntry(updater(previous))
         if (!shouldPersistNotebookEntry(updated)) {
-          if (!current[key]) {
+          if (!existing) {
+            if (areNotebookEntriesEqual(previous, updated)) {
+              return current
+            }
+            outcome = { entry: updated, entryExists: false, changed: true }
+            return current
+          }
+          if (areNotebookEntriesEqual(existing, updated)) {
+            outcome = null
             return current
           }
           const { [key]: _removed, ...rest } = current
+          outcome = { entry: updated, entryExists: false, changed: true }
           return rest
         }
-        const existing = current[key]
-        if (existing) {
-          const sameNotes = existing.notes === updated.notes
-          const sameLength = existing.subtasks.length === updated.subtasks.length
-          const sameSubtasks =
-            sameLength &&
-            existing.subtasks.every((subtask, index) => {
-              const candidate = updated.subtasks[index]
-              return (
-                candidate &&
-                candidate.id === subtask.id &&
-                candidate.text === subtask.text &&
-                candidate.completed === subtask.completed
-              )
-            })
-          if (sameNotes && sameSubtasks) {
-            return current
-          }
+        if (existing && areNotebookEntriesEqual(existing, updated)) {
+          outcome = null
+          return current
         }
+        outcome = { entry: updated, entryExists: true, changed: true }
         return { ...current, [key]: updated }
       })
+      return outcome
+    },
+    [areNotebookEntriesEqual],
+  )
+  const activeTaskId = useMemo(() => {
+    if (!focusSource?.taskId || focusSource.goalId === LIFE_ROUTINES_GOAL_ID) {
+      return null
+    }
+    const sourceKey = computeNotebookKey(focusSource, normalizedCurrentTask)
+    return sourceKey === notebookKey ? focusSource.taskId : null
+  }, [focusSource, normalizedCurrentTask, notebookKey])
+  const notebookNotesSaveTimersRef = useRef<Map<string, number>>(new Map())
+  const notebookNotesLatestRef = useRef<Map<string, string>>(new Map())
+  const notebookSubtaskSaveTimersRef = useRef<Map<string, number>>(new Map())
+  const notebookSubtaskLatestRef = useRef<Map<string, NotebookSubtask>>(new Map())
+  const scheduleNotebookNotesPersist = useCallback(
+    (taskId: string, notes: string) => {
+      if (!taskId) {
+        return
+      }
+      notebookNotesLatestRef.current.set(taskId, notes)
+      if (typeof window === 'undefined') {
+        void apiUpdateTaskNotes(taskId, notes).catch((error) =>
+          console.warn('[Taskwatch] Failed to persist notes for task:', error),
+        )
+        return
+      }
+      const timers = notebookNotesSaveTimersRef.current
+      const pending = timers.get(taskId)
+      if (pending) {
+        window.clearTimeout(pending)
+      }
+      const handle = window.setTimeout(() => {
+        timers.delete(taskId)
+        const latest = notebookNotesLatestRef.current.get(taskId) ?? ''
+        void apiUpdateTaskNotes(taskId, latest).catch((error) =>
+          console.warn('[Taskwatch] Failed to persist notes for task:', error),
+        )
+      }, 500)
+      timers.set(taskId, handle)
+    },
+    [apiUpdateTaskNotes],
+  )
+  const cancelNotebookSubtaskPersist = useCallback((taskId: string, subtaskId: string) => {
+    const key = `${taskId}:${subtaskId}`
+    if (typeof window !== 'undefined') {
+      const timers = notebookSubtaskSaveTimersRef.current
+      const pending = timers.get(key)
+      if (pending) {
+        window.clearTimeout(pending)
+        timers.delete(key)
+      }
+    }
+    notebookSubtaskLatestRef.current.delete(key)
+  }, [])
+  const scheduleNotebookSubtaskPersist = useCallback(
+    (taskId: string, subtask: NotebookSubtask) => {
+      if (!taskId) {
+        return
+      }
+      if (subtask.text.trim().length === 0) {
+        cancelNotebookSubtaskPersist(taskId, subtask.id)
+        return
+      }
+      const key = `${taskId}:${subtask.id}`
+      notebookSubtaskLatestRef.current.set(key, { ...subtask })
+      if (typeof window === 'undefined') {
+        void apiUpsertTaskSubtask(taskId, {
+          id: subtask.id,
+          text: subtask.text,
+          completed: subtask.completed,
+          sort_index: subtask.sortIndex,
+        }).catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
+        return
+      }
+      const timers = notebookSubtaskSaveTimersRef.current
+      const pending = timers.get(key)
+      if (pending) {
+        window.clearTimeout(pending)
+      }
+      const handle = window.setTimeout(() => {
+        timers.delete(key)
+        const latest = notebookSubtaskLatestRef.current.get(key)
+        if (!latest || latest.text.trim().length === 0) {
+          return
+        }
+        void apiUpsertTaskSubtask(taskId, {
+          id: latest.id,
+          text: latest.text,
+          completed: latest.completed,
+          sort_index: latest.sortIndex,
+        }).catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
+      }, 400)
+      timers.set(key, handle)
+    },
+    [apiUpsertTaskSubtask, cancelNotebookSubtaskPersist],
+  )
+  const notebookSubtasksToSnapshot = useCallback(
+    (subtasks: NotebookSubtask[]): GoalTaskSnapshot['subtasks'] =>
+      subtasks.map((subtask, index) => ({
+        id: subtask.id,
+        text: subtask.text,
+        completed: subtask.completed,
+        sortIndex:
+          typeof subtask.sortIndex === 'number' ? subtask.sortIndex : (index + 1) * NOTEBOOK_SUBTASK_SORT_STEP,
+      })),
+    [],
+  )
+  const snapshotSubtasksToNotebook = useCallback(
+    (subtasks: GoalTaskSnapshot['subtasks']): NotebookSubtask[] =>
+      subtasks.map((subtask, index) => ({
+        id: subtask.id,
+        text: subtask.text,
+        completed: subtask.completed,
+        sortIndex:
+          typeof subtask.sortIndex === 'number' ? subtask.sortIndex : (index + 1) * NOTEBOOK_SUBTASK_SORT_STEP,
+      })),
+    [],
+  )
+  const areSnapshotSubtasksEqual = useCallback(
+    (snapshot: GoalTaskSnapshot['subtasks'], notebook: NotebookSubtask[]) => {
+      if (snapshot.length !== notebook.length) {
+        return false
+      }
+      for (let index = 0; index < snapshot.length; index += 1) {
+        const left = snapshot[index]
+        const right = notebook[index]
+        if (
+          !right ||
+          left.id !== right.id ||
+          left.text !== right.text ||
+          left.completed !== right.completed ||
+          (left.sortIndex ?? (index + 1) * NOTEBOOK_SUBTASK_SORT_STEP) !== right.sortIndex
+        ) {
+          return false
+        }
+      }
+      return true
     },
     [],
   )
+  const updateGoalSnapshotTask = useCallback(
+    (taskId: string, entry: NotebookEntry) => {
+      setGoalsSnapshot((current) => {
+        let mutated = false
+        const next = current.map((goal) => {
+          let goalMutated = false
+          const nextBuckets = goal.buckets.map((bucket) => {
+            const index = bucket.tasks.findIndex((task) => task.id === taskId)
+            if (index === -1) {
+              return bucket
+            }
+            const originalTask = bucket.tasks[index]
+            const sameNotes = originalTask.notes === entry.notes
+            const sameSubtasks = areSnapshotSubtasksEqual(originalTask.subtasks ?? [], entry.subtasks)
+            if (sameNotes && sameSubtasks) {
+              return bucket
+            }
+            goalMutated = true
+            mutated = true
+            const updatedTask: GoalTaskSnapshot = {
+              ...originalTask,
+              notes: entry.notes,
+              subtasks: notebookSubtasksToSnapshot(entry.subtasks),
+            }
+            const nextTasks = [...bucket.tasks]
+            nextTasks[index] = updatedTask
+            return { ...bucket, tasks: nextTasks }
+          })
+          if (!goalMutated) {
+            return goal
+          }
+          return { ...goal, buckets: nextBuckets }
+        })
+        if (!mutated) {
+          return current
+        }
+        publishGoalsSnapshot(next)
+        return next
+      })
+    },
+    [areSnapshotSubtasksEqual, notebookSubtasksToSnapshot],
+  )
+  const updateFocusSourceFromEntry = useCallback(
+    (entry: NotebookEntry) => {
+      setFocusSource((current) => {
+        if (!current || !current.taskId) {
+          return current
+        }
+        const currentKey = computeNotebookKey(current, normalizedCurrentTask)
+        if (currentKey !== notebookKey) {
+          return current
+        }
+        const existingNotes = typeof current.notes === 'string' ? current.notes : ''
+        const existingSubtasks = Array.isArray(current.subtasks) ? current.subtasks : []
+        if (existingNotes === entry.notes && areNotebookSubtasksEqual(existingSubtasks, entry.subtasks)) {
+          return current
+        }
+        return { ...current, notes: entry.notes, subtasks: entry.subtasks }
+      })
+    },
+    [areNotebookSubtasksEqual, notebookKey, normalizedCurrentTask],
+  )
+  useEffect(() => {
+    if (!focusSource || !focusSource.taskId) {
+      return
+    }
+    const targetKey = computeNotebookKey(focusSource, normalizedCurrentTask)
+    const sourceNotes = typeof focusSource.notes === 'string' ? focusSource.notes : ''
+    const sourceSubtasks = Array.isArray(focusSource.subtasks) ? focusSource.subtasks : []
+    if (sourceNotes.trim().length === 0 && sourceSubtasks.length === 0) {
+      return
+    }
+    updateNotebookForKey(targetKey, (entry) => {
+      if (areNotebookEntriesEqual(entry, { notes: sourceNotes, subtasks: sourceSubtasks })) {
+        return entry
+      }
+      return {
+        notes: sourceNotes,
+        subtasks: sourceSubtasks,
+      }
+    })
+  }, [areNotebookEntriesEqual, focusSource, normalizedCurrentTask, updateNotebookForKey])
   const activeNotebookEntry = useMemo(
     () => notebookState[notebookKey] ?? createNotebookEntry(),
     [notebookState, notebookKey],
   )
+  useEffect(() => {
+    if (!activeTaskId) {
+      return
+    }
+    let snapshotTask: GoalTaskSnapshot | null = null
+    outer: for (let goalIndex = 0; goalIndex < goalsSnapshot.length; goalIndex += 1) {
+      const goal = goalsSnapshot[goalIndex]
+      for (let bucketIndex = 0; bucketIndex < goal.buckets.length; bucketIndex += 1) {
+        const bucket = goal.buckets[bucketIndex]
+        const found = bucket.tasks.find((task) => task.id === activeTaskId)
+        if (found) {
+          snapshotTask = found
+          break outer
+        }
+      }
+    }
+    if (!snapshotTask) {
+      return
+    }
+    const entryFromSnapshot: NotebookEntry = {
+      notes: typeof snapshotTask.notes === 'string' ? snapshotTask.notes : '',
+      subtasks: snapshotSubtasksToNotebook(snapshotTask.subtasks ?? []),
+    }
+    const result = updateNotebookForKey(notebookKey, (entry) =>
+      areNotebookEntriesEqual(entry, entryFromSnapshot) ? entry : entryFromSnapshot,
+    )
+    if (result && result.changed) {
+      updateFocusSourceFromEntry(result.entry)
+    }
+  }, [
+    activeTaskId,
+    areNotebookEntriesEqual,
+    goalsSnapshot,
+    notebookKey,
+    snapshotSubtasksToNotebook,
+    updateFocusSourceFromEntry,
+    updateNotebookForKey,
+  ])
   const notebookNotes = activeNotebookEntry.notes
   const notebookSubtasks = activeNotebookEntry.subtasks
   const completedNotebookSubtasks = useMemo(
@@ -1005,23 +1368,51 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const handleNotebookNotesChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {
       const value = event.target.value
-      updateNotebookForKey(notebookKey, (entry) => (entry.notes === value ? entry : { ...entry, notes: value }))
+      const result = updateNotebookForKey(notebookKey, (entry) =>
+        entry.notes === value ? entry : { ...entry, notes: value },
+      )
+      if (!result || !result.changed) {
+        return
+      }
+      const entry = result.entry
+      if (activeTaskId) {
+        scheduleNotebookNotesPersist(activeTaskId, entry.notes)
+        updateGoalSnapshotTask(activeTaskId, entry)
+      }
+      updateFocusSourceFromEntry(entry)
     },
-    [notebookKey, updateNotebookForKey],
+    [
+      activeTaskId,
+      notebookKey,
+      scheduleNotebookNotesPersist,
+      updateFocusSourceFromEntry,
+      updateGoalSnapshotTask,
+      updateNotebookForKey,
+    ],
   )
   const pendingNotebookSubtaskFocusRef = useRef<{ notebookKey: string; subtaskId: string } | null>(null)
   const handleAddNotebookSubtask = useCallback(
     (options?: { focus?: boolean }) => {
-      const newSubtask = createNotebookEmptySubtask()
-      updateNotebookForKey(notebookKey, (entry) => ({
-        ...entry,
-        subtasks: [...entry.subtasks, newSubtask],
-      }))
-      if (options?.focus) {
-        pendingNotebookSubtaskFocusRef.current = { notebookKey, subtaskId: newSubtask.id }
+      let created: NotebookSubtask | null = null
+      const result = updateNotebookForKey(notebookKey, (entry) => {
+        const sortIndex = getNextNotebookSubtaskSortIndex(entry.subtasks)
+        const subtask = createNotebookEmptySubtask(sortIndex)
+        created = subtask
+        return {
+          ...entry,
+          subtasks: [...entry.subtasks, subtask],
+        }
+      })
+      if (!result || !result.changed || !created) {
+        return
       }
+      const createdSubtask: NotebookSubtask = created
+      if (options?.focus) {
+        pendingNotebookSubtaskFocusRef.current = { notebookKey, subtaskId: createdSubtask.id }
+      }
+      updateFocusSourceFromEntry(result.entry)
     },
-    [notebookKey, updateNotebookForKey],
+    [notebookKey, updateFocusSourceFromEntry, updateNotebookForKey],
   )
   useEffect(() => {
     const pending = pendingNotebookSubtaskFocusRef.current
@@ -1052,7 +1443,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   }, [notebookKey, notebookSubtasks])
   const handleNotebookSubtaskTextChange = useCallback(
     (subtaskId: string, value: string) => {
-      updateNotebookForKey(notebookKey, (entry) => {
+      let updated: NotebookSubtask | null = null
+      const result = updateNotebookForKey(notebookKey, (entry) => {
         const index = entry.subtasks.findIndex((item) => item.id === subtaskId)
         if (index === -1) {
           return entry
@@ -1061,57 +1453,177 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         if (!target || target.text === value) {
           return entry
         }
-        const nextSubtasks = entry.subtasks.map((item, idx) =>
-          idx === index ? { ...item, text: value } : item,
-        )
+        const nextSubtasks = entry.subtasks.map((item, idx) => {
+          if (idx !== index) {
+            return item
+          }
+          const next = { ...item, text: value }
+          updated = next
+          return next
+        })
         return { ...entry, subtasks: nextSubtasks }
       })
+      if (!result || !result.changed || !updated) {
+        return
+      }
+      const updatedSubtask: NotebookSubtask = updated
+      if (activeTaskId) {
+        if (updatedSubtask.text.trim().length > 0) {
+          scheduleNotebookSubtaskPersist(activeTaskId, updatedSubtask)
+        } else {
+          cancelNotebookSubtaskPersist(activeTaskId, updatedSubtask.id)
+        }
+        updateGoalSnapshotTask(activeTaskId, result.entry)
+      }
+      updateFocusSourceFromEntry(result.entry)
     },
-    [notebookKey, updateNotebookForKey],
+    [
+      activeTaskId,
+      cancelNotebookSubtaskPersist,
+      notebookKey,
+      scheduleNotebookSubtaskPersist,
+      updateFocusSourceFromEntry,
+      updateGoalSnapshotTask,
+      updateNotebookForKey,
+    ],
   )
   const handleNotebookSubtaskBlur = useCallback(
     (subtaskId: string) => {
-      updateNotebookForKey(notebookKey, (entry) => {
+      let removed: NotebookSubtask | null = null
+      const result = updateNotebookForKey(notebookKey, (entry) => {
         const target = entry.subtasks.find((item) => item.id === subtaskId)
         if (!target || target.text.trim().length > 0) {
           return entry
         }
         const nextSubtasks = entry.subtasks.filter((item) => item.id !== subtaskId)
-        return nextSubtasks.length === entry.subtasks.length ? entry : { ...entry, subtasks: nextSubtasks }
+        if (nextSubtasks.length === entry.subtasks.length) {
+          return entry
+        }
+        removed = target
+        return { ...entry, subtasks: nextSubtasks }
       })
+      if (!result || !result.changed || !removed) {
+        return
+      }
+      const removedSubtask: NotebookSubtask = removed
+      if (activeTaskId) {
+        cancelNotebookSubtaskPersist(activeTaskId, removedSubtask.id)
+        void apiDeleteTaskSubtask(activeTaskId, removedSubtask.id).catch((error) =>
+          console.warn('[Taskwatch] Failed to delete empty subtask:', error),
+        )
+        updateGoalSnapshotTask(activeTaskId, result.entry)
+      }
+      updateFocusSourceFromEntry(result.entry)
     },
-    [notebookKey, updateNotebookForKey],
+    [
+      activeTaskId,
+      cancelNotebookSubtaskPersist,
+      notebookKey,
+      updateFocusSourceFromEntry,
+      updateGoalSnapshotTask,
+      updateNotebookForKey,
+    ],
   )
   const handleNotebookSubtaskToggle = useCallback(
     (subtaskId: string) => {
-      updateNotebookForKey(notebookKey, (entry) => {
+      let toggled: NotebookSubtask | null = null
+      const result = updateNotebookForKey(notebookKey, (entry) => {
         const index = entry.subtasks.findIndex((item) => item.id === subtaskId)
         if (index === -1) {
           return entry
         }
-        const nextSubtasks = entry.subtasks.map((item, idx) =>
-          idx === index ? { ...item, completed: !item.completed } : item,
-        )
+        const nextSubtasks = entry.subtasks.map((item, idx) => {
+          if (idx !== index) {
+            return item
+          }
+          const next = { ...item, completed: !item.completed }
+          toggled = next
+          return next
+        })
         return { ...entry, subtasks: nextSubtasks }
       })
+      if (!result || !result.changed || !toggled) {
+        return
+      }
+      const toggledSubtask: NotebookSubtask = toggled
+      if (activeTaskId) {
+        scheduleNotebookSubtaskPersist(activeTaskId, toggledSubtask)
+        updateGoalSnapshotTask(activeTaskId, result.entry)
+      }
+      updateFocusSourceFromEntry(result.entry)
     },
-    [notebookKey, updateNotebookForKey],
+    [
+      activeTaskId,
+      notebookKey,
+      scheduleNotebookSubtaskPersist,
+      updateFocusSourceFromEntry,
+      updateGoalSnapshotTask,
+      updateNotebookForKey,
+    ],
   )
   const handleNotebookSubtaskRemove = useCallback(
     (subtaskId: string) => {
-      updateNotebookForKey(notebookKey, (entry) => {
+      let removed: NotebookSubtask | null = null
+      const result = updateNotebookForKey(notebookKey, (entry) => {
         const nextSubtasks = entry.subtasks.filter((item) => item.id !== subtaskId)
         if (nextSubtasks.length === entry.subtasks.length) {
           return entry
         }
+        const target = entry.subtasks.find((item) => item.id === subtaskId) ?? null
+        removed = target
         return { ...entry, subtasks: nextSubtasks }
       })
+      if (!result || !result.changed || !removed) {
+        return
+      }
+      const removedSubtask: NotebookSubtask = removed
+      if (activeTaskId) {
+        cancelNotebookSubtaskPersist(activeTaskId, removedSubtask.id)
+        void apiDeleteTaskSubtask(activeTaskId, removedSubtask.id).catch((error) =>
+          console.warn('[Taskwatch] Failed to remove subtask:', error),
+        )
+        updateGoalSnapshotTask(activeTaskId, result.entry)
+      }
+      updateFocusSourceFromEntry(result.entry)
     },
-    [notebookKey, updateNotebookForKey],
+    [
+      activeTaskId,
+      cancelNotebookSubtaskPersist,
+      notebookKey,
+      updateFocusSourceFromEntry,
+      updateGoalSnapshotTask,
+      updateNotebookForKey,
+    ],
   )
   const handleNotebookClear = useCallback(() => {
-    updateNotebookForKey(notebookKey, () => createNotebookEntry())
-  }, [notebookKey, updateNotebookForKey])
+    const previous = activeNotebookEntry
+    const result = updateNotebookForKey(notebookKey, () => createNotebookEntry())
+    if (!result || !result.changed) {
+      return
+    }
+    if (activeTaskId) {
+      scheduleNotebookNotesPersist(activeTaskId, '')
+      if (previous.subtasks.length > 0) {
+        previous.subtasks.forEach((subtask) => {
+          cancelNotebookSubtaskPersist(activeTaskId, subtask.id)
+          void apiDeleteTaskSubtask(activeTaskId, subtask.id).catch((error) =>
+            console.warn('[Taskwatch] Failed to remove subtask during clear:', error),
+          )
+        })
+      }
+      updateGoalSnapshotTask(activeTaskId, result.entry)
+    }
+    updateFocusSourceFromEntry(result.entry)
+  }, [
+    activeNotebookEntry,
+    activeTaskId,
+    cancelNotebookSubtaskPersist,
+    notebookKey,
+    scheduleNotebookNotesPersist,
+    updateFocusSourceFromEntry,
+    updateGoalSnapshotTask,
+    updateNotebookForKey,
+  ])
 
 
   useEffect(() => {
@@ -1759,19 +2271,33 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   const handleSelectTask = (taskName: string, source: FocusSource | null) => {
     const trimmed = taskName.trim().slice(0, MAX_TASK_STORAGE_LENGTH)
-    const sanitizedSource = source && source.goalName && source.bucketName
-      ? {
-          goalId: source.goalId,
-          bucketId: source.bucketId,
-          goalName: source.goalName.trim().slice(0, MAX_TASK_STORAGE_LENGTH),
-          bucketName: source.bucketName.trim().slice(0, MAX_TASK_STORAGE_LENGTH),
-          taskId: source.taskId ?? null,
-          taskDifficulty: source.taskDifficulty ?? null,
-          priority: source.priority ?? null,
-          goalSurface: source.goalSurface ? ensureSurfaceStyle(source.goalSurface, DEFAULT_SURFACE_STYLE) : null,
-          bucketSurface: source.bucketSurface ? ensureSurfaceStyle(source.bucketSurface, DEFAULT_SURFACE_STYLE) : null,
-        }
-      : null
+    let sanitizedSource: FocusSource | null = null
+    if (source && source.goalName && source.bucketName) {
+      const sanitizedNotes = typeof source.notes === 'string' ? source.notes : ''
+      const sanitizedSubtasks = Array.isArray(source.subtasks)
+        ? sanitizeNotebookSubtasks(source.subtasks)
+        : []
+      sanitizedSource = {
+        goalId: source.goalId,
+        bucketId: source.bucketId,
+        goalName: source.goalName.trim().slice(0, MAX_TASK_STORAGE_LENGTH),
+        bucketName: source.bucketName.trim().slice(0, MAX_TASK_STORAGE_LENGTH),
+        taskId: source.taskId ?? null,
+        taskDifficulty: source.taskDifficulty ?? null,
+        priority: source.priority ?? null,
+        goalSurface: source.goalSurface ? ensureSurfaceStyle(source.goalSurface, DEFAULT_SURFACE_STYLE) : null,
+        bucketSurface: source.bucketSurface ? ensureSurfaceStyle(source.bucketSurface, DEFAULT_SURFACE_STYLE) : null,
+        notes: sanitizedNotes,
+        subtasks: sanitizedSubtasks,
+      }
+      if (sanitizedSource.taskId) {
+        const nextKey = computeNotebookKey(sanitizedSource, trimmed)
+        updateNotebookForKey(nextKey, () => ({
+          notes: sanitizedNotes,
+          subtasks: sanitizedSubtasks,
+        }))
+      }
+    }
     setCurrentTaskName(trimmed)
     setFocusSource(sanitizedSource)
     setCustomTaskDraft(trimmed)
@@ -2092,9 +2618,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         detail.bucketSurface !== undefined && detail.bucketSurface !== null
           ? ensureSurfaceStyle(detail.bucketSurface, DEFAULT_SURFACE_STYLE)
           : null
-
-      setCurrentTaskName(taskName)
-      setFocusSource({
+      const detailNotes = typeof detail.notes === 'string' ? detail.notes : ''
+      const detailSubtasks = sanitizeNotebookSubtasks(detail.subtasks)
+      const nextSource: FocusSource = {
         goalId: detail.goalId,
         bucketId: detail.bucketId,
         goalName,
@@ -2104,7 +2630,19 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         priority: detail.priority ?? null,
         goalSurface: safeGoalSurface,
         bucketSurface: safeBucketSurface,
-      })
+        notes: detailNotes,
+        subtasks: detailSubtasks,
+      }
+      if (nextSource.taskId) {
+        const nextKey = computeNotebookKey(nextSource, taskName)
+        updateNotebookForKey(nextKey, () => ({
+          notes: detailNotes,
+          subtasks: detailSubtasks,
+        }))
+      }
+
+      setCurrentTaskName(taskName)
+      setFocusSource(nextSource)
       setCustomTaskDraft(taskName)
       setIsSelectorOpen(false)
 
@@ -2151,7 +2689,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     return () => {
       window.removeEventListener(FOCUS_EVENT_TYPE, handleFocusBroadcast as EventListener)
     }
-  }, [elapsed, normalizedCurrentTask, registerNewHistoryEntry])
+  }, [elapsed, normalizedCurrentTask, registerNewHistoryEntry, updateNotebookForKey])
 
   const formattedTime = useMemo(() => formatTime(elapsed), [elapsed])
   const formattedClock = useMemo(() => formatClockTime(currentTime), [currentTime])
@@ -2354,6 +2892,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                               priority: task.priority,
                               goalSurface: task.goalSurface,
                               bucketSurface: task.bucketSurface,
+                              notes: task.notes,
+                              subtasks: task.subtasks,
                             })
                           }
                         >
@@ -2431,6 +2971,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                               priority: false,
                               goalSurface: LIFE_ROUTINES_SURFACE,
                               bucketSurface: task.surfaceStyle,
+                              notes: '',
+                              subtasks: [],
                             })
                           }
                         >
@@ -2553,6 +3095,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                                                       priority: task.priority ?? false,
                                                       goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
                                                       bucketSurface,
+                                                      notes: task.notes,
+                                                      subtasks: task.subtasks,
                                                     })
                                                   }
                                                 >
