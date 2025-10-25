@@ -8,6 +8,7 @@ import {
   useState,
   type ChangeEvent,
   type CSSProperties,
+  type FormEvent,
   type HTMLAttributes,
   type KeyboardEvent,
   type MouseEvent,
@@ -72,6 +73,14 @@ type HistoryDraftState = {
   bucketName: string
   startedAt: number | null
   endedAt: number | null
+}
+
+type CalendarPopoverEditingState = {
+  entryId: string
+  value: string
+  initialTaskName: string
+  initialDisplayValue: string
+  dirty: boolean
 }
 
 type GradientStop = {
@@ -3078,6 +3087,9 @@ export default function ReflectionPage() {
       }
   >(null)
   const calendarPreviewRef = useRef<HTMLDivElement | null>(null)
+  const [calendarPopoverEditing, setCalendarPopoverEditing] = useState<CalendarPopoverEditingState | null>(null)
+  const calendarPopoverFocusedEntryRef = useRef<string | null>(null)
+  const calendarPopoverEditableRef = useRef<HTMLDivElement | null>(null)
   // Suppress one subsequent open caused by bubbling/click-after-close on mobile
   const suppressEventOpenRef = useRef(false)
   const suppressNextEventOpen = useCallback(() => {
@@ -3312,6 +3324,74 @@ export default function ReflectionPage() {
       window.removeEventListener('scroll', onReposition, true)
     }
   }, [calendarPreview, handleCloseCalendarPreview, positionCalendarPreview, effectiveHistory, handleOpenCalendarPreview, suppressNextEventOpen])
+
+  useEffect(() => {
+    if (!calendarPreview) {
+      setCalendarPopoverEditing(null)
+      calendarPopoverFocusedEntryRef.current = null
+      return
+    }
+    setCalendarPopoverEditing((current) => {
+      if (!current) {
+        return current
+      }
+      return current.entryId === calendarPreview.entryId ? current : null
+    })
+  }, [calendarPreview])
+
+  useEffect(() => {
+    if (!calendarPopoverEditing) {
+      calendarPopoverFocusedEntryRef.current = null
+      return
+    }
+    if (typeof window === 'undefined') {
+      return
+    }
+    if (calendarPopoverFocusedEntryRef.current === calendarPopoverEditing.entryId) {
+      return
+    }
+    calendarPopoverFocusedEntryRef.current = calendarPopoverEditing.entryId
+    const raf = window.requestAnimationFrame(() => {
+      const editableEl = calendarPopoverEditableRef.current
+      if (!editableEl) {
+        return
+      }
+      try {
+        editableEl.focus()
+        const selection = window.getSelection()
+        if (!selection) {
+          return
+        }
+        const range = document.createRange()
+        range.selectNodeContents(editableEl)
+        range.collapse(false)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      } catch {
+        // ignore focus errors (e.g., element might be detached)
+      }
+    })
+    return () => {
+      window.cancelAnimationFrame(raf)
+    }
+  }, [calendarPopoverEditing])
+
+  useLayoutEffect(() => {
+    const editableEl = calendarPopoverEditableRef.current
+    const editingState = calendarPopoverEditing
+    if (!editableEl) {
+      return
+    }
+    if (!editingState) {
+      editableEl.textContent = ''
+      return
+    }
+    const desired = editingState.value
+    if (editableEl.textContent !== desired) {
+      editableEl.textContent = desired
+    }
+  }, [calendarPopoverEditing])
+
   const anchoredTooltipId = hoveredHistoryId ?? selectedHistoryId
   const dayEntryCount = daySegments.length
   const monthAndYearLabel = useMemo(() => {
@@ -4839,6 +4919,112 @@ export default function ReflectionPage() {
       return formatDateRange(entry.startedAt, entry.endedAt)
     })()
     const title = deriveEntryTaskName(entry)
+    const editingState = calendarPopoverEditing && calendarPopoverEditing.entryId === entry.id ? calendarPopoverEditing : null
+    const startValue = entry.taskName ?? ''
+    const initialDisplayValue = title || ''
+    const handleTitleButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      setCalendarPopoverEditing({
+        entryId: entry.id,
+        value: initialDisplayValue,
+        initialTaskName: startValue,
+        initialDisplayValue,
+        dirty: false,
+      })
+    }
+    const handleTitleEditableInput = (event: FormEvent<HTMLDivElement>) => {
+      if (!editingState) {
+        return
+      }
+      const value = event.currentTarget.textContent ?? ''
+      const nextDirty = value !== editingState.initialDisplayValue
+      if (value === editingState.value && nextDirty === editingState.dirty) {
+        return
+      }
+      setCalendarPopoverEditing({
+        ...editingState,
+        value,
+        dirty: nextDirty,
+      })
+      const desiredValue = nextDirty ? value : editingState.initialTaskName
+      updateHistory((current) => {
+        const index = current.findIndex((item) => item.id === entry.id)
+        if (index === -1) {
+          return current
+        }
+        const target = current[index]
+        if (target.taskName === desiredValue) {
+          return current
+        }
+        const next = [...current]
+        next[index] = { ...target, taskName: desiredValue }
+        return next
+      })
+    }
+    const commitTitleChange = () => {
+      if (!editingState) {
+        return
+      }
+      const nextTrimmed = editingState.value.trim()
+      const previousRaw = editingState.initialTaskName
+      const previousTrimmed = previousRaw.trim()
+      setCalendarPopoverEditing(null)
+      updateHistory((current) => {
+        const index = current.findIndex((item) => item.id === entry.id)
+        if (index === -1) {
+          return current
+        }
+        const target = current[index]
+        const desiredValue = editingState.dirty ? nextTrimmed : previousRaw
+        if (editingState.dirty && nextTrimmed === previousTrimmed) {
+          if (target.taskName === previousRaw) {
+            return current
+          }
+          const next = [...current]
+          next[index] = { ...target, taskName: previousRaw }
+          return next
+        }
+        if (target.taskName === desiredValue) {
+          return current
+        }
+        const next = [...current]
+        next[index] = { ...target, taskName: desiredValue }
+        return next
+      })
+    }
+    const cancelTitleChange = () => {
+      setCalendarPopoverEditing(null)
+      if (!editingState) {
+        return
+      }
+      const original = editingState.initialTaskName
+      updateHistory((current) => {
+        const index = current.findIndex((item) => item.id === entry.id)
+        if (index === -1) {
+          return current
+        }
+        const target = current[index]
+        if (target.taskName === original) {
+          return current
+        }
+        const next = [...current]
+        next[index] = { ...target, taskName: original }
+        return next
+      })
+    }
+    const handleTitleEditableBlur = () => {
+      commitTitleChange()
+    }
+    const handleTitleEditableKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        commitTitleChange()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        cancelTitleChange()
+      }
+    }
     const goal = entry.goalName || 'No goal'
     const bucket = entry.bucketName || 'No bucket'
     return createPortal(
@@ -4850,7 +5036,29 @@ export default function ReflectionPage() {
         aria-label="Session details"
       >
         <div className="calendar-popover__header">
-          <div className="calendar-popover__title" aria-label="Session title">{title || 'Untitled session'}</div>
+          {editingState ? (
+            <div
+              ref={calendarPopoverEditableRef}
+              className="calendar-popover__title calendar-popover__title--editing"
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              aria-label="Edit session title"
+              aria-multiline="true"
+              onInput={handleTitleEditableInput}
+              onBlur={handleTitleEditableBlur}
+              onKeyDown={handleTitleEditableKeyDown}
+            />
+          ) : (
+            <button
+              type="button"
+              className="calendar-popover__title calendar-popover__title-button"
+              aria-label="Edit session title"
+              onClick={handleTitleButtonClick}
+            >
+              {title || 'Untitled session'}
+            </button>
+          )}
           <div className="calendar-popover__actions">
             <button
               type="button"
@@ -4929,7 +5137,7 @@ export default function ReflectionPage() {
       </div>,
       document.body,
     )
-  }, [calendarPreview, effectiveHistory, handleCloseCalendarPreview, handleDeleteHistoryEntry, handleStartEditingHistoryEntry])
+  }, [calendarPreview, calendarPopoverEditing, effectiveHistory, handleCloseCalendarPreview, handleDeleteHistoryEntry, handleStartEditingHistoryEntry, updateHistory])
 
   // Calendar editor modal
   useEffect(() => {
