@@ -618,11 +618,11 @@ html[data-theme='light'] .goal-favorite-toggle--active {
 }
 
 .life-routines-card__task--surface-glass {
-  --lr-pill-bg: linear-gradient(135deg, rgba(48, 64, 120, 0.34), rgba(26, 34, 78, 0.26));
-  --lr-pill-border: rgba(118, 142, 255, 0.34);
-  --lr-pill-text: rgba(235, 240, 255, 0.9);
-  --lr-pill-muted: rgba(210, 220, 255, 0.68);
-  --lr-pill-marker: linear-gradient(135deg, rgba(148, 163, 255, 0.75), rgba(99, 102, 241, 0.68));
+  --lr-pill-bg: linear-gradient(135deg, rgba(76, 118, 255, 0.42), rgba(28, 54, 156, 0.28));
+  --lr-pill-border: rgba(120, 166, 255, 0.42);
+  --lr-pill-text: rgba(235, 240, 255, 0.92);
+  --lr-pill-muted: rgba(196, 210, 255, 0.74);
+  --lr-pill-marker: linear-gradient(135deg, rgba(124, 168, 255, 0.78), rgba(72, 118, 255, 0.68));
 }
 
 .life-routines-card__task--surface-midnight {
@@ -788,11 +788,11 @@ html[data-theme='light'] .life-routines-card__task-description {
 }
 
 html[data-theme='light'] .life-routines-card__task--surface-glass {
-  --lr-pill-bg: rgba(241, 244, 255, 0.92);
-  --lr-pill-border: rgba(118, 142, 255, 0.34);
-  --lr-pill-text: rgba(46, 54, 102, 0.94);
-  --lr-pill-muted: rgba(82, 96, 150, 0.72);
-  --lr-pill-marker: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(79, 70, 229, 0.88));
+  --lr-pill-bg: rgba(224, 236, 255, 0.94);
+  --lr-pill-border: rgba(118, 142, 255, 0.38);
+  --lr-pill-text: rgba(40, 62, 132, 0.94);
+  --lr-pill-muted: rgba(76, 98, 164, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(96, 136, 255, 0.95), rgba(68, 108, 240, 0.88));
 }
 
 html[data-theme='light'] .life-routines-card__task--surface-midnight {
@@ -3237,8 +3237,8 @@ html[data-theme='light'] .goal-task-row--diff-green {
 }
 
 .goal-customizer--life-routine .goal-customizer__surface-preview--glass {
-  background: linear-gradient(135deg, rgba(48, 64, 120, 0.34), rgba(26, 34, 78, 0.26));
-  border-color: rgba(118, 142, 255, 0.34);
+  background: linear-gradient(135deg, rgba(76, 118, 255, 0.42), rgba(28, 54, 156, 0.28));
+  border-color: rgba(120, 166, 255, 0.42);
 }
 
 .goal-customizer--life-routine .goal-customizer__surface-preview--midnight {
@@ -3282,8 +3282,8 @@ html[data-theme='light'] .goal-task-row--diff-green {
 }
 
 html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--glass {
-  background: rgba(241, 244, 255, 0.92);
-  border-color: rgba(118, 142, 255, 0.34);
+  background: linear-gradient(135deg, rgba(216, 230, 255, 0.94), rgba(188, 210, 255, 0.88));
+  border-color: rgba(118, 142, 255, 0.36);
 }
 
 html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--midnight {

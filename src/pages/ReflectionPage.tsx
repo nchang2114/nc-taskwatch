@@ -198,6 +198,96 @@ const SURFACE_GRADIENT_INFO: Record<SurfaceStyle, SurfaceGradientInfo> = {
   },
 }
 
+const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGradientInfo>> = {
+  glass: {
+    gradient:
+      'linear-gradient(135deg, rgba(76, 118, 255, 0.42) 0%, rgba(56, 96, 230, 0.34) 48%, rgba(28, 54, 156, 0.28) 100%)',
+    start: 'rgba(76, 118, 255, 0.42)',
+    mid: 'rgba(56, 96, 230, 0.34)',
+    end: 'rgba(28, 54, 156, 0.28)',
+    base: '#3f60d6',
+  },
+  midnight: {
+    gradient:
+      'linear-gradient(135deg, rgba(118, 126, 255, 0.3) 0%, rgba(110, 118, 246, 0.26) 48%, rgba(92, 106, 230, 0.22) 100%)',
+    start: 'rgba(118, 126, 255, 0.3)',
+    mid: 'rgba(110, 118, 246, 0.26)',
+    end: 'rgba(92, 106, 230, 0.22)',
+    base: SURFACE_GRADIENT_INFO.midnight.base,
+  },
+  slate: {
+    gradient:
+      'linear-gradient(135deg, rgba(151, 227, 255, 0.3) 0%, rgba(120, 198, 255, 0.26) 48%, rgba(96, 180, 255, 0.22) 100%)',
+    start: 'rgba(151, 227, 255, 0.3)',
+    mid: 'rgba(120, 198, 255, 0.26)',
+    end: 'rgba(96, 180, 255, 0.22)',
+    base: SURFACE_GRADIENT_INFO.slate.base,
+  },
+  charcoal: {
+    gradient:
+      'linear-gradient(135deg, rgba(255, 188, 213, 0.34) 0%, rgba(250, 190, 216, 0.3) 50%, rgba(244, 174, 206, 0.26) 100%)',
+    start: 'rgba(255, 188, 213, 0.34)',
+    mid: 'rgba(250, 190, 216, 0.3)',
+    end: 'rgba(244, 174, 206, 0.26)',
+    base: SURFACE_GRADIENT_INFO.charcoal.base,
+  },
+  linen: {
+    gradient:
+      'linear-gradient(135deg, rgba(255, 214, 170, 0.34) 0%, rgba(255, 200, 156, 0.3) 48%, rgba(255, 233, 192, 0.26) 100%)',
+    start: 'rgba(255, 214, 170, 0.34)',
+    mid: 'rgba(255, 200, 156, 0.3)',
+    end: 'rgba(255, 233, 192, 0.26)',
+    base: SURFACE_GRADIENT_INFO.linen.base,
+  },
+  frost: {
+    gradient:
+      'linear-gradient(135deg, rgba(174, 233, 255, 0.3) 0%, rgba(150, 224, 255, 0.26) 48%, rgba(142, 210, 255, 0.22) 100%)',
+    start: 'rgba(174, 233, 255, 0.3)',
+    mid: 'rgba(150, 224, 255, 0.26)',
+    end: 'rgba(142, 210, 255, 0.22)',
+    base: SURFACE_GRADIENT_INFO.frost.base,
+  },
+  grove: {
+    gradient:
+      'linear-gradient(135deg, rgba(140, 255, 204, 0.3) 0%, rgba(112, 240, 176, 0.26) 48%, rgba(74, 222, 128, 0.22) 100%)',
+    start: 'rgba(140, 255, 204, 0.3)',
+    mid: 'rgba(112, 240, 176, 0.26)',
+    end: 'rgba(74, 222, 128, 0.22)',
+    base: SURFACE_GRADIENT_INFO.grove.base,
+  },
+  lagoon: {
+    gradient:
+      'linear-gradient(135deg, rgba(146, 213, 255, 0.3) 0%, rgba(116, 190, 255, 0.26) 48%, rgba(88, 168, 255, 0.22) 100%)',
+    start: 'rgba(146, 213, 255, 0.3)',
+    mid: 'rgba(116, 190, 255, 0.26)',
+    end: 'rgba(88, 168, 255, 0.22)',
+    base: SURFACE_GRADIENT_INFO.lagoon.base,
+  },
+  ember: {
+    gradient:
+      'linear-gradient(135deg, rgba(255, 210, 170, 0.34) 0%, rgba(255, 192, 136, 0.3) 48%, rgba(249, 160, 68, 0.24) 100%)',
+    start: 'rgba(255, 210, 170, 0.34)',
+    mid: 'rgba(255, 192, 136, 0.3)',
+    end: 'rgba(249, 160, 68, 0.24)',
+    base: SURFACE_GRADIENT_INFO.ember.base,
+  },
+}
+
+const toGoalColorInfo = (info: SurfaceGradientInfo): GoalColorInfo => ({
+  gradient: {
+    css: info.gradient,
+    start: info.start,
+    end: info.end,
+    angle: 135,
+    stops: [
+      { color: info.start, position: 0 },
+      { color: info.mid, position: 0.48 },
+      { color: info.end, position: 1 },
+    ],
+  },
+  solidColor: info.base,
+})
+
 type HistoryDropdownOption = {
   value: string
   label: string
@@ -557,22 +647,11 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }
   )
 }
 
-const getSurfaceColorInfo = (surface: SurfaceStyle): GoalColorInfo => {
-  const info = SURFACE_GRADIENT_INFO[surface]
-  return {
-    gradient: {
-      css: info.gradient,
-      start: info.start,
-      end: info.end,
-      angle: 135,
-      stops: [
-        { color: info.start, position: 0 },
-        { color: info.mid, position: 0.45 },
-        { color: info.end, position: 1 },
-      ],
-    },
-    solidColor: info.base,
-  }
+const getSurfaceColorInfo = (surface: SurfaceStyle): GoalColorInfo => toGoalColorInfo(SURFACE_GRADIENT_INFO[surface])
+
+const getLifeRoutineSurfaceColorInfo = (surface: SurfaceStyle): GoalColorInfo => {
+  const info = LIFE_ROUTINE_SURFACE_GRADIENT_INFO[surface] ?? SURFACE_GRADIENT_INFO[surface]
+  return toGoalColorInfo(info)
 }
 
 type GoalLookup = Map<string, { goalName: string; colorInfo?: GoalColorInfo }>
@@ -1376,7 +1455,7 @@ const resolveGoalMetadata = (
   if (isLifeRoutineEntry) {
     const routineSurface =
       entry.bucketSurface ?? (normalizedBucketName ? lifeRoutineSurfaceLookup.get(normalizedBucketName) ?? null : null)
-    const surfaceInfo = routineSurface ? getSurfaceColorInfo(routineSurface) : getSurfaceColorInfo(LIFE_ROUTINES_SURFACE)
+    const surfaceInfo = getLifeRoutineSurfaceColorInfo(routineSurface ?? LIFE_ROUTINES_SURFACE)
     const labelCandidate =
       bucketNameRaw && bucketNameRaw.length > 0
         ? bucketNameRaw
