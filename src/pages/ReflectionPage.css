@@ -1150,9 +1150,10 @@ html[data-theme='light'] .calendar-now-line::before {
 }
 .calendar-popover__header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.35rem; /* tighter spacing to reduce vertical height */
 }
 .calendar-popover__title {
   font-weight: 700;
@@ -1166,15 +1167,15 @@ html[data-theme='light'] .calendar-now-line::before {
 }
 .calendar-popover__actions {
   display: inline-flex;
-  gap: 0.35rem;
-  align-self: flex-start;
+  gap: 0.25rem; /* tighter action spacing */
+  align-self: flex-end; /* place actions on the top-right */
 }
 .calendar-popover__action {
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px; /* smaller action buttons to match compact look */
   border-radius: 6px;
   cursor: pointer;
   touch-action: manipulation; /* ensure single-tap activation on mobile */
@@ -1186,8 +1187,8 @@ html[data-theme='light'] .calendar-now-line::before {
 }
 .calendar-popover__action svg {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px; /* smaller icon to fit 24px buttons */
   stroke: currentColor;
   fill: none;
   stroke-width: 2;
@@ -1202,9 +1203,9 @@ html[data-theme='light'] .calendar-now-line::before {
 }
 /* Slightly larger close target as requested */
 .calendar-popover__action--close {
-  width: 32px;
-  height: 32px;
-  font-size: 1.1rem;
+  width: 26px; /* keep close slightly larger while still compact */
+  height: 26px;
+  font-size: 1rem;
 }
 .calendar-popover__meta {
   display: flex;
