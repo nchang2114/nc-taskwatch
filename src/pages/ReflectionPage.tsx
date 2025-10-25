@@ -1628,6 +1628,8 @@ export default function ReflectionPage() {
   const editingTooltipRef = useRef<HTMLDivElement | null>(null)
   // Ref to the calendar editor panel so global outside-click handlers don't cancel edits when interacting with the modal
   const calendarEditorRef = useRef<HTMLDivElement | null>(null)
+  // Ref to the session name input inside the calendar editor modal (for autofocus on new entries)
+  const calendarEditorNameInputRef = useRef<HTMLInputElement | null>(null)
   const [activeTooltipOffsets, setActiveTooltipOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [activeTooltipPlacement, setActiveTooltipPlacement] = useState<'above' | 'below'>('above')
   const dragStateRef = useRef<DragState | null>(null)
@@ -2213,6 +2215,8 @@ export default function ReflectionPage() {
       startedAt,
       endedAt,
     })
+    // Immediately open the full editor modal for the new entry
+    setCalendarEditorEntryId(entry.id)
   }, [historyDayOffset, updateHistory])
 
   const handleSelectHistorySegment = useCallback(
@@ -2396,8 +2400,31 @@ export default function ReflectionPage() {
   )
 
   const handleCancelHistoryEdit = useCallback(() => {
-    // If we're cancelling a newly added (pending) entry, KEEP it (persist), just stop editing
+    // If we're cancelling a newly added (pending) entry, delete it only if untouched (no field edits)
     if (pendingNewHistoryId && selectedHistoryId === pendingNewHistoryId) {
+      const entry = selectedHistoryEntry
+      const draft = historyDraft
+      const entryTask = (entry?.taskName ?? '').trim()
+      const draftTask = (draft.taskName ?? '').trim()
+      const entryGoal = (entry?.goalName ?? '').trim()
+      const draftGoal = (draft.goalName ?? '').trim()
+      const entryBucket = (entry?.bucketName ?? '').trim()
+      const draftBucket = (draft.bucketName ?? '').trim()
+      const entryStart = entry?.startedAt ?? null
+      const entryEnd = entry?.endedAt ?? null
+      const draftStart = draft.startedAt ?? entryStart
+      const draftEnd = draft.endedAt ?? entryEnd
+      const untouched =
+        entryTask === draftTask &&
+        entryGoal === draftGoal &&
+        entryBucket === draftBucket &&
+        entryStart === draftStart &&
+        entryEnd === draftEnd
+
+      if (untouched && entry) {
+        // Remove the new entry since user dismissed without editing
+        updateHistory((current) => current.filter((e) => e.id !== entry.id))
+      }
       setPendingNewHistoryId(null)
       setSelectedHistoryId(null)
       setEditingHistoryId(null)
@@ -4157,6 +4184,8 @@ export default function ReflectionPage() {
                         setPendingNewHistoryId(newId)
                         setTimeout(() => {
                           handleStartEditingHistoryEntry(newEntry)
+                          // Open the full editor for new entries immediately
+                          setCalendarEditorEntryId(newId)
                         }, 0)
                       }
                       calendarEventDragRef.current = null
@@ -4593,6 +4622,25 @@ export default function ReflectionPage() {
     return () => document.removeEventListener('keydown', onKeyDown as EventListener)
   }, [calendarEditorEntryId, handleCancelHistoryEdit])
 
+  // When opening the calendar editor, if this is a freshly created (pending) entry,
+  // focus the session name input and place the caret at the end.
+  useEffect(() => {
+    if (!calendarEditorEntryId) return
+    if (!pendingNewHistoryId || pendingNewHistoryId !== calendarEditorEntryId) return
+    const focusLater = () => {
+      const input = calendarEditorNameInputRef.current
+      if (input) {
+        try {
+          input.focus()
+          const len = input.value?.length ?? 0
+          input.setSelectionRange(len, len)
+        } catch {}
+      }
+    }
+    const raf = window.requestAnimationFrame(focusLater)
+    return () => window.cancelAnimationFrame(raf)
+  }, [calendarEditorEntryId, pendingNewHistoryId])
+
   const renderCalendarEditor = useCallback(() => {
     if (!calendarEditorEntryId || typeof document === 'undefined') return null
     const entry = history.find((h) => h.id === calendarEditorEntryId) || null
@@ -4642,6 +4690,7 @@ export default function ReflectionPage() {
               <input
                 className="history-timeline__field-input"
                 type="text"
+                ref={calendarEditorNameInputRef}
                 value={historyDraft.taskName}
                 placeholder="Describe the focus block"
                 onChange={handleHistoryFieldChange('taskName')}
