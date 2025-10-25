@@ -2953,27 +2953,110 @@ export default function ReflectionPage() {
       }
   >(null)
   const calendarPreviewRef = useRef<HTMLDivElement | null>(null)
+  // Suppress one subsequent open caused by bubbling/click-after-close on mobile
+  const suppressEventOpenRef = useRef(false)
+  const suppressNextEventOpen = useCallback(() => {
+    suppressEventOpenRef.current = true
+    window.setTimeout(() => {
+      suppressEventOpenRef.current = false
+    }, 300)
+  }, [])
 
   const positionCalendarPreview = useCallback((anchorEl: HTMLElement | null) => {
     if (!anchorEl) return
-    const rect = anchorEl.getBoundingClientRect()
-    // Default place to the right of the anchor, vertically aligned with its top
-    const viewportPadding = 8
-    const assumedWidth = 420 // match CSS max-width for better initial placement
-    const assumedHeight = 220 // more realistic height; will be clamped again after mount
-    let left = Math.round(rect.right + viewportPadding)
-    let top = Math.round(rect.top)
-    // If it would overflow right, place to the left of the anchor
-    if (left + assumedWidth > window.innerWidth - viewportPadding) {
-      left = Math.max(viewportPadding, Math.round(rect.left - assumedWidth - viewportPadding))
-    }
-    // Clamp vertically within viewport
-    if (top + assumedHeight > window.innerHeight - viewportPadding) {
-      top = Math.max(viewportPadding, window.innerHeight - viewportPadding - assumedHeight)
-    }
-    if (top < viewportPadding) top = viewportPadding
-    // Apply directly to DOM to avoid extra React re-renders
+    const anchorRect = anchorEl.getBoundingClientRect()
+    const padding = 8
     const pop = calendarPreviewRef.current
+    // Use actual size if mounted, otherwise fall back to assumptions
+    const popWidth = pop ? Math.ceil(pop.getBoundingClientRect().width) || 420 : 420
+    const popHeight = pop ? Math.ceil(pop.getBoundingClientRect().height) || 220 : 220
+
+    // Available space in each direction
+    const rightSpace = Math.max(0, window.innerWidth - padding - anchorRect.right)
+    const leftSpace = Math.max(0, anchorRect.left - padding)
+    const belowSpace = Math.max(0, window.innerHeight - padding - anchorRect.bottom)
+    const aboveSpace = Math.max(0, anchorRect.top - padding)
+
+    // Try placements in priority order: right, left, below, above
+    // Choose the first placement that fully fits; otherwise use the best partial and clamp
+    type Placement = 'right' | 'left' | 'below' | 'above'
+    const candidates: Placement[] = []
+    if (rightSpace >= leftSpace) {
+      candidates.push('right', 'left', 'below', 'above')
+    } else {
+      candidates.push('left', 'right', 'below', 'above')
+    }
+
+    let left = 0
+    let top = 0
+    let placed = false
+
+    const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
+
+    for (const placement of candidates) {
+      if (placement === 'right') {
+        if (rightSpace >= popWidth) {
+          left = Math.round(anchorRect.right + padding)
+          // align to anchor top by default, then clamp vertically
+          top = Math.round(anchorRect.top)
+          placed = true
+          break
+        }
+      } else if (placement === 'left') {
+        if (leftSpace >= popWidth) {
+          left = Math.round(anchorRect.left - popWidth - padding)
+          top = Math.round(anchorRect.top)
+          placed = true
+          break
+        }
+      } else if (placement === 'below') {
+        if (belowSpace >= popHeight) {
+          top = Math.round(anchorRect.bottom + padding)
+          // Prefer aligning left edges; clamp within viewport
+          left = Math.round(anchorRect.left)
+          placed = true
+          break
+        }
+      } else if (placement === 'above') {
+        if (aboveSpace >= popHeight) {
+          top = Math.round(anchorRect.top - popHeight - padding)
+          left = Math.round(anchorRect.left)
+          placed = true
+          break
+        }
+      }
+    }
+
+    if (!placed) {
+      // Fallback: choose the direction with the most space and clamp within viewport
+      const bestHorizontal = rightSpace >= leftSpace ? 'right' : 'left'
+      const bestVertical = belowSpace >= aboveSpace ? 'below' : 'above'
+      const preferHorizontal = Math.max(rightSpace, leftSpace) >= Math.max(belowSpace, aboveSpace)
+      const placement = preferHorizontal ? bestHorizontal : bestVertical
+      switch (placement) {
+        case 'right':
+          left = Math.round(anchorRect.right + padding)
+          top = Math.round(anchorRect.top)
+          break
+        case 'left':
+          left = Math.round(anchorRect.left - popWidth - padding)
+          top = Math.round(anchorRect.top)
+          break
+        case 'below':
+          top = Math.round(anchorRect.bottom + padding)
+          left = Math.round(anchorRect.left)
+          break
+        case 'above':
+          top = Math.round(anchorRect.top - popHeight - padding)
+          left = Math.round(anchorRect.left)
+          break
+      }
+    }
+
+    // Final clamp into the viewport
+    left = clamp(left, padding, Math.max(padding, window.innerWidth - padding - popWidth))
+    top = clamp(top, padding, Math.max(padding, window.innerHeight - padding - popHeight))
+
     if (pop) {
       pop.style.top = `${top}px`
       pop.style.left = `${left}px`
@@ -2986,18 +3069,55 @@ export default function ReflectionPage() {
       handleSelectHistorySegment(entry)
       // Compute an initial position immediately
       const rect = targetEl.getBoundingClientRect()
-  const viewportPadding = 8
-  const assumedWidth = 420
-  const assumedHeight = 220
-      let left = Math.round(rect.right + viewportPadding)
-      let top = Math.round(rect.top)
-      if (left + assumedWidth > window.innerWidth - viewportPadding) {
-        left = Math.max(viewportPadding, Math.round(rect.left - assumedWidth - viewportPadding))
+      const viewportPadding = 8
+      const assumedWidth = 420
+      const assumedHeight = 220
+      const rightSpace = Math.max(0, window.innerWidth - viewportPadding - rect.right)
+      const leftSpace = Math.max(0, rect.left - viewportPadding)
+      const belowSpace = Math.max(0, window.innerHeight - viewportPadding - rect.bottom)
+      const aboveSpace = Math.max(0, rect.top - viewportPadding)
+      // Try right/left first, then below/above; pick best fit
+      let left = 0
+      let top = 0
+      let placed = false
+      if (rightSpace >= assumedWidth) {
+        left = Math.round(rect.right + viewportPadding)
+        top = Math.round(rect.top)
+        placed = true
+      } else if (leftSpace >= assumedWidth) {
+        left = Math.round(rect.left - assumedWidth - viewportPadding)
+        top = Math.round(rect.top)
+        placed = true
+      } else if (belowSpace >= assumedHeight) {
+        top = Math.round(rect.bottom + viewportPadding)
+        left = Math.round(rect.left)
+        placed = true
+      } else if (aboveSpace >= assumedHeight) {
+        top = Math.round(rect.top - assumedHeight - viewportPadding)
+        left = Math.round(rect.left)
+        placed = true
       }
-      if (top + assumedHeight > window.innerHeight - viewportPadding) {
-        top = Math.max(viewportPadding, window.innerHeight - viewportPadding - assumedHeight)
+      if (!placed) {
+        // Fallback: choose side with most space and clamp
+        if (Math.max(rightSpace, leftSpace) >= Math.max(belowSpace, aboveSpace)) {
+          if (rightSpace >= leftSpace) {
+            left = Math.round(rect.right + viewportPadding)
+          } else {
+            left = Math.round(rect.left - assumedWidth - viewportPadding)
+          }
+          top = Math.round(rect.top)
+        } else {
+          if (belowSpace >= aboveSpace) {
+            top = Math.round(rect.bottom + viewportPadding)
+          } else {
+            top = Math.round(rect.top - assumedHeight - viewportPadding)
+          }
+          left = Math.round(rect.left)
+        }
+        // Clamp into viewport
+        left = Math.min(Math.max(left, viewportPadding), Math.max(viewportPadding, window.innerWidth - viewportPadding - assumedWidth))
+        top = Math.min(Math.max(top, viewportPadding), Math.max(viewportPadding, window.innerHeight - viewportPadding - assumedHeight))
       }
-      if (top < viewportPadding) top = viewportPadding
       setCalendarPreview({ entryId: entry.id, top, left, anchorEl: targetEl })
       // Position on next frame to refine based on actual size
       requestAnimationFrame(() => positionCalendarPreview(targetEl))
@@ -3014,8 +3134,19 @@ export default function ReflectionPage() {
       if (!node) return
       // Ignore clicks inside the popover
       if (calendarPreviewRef.current && calendarPreviewRef.current.contains(node)) return
-      // If the click is on a calendar event, let the event's own click handler decide (open/toggle)
-      if (node instanceof Element && node.closest('.calendar-event')) return
+      // If tapping a calendar event while a popover is open, immediately open that event's popover (single tap behavior)
+      if (node instanceof Element) {
+        const evEl = node.closest('.calendar-event') as HTMLElement | null
+        if (evEl && evEl.dataset.entryId) {
+          const entry = effectiveHistory.find((h) => h.id === evEl.dataset.entryId)
+          if (entry) {
+            // Suppress the subsequent click from re-triggering
+            suppressNextEventOpen()
+            handleOpenCalendarPreview(entry, evEl)
+            return
+          }
+        }
+      }
       handleCloseCalendarPreview()
     }
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
@@ -3049,7 +3180,7 @@ export default function ReflectionPage() {
       window.removeEventListener('resize', onReposition)
       window.removeEventListener('scroll', onReposition, true)
     }
-  }, [calendarPreview, handleCloseCalendarPreview, positionCalendarPreview])
+  }, [calendarPreview, handleCloseCalendarPreview, positionCalendarPreview, effectiveHistory, handleOpenCalendarPreview, suppressNextEventOpen])
   const anchoredTooltipId = hoveredHistoryId ?? selectedHistoryId
   const dayEntryCount = daySegments.length
   const monthAndYearLabel = useMemo(() => {
@@ -4074,6 +4205,7 @@ export default function ReflectionPage() {
                           background: ev.gradientCss ?? ev.color,
                         }}
                         data-drag-time={dragTime}
+                        data-entry-id={ev.entry.id}
                         role="button"
                         aria-label={`${ev.label} ${ev.rangeLabel}`}
                         title={`${ev.label} · ${ev.rangeLabel}`}
@@ -4081,6 +4213,11 @@ export default function ReflectionPage() {
                           // Only open the preview on genuine clicks; suppress after any drag intent
                           if (dragPreventClickRef.current) {
                             dragPreventClickRef.current = false
+                            return
+                          }
+                          // Suppress the first click if closing/opening race just occurred
+                          if (suppressEventOpenRef.current) {
+                            suppressEventOpenRef.current = false
                             return
                           }
                           // If clicking the same entry that's already previewed, toggle it closed
@@ -4396,6 +4533,7 @@ export default function ReflectionPage() {
               onPointerDown={(ev) => {
                 ev.preventDefault()
                 ev.stopPropagation()
+                suppressNextEventOpen()
                 handleCloseCalendarPreview()
               }}
             >
