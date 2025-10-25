@@ -5031,9 +5031,11 @@ export default function ReflectionPage() {
       if (event.key === 'Enter') {
         event.preventDefault()
         commitTitleChange()
+        handleCloseCalendarPreview()
       } else if (event.key === 'Escape') {
         event.preventDefault()
         cancelTitleChange()
+        handleCloseCalendarPreview()
       }
     }
     const goal = entry.goalName || 'No goal'
