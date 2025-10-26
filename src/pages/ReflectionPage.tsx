@@ -1849,7 +1849,7 @@ export default function ReflectionPage() {
       const rawDays = hasDayWidth ? effectiveDx / dayWidth : 0
       const chunkSize = state.dayCount > 0 ? state.dayCount : 1
       const snapUnitSpan = view === '3d'
-        ? chunkSize
+        ? 1
         : chunkSize <= 1
           ? 1
           : chunkSize
