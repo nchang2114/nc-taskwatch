@@ -1614,6 +1614,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       activeTaskId,
       blockNotebookHydration,
       cancelNotebookSubtaskPersist,
+      handleAddNotebookSubtask,
       notebookKey,
       updateFocusSourceFromEntry,
       updateGoalSnapshotTask,
@@ -1817,11 +1818,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                       onChange={(event) => handleNotebookSubtaskTextChange(subtask.id, event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
-                          event.preventDefault()
-                          const value = event.currentTarget.value.trim()
-                          if (value.length === 0) {
+                          const currentValue = event.currentTarget.value.trim()
+                          if (currentValue.length === 0) {
                             return
                           }
+                          event.preventDefault()
                           handleAddNotebookSubtask({ focus: true })
                         }
                       }}
