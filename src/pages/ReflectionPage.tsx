@@ -2667,6 +2667,9 @@ export default function ReflectionPage() {
     (event: KeyboardEvent<HTMLInputElement>) => {
       if (event.key === 'Enter') {
         event.preventDefault()
+        if (pendingNewHistoryId && selectedHistoryId === pendingNewHistoryId) {
+          setPendingNewHistoryId(null)
+        }
         commitHistoryDraft()
         // If the calendar editor modal is open, close it after saving via Enter
         if (calendarEditorEntryId) {
@@ -2686,7 +2689,7 @@ export default function ReflectionPage() {
         setEditingHistoryId(null)
       }
     },
-    [calendarEditorEntryId, commitHistoryDraft, selectedHistoryEntry],
+    [calendarEditorEntryId, commitHistoryDraft, pendingNewHistoryId, selectedHistoryEntry, selectedHistoryId],
   )
 
   const handleCancelHistoryEdit = useCallback(() => {
