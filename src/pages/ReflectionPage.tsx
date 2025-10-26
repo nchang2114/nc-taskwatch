@@ -67,6 +67,34 @@ const RANGE_DEFS: Record<ReflectionRangeKey, RangeDefinition> = {
 
 const RANGE_KEYS: ReflectionRangeKey[] = ['24h', '48h', '7d']
 
+const PAN_SNAP_THRESHOLD = 0.35
+const PAN_FLICK_VELOCITY_PX_PER_MS = 0.6
+const PAN_MIN_ANIMATION_MS = 220
+const PAN_MAX_ANIMATION_MS = 450
+const MAX_BUFFER_DAYS = 28
+
+const getCalendarBufferDays = (visibleDayCount: number): number => {
+  if (!Number.isFinite(visibleDayCount) || visibleDayCount <= 0) {
+    return 4
+  }
+  const scaled = Math.ceil(visibleDayCount * 1.6)
+  return Math.min(MAX_BUFFER_DAYS, Math.max(4, scaled))
+}
+
+const clampPanDelta = (dx: number, dayWidth: number, spanDays: number): number => {
+  if (!Number.isFinite(dayWidth) || dayWidth <= 0) {
+    return 0
+  }
+  const safeSpan = Number.isFinite(spanDays) ? Math.max(1, Math.min(MAX_BUFFER_DAYS, Math.abs(spanDays))) : 1
+  const maxShift = dayWidth * safeSpan
+  if (!Number.isFinite(maxShift) || maxShift <= 0) {
+    return 0
+  }
+  if (dx > maxShift) return maxShift
+  if (dx < -maxShift) return -maxShift
+  return dx
+}
+
 type HistoryDraftState = {
   taskName: string
   goalName: string
@@ -1674,6 +1702,7 @@ export default function ReflectionPage() {
   const [calendarView, setCalendarView] = useState<CalendarViewMode>('month')
   const [multiDayCount, setMultiDayCount] = useState<number>(4)
   const [showMultiDayChooser, setShowMultiDayChooser] = useState(false)
+  const [historyDayOffset, setHistoryDayOffset] = useState(0)
   const multiChooserRef = useRef<HTMLDivElement | null>(null)
   const calendarDaysAreaRef = useRef<HTMLDivElement | null>(null)
   const calendarDaysRef = useRef<HTMLDivElement | null>(null)
@@ -1683,12 +1712,168 @@ export default function ReflectionPage() {
     pointerId: number
     startX: number
     startY: number
+    startTime: number
     areaWidth: number
     dayCount: number
     baseOffset: number
-    appliedSnap: number
     mode: 'pending' | 'hdrag'
+    lastAppliedDx: number
   } | null>(null)
+  const calendarPanCleanupRef = useRef<((shouldCommit: boolean) => void) | null>(null)
+
+  const stopCalendarPanAnimation = useCallback(
+    (options?: { commit?: boolean }) => {
+      const cleanup = calendarPanCleanupRef.current
+      if (!cleanup) return
+      calendarPanCleanupRef.current = null
+      cleanup(options?.commit ?? true)
+    },
+    [],
+  )
+
+  const animateCalendarPan = useCallback(
+    (snapDays: number, dayWidth: number, baseOffset: number) => {
+      const targetOffset = baseOffset - snapDays
+      const daysEl = calendarDaysRef.current
+      const hdrEl = calendarHeadersRef.current
+      if (!daysEl || !hdrEl || !Number.isFinite(dayWidth) || dayWidth <= 0) {
+        if (targetOffset !== baseOffset) {
+          setHistoryDayOffset(targetOffset)
+        }
+        return
+      }
+
+      if (snapDays === 0) {
+        stopCalendarPanAnimation({ commit: false })
+        const baseTransform = calendarBaseTranslateRef.current
+        daysEl.style.transition = ''
+        hdrEl.style.transition = ''
+        daysEl.style.transform = `translateX(${baseTransform}px)`
+        hdrEl.style.transform = `translateX(${baseTransform}px)`
+        return
+      }
+
+      const baseTransform = calendarBaseTranslateRef.current
+      const endTransform = baseTransform + snapDays * dayWidth
+
+      const parseCurrentTransform = (value: string): number => {
+        const match = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(value)
+        if (!match) return baseTransform
+        const parsed = Number(match[1])
+        return Number.isFinite(parsed) ? parsed : baseTransform
+      }
+
+      const currentTransform = parseCurrentTransform(daysEl.style.transform)
+      const deltaPx = endTransform - currentTransform
+      if (Math.abs(deltaPx) < 0.5) {
+        daysEl.style.transition = ''
+        hdrEl.style.transition = ''
+        daysEl.style.transform = `translateX(${baseTransform}px)`
+        hdrEl.style.transform = `translateX(${baseTransform}px)`
+        if (targetOffset !== baseOffset) {
+          setHistoryDayOffset(targetOffset)
+        }
+        return
+      }
+
+      stopCalendarPanAnimation()
+
+      const distanceFactor = Math.min(1.8, Math.max(1, Math.abs(deltaPx) / Math.max(dayWidth, 1)))
+      const duration = Math.round(
+        Math.min(PAN_MAX_ANIMATION_MS, Math.max(PAN_MIN_ANIMATION_MS, PAN_MIN_ANIMATION_MS * distanceFactor)),
+      )
+      const easing = 'cubic-bezier(0.22, 0.72, 0.28, 1)'
+
+      const finalize = (shouldCommit: boolean) => {
+        daysEl.style.transition = ''
+        hdrEl.style.transition = ''
+        if (!shouldCommit) {
+          const baseAfter = calendarBaseTranslateRef.current
+          daysEl.style.transform = `translateX(${baseAfter}px)`
+          hdrEl.style.transform = `translateX(${baseAfter}px)`
+        }
+        if (shouldCommit && targetOffset !== baseOffset) {
+          setHistoryDayOffset(targetOffset)
+        }
+      }
+
+      const onTransitionEnd = (event: TransitionEvent) => {
+        if (event.propertyName !== 'transform') {
+          return
+        }
+        daysEl.removeEventListener('transitionend', onTransitionEnd)
+        calendarPanCleanupRef.current = null
+        finalize(true)
+      }
+
+      calendarPanCleanupRef.current = (shouldCommit: boolean) => {
+        daysEl.removeEventListener('transitionend', onTransitionEnd)
+        finalize(shouldCommit)
+      }
+
+      // Start animation on next frame to ensure transition registers
+      requestAnimationFrame(() => {
+        daysEl.style.transition = `transform ${duration}ms ${easing}`
+        hdrEl.style.transition = `transform ${duration}ms ${easing}`
+        daysEl.style.transform = `translateX(${endTransform}px)`
+        hdrEl.style.transform = `translateX(${endTransform}px)`
+      })
+
+      daysEl.addEventListener('transitionend', onTransitionEnd)
+      window.setTimeout(() => {
+        const cleanup = calendarPanCleanupRef.current
+        if (!cleanup) {
+          return
+        }
+        calendarPanCleanupRef.current = null
+        cleanup(true)
+      }, duration + 60)
+    },
+    [stopCalendarPanAnimation, setHistoryDayOffset],
+  )
+
+  const resolvePanSnap = useCallback(
+    (
+      state: { baseOffset: number; startTime: number; dayCount: number },
+      dx: number,
+      dayWidth: number,
+      view: CalendarViewMode,
+      appliedDx?: number,
+    ) => {
+      const hasDayWidth = Number.isFinite(dayWidth) && dayWidth > 0
+      const effectiveDx = hasDayWidth
+        ? Number.isFinite(appliedDx)
+          ? appliedDx!
+          : clampPanDelta(dx, dayWidth, state.dayCount)
+        : 0
+      const rawDays = hasDayWidth ? effectiveDx / dayWidth : 0
+      const chunkSize = state.dayCount > 0 ? state.dayCount : 1
+      const snapUnitSpan = view === '3d'
+        ? chunkSize
+        : chunkSize <= 1
+          ? 1
+          : chunkSize
+      const effectiveRaw = snapUnitSpan === 1 ? rawDays : rawDays / snapUnitSpan
+      let snapUnits = Math.round(effectiveRaw)
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      const elapsedMs = Math.max(now - state.startTime, 1)
+      const velocityPxPerMs = dx / elapsedMs
+
+      if (snapUnits === 0) {
+        if (Math.abs(effectiveRaw) > PAN_SNAP_THRESHOLD) {
+          snapUnits = effectiveRaw > 0 ? 1 : -1
+        } else if (Math.abs(velocityPxPerMs) > PAN_FLICK_VELOCITY_PX_PER_MS) {
+          snapUnits = velocityPxPerMs > 0 ? 1 : -1
+        }
+      }
+
+      const snap = snapUnits * snapUnitSpan
+
+      const targetOffset = state.baseOffset - snap
+      return { snap, targetOffset }
+    },
+    [],
+  )
   const [activeRange, setActiveRange] = useState<ReflectionRangeKey>('24h')
   const [history, setHistory] = useState<HistoryEntry[]>(() => readPersistedHistory())
   const latestHistoryRef = useRef(history)
@@ -1696,7 +1881,6 @@ export default function ReflectionPage() {
   const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(() => readStoredActiveSession())
   const [nowTick, setNowTick] = useState(() => Date.now())
-  const [historyDayOffset, setHistoryDayOffset] = useState(0)
   const [journal, setJournal] = useState('')
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
   const [pendingNewHistoryId, setPendingNewHistoryId] = useState<string | null>(null)
@@ -2957,11 +3141,16 @@ export default function ReflectionPage() {
   const dayStart = useMemo(() => {
     const date = new Date(nowTick)
     date.setHours(0, 0, 0, 0)
+    if (calendarView === '3d' && historyDayOffset !== 0) {
+      const adjusted = new Date(date)
+      adjusted.setDate(adjusted.getDate() + historyDayOffset)
+      return adjusted.getTime()
+    }
     if (historyDayOffset !== 0) {
       date.setDate(date.getDate() + historyDayOffset)
     }
     return date.getTime()
-  }, [nowTick, historyDayOffset])
+  }, [nowTick, historyDayOffset, calendarView])
   const dayEnd = dayStart + DAY_DURATION_MS
   const anchorDate = useMemo(() => new Date(dayStart), [dayStart])
   const currentTimePercent = useMemo(() => {
@@ -3555,16 +3744,26 @@ export default function ReflectionPage() {
     if (!area) return
     const rect = area.getBoundingClientRect()
     if (rect.width <= 0) return
+    stopCalendarPanAnimation()
+    const daysEl = calendarDaysRef.current
+    const hdrEl = calendarHeadersRef.current
+    if (daysEl) {
+      daysEl.style.transition = ''
+    }
+    if (hdrEl) {
+      hdrEl.style.transition = ''
+    }
     const dayCount = calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
     calendarDragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
+      startTime: typeof performance !== 'undefined' ? performance.now() : Date.now(),
       areaWidth: rect.width,
       dayCount,
       baseOffset: historyDayOffset,
-      appliedSnap: 0,
       mode: 'pending',
+      lastAppliedDx: 0,
     }
     // Don't capture or preventDefault yet; wait until we detect horizontal intent
     const handleMove = (e: PointerEvent) => {
@@ -3597,10 +3796,10 @@ export default function ReflectionPage() {
       }
       // From here, horizontal drag is active
       try { e.preventDefault() } catch {}
-      const rawDays = dx / dayWidth
+      const constrainedDx = clampPanDelta(dx, dayWidth, state.dayCount)
+      state.lastAppliedDx = constrainedDx
       // Smooth pan: do not update historyDayOffset while dragging to avoid re-renders
-      const translatePx = rawDays * dayWidth
-      const totalPx = calendarBaseTranslateRef.current + translatePx
+      const totalPx = calendarBaseTranslateRef.current + constrainedDx
       const daysEl = calendarDaysRef.current
       if (daysEl) {
         daysEl.style.transform = `translateX(${totalPx}px)`
@@ -3619,27 +3818,44 @@ export default function ReflectionPage() {
       window.removeEventListener('pointercancel', handleUp)
       const dx = e.clientX - state.startX
       const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
+      let resetImmediately = true
       if (state.mode === 'hdrag' && Number.isFinite(dayWidth) && dayWidth > 0) {
-        const rawDays = dx / dayWidth
-        const finalSnap = Math.round(rawDays)
-        const targetOffset = state.baseOffset - finalSnap
-        setHistoryDayOffset(targetOffset)
+        const appliedDx = clampPanDelta(dx, dayWidth, state.dayCount)
+        state.lastAppliedDx = appliedDx
+        const totalPx = calendarBaseTranslateRef.current + appliedDx
+        const daysEl = calendarDaysRef.current
+        if (daysEl) {
+          daysEl.style.transform = `translateX(${totalPx}px)`
+        }
+        const hdrEl = calendarHeadersRef.current
+        if (hdrEl) {
+          hdrEl.style.transform = `translateX(${totalPx}px)`
+        }
+        const { snap } = resolvePanSnap(state, dx, dayWidth, calendarView, appliedDx)
+        if (snap !== 0) {
+          animateCalendarPan(snap, dayWidth, state.baseOffset)
+          resetImmediately = false
+        } else {
+          animateCalendarPan(0, dayWidth, state.baseOffset)
+        }
       }
-      const base = calendarBaseTranslateRef.current
-      const daysEl = calendarDaysRef.current
-      if (daysEl) {
-        daysEl.style.transform = `translateX(${base}px)`
-      }
-      const hdrEl = calendarHeadersRef.current
-      if (hdrEl) {
-        hdrEl.style.transform = `translateX(${base}px)`
+      if (resetImmediately) {
+        const base = calendarBaseTranslateRef.current
+        const daysEl = calendarDaysRef.current
+        if (daysEl) {
+          daysEl.style.transform = `translateX(${base}px)`
+        }
+        const hdrEl = calendarHeadersRef.current
+        if (hdrEl) {
+          hdrEl.style.transform = `translateX(${base}px)`
+        }
       }
       calendarDragRef.current = null
     }
     window.addEventListener('pointermove', handleMove)
     window.addEventListener('pointerup', handleUp)
     window.addEventListener('pointercancel', handleUp)
-  }, [calendarView, multiDayCount, historyDayOffset, setHistoryDayOffset])
+  }, [calendarView, multiDayCount, historyDayOffset, stopCalendarPanAnimation, resolvePanSnap, animateCalendarPan])
 
   // Build minimal calendar content for non-day views
   const renderCalendarContent = useCallback(() => {
@@ -3667,7 +3883,7 @@ export default function ReflectionPage() {
 
     if (calendarView === 'day' || calendarView === '3d' || calendarView === 'week') {
       const visibleDayCount = calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
-      const bufferDays = 2
+      const bufferDays = getCalendarBufferDays(visibleDayCount)
       const totalCount = visibleDayCount + bufferDays * 2
       // Determine range start (shifted by buffer)
       const windowStart = new Date(anchorDate)
@@ -4147,15 +4363,22 @@ export default function ReflectionPage() {
                         : calendarView === 'week'
                           ? 7
                           : 1
+                      stopCalendarPanAnimation()
+                      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+                      const daysEl = calendarDaysRef.current
+                      const hdrEl = calendarHeadersRef.current
+                      if (daysEl) daysEl.style.transition = ''
+                      if (hdrEl) hdrEl.style.transition = ''
                       calendarDragRef.current = {
                         pointerId: s.pointerId,
                         startX: s.startX,
                         startY: s.startY,
+                        startTime: now,
                         areaWidth: rect.width,
                         dayCount,
                         baseOffset: historyDayOffset,
-                        appliedSnap: 0,
                         mode: 'hdrag',
+                        lastAppliedDx: 0,
                       }
                       try { area.setPointerCapture?.(s.pointerId) } catch {}
                       panningFromEvent = true
@@ -4165,15 +4388,15 @@ export default function ReflectionPage() {
                   const state = calendarDragRef.current
                   if (state && state.mode === 'hdrag') {
                     const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
-                    if (Number.isFinite(dayWidth) && dayWidth > 0) {
-                      try { e.preventDefault() } catch {}
-                      const rawDays = dx / dayWidth
-                      const translatePx = rawDays * dayWidth
-                      const totalPx = calendarBaseTranslateRef.current + translatePx
-                      const daysEl = calendarDaysRef.current
-                      if (daysEl) daysEl.style.transform = `translateX(${totalPx}px)`
-                      const hdrEl = calendarHeadersRef.current
-                      if (hdrEl) hdrEl.style.transform = `translateX(${totalPx}px)`
+                      if (Number.isFinite(dayWidth) && dayWidth > 0) {
+                        try { e.preventDefault() } catch {}
+                        const constrainedDx = clampPanDelta(dx, dayWidth, state.dayCount)
+                        state.lastAppliedDx = constrainedDx
+                        const totalPx = calendarBaseTranslateRef.current + constrainedDx
+                        const daysEl = calendarDaysRef.current
+                        if (daysEl) daysEl.style.transform = `translateX(${totalPx}px)`
+                        const hdrEl = calendarHeadersRef.current
+                        if (hdrEl) hdrEl.style.transform = `translateX(${totalPx}px)`
                     }
                   }
                   return
@@ -4257,16 +4480,26 @@ export default function ReflectionPage() {
               const dx = e.clientX - state.startX
               const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
               if (Number.isFinite(dayWidth) && dayWidth > 0) {
-                const rawDays = dx / dayWidth
-                const finalSnap = Math.round(rawDays)
-                const targetOffset = state.baseOffset - finalSnap
-                setHistoryDayOffset(targetOffset)
+                const appliedDx = clampPanDelta(dx, dayWidth, state.dayCount)
+                state.lastAppliedDx = appliedDx
+                const totalPx = calendarBaseTranslateRef.current + appliedDx
+                const daysEl = calendarDaysRef.current
+                if (daysEl) daysEl.style.transform = `translateX(${totalPx}px)`
+                const hdrEl = calendarHeadersRef.current
+                if (hdrEl) hdrEl.style.transform = `translateX(${totalPx}px)`
+                const { snap } = resolvePanSnap(state, dx, dayWidth, calendarView, appliedDx)
+                if (snap !== 0) {
+                  animateCalendarPan(snap, dayWidth, state.baseOffset)
+                } else {
+                  animateCalendarPan(0, dayWidth, state.baseOffset)
+                }
+              } else {
+                const base = calendarBaseTranslateRef.current
+                const daysEl = calendarDaysRef.current
+                if (daysEl) daysEl.style.transform = `translateX(${base}px)`
+                const hdrEl = calendarHeadersRef.current
+                if (hdrEl) hdrEl.style.transform = `translateX(${base}px)`
               }
-              const base = calendarBaseTranslateRef.current
-              const daysEl = calendarDaysRef.current
-              if (daysEl) daysEl.style.transform = `translateX(${base}px)`
-              const hdrEl = calendarHeadersRef.current
-              if (hdrEl) hdrEl.style.transform = `translateX(${base}px)`
             }
             calendarDragRef.current = null
             // Suppress click opening preview after a pan
@@ -4424,15 +4657,22 @@ export default function ReflectionPage() {
                       : calendarView === 'week'
                         ? 7
                         : 1
+                    stopCalendarPanAnimation()
+                    const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+                    const daysEl = calendarDaysRef.current
+                    const hdrEl = calendarHeadersRef.current
+                    if (daysEl) daysEl.style.transition = ''
+                    if (hdrEl) hdrEl.style.transition = ''
                     calendarDragRef.current = {
                       pointerId,
                       startX,
                       startY,
+                      startTime: now,
                       areaWidth: rect.width,
                       dayCount,
                       baseOffset: historyDayOffset,
-                      appliedSnap: 0,
                       mode: 'hdrag',
+                      lastAppliedDx: 0,
                     }
                     try { area.setPointerCapture?.(pointerId) } catch {}
                   }
@@ -4471,9 +4711,9 @@ export default function ReflectionPage() {
                       const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
                       if (!Number.isFinite(dayWidth) || dayWidth <= 0) return
                       try { e.preventDefault() } catch {}
-                      const rawDays = dx / dayWidth
-                      const translatePx = rawDays * dayWidth
-                      const totalPx = calendarBaseTranslateRef.current + translatePx
+                      const constrainedDx = clampPanDelta(dx, dayWidth, state.dayCount)
+                      state.lastAppliedDx = constrainedDx
+                      const totalPx = calendarBaseTranslateRef.current + constrainedDx
                       const daysEl = calendarDaysRef.current
                       if (daysEl) daysEl.style.transform = `translateX(${totalPx}px)`
                       const hdrEl = calendarHeadersRef.current
@@ -4530,17 +4770,23 @@ export default function ReflectionPage() {
                         const dx = e.clientX - state.startX
                         const dayWidth = state.areaWidth / Math.max(1, state.dayCount)
                         if (Number.isFinite(dayWidth) && dayWidth > 0) {
-                          const rawDays = dx / dayWidth
-                          const finalSnap = Math.round(rawDays)
-                          const targetOffset = state.baseOffset - finalSnap
-                          setHistoryDayOffset(targetOffset)
+                          const appliedDx = clampPanDelta(dx, dayWidth, state.dayCount)
+                          state.lastAppliedDx = appliedDx
+                          const totalPx = calendarBaseTranslateRef.current + appliedDx
+                          const daysEl = calendarDaysRef.current
+                          if (daysEl) daysEl.style.transform = `translateX(${totalPx}px)`
+                          const hdrEl = calendarHeadersRef.current
+                          if (hdrEl) hdrEl.style.transform = `translateX(${totalPx}px)`
+                          const { snap } = resolvePanSnap(state, dx, dayWidth, calendarView, appliedDx)
+                          animateCalendarPan(snap, dayWidth, state.baseOffset)
+                        } else {
+                          const base = calendarBaseTranslateRef.current
+                          const daysEl = calendarDaysRef.current
+                          if (daysEl) daysEl.style.transform = `translateX(${base}px)`
+                          const hdrEl = calendarHeadersRef.current
+                          if (hdrEl) hdrEl.style.transform = `translateX(${base}px)`
                         }
                       }
-                      const base = calendarBaseTranslateRef.current
-                      const daysEl = calendarDaysRef.current
-                      if (daysEl) daysEl.style.transform = `translateX(${base}px)`
-                      const hdrEl = calendarHeadersRef.current
-                      if (hdrEl) hdrEl.style.transform = `translateX(${base}px)`
                       calendarDragRef.current = null
                       return
                     }
@@ -4825,7 +5071,7 @@ export default function ReflectionPage() {
     }
 
     return null
-  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview])
+  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, stopCalendarPanAnimation])
 
   // Small inline component: kebab actions menu inside calendar popover
   const CalendarActionsKebab = ({ onDuplicate }: { onDuplicate: () => void }) => {
@@ -5367,13 +5613,19 @@ export default function ReflectionPage() {
     const hdrEl = calendarHeadersRef.current
     if (!area || !daysEl || !hdrEl) return
     const visibleDayCount = calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
-    const bufferDays = 2
+    const bufferDays = getCalendarBufferDays(visibleDayCount)
     const dayWidth = area.clientWidth / Math.max(1, visibleDayCount)
     const base = -bufferDays * dayWidth
     calendarBaseTranslateRef.current = base
     daysEl.style.transform = `translateX(${base}px)`
     hdrEl.style.transform = `translateX(${base}px)`
   }, [calendarView, multiDayCount, anchorDate])
+
+  useEffect(() => {
+    return () => {
+      stopCalendarPanAnimation({ commit: false })
+    }
+  }, [stopCalendarPanAnimation])
 
   const handleWindowPointerMove = useCallback(
     (event: PointerEvent) => {
