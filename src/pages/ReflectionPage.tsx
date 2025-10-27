@@ -3931,6 +3931,33 @@ export default function ReflectionPage() {
           setView('year')
           return
         }
+        case 't': {
+          const now = Date.now()
+          lastCalendarHotkeyRef.current = { key: 't', timestamp: now }
+          event.preventDefault()
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          handleJumpToToday()
+          return
+        }
+        case 'p': {
+          const now = Date.now()
+          lastCalendarHotkeyRef.current = { key: 'p', timestamp: now }
+          event.preventDefault()
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          handlePrevWindow()
+          return
+        }
+        case 'n': {
+          const now = Date.now()
+          lastCalendarHotkeyRef.current = { key: 'n', timestamp: now }
+          event.preventDefault()
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          handleNextWindow()
+          return
+        }
         default: {
           lastCalendarHotkeyRef.current = { key, timestamp: Date.now() }
         }
@@ -3943,6 +3970,9 @@ export default function ReflectionPage() {
   }, [
     calendarView,
     focusMultiDayOption,
+    handleJumpToToday,
+    handleNextWindow,
+    handlePrevWindow,
     multiDayCount,
     setMultiDayCount,
     setView,
