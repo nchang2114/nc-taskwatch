@@ -1861,6 +1861,7 @@ export default function ReflectionPage() {
     lastAppliedDx: number
   } | null>(null)
   const calendarPanCleanupRef = useRef<((shouldCommit: boolean) => void) | null>(null)
+  const calendarPanDesiredOffsetRef = useRef<number>(historyDayOffset)
 
   const stopCalendarPanAnimation = useCallback(
     (options?: { commit?: boolean }) => {
@@ -1885,6 +1886,8 @@ export default function ReflectionPage() {
   const animateCalendarPan = useCallback(
     (snapDays: number, dayWidth: number, baseOffset: number) => {
       const targetOffset = baseOffset - snapDays
+      calendarPanDesiredOffsetRef.current = targetOffset
+      historyDayOffsetRef.current = targetOffset
       const daysEl = calendarDaysRef.current
       const hdrEl = calendarHeadersRef.current
       if (!daysEl || !hdrEl || !Number.isFinite(dayWidth) || dayWidth <= 0) {
@@ -1942,9 +1945,14 @@ export default function ReflectionPage() {
           const baseAfter = calendarBaseTranslateRef.current
           daysEl.style.transform = `translateX(${baseAfter}px)`
           hdrEl.style.transform = `translateX(${baseAfter}px)`
-        }
-        if (shouldCommit && targetOffset !== baseOffset) {
-          setHistoryDayOffset(targetOffset)
+          calendarPanDesiredOffsetRef.current = baseOffset
+          historyDayOffsetRef.current = baseOffset
+        } else {
+          calendarPanDesiredOffsetRef.current = targetOffset
+          historyDayOffsetRef.current = targetOffset
+          if (targetOffset !== baseOffset) {
+            setHistoryDayOffset(targetOffset)
+          }
         }
       }
 
@@ -3777,6 +3785,7 @@ export default function ReflectionPage() {
 
   useEffect(() => {
     historyDayOffsetRef.current = historyDayOffset
+    calendarPanDesiredOffsetRef.current = historyDayOffset
   }, [historyDayOffset])
 
   const navigateByDelta = useCallback(
@@ -3784,15 +3793,17 @@ export default function ReflectionPage() {
       if (delta === 0) {
         return
       }
-      const startOffset = historyDayOffsetRef.current
-      const targetOffset = startOffset + delta
+      const baseOffset = calendarPanDesiredOffsetRef.current
+      const targetOffset = baseOffset + delta
       if (!(calendarView === 'day' || calendarView === '3d' || calendarView === 'week')) {
+        calendarPanDesiredOffsetRef.current = targetOffset
         historyDayOffsetRef.current = targetOffset
         setHistoryDayOffset(targetOffset)
         return
       }
       const area = calendarDaysAreaRef.current
       if (!area) {
+        calendarPanDesiredOffsetRef.current = targetOffset
         historyDayOffsetRef.current = targetOffset
         setHistoryDayOffset(targetOffset)
         return
@@ -3805,13 +3816,16 @@ export default function ReflectionPage() {
             : 1
       const dayWidth = area.clientWidth / Math.max(1, visibleDayCount)
       if (!Number.isFinite(dayWidth) || dayWidth <= 0) {
+        calendarPanDesiredOffsetRef.current = targetOffset
         historyDayOffsetRef.current = targetOffset
         setHistoryDayOffset(targetOffset)
         return
       }
       stopCalendarPanAnimation({ commit: true })
-      const snapDays = -delta
-      animateCalendarPan(snapDays, dayWidth, startOffset)
+      calendarPanDesiredOffsetRef.current = targetOffset
+      historyDayOffsetRef.current = targetOffset
+      const snapDays = -(targetOffset - baseOffset)
+      animateCalendarPan(snapDays, dayWidth, baseOffset)
     },
     [animateCalendarPan, calendarView, multiDayCount, stopCalendarPanAnimation],
   )
