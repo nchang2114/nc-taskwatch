@@ -6894,10 +6894,17 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     fromIndex: number,
     toIndex: number,
   ) => {
-    // Determine moved task id based on current state before mutation
     const bucket = goals.find((g) => g.id === goalId)?.buckets.find((b) => b.id === bucketId)
-    const listBefore = (bucket?.tasks ?? []).filter((t) => (section === 'active' ? !t.completed : t.completed))
-    const movedId = listBefore[fromIndex]?.id
+    if (!bucket) {
+      return
+    }
+    const sectionTasks = bucket.tasks.filter((task) => (section === 'active' ? !task.completed : task.completed))
+    const movedTask = sectionTasks[fromIndex]
+    if (!movedTask) {
+      return
+    }
+
+    let persistedIndex: number | null = null
     setGoals((gs) =>
       gs.map((g) => {
         if (g.id !== goalId) return g
@@ -6908,20 +6915,30 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
             const active = b.tasks.filter((t) => !t.completed)
             const completed = b.tasks.filter((t) => t.completed)
             const list = section === 'active' ? active : completed
-            if (fromIndex < 0 || fromIndex >= list.length || toIndex < 0 || toIndex >= list.length) {
+            const listLength = list.length
+            if (fromIndex < 0 || fromIndex >= listLength) {
               return b
             }
             const nextList = list.slice()
             const [moved] = nextList.splice(fromIndex, 1)
-            nextList.splice(toIndex, 0, moved)
+            if (!moved) {
+              return b
+            }
+            const cappedIndex = Math.max(0, Math.min(toIndex, nextList.length))
+            nextList.splice(cappedIndex, 0, moved)
+            if (cappedIndex !== fromIndex) {
+              const rawPersisted = cappedIndex > fromIndex ? cappedIndex + 1 : cappedIndex
+              const clampedPersisted = Math.max(0, Math.min(rawPersisted, listLength))
+              persistedIndex = clampedPersisted
+            }
             const newTasks = section === 'active' ? [...nextList, ...completed] : [...active, ...nextList]
             return { ...b, tasks: newTasks }
           }),
         }
       }),
     )
-    if (movedId) {
-      apiSetTaskSortIndex(bucketId, section, toIndex, movedId).catch(() => {})
+    if (persistedIndex !== null) {
+      apiSetTaskSortIndex(bucketId, section, persistedIndex, movedTask.id).catch(() => {})
     }
   }
 
