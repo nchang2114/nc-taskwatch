@@ -1838,7 +1838,6 @@ export default function ReflectionPage() {
   const [multiDayCount, setMultiDayCount] = useState<number>(4)
   const [showMultiDayChooser, setShowMultiDayChooser] = useState(false)
   const [historyDayOffset, setHistoryDayOffset] = useState(0)
-  const historyDayOffsetRef = useRef(historyDayOffset)
   const multiChooserRef = useRef<HTMLDivElement | null>(null)
   const lastCalendarHotkeyRef = useRef<{ key: string; timestamp: number } | null>(null)
   const multiDayKeyboardStateRef = useRef<{ active: boolean; selection: number }>({
@@ -3775,59 +3774,17 @@ export default function ReflectionPage() {
     [daysInMonth, multiDayCount],
   )
 
-  useEffect(() => {
-    historyDayOffsetRef.current = historyDayOffset
-  }, [historyDayOffset])
-
-  const navigateByDelta = useCallback(
-    (delta: number) => {
-      if (delta === 0) {
-        return
-      }
-      const startOffset = historyDayOffsetRef.current
-      const targetOffset = startOffset + delta
-      if (!(calendarView === 'day' || calendarView === '3d' || calendarView === 'week')) {
-        historyDayOffsetRef.current = targetOffset
-        setHistoryDayOffset(targetOffset)
-        return
-      }
-      const area = calendarDaysAreaRef.current
-      if (!area) {
-        historyDayOffsetRef.current = targetOffset
-        setHistoryDayOffset(targetOffset)
-        return
-      }
-      const visibleDayCount =
-        calendarView === '3d'
-          ? Math.max(2, Math.min(multiDayCount, 14))
-          : calendarView === 'week'
-            ? 7
-            : 1
-      const dayWidth = area.clientWidth / Math.max(1, visibleDayCount)
-      if (!Number.isFinite(dayWidth) || dayWidth <= 0) {
-        historyDayOffsetRef.current = targetOffset
-        setHistoryDayOffset(targetOffset)
-        return
-      }
-      stopCalendarPanAnimation({ commit: true })
-      const snapDays = -delta
-      animateCalendarPan(snapDays, dayWidth, startOffset)
-    },
-    [animateCalendarPan, calendarView, multiDayCount, stopCalendarPanAnimation],
-  )
-
   const handlePrevWindow = useCallback(() => {
-    navigateByDelta(-stepSizeByView[calendarView])
-  }, [calendarView, navigateByDelta, stepSizeByView])
+    setHistoryDayOffset((offset) => offset - stepSizeByView[calendarView])
+  }, [calendarView, stepSizeByView])
 
   const handleNextWindow = useCallback(() => {
-    navigateByDelta(stepSizeByView[calendarView])
-  }, [calendarView, navigateByDelta, stepSizeByView])
+    setHistoryDayOffset((offset) => offset + stepSizeByView[calendarView])
+  }, [calendarView, stepSizeByView])
 
   const handleJumpToToday = useCallback(() => {
-    const currentOffset = historyDayOffsetRef.current
-    navigateByDelta(-currentOffset)
-  }, [navigateByDelta])
+    setHistoryDayOffset(0)
+  }, [])
 
   const setView = useCallback((view: CalendarViewMode) => {
     setCalendarView(view)
@@ -3972,33 +3929,6 @@ export default function ReflectionPage() {
           setShowMultiDayChooser(false)
           multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
           setView('year')
-          return
-        }
-        case 'p': {
-          const now = Date.now()
-          lastCalendarHotkeyRef.current = { key: 'p', timestamp: now }
-          event.preventDefault()
-          setShowMultiDayChooser(false)
-          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
-          handlePrevWindow()
-          return
-        }
-        case 'n': {
-          const now = Date.now()
-          lastCalendarHotkeyRef.current = { key: 'n', timestamp: now }
-          event.preventDefault()
-          setShowMultiDayChooser(false)
-          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
-          handleNextWindow()
-          return
-        }
-        case 't': {
-          const now = Date.now()
-          lastCalendarHotkeyRef.current = { key: 't', timestamp: now }
-          event.preventDefault()
-          setShowMultiDayChooser(false)
-          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
-          handleJumpToToday()
           return
         }
         default: {
