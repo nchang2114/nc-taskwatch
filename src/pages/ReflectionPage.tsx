@@ -5308,9 +5308,14 @@ export default function ReflectionPage() {
       if (editingState) {
         return
       }
-      event.preventDefault()
-      event.stopPropagation()
-      const snapshot = getCaretSnapshotFromPoint(event.clientX, event.clientY)
+      if (event.pointerType === 'mouse') {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+      const snapshot =
+        event.pointerType === 'mouse'
+          ? getCaretSnapshotFromPoint(event.clientX, event.clientY)
+          : null
       startEditingTitle({ selectionSnapshot: snapshot })
     }
     const handleTitleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
