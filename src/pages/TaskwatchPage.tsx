@@ -1490,7 +1490,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     [notebookSubtasks],
   )
   const subtaskProgressLabel = notebookSubtasks.length > 0 ? `${completedNotebookSubtasks}/${notebookSubtasks.length}` : null
-  const hasNotebookContent = notebookNotes.trim().length > 0 || notebookSubtasks.length > 0
   const notesFieldId = useMemo(() => {
     const safeKey = notebookKey.replace(/[^a-z0-9-]/gi, '-') || 'scratchpad'
     return `taskwatch-notes-${safeKey}`
@@ -1534,6 +1533,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     ],
   )
   const pendingNotebookSubtaskFocusRef = useRef<{ notebookKey: string; subtaskId: string } | null>(null)
+  const previousNotebookSubtaskIdsRef = useRef<Set<string>>(new Set())
+  const notebookSubtaskIdsInitializedRef = useRef(false)
+  useEffect(() => {
+    previousNotebookSubtaskIdsRef.current = new Set()
+    notebookSubtaskIdsInitializedRef.current = false
+  }, [notebookKey])
   const handleAddNotebookSubtask = useCallback(
     (options?: { focus?: boolean }) => {
       let created: NotebookSubtask | null = null
@@ -1559,14 +1564,36 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     [blockNotebookHydration, notebookKey, updateFocusSourceFromEntry, updateNotebookForKey],
   )
   useEffect(() => {
-    const pending = pendingNotebookSubtaskFocusRef.current
+    const previousIds = previousNotebookSubtaskIdsRef.current
+    const nextIds = new Set<string>()
+    notebookSubtasks.forEach((subtask) => {
+      nextIds.add(subtask.id)
+    })
+
+    let pending = pendingNotebookSubtaskFocusRef.current
+    if (!notebookSubtaskIdsInitializedRef.current) {
+      notebookSubtaskIdsInitializedRef.current = true
+    } else if (!pending || pending.notebookKey !== notebookKey) {
+      const newestBlankSubtask = [...notebookSubtasks]
+        .slice()
+        .reverse()
+        .find((subtask) => !previousIds.has(subtask.id) && subtask.text.trim().length === 0)
+      if (newestBlankSubtask) {
+        pending = { notebookKey, subtaskId: newestBlankSubtask.id }
+        pendingNotebookSubtaskFocusRef.current = pending
+      }
+    }
+
+    previousNotebookSubtaskIdsRef.current = nextIds
+
     if (!pending || pending.notebookKey !== notebookKey) {
       return
     }
     if (typeof window === 'undefined') {
       return
     }
-    const inputId = makeNotebookSubtaskInputId(notebookKey, pending.subtaskId)
+    const focusTarget = pending
+    const inputId = makeNotebookSubtaskInputId(notebookKey, focusTarget.subtaskId)
     let attempts = 0
     let rafId: number | null = null
     let timeoutId: number | null = null
@@ -1581,15 +1608,30 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         timeoutId = null
       }
     }
+    const clearPendingIfMatch = () => {
+      const currentPending = pendingNotebookSubtaskFocusRef.current
+      if (
+        currentPending &&
+        currentPending.notebookKey === focusTarget.notebookKey &&
+        currentPending.subtaskId === focusTarget.subtaskId
+      ) {
+        pendingNotebookSubtaskFocusRef.current = null
+      }
+    }
 
     const tryFocus = () => {
       const input = document.getElementById(inputId) as HTMLInputElement | null
       if (input) {
         try {
           input.focus()
-          input.select()
+          if (typeof input.setSelectionRange === 'function') {
+            const end = input.value.length
+            input.setSelectionRange(end, end)
+          } else {
+            input.select()
+          }
         } catch {}
-        pendingNotebookSubtaskFocusRef.current = null
+        clearPendingIfMatch()
         cleanup()
         return
       }
@@ -1602,7 +1644,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         }
         return
       }
-      pendingNotebookSubtaskFocusRef.current = null
+      clearPendingIfMatch()
       cleanup()
     }
 
@@ -1760,32 +1802,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       updateNotebookForKey,
     ],
   )
-  const handleNotebookClear = useCallback(() => {
-    const previous = activeNotebookEntry
-    blockNotebookHydration()
-    const result = updateNotebookForKey(notebookKey, () => createNotebookEntry())
-    if (!result || !result.changed) {
-      return
-    }
-    if (activeTaskId) {
-      if (previous.subtasks.length > 0) {
-        previous.subtasks.forEach((subtask) => {
-          cancelNotebookSubtaskPersist(activeTaskId, subtask.id)
-        })
-      }
-      updateGoalSnapshotTask(activeTaskId, result.entry)
-    }
-    updateFocusSourceFromEntry(result.entry)
-  }, [
-    activeNotebookEntry,
-    activeTaskId,
-    cancelNotebookSubtaskPersist,
-    notebookKey,
-    blockNotebookHydration,
-    updateFocusSourceFromEntry,
-    updateGoalSnapshotTask,
-    updateNotebookForKey,
-  ])
   const notebookSection = useMemo(
     () => (
       <section className="taskwatch-notes" aria-label="Notes and subtasks">
@@ -1797,11 +1813,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
               <span className="taskwatch-notes__context">{focusContextLabel}</span>
             </p>
           </div>
-          {hasNotebookContent ? (
-            <button type="button" className="taskwatch-notes__clear" onClick={handleNotebookClear}>
-              Clear
-            </button>
-          ) : null}
         </div>
 
         <div className="taskwatch-notes__subtasks">
@@ -1834,7 +1845,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                     subtask.completed && 'taskwatch-notes__item--completed',
                   )}
                 >
-                  <label className="taskwatch-notes__subtask">
+                  <div className="taskwatch-notes__subtask">
                     <input
                       type="checkbox"
                       className="taskwatch-notes__checkbox goal-task-details__checkbox"
@@ -1863,7 +1874,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                       onBlur={() => handleNotebookSubtaskBlur(subtask.id)}
                       placeholder="Describe subtask"
                     />
-                  </label>
+                  </div>
                   <button
                     type="button"
                     className="taskwatch-notes__remove"
@@ -1896,13 +1907,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     [
       focusContextLabel,
       handleAddNotebookSubtask,
-      handleNotebookClear,
       handleNotebookNotesChange,
       handleNotebookSubtaskBlur,
       handleNotebookSubtaskRemove,
       handleNotebookSubtaskTextChange,
       handleNotebookSubtaskToggle,
-      hasNotebookContent,
       notebookKey,
       notebookNotes,
       notebookSubtasks,
