@@ -866,42 +866,6 @@ function reconcileGoalsWithSnapshot(snapshot: GoalSnapshot[], current: Goal[]): 
   })
 }
 
-function createTaskDetailsFromSnapshot(
-  snapshot: GoalSnapshot[],
-  previous: TaskDetailsState,
-): TaskDetailsState {
-  const next: TaskDetailsState = {}
-  snapshot.forEach((goal) => {
-    goal.buckets.forEach((bucket) => {
-      bucket.tasks.forEach((task) => {
-        const existing = previous[task.id]
-        const normalizedSubtasks = Array.isArray(task.subtasks)
-          ? task.subtasks.map((subtask, index) => {
-              const fallback =
-                existing?.subtasks.find((item) => item.id === subtask.id)?.sortIndex ??
-                (index + 1) * SUBTASK_SORT_STEP
-              const sortIndex =
-                typeof subtask.sortIndex === 'number' ? subtask.sortIndex : fallback
-              return {
-                id: subtask.id,
-                text: subtask.text,
-                completed: subtask.completed,
-                sortIndex,
-              }
-            })
-          : []
-        next[task.id] = {
-          notes: typeof task.notes === 'string' ? task.notes : existing?.notes ?? '',
-          subtasks: normalizedSubtasks,
-          expanded: existing?.expanded ?? false,
-          subtasksCollapsed: existing?.subtasksCollapsed ?? false,
-        }
-      })
-    })
-  })
-  return next
-}
-
 const BASE_GRADIENT_PREVIEW: Record<string, string> = {
   'from-fuchsia-500 to-purple-500': 'linear-gradient(135deg, #f471b5 0%, #a855f7 50%, #6b21a8 100%)',
   'from-emerald-500 to-cyan-500': 'linear-gradient(135deg, #34d399 0%, #10b981 45%, #0ea5e9 100%)',
@@ -4467,6 +4431,11 @@ export default function GoalsPage(): ReactElement {
   const [searchTerm, setSearchTerm] = useState('')
   const [taskDetails, setTaskDetails] = useState<TaskDetailsState>(() => readStoredTaskDetails())
   const taskDetailsRef = useRef<TaskDetailsState>(taskDetails)
+  const pendingGoalSubtaskFocusRef = useRef<{ taskId: string; subtaskId: string } | null>(null)
+  const taskNotesSaveTimersRef = useRef<Map<string, number>>(new Map())
+  const taskNotesLatestRef = useRef<Map<string, string>>(new Map())
+  const subtaskSaveTimersRef = useRef<Map<string, number>>(new Map())
+  const subtaskLatestRef = useRef<Map<string, TaskSubtask>>(new Map())
   const isMountedRef = useRef(true)
   const goalsRefreshInFlightRef = useRef(false)
   const goalsRefreshPendingRef = useRef(false)
@@ -4484,6 +4453,130 @@ export default function GoalsPage(): ReactElement {
   useEffect(() => {
     taskDetailsRef.current = taskDetails
   }, [taskDetails])
+  const mergeSubtasksWithSources = useCallback(
+    (taskId: string, remote: TaskSubtask[], sources: TaskSubtask[][]): TaskSubtask[] => {
+      const merged = new Map<string, TaskSubtask>()
+
+      remote.forEach((item) => {
+        if (!item) {
+          return
+        }
+        const pending = subtaskLatestRef.current.get(`${taskId}:${item.id}`)
+        const base = pending ?? item
+        merged.set(item.id, {
+          id: base.id,
+          text: base.text,
+          completed: base.completed,
+          sortIndex:
+            typeof base.sortIndex === 'number' ? base.sortIndex : SUBTASK_SORT_STEP,
+        })
+      })
+
+      sources.forEach((collection) => {
+        collection.forEach((item) => {
+          if (!item) {
+            return
+          }
+          const key = `${taskId}:${item.id}`
+          const pending = subtaskLatestRef.current.get(key)
+          const existing = merged.get(item.id)
+          if (!existing) {
+            const base = pending ?? item
+            merged.set(item.id, {
+              id: base.id,
+              text: base.text,
+              completed: base.completed,
+              sortIndex:
+                typeof base.sortIndex === 'number' ? base.sortIndex : SUBTASK_SORT_STEP,
+            })
+            return
+          }
+          if (pending) {
+            merged.set(item.id, {
+              id: pending.id,
+              text: pending.text,
+              completed: pending.completed,
+              sortIndex:
+                typeof pending.sortIndex === 'number' ? pending.sortIndex : SUBTASK_SORT_STEP,
+            })
+          }
+        })
+      })
+
+      return Array.from(merged.values()).sort((a, b) => a.sortIndex - b.sortIndex)
+    },
+    [subtaskLatestRef],
+  )
+
+  const mergeIncomingGoals = useCallback(
+    (currentGoals: Goal[], incomingGoals: Goal[]): Goal[] =>
+      incomingGoals.map((goal) => {
+        const existingGoal = currentGoals.find((item) => item.id === goal.id)
+        return {
+          ...goal,
+          customGradient: goal.customGradient ?? existingGoal?.customGradient,
+          buckets: goal.buckets.map((bucket) => {
+            const existingBucket = existingGoal?.buckets.find((item) => item.id === bucket.id)
+            return {
+              ...bucket,
+              tasks: bucket.tasks.map((task) => {
+                const existingTask = existingBucket?.tasks.find((item) => item.id === task.id)
+                const pendingNotes = taskNotesLatestRef.current.get(task.id)
+                const mergedNotes =
+                  pendingNotes !== undefined
+                    ? pendingNotes
+                    : typeof task.notes === 'string'
+                      ? task.notes
+                      : existingTask?.notes ?? ''
+                const remoteSubtasks = Array.isArray(task.subtasks) ? task.subtasks : []
+                const mergedSubtasks = mergeSubtasksWithSources(task.id, remoteSubtasks, [
+                  existingTask?.subtasks ?? [],
+                  taskDetailsRef.current[task.id]?.subtasks ?? [],
+                ])
+                return {
+                  ...task,
+                  notes: mergedNotes,
+                  subtasks: mergedSubtasks,
+                }
+              }),
+            }
+          }),
+        }
+      }),
+    [mergeSubtasksWithSources, taskDetailsRef, taskNotesLatestRef],
+  )
+
+  const mergeIncomingTaskDetails = useCallback(
+    (currentDetails: TaskDetailsState, incomingGoals: Goal[]): TaskDetailsState => {
+      const next: TaskDetailsState = {}
+      incomingGoals.forEach((goal) => {
+        goal.buckets.forEach((bucket) => {
+          bucket.tasks.forEach((task) => {
+            const existing = currentDetails[task.id]
+            const pendingNotes = taskNotesLatestRef.current.get(task.id)
+            const notes =
+              pendingNotes !== undefined
+                ? pendingNotes
+                : typeof task.notes === 'string'
+                  ? task.notes
+                  : existing?.notes ?? ''
+            const remoteSubtasks = Array.isArray(task.subtasks) ? task.subtasks : []
+            const mergedSubtasks = mergeSubtasksWithSources(task.id, remoteSubtasks, [
+              existing?.subtasks ?? [],
+            ])
+            next[task.id] = {
+              notes,
+              subtasks: mergedSubtasks,
+              expanded: existing?.expanded ?? false,
+              subtasksCollapsed: existing?.subtasksCollapsed ?? false,
+            }
+          })
+        })
+      })
+      return next
+    },
+    [mergeSubtasksWithSources, taskNotesLatestRef],
+  )
 
   useEffect(() => {
     return () => {
@@ -4494,26 +4587,10 @@ export default function GoalsPage(): ReactElement {
   const applySupabaseGoalsPayload = useCallback(
     (payload: any[]) => {
       const normalized = normalizeSupabaseGoalsPayload(payload) as Goal[]
-      setGoals(normalized)
-      setTaskDetails((current) => {
-        const next: TaskDetailsState = {}
-        normalized.forEach((goal) => {
-          goal.buckets.forEach((bucket) => {
-            bucket.tasks.forEach((task) => {
-              const existing = current[task.id]
-              next[task.id] = {
-                notes: typeof task.notes === 'string' ? task.notes : '',
-                subtasks: (task.subtasks ?? []).map((subtask) => ({ ...subtask })),
-                expanded: existing?.expanded ?? false,
-                subtasksCollapsed: existing?.subtasksCollapsed ?? false,
-              }
-            })
-          })
-        })
-        return next
-      })
+      setGoals((current) => mergeIncomingGoals(current, normalized))
+      setTaskDetails((current) => mergeIncomingTaskDetails(current, normalized))
     },
-    [setGoals, setTaskDetails],
+    [mergeIncomingGoals, mergeIncomingTaskDetails],
   )
 
   const refreshGoalsFromSupabase = useCallback(
@@ -4562,8 +4639,16 @@ export default function GoalsPage(): ReactElement {
         if (cancelled) {
           return
         }
-        setGoals((current) => reconcileGoalsWithSnapshot(snapshot, current))
-        setTaskDetails((current) => createTaskDetailsFromSnapshot(snapshot, current))
+        let normalizedGoals: Goal[] | null = null
+        setGoals((current) => {
+          const reconciled = reconcileGoalsWithSnapshot(snapshot, current)
+          normalizedGoals = reconciled
+          return mergeIncomingGoals(current, reconciled)
+        })
+        if (normalizedGoals) {
+          const normalizedSnapshot = normalizedGoals
+          setTaskDetails((current) => mergeIncomingTaskDetails(current, normalizedSnapshot))
+        }
       }
       if (typeof queueMicrotask === 'function') {
         queueMicrotask(run)
@@ -4580,7 +4665,7 @@ export default function GoalsPage(): ReactElement {
       cancelled = true
       unsubscribe()
     }
-  }, [refreshGoalsFromSupabase])
+  }, [mergeIncomingGoals, mergeIncomingTaskDetails, refreshGoalsFromSupabase])
 
   useEffect(() => {
     const validTaskIds = new Set<string>()
@@ -4666,18 +4751,13 @@ export default function GoalsPage(): ReactElement {
     },
     [],
   )
-
-  const pendingGoalSubtaskFocusRef = useRef<{ taskId: string; subtaskId: string } | null>(null)
-  const taskNotesSaveTimersRef = useRef<Map<string, number>>(new Map())
-  const taskNotesLatestRef = useRef<Map<string, string>>(new Map())
-  const subtaskSaveTimersRef = useRef<Map<string, number>>(new Map())
-  const subtaskLatestRef = useRef<Map<string, TaskSubtask>>(new Map())
-
   const scheduleTaskNotesPersist = useCallback(
     (taskId: string, notes: string) => {
       if (typeof window === 'undefined') {
         void apiUpdateTaskNotes(taskId, notes)
-          .then(() => refreshGoalsFromSupabase('goal-notes-save'))
+          .then(() => {
+            taskNotesLatestRef.current.delete(taskId)
+          })
           .catch((error) => console.warn('[GoalsPage] Failed to persist task notes:', error))
         return
       }
@@ -4691,12 +4771,16 @@ export default function GoalsPage(): ReactElement {
         timers.delete(taskId)
         const latest = taskNotesLatestRef.current.get(taskId) ?? ''
         void apiUpdateTaskNotes(taskId, latest)
-          .then(() => refreshGoalsFromSupabase('goal-notes-save'))
+          .then(() => {
+            if (taskNotesLatestRef.current.get(taskId) === latest) {
+              taskNotesLatestRef.current.delete(taskId)
+            }
+          })
           .catch((error) => console.warn('[GoalsPage] Failed to persist task notes:', error))
       }, 500)
       timers.set(taskId, handle)
     },
-    [apiUpdateTaskNotes, refreshGoalsFromSupabase],
+    [apiUpdateTaskNotes],
   )
 
   const cancelPendingSubtaskSave = useCallback((taskId: string, subtaskId: string) => {
@@ -4723,13 +4807,25 @@ export default function GoalsPage(): ReactElement {
       const key = `${taskId}:${subtask.id}`
       subtaskLatestRef.current.set(key, { ...subtask })
       if (typeof window === 'undefined') {
+        const payload = { ...subtask }
         void apiUpsertTaskSubtask(taskId, {
-          id: subtask.id,
-          text: subtask.text,
-          completed: subtask.completed,
-          sort_index: subtask.sortIndex,
+          id: payload.id,
+          text: payload.text,
+          completed: payload.completed,
+          sort_index: payload.sortIndex,
         })
-          .then(() => refreshGoalsFromSupabase('goal-subtask-save'))
+          .then(() => {
+            const currentLatest = subtaskLatestRef.current.get(key)
+            if (
+              currentLatest &&
+              currentLatest.id === payload.id &&
+              currentLatest.text === payload.text &&
+              currentLatest.completed === payload.completed &&
+              currentLatest.sortIndex === payload.sortIndex
+            ) {
+              subtaskLatestRef.current.delete(key)
+            }
+          })
           .catch((error) => console.warn('[GoalsPage] Failed to persist subtask:', error))
         return
       }
@@ -4744,18 +4840,30 @@ export default function GoalsPage(): ReactElement {
         if (!latest || latest.text.trim().length === 0) {
           return
         }
+        const payload = { ...latest }
         void apiUpsertTaskSubtask(taskId, {
-          id: latest.id,
-          text: latest.text,
-          completed: latest.completed,
-          sort_index: latest.sortIndex,
+          id: payload.id,
+          text: payload.text,
+          completed: payload.completed,
+          sort_index: payload.sortIndex,
         })
-          .then(() => refreshGoalsFromSupabase('goal-subtask-save'))
+          .then(() => {
+            const currentLatest = subtaskLatestRef.current.get(key)
+            if (
+              currentLatest &&
+              currentLatest.id === payload.id &&
+              currentLatest.text === payload.text &&
+              currentLatest.completed === payload.completed &&
+              currentLatest.sortIndex === payload.sortIndex
+            ) {
+              subtaskLatestRef.current.delete(key)
+            }
+          })
           .catch((error) => console.warn('[GoalsPage] Failed to persist subtask:', error))
       }, 400)
       timers.set(key, handle)
     },
-    [apiUpsertTaskSubtask, cancelPendingSubtaskSave, refreshGoalsFromSupabase],
+    [apiUpsertTaskSubtask, cancelPendingSubtaskSave],
   )
 
   const flushSubtaskPersist = useCallback(
@@ -4764,16 +4872,29 @@ export default function GoalsPage(): ReactElement {
       if (subtask.text.trim().length === 0) {
         return
       }
+      const payload = { ...subtask }
       void apiUpsertTaskSubtask(taskId, {
-        id: subtask.id,
-        text: subtask.text,
-        completed: subtask.completed,
-        sort_index: subtask.sortIndex,
+        id: payload.id,
+        text: payload.text,
+        completed: payload.completed,
+        sort_index: payload.sortIndex,
       })
-        .then(() => refreshGoalsFromSupabase('goal-subtask-save'))
+        .then(() => {
+          const key = `${taskId}:${payload.id}`
+          const currentLatest = subtaskLatestRef.current.get(key)
+          if (
+            currentLatest &&
+            currentLatest.id === payload.id &&
+            currentLatest.text === payload.text &&
+            currentLatest.completed === payload.completed &&
+            currentLatest.sortIndex === payload.sortIndex
+          ) {
+            subtaskLatestRef.current.delete(key)
+          }
+        })
         .catch((error) => console.warn('[GoalsPage] Failed to persist subtask:', error))
     },
-    [apiUpsertTaskSubtask, cancelPendingSubtaskSave, refreshGoalsFromSupabase],
+    [apiUpsertTaskSubtask, cancelPendingSubtaskSave],
   )
 
   const handleToggleTaskDetails = useCallback(
@@ -4890,9 +5011,9 @@ export default function GoalsPage(): ReactElement {
         }))
         updateGoalTaskSubtasks(taskId, (current) => current.filter((item) => item.id !== subtaskId))
         cancelPendingSubtaskSave(taskId, subtaskId)
-        void apiDeleteTaskSubtask(taskId, subtaskId)
-          .then(() => refreshGoalsFromSupabase('goal-subtask-delete'))
-          .catch((error) => console.warn('[GoalsPage] Failed to delete empty subtask:', error))
+        void apiDeleteTaskSubtask(taskId, subtaskId).catch((error) =>
+          console.warn('[GoalsPage] Failed to delete empty subtask:', error),
+        )
         return
       }
       const normalized: TaskSubtask =
@@ -4906,7 +5027,7 @@ export default function GoalsPage(): ReactElement {
       )
       flushSubtaskPersist(taskId, normalized)
     },
-    [cancelPendingSubtaskSave, flushSubtaskPersist, refreshGoalsFromSupabase, updateGoalTaskSubtasks, updateTaskDetails],
+    [cancelPendingSubtaskSave, flushSubtaskPersist, updateGoalTaskSubtasks, updateTaskDetails],
   )
 
   const handleToggleSubtaskSection = useCallback(
@@ -4962,11 +5083,11 @@ export default function GoalsPage(): ReactElement {
       }
       updateGoalTaskSubtasks(taskId, (current) => current.filter((item) => item.id !== subtaskId))
       cancelPendingSubtaskSave(taskId, subtaskId)
-      void apiDeleteTaskSubtask(taskId, subtaskId)
-        .then(() => refreshGoalsFromSupabase('goal-subtask-delete'))
-        .catch((error) => console.warn('[GoalsPage] Failed to remove subtask:', error))
+      void apiDeleteTaskSubtask(taskId, subtaskId).catch((error) =>
+        console.warn('[GoalsPage] Failed to remove subtask:', error),
+      )
     },
-    [cancelPendingSubtaskSave, refreshGoalsFromSupabase, updateGoalTaskSubtasks, updateTaskDetails],
+    [cancelPendingSubtaskSave, updateGoalTaskSubtasks, updateTaskDetails],
   )
   const [nextGoalGradientIndex, setNextGoalGradientIndex] = useState(() => DEFAULT_GOALS.length % GOAL_GRADIENTS.length)
   const [activeCustomizerGoalId, setActiveCustomizerGoalId] = useState<string | null>(null)
@@ -5030,15 +5151,9 @@ export default function GoalsPage(): ReactElement {
     }
     window.addEventListener('focus', handleFocus)
     document.addEventListener('visibilitychange', handleVisibility)
-    const interval = window.setInterval(() => {
-      if (!document.hidden) {
-        refreshGoalsFromSupabase('interval')
-      }
-    }, 60000)
     return () => {
       window.removeEventListener('focus', handleFocus)
       document.removeEventListener('visibilitychange', handleVisibility)
-      window.clearInterval(interval)
     }
   }, [refreshGoalsFromSupabase])
 
