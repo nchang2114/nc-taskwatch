@@ -1551,7 +1551,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         return
       }
       const createdSubtask: NotebookSubtask = created
-      if (options?.focus) {
+      if (options?.focus !== false) {
         pendingNotebookSubtaskFocusRef.current = { notebookKey, subtaskId: createdSubtask.id }
       }
       updateFocusSourceFromEntry(result.entry)
@@ -1568,22 +1568,46 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     }
     const inputId = makeNotebookSubtaskInputId(notebookKey, pending.subtaskId)
     let attempts = 0
+    let rafId: number | null = null
+    let timeoutId: number | null = null
+
+    const cleanup = () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId)
+        rafId = null
+      }
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId)
+        timeoutId = null
+      }
+    }
+
     const tryFocus = () => {
       const input = document.getElementById(inputId) as HTMLInputElement | null
       if (input) {
-        input.focus()
-        input.select()
+        try {
+          input.focus()
+          input.select()
+        } catch {}
         pendingNotebookSubtaskFocusRef.current = null
+        cleanup()
         return
       }
-      if (typeof window.requestAnimationFrame === 'function' && attempts < 2) {
-        attempts += 1
-        window.requestAnimationFrame(tryFocus)
-      } else {
-        pendingNotebookSubtaskFocusRef.current = null
+      attempts += 1
+      if (attempts < 4) {
+        if (attempts <= 2 && typeof window.requestAnimationFrame === 'function') {
+          rafId = window.requestAnimationFrame(tryFocus)
+        } else {
+          timeoutId = window.setTimeout(tryFocus, 60)
+        }
+        return
       }
+      pendingNotebookSubtaskFocusRef.current = null
+      cleanup()
     }
+
     tryFocus()
+    return cleanup
   }, [notebookKey, notebookSubtasks])
   const handleNotebookSubtaskTextChange = useCallback(
     (subtaskId: string, value: string) => {
@@ -1793,7 +1817,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             <button
               type="button"
               className="taskwatch-notes__add"
-              onClick={() => handleAddNotebookSubtask({ focus: true })}
+              onClick={() => handleAddNotebookSubtask()}
             >
               + Subtask
             </button>
@@ -1828,12 +1852,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                       onChange={(event) => handleNotebookSubtaskTextChange(subtask.id, event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
+                          event.preventDefault()
                           const currentValue = event.currentTarget.value.trim()
                           if (currentValue.length === 0) {
                             return
                           }
-                          event.preventDefault()
-                          handleAddNotebookSubtask({ focus: true })
+                          handleAddNotebookSubtask()
                         }
                       }}
                       onBlur={() => handleNotebookSubtaskBlur(subtask.id)}
