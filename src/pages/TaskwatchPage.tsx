@@ -1157,6 +1157,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const blockNotebookHydration = useCallback((durationMs = 4000) => {
     notebookHydrationBlockRef.current = Date.now() + durationMs
   }, [])
+  const scrollTaskwatchToTop = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch {
+      window.scrollTo(0, 0)
+    }
+  }, [])
   const scheduleNotebookNotesPersist = useCallback(
     (taskId: string, notes: string) => {
       if (!taskId) {
@@ -2933,13 +2943,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         }
         currentSessionKeyRef.current = autoSessionKey
         lastLoggedSessionKeyRef.current = null
+        scrollTaskwatchToTop()
       }
     }
     window.addEventListener(FOCUS_EVENT_TYPE, handleFocusBroadcast as EventListener)
     return () => {
       window.removeEventListener(FOCUS_EVENT_TYPE, handleFocusBroadcast as EventListener)
     }
-  }, [elapsed, normalizedCurrentTask, registerNewHistoryEntry, updateNotebookForKey])
+  }, [elapsed, normalizedCurrentTask, registerNewHistoryEntry, scrollTaskwatchToTop, updateNotebookForKey])
 
   const formattedTime = useMemo(() => formatTime(elapsed), [elapsed])
   const formattedClock = useMemo(() => formatClockTime(currentTime), [currentTime])
