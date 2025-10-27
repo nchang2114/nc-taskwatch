@@ -1838,6 +1838,8 @@ export default function ReflectionPage() {
   const [multiDayCount, setMultiDayCount] = useState<number>(4)
   const [showMultiDayChooser, setShowMultiDayChooser] = useState(false)
   const [historyDayOffset, setHistoryDayOffset] = useState(0)
+  const historyDayOffsetRef = useRef(historyDayOffset)
+  const historyDayPendingOffsetRef = useRef<number | null>(null)
   const multiChooserRef = useRef<HTMLDivElement | null>(null)
   const lastCalendarHotkeyRef = useRef<{ key: string; timestamp: number } | null>(null)
   const multiDayKeyboardStateRef = useRef<{ active: boolean; selection: number }>({
@@ -1906,20 +1908,39 @@ export default function ReflectionPage() {
       const baseTransform = calendarBaseTranslateRef.current
       const endTransform = baseTransform + snapDays * dayWidth
 
-      const parseCurrentTransform = (value: string): number => {
-        const match = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(value)
-        if (!match) return baseTransform
-        const parsed = Number(match[1])
-        return Number.isFinite(parsed) ? parsed : baseTransform
+      const parseCurrentTransform = (raw: string): number => {
+        if (!raw) {
+          return baseTransform
+        }
+        const translateMatch = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(raw)
+        if (translateMatch) {
+          const parsed = Number(translateMatch[1])
+          return Number.isFinite(parsed) ? parsed : baseTransform
+        }
+        if (raw.startsWith('matrix(')) {
+          const parts = raw
+            .slice(7, -1)
+            .split(',')
+            .map((part) => Number(part.trim()))
+          if (parts.length >= 6) {
+            const tx = parts[4]
+            if (Number.isFinite(tx)) {
+              return tx
+            }
+          }
+        }
+        return baseTransform
       }
-
-      const currentTransform = parseCurrentTransform(daysEl.style.transform)
+      const currentTransform = parseCurrentTransform(
+        daysEl.style.transform || window.getComputedStyle(daysEl).transform || '',
+      )
       const deltaPx = endTransform - currentTransform
       if (Math.abs(deltaPx) < 0.5) {
         daysEl.style.transition = ''
         hdrEl.style.transition = ''
-        daysEl.style.transform = `translateX(${baseTransform}px)`
-        hdrEl.style.transform = `translateX(${baseTransform}px)`
+        const baseAfter = calendarBaseTranslateRef.current
+        daysEl.style.transform = `translateX(${baseAfter}px)`
+        hdrEl.style.transform = `translateX(${baseAfter}px)`
         if (targetOffset !== baseOffset) {
           setHistoryDayOffset(targetOffset)
         }
@@ -1937,14 +1958,16 @@ export default function ReflectionPage() {
       const finalize = (shouldCommit: boolean) => {
         daysEl.style.transition = ''
         hdrEl.style.transition = ''
-        if (!shouldCommit) {
-          const baseAfter = calendarBaseTranslateRef.current
-          daysEl.style.transform = `translateX(${baseAfter}px)`
-          hdrEl.style.transform = `translateX(${baseAfter}px)`
+        if (shouldCommit) {
+          if (historyDayOffsetRef.current !== targetOffset) {
+            historyDayOffsetRef.current = targetOffset
+            setHistoryDayOffset(targetOffset)
+          }
         }
-        if (shouldCommit && targetOffset !== baseOffset) {
-          setHistoryDayOffset(targetOffset)
-        }
+        historyDayPendingOffsetRef.current = null
+        const baseAfter = calendarBaseTranslateRef.current
+        daysEl.style.transform = `translateX(${baseAfter}px)`
+        hdrEl.style.transform = `translateX(${baseAfter}px)`
       }
 
       const onTransitionEnd = (event: TransitionEvent) => {
@@ -1980,6 +2003,92 @@ export default function ReflectionPage() {
       }, duration + 60)
     },
     [stopCalendarPanAnimation, setHistoryDayOffset],
+  )
+  const animateCalendarNavigate = useCallback(
+    (fromOffset: number, toOffset: number) => {
+      if (!(calendarView === 'day' || calendarView === '3d' || calendarView === 'week')) {
+        return false
+      }
+      const area = calendarDaysAreaRef.current
+      const daysEl = calendarDaysRef.current
+      const hdrEl = calendarHeadersRef.current
+      if (!area || !daysEl || !hdrEl) {
+        return false
+      }
+      const visibleDayCount =
+        calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
+      const dayWidth = area.clientWidth / Math.max(1, visibleDayCount)
+      if (!Number.isFinite(dayWidth) || dayWidth <= 0) {
+        return false
+      }
+      const diffDays = fromOffset - toOffset
+      if (!Number.isFinite(diffDays) || diffDays === 0) {
+        return false
+      }
+      const baseTransform = calendarBaseTranslateRef.current
+      const startTransform = baseTransform - diffDays * dayWidth
+      const endTransform = baseTransform
+
+      daysEl.style.transition = ''
+      hdrEl.style.transition = ''
+      daysEl.style.transform = `translateX(${startTransform}px)`
+      hdrEl.style.transform = `translateX(${startTransform}px)`
+      void daysEl.offsetWidth
+
+      const distanceFactor = Math.min(1.8, Math.max(1, Math.abs(diffDays)))
+      const duration = Math.round(
+        Math.min(PAN_MAX_ANIMATION_MS, Math.max(PAN_MIN_ANIMATION_MS, PAN_MIN_ANIMATION_MS * distanceFactor)),
+      )
+      const easing = 'cubic-bezier(0.22, 0.72, 0.28, 1)'
+
+      const finalize = () => {
+        daysEl.style.transition = ''
+        hdrEl.style.transition = ''
+        daysEl.style.transform = `translateX(${endTransform}px)`
+        hdrEl.style.transform = `translateX(${endTransform}px)`
+        historyDayPendingOffsetRef.current = null
+      }
+
+      const onTransitionEnd = (event: TransitionEvent) => {
+        if (event.propertyName !== 'transform') {
+          return
+        }
+        daysEl.removeEventListener('transitionend', onTransitionEnd)
+        calendarPanCleanupRef.current = null
+        finalize()
+      }
+
+      calendarPanCleanupRef.current = (shouldCommit: boolean) => {
+        daysEl.removeEventListener('transitionend', onTransitionEnd)
+        if (shouldCommit) {
+          finalize()
+        } else {
+          daysEl.style.transition = ''
+          hdrEl.style.transition = ''
+          historyDayPendingOffsetRef.current = null
+        }
+      }
+
+      requestAnimationFrame(() => {
+        daysEl.style.transition = `transform ${duration}ms ${easing}`
+        hdrEl.style.transition = `transform ${duration}ms ${easing}`
+        daysEl.style.transform = `translateX(${endTransform}px)`
+        hdrEl.style.transform = `translateX(${endTransform}px)`
+      })
+
+      daysEl.addEventListener('transitionend', onTransitionEnd)
+      window.setTimeout(() => {
+        const cleanup = calendarPanCleanupRef.current
+        if (!cleanup) {
+          return
+        }
+        calendarPanCleanupRef.current = null
+        cleanup(true)
+      }, duration + 60)
+
+      return true
+    },
+    [calendarView, multiDayCount],
   )
 
   const resolvePanSnap = useCallback(
@@ -3774,21 +3883,44 @@ export default function ReflectionPage() {
     [daysInMonth, multiDayCount],
   )
 
+  const navigateCalendarToOffset = useCallback(
+    (targetOffset: number) => {
+      const startOffset = historyDayPendingOffsetRef.current ?? historyDayOffsetRef.current
+      if (startOffset === targetOffset) {
+        return
+      }
+      stopCalendarPanAnimation({ commit: true })
+      historyDayPendingOffsetRef.current = targetOffset
+      historyDayOffsetRef.current = targetOffset
+      setHistoryDayOffset(targetOffset)
+      if (!animateCalendarNavigate(startOffset, targetOffset)) {
+        historyDayPendingOffsetRef.current = null
+      }
+    },
+    [animateCalendarNavigate, setHistoryDayOffset, stopCalendarPanAnimation],
+  )
+
   const handlePrevWindow = useCallback(() => {
-    setHistoryDayOffset((offset) => offset - stepSizeByView[calendarView])
-  }, [calendarView, stepSizeByView])
+    const step = stepSizeByView[calendarView]
+    navigateCalendarToOffset(historyDayOffsetRef.current - step)
+  }, [calendarView, navigateCalendarToOffset, stepSizeByView])
 
   const handleNextWindow = useCallback(() => {
-    setHistoryDayOffset((offset) => offset + stepSizeByView[calendarView])
-  }, [calendarView, stepSizeByView])
+    const step = stepSizeByView[calendarView]
+    navigateCalendarToOffset(historyDayOffsetRef.current + step)
+  }, [calendarView, navigateCalendarToOffset, stepSizeByView])
 
   const handleJumpToToday = useCallback(() => {
-    setHistoryDayOffset(0)
-  }, [])
+    navigateCalendarToOffset(0)
+  }, [navigateCalendarToOffset])
 
   const setView = useCallback((view: CalendarViewMode) => {
     setCalendarView(view)
   }, [])
+
+  useEffect(() => {
+    historyDayOffsetRef.current = historyDayOffset
+  }, [historyDayOffset])
 
   useEffect(() => {
     if (!showMultiDayChooser) {
@@ -5960,6 +6092,9 @@ export default function ReflectionPage() {
     const dayWidth = area.clientWidth / Math.max(1, visibleDayCount)
     const base = -bufferDays * dayWidth
     calendarBaseTranslateRef.current = base
+    if (historyDayPendingOffsetRef.current !== null) {
+      return
+    }
     daysEl.style.transform = `translateX(${base}px)`
     hdrEl.style.transform = `translateX(${base}px)`
   }, [calendarView, multiDayCount, anchorDate])
