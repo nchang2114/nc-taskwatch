@@ -14,6 +14,7 @@ import {
   type MouseEvent,
   type TouchEvent,
   type PointerEvent as ReactPointerEvent,
+  type RefObject,
 } from 'react'
 import { createPortal } from 'react-dom'
 import './ReflectionPage.css'
@@ -95,6 +96,68 @@ const clampPanDelta = (dx: number, dayWidth: number, spanDays: number): number =
   return dx
 }
 
+type EditableSelectionSnapshot = {
+  path: number[]
+  offset: number
+}
+
+const buildSelectionSnapshotFromRange = (root: HTMLElement, range: Range | null): EditableSelectionSnapshot | null => {
+  if (!range) return null
+  const container = range.endContainer
+  if (!root.contains(container)) return null
+  const path: number[] = []
+  let current: Node | null = container
+  while (current && current !== root) {
+    const parent: Node | null = current.parentNode
+    if (!parent) return null
+    const index = Array.prototype.indexOf.call(parent.childNodes, current)
+    if (index === -1) return null
+    path.push(index)
+    current = parent
+  }
+  if (current !== root) {
+    return null
+  }
+  path.reverse()
+  return { path, offset: range.endOffset }
+}
+
+const resolveNodeFromPath = (root: HTMLElement, path: number[]): Node => {
+  let node: Node = root
+  for (const index of path) {
+    if (!node.childNodes || index < 0 || index >= node.childNodes.length) {
+      return node
+    }
+    node = node.childNodes[index]
+  }
+  return node
+}
+
+const applySelectionSnapshot = (root: HTMLElement, snapshot: EditableSelectionSnapshot | null): boolean => {
+  if (!snapshot || typeof window === 'undefined') {
+    return false
+  }
+  const selection = window.getSelection()
+  if (!selection) {
+    return false
+  }
+  const doc = root.ownerDocument || document
+  const node = resolveNodeFromPath(root, snapshot.path)
+  const range = doc.createRange()
+  const maxOffset =
+    node.nodeType === Node.TEXT_NODE ? (node.textContent?.length ?? 0) : node.childNodes.length
+  const clampedOffset = Math.max(0, Math.min(snapshot.offset, maxOffset))
+  try {
+    range.setStart(node, clampedOffset)
+    range.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return true
+  } catch {
+    return false
+  }
+}
+
 type HistoryDraftState = {
   taskName: string
   goalName: string
@@ -109,6 +172,75 @@ type CalendarPopoverEditingState = {
   initialTaskName: string
   initialDisplayValue: string
   dirty: boolean
+  selectionSnapshot: EditableSelectionSnapshot | null
+}
+
+type CalendarActionsKebabProps = {
+  onDuplicate: () => void
+  previewRef: RefObject<HTMLDivElement | null>
+}
+
+const CalendarActionsKebab = ({ onDuplicate, previewRef }: CalendarActionsKebabProps) => {
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDocDown = (e: Event) => {
+      const target = e.target as HTMLElement | null
+      if (!target) return
+      const host = previewRef.current
+      if (host && host.contains(target)) {
+        const menu = host.querySelector('.calendar-popover__menu') as HTMLElement | null
+        if (menu && menu.contains(target)) return
+        if (btnRef.current && btnRef.current.contains(target)) return
+      }
+      setOpen(false)
+    }
+    window.addEventListener('pointerdown', onDocDown as EventListener, true)
+    return () => window.removeEventListener('pointerdown', onDocDown as EventListener, true)
+  }, [open, previewRef])
+
+  return (
+    <div className="calendar-popover__kebab-wrap">
+      <button
+        ref={btnRef}
+        type="button"
+        className="calendar-popover__action"
+        aria-label="More actions"
+        onPointerDown={(ev) => {
+          ev.preventDefault()
+          ev.stopPropagation()
+          setOpen((v) => !v)
+        }}
+        onClick={(ev) => {
+          ev.preventDefault()
+          ev.stopPropagation()
+        }}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="12" cy="19" r="1.75"/></svg>
+      </button>
+      {open ? (
+        <div className="calendar-popover__menu" role="menu" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="calendar-popover__menu-item"
+            onPointerDown={(ev) => {
+              ev.preventDefault()
+              ev.stopPropagation()
+              try {
+                onDuplicate()
+              } finally {
+                setOpen(false)
+              }
+            }}
+          >
+            Duplicate entry
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 type GradientStop = {
@@ -3542,39 +3674,50 @@ export default function ReflectionPage() {
     if (calendarPopoverFocusedEntryRef.current === calendarPopoverEditing.entryId) {
       return
     }
-    calendarPopoverFocusedEntryRef.current = calendarPopoverEditing.entryId
+    const editingState = calendarPopoverEditing
+    calendarPopoverFocusedEntryRef.current = editingState.entryId
     const raf = window.requestAnimationFrame(() => {
       const editableEl = calendarPopoverTitleRef.current
       if (!editableEl) {
         return
       }
       try {
-        editableEl.focus()
-        const selection = window.getSelection()
-        if (!selection) {
-          return
-        }
-        const range = document.createRange()
-        range.selectNodeContents(editableEl)
-        range.collapse(false)
-        selection.removeAllRanges()
-        selection.addRange(range)
+        editableEl.focus({ preventScroll: true })
       } catch {
-        // ignore focus errors (e.g., element might be detached)
+        try { editableEl.focus() } catch {}
+      }
+      let snapshotApplied = false
+      if (editingState.selectionSnapshot) {
+        snapshotApplied = applySelectionSnapshot(editableEl, editingState.selectionSnapshot)
+      }
+      if (!snapshotApplied) {
+        const selection = window.getSelection()
+        if (selection) {
+          const range = (editableEl.ownerDocument || document).createRange()
+          range.selectNodeContents(editableEl)
+          range.collapse(false)
+          selection.removeAllRanges()
+          selection.addRange(range)
+        }
+      }
+      if (editingState.selectionSnapshot) {
+        setCalendarPopoverEditing((state) => {
+          if (!state || state.entryId !== editingState.entryId || !state.selectionSnapshot) {
+            return state
+          }
+          return { ...state, selectionSnapshot: null }
+        })
       }
     })
     return () => {
       window.cancelAnimationFrame(raf)
     }
-  }, [calendarPopoverEditing])
+  }, [calendarPopoverEditing, setCalendarPopoverEditing])
 
   useLayoutEffect(() => {
     const editableEl = calendarPopoverTitleRef.current
     const editingState = calendarPopoverEditing
-    if (!editableEl) {
-      return
-    }
-    if (!editingState) {
+    if (!editableEl || !editingState) {
       return
     }
     const desired = editingState.value
@@ -5076,57 +5219,6 @@ export default function ReflectionPage() {
     return null
   }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, stopCalendarPanAnimation])
 
-  // Small inline component: kebab actions menu inside calendar popover
-  const CalendarActionsKebab = ({ onDuplicate }: { onDuplicate: () => void }) => {
-    const [open, setOpen] = useState(false)
-    const btnRef = useRef<HTMLButtonElement | null>(null)
-    useEffect(() => {
-      if (!open) return
-      const onDocDown = (e: Event) => {
-        const target = e.target as HTMLElement | null
-        if (!target) return
-        const menu = document.querySelector('.calendar-popover__menu') as HTMLElement | null
-        if (btnRef.current && btnRef.current.contains(target)) return
-        if (menu && menu.contains(target)) return
-        setOpen(false)
-      }
-      window.addEventListener('pointerdown', onDocDown as EventListener, true)
-      return () => window.removeEventListener('pointerdown', onDocDown as EventListener, true)
-    }, [open])
-    return (
-      <div className="calendar-popover__kebab-wrap">
-        <button
-          ref={btnRef}
-          type="button"
-          className="calendar-popover__action"
-          aria-label="More actions"
-          onPointerDown={(ev) => {
-            ev.preventDefault()
-            ev.stopPropagation()
-            setOpen((v) => !v)
-          }}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="12" cy="19" r="1.75"/></svg>
-        </button>
-        {open ? (
-          <div className="calendar-popover__menu" role="menu" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="calendar-popover__menu-item"
-              onPointerDown={(ev) => {
-                ev.preventDefault()
-                ev.stopPropagation()
-                try { onDuplicate() } finally { setOpen(false) }
-              }}
-            >
-              Duplicate entry
-            </button>
-          </div>
-        ) : null}
-      </div>
-    )
-  }
-
   // Simple inline icons for popover actions
   const IconEdit = () => (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -5170,19 +5262,56 @@ export default function ReflectionPage() {
     const editingState = calendarPopoverEditing && calendarPopoverEditing.entryId === entry.id ? calendarPopoverEditing : null
     const startValue = entry.taskName ?? ''
     const initialDisplayValue = title || ''
-    const startEditingTitle = () => {
+    const duplicateHistoryEntry = (source: HistoryEntry): HistoryEntry => {
+      const newEntry: HistoryEntry = { ...source, id: makeHistoryId() }
+      updateHistory((current) => {
+        const next = [...current, newEntry]
+        next.sort((a, b) => a.startedAt - b.startedAt)
+        return next
+      })
+      return newEntry
+    }
+    const startEditingTitle = (options?: { selectionSnapshot?: EditableSelectionSnapshot | null }) => {
       setCalendarPopoverEditing({
         entryId: entry.id,
         value: initialDisplayValue,
         initialTaskName: startValue,
         initialDisplayValue,
         dirty: false,
+        selectionSnapshot: options?.selectionSnapshot ?? null,
       })
     }
+    const getCaretSnapshotFromPoint = (clientX: number, clientY: number): EditableSelectionSnapshot | null => {
+      const editableEl = calendarPopoverTitleRef.current
+      if (!editableEl || typeof document === 'undefined') {
+        return null
+      }
+      const doc = editableEl.ownerDocument || document
+      let range: Range | null = null
+      const anyDoc = doc as Document & {
+        caretRangeFromPoint?: (x: number, y: number) => Range | null
+        caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null
+      }
+      if (typeof anyDoc.caretRangeFromPoint === 'function') {
+        range = anyDoc.caretRangeFromPoint(clientX, clientY)
+      } else if (typeof anyDoc.caretPositionFromPoint === 'function') {
+        const pos = anyDoc.caretPositionFromPoint(clientX, clientY)
+        if (pos) {
+          range = doc.createRange()
+          range.setStart(pos.offsetNode, pos.offset)
+          range.collapse(true)
+        }
+      }
+      return buildSelectionSnapshotFromRange(editableEl, range)
+    }
     const handleTitlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (editingState) {
+        return
+      }
       event.preventDefault()
       event.stopPropagation()
-      startEditingTitle()
+      const snapshot = getCaretSnapshotFromPoint(event.clientX, event.clientY)
+      startEditingTitle({ selectionSnapshot: snapshot })
     }
     const handleTitleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
       if (editingState) {
@@ -5206,6 +5335,7 @@ export default function ReflectionPage() {
         ...editingState,
         value,
         dirty: nextDirty,
+        selectionSnapshot: null,
       })
       const desiredValue = nextDirty ? value : editingState.initialTaskName
       updateHistory((current) => {
@@ -5328,26 +5458,41 @@ export default function ReflectionPage() {
               onPointerDown={(ev) => {
                 ev.preventDefault()
                 ev.stopPropagation()
-                // Prepare draft + selection state
                 setSelectedHistoryId(entry.id)
                 setHoveredHistoryId(entry.id)
                 setEditingHistoryId(entry.id)
                 taskNameAutofilledRef.current = false
                 setHistoryDraft({
-                  // Use stored taskName verbatim so intentional blanks stay blank
                   taskName: entry.taskName,
                   goalName: entry.goalName ?? '',
                   bucketName: entry.bucketName ?? '',
                   startedAt: entry.startedAt,
                   endedAt: entry.endedAt,
                 })
-                // Open calendar editor modal and close preview
                 setCalendarEditorEntryId(entry.id)
                 handleCloseCalendarPreview()
               }}
             >
               <IconEdit />
             </button>
+            <CalendarActionsKebab
+              previewRef={calendarPreviewRef}
+              onDuplicate={() => {
+                const dup = duplicateHistoryEntry(entry)
+                if (!dup) return
+                setHoveredHistoryId(dup.id)
+                setSelectedHistoryId(dup.id)
+                setEditingHistoryId(dup.id)
+                taskNameAutofilledRef.current = false
+                setHistoryDraft({
+                  taskName: dup.taskName,
+                  goalName: dup.goalName ?? '',
+                  bucketName: dup.bucketName ?? '',
+                  startedAt: dup.startedAt,
+                  endedAt: dup.endedAt,
+                })
+              }}
+            />
             <button
               type="button"
               className="calendar-popover__action calendar-popover__action--danger"
@@ -5355,8 +5500,6 @@ export default function ReflectionPage() {
               onPointerDown={(ev) => {
                 ev.preventDefault()
                 ev.stopPropagation()
-                // Suppress any subsequent click from hitting the underlying calendar event
-                // after the popover closes (prevents click-through re-open)
                 suppressNextEventOpen()
                 handleDeleteHistoryEntry(entry.id)(ev as any)
                 handleCloseCalendarPreview()
@@ -5364,18 +5507,6 @@ export default function ReflectionPage() {
             >
               <IconTrash />
             </button>
-            {/* Kebab menu: duplicate entry (placed between delete and close) */}
-            <CalendarActionsKebab
-              onDuplicate={() => {
-                const newId = makeHistoryId()
-                const dup: HistoryEntry = { ...entry, id: newId }
-                updateHistory((current) => {
-                  const next = [...current, dup]
-                  next.sort((a, b) => a.startedAt - b.startedAt)
-                  return next
-                })
-              }}
-            />
             <button
               type="button"
               className="calendar-popover__action calendar-popover__action--close"
