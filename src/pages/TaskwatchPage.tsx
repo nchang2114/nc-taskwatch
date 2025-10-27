@@ -2423,6 +2423,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     prepareFocusCheckAnimation()
   }, [prepareFocusCheckAnimation, activeFocusCandidate?.taskId, focusSource?.taskId, normalizedCurrentTask])
 
+  const handleClearFocus = useCallback(() => {
+    setCurrentTaskName('')
+    setFocusSource(null)
+    setCustomTaskDraft('')
+    setIsSelectorOpen(false)
+    selectorButtonRef.current?.focus()
+    currentSessionKeyRef.current = null
+    lastLoggedSessionKeyRef.current = null
+  }, [])
+
   const handleCompleteFocus = async (
     event?: ReactPointerEvent<HTMLButtonElement> | ReactMouseEvent<HTMLButtonElement>,
   ) => {
@@ -2523,7 +2533,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
     const timeoutId = window.setTimeout(() => {
       setIsCompletingFocus(false)
-      setIsSelectorOpen(false)
+      handleClearFocus()
       focusCompletionTimeoutRef.current = null
     }, FOCUS_COMPLETION_RESET_DELAY_MS)
     focusCompletionTimeoutRef.current = timeoutId
@@ -2563,16 +2573,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     setCustomTaskDraft(trimmed)
     setIsSelectorOpen(false)
     selectorButtonRef.current?.focus()
-  }
-
-  const handleClearFocus = () => {
-    setCurrentTaskName('')
-    setFocusSource(null)
-    setCustomTaskDraft('')
-    setIsSelectorOpen(false)
-    selectorButtonRef.current?.focus()
-    currentSessionKeyRef.current = null
-    lastLoggedSessionKeyRef.current = null
   }
 
   const handleCustomSubmit = (event: FormEvent<HTMLFormElement>) => {
