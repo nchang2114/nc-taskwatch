@@ -73,6 +73,9 @@ const PAN_FLICK_VELOCITY_PX_PER_MS = 0.6
 const PAN_MIN_ANIMATION_MS = 220
 const PAN_MAX_ANIMATION_MS = 450
 const MAX_BUFFER_DAYS = 28
+const MULTI_DAY_OPTIONS = [2, 3, 4, 5, 6] as const
+const isValidMultiDayOption = (value: number): value is (typeof MULTI_DAY_OPTIONS)[number] =>
+  (MULTI_DAY_OPTIONS as readonly number[]).includes(value)
 
 const getCalendarBufferDays = (visibleDayCount: number): number => {
   if (!Number.isFinite(visibleDayCount) || visibleDayCount <= 0) {
@@ -1836,6 +1839,11 @@ export default function ReflectionPage() {
   const [showMultiDayChooser, setShowMultiDayChooser] = useState(false)
   const [historyDayOffset, setHistoryDayOffset] = useState(0)
   const multiChooserRef = useRef<HTMLDivElement | null>(null)
+  const lastCalendarHotkeyRef = useRef<{ key: string; timestamp: number } | null>(null)
+  const multiDayKeyboardStateRef = useRef<{ active: boolean; selection: number }>({
+    active: false,
+    selection: multiDayCount,
+  })
   const calendarDaysAreaRef = useRef<HTMLDivElement | null>(null)
   const calendarDaysRef = useRef<HTMLDivElement | null>(null)
   const calendarHeadersRef = useRef<HTMLDivElement | null>(null)
@@ -1862,6 +1870,16 @@ export default function ReflectionPage() {
     },
     [],
   )
+  const focusMultiDayOption = useCallback((value: number) => {
+    const chooser = multiChooserRef.current
+    if (!chooser) {
+      return
+    }
+    const button = chooser.querySelector<HTMLButtonElement>(`button[data-day-count="${value}"]`)
+    if (button) {
+      button.focus()
+    }
+  }, [])
 
   const animateCalendarPan = useCallback(
     (snapDays: number, dayWidth: number, baseOffset: number) => {
@@ -3773,6 +3791,12 @@ export default function ReflectionPage() {
   }, [])
 
   useEffect(() => {
+    if (!showMultiDayChooser) {
+      multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+    }
+  }, [multiDayCount, showMultiDayChooser])
+
+  useEffect(() => {
     if (!showMultiDayChooser) return
     const onDocPointerDown = (e: PointerEvent) => {
       const target = e.target as Node | null
@@ -3785,6 +3809,146 @@ export default function ReflectionPage() {
     document.addEventListener('pointerdown', onDocPointerDown)
     return () => document.removeEventListener('pointerdown', onDocPointerDown)
   }, [showMultiDayChooser])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const DOUBLE_PRESS_THRESHOLD_MS = 450
+    const options = Array.from(MULTI_DAY_OPTIONS) as Array<(typeof MULTI_DAY_OPTIONS)[number]>
+    const getNormalizedSelection = (fallback?: number): (typeof MULTI_DAY_OPTIONS)[number] => {
+      if (fallback !== undefined && isValidMultiDayOption(fallback)) {
+        return fallback
+      }
+      if (isValidMultiDayOption(multiDayCount)) {
+        return multiDayCount
+      }
+      return options[options.length - 1]
+    }
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented) return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target) {
+        const tag = target.tagName
+        const isEditable = target.isContentEditable
+        if (isEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+          return
+        }
+      }
+      const key = event.key.toLowerCase()
+      const keyboardState = multiDayKeyboardStateRef.current
+      if (keyboardState?.active && showMultiDayChooser) {
+        if (key === 'arrowleft' || key === 'arrowright') {
+          event.preventDefault()
+          const currentSelection = getNormalizedSelection(keyboardState.selection)
+          const currentIndex = Math.max(0, options.indexOf(currentSelection))
+          let nextIndex = currentIndex
+          if (key === 'arrowleft') {
+            nextIndex = Math.max(0, currentIndex - 1)
+          } else if (key === 'arrowright') {
+            nextIndex = Math.min(options.length - 1, currentIndex + 1)
+          }
+          const nextSelection = options[nextIndex]
+          multiDayKeyboardStateRef.current = { active: true, selection: nextSelection }
+          focusMultiDayOption(nextSelection)
+          return
+        }
+        if (key === 'enter') {
+          event.preventDefault()
+          const selection = getNormalizedSelection(keyboardState.selection)
+          setMultiDayCount(selection)
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection }
+          return
+        }
+        if (key === 'escape') {
+          event.preventDefault()
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          return
+        }
+      }
+      switch (key) {
+        case 'd': {
+          const now = Date.now()
+          lastCalendarHotkeyRef.current = { key: 'd', timestamp: now }
+          event.preventDefault()
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          setView('day')
+          return
+        }
+        case 'x': {
+          const now = Date.now()
+          const last = lastCalendarHotkeyRef.current
+          const isDouble = Boolean(last && last.key === 'x' && now - last.timestamp < DOUBLE_PRESS_THRESHOLD_MS)
+          lastCalendarHotkeyRef.current = { key: 'x', timestamp: now }
+          event.preventDefault()
+          if (calendarView !== '3d') {
+            setView('3d')
+            setShowMultiDayChooser(false)
+            multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+            return
+          }
+          if (isDouble) {
+            const selection = getNormalizedSelection()
+            setShowMultiDayChooser(true)
+            multiDayKeyboardStateRef.current = { active: true, selection }
+            if (typeof window !== 'undefined') {
+              window.requestAnimationFrame(() => focusMultiDayOption(selection))
+            }
+          } else {
+            setShowMultiDayChooser(false)
+            multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          }
+          return
+        }
+        case 'w': {
+          const now = Date.now()
+          lastCalendarHotkeyRef.current = { key: 'w', timestamp: now }
+          event.preventDefault()
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          setView('week')
+          return
+        }
+        case 'm': {
+          const now = Date.now()
+          lastCalendarHotkeyRef.current = { key: 'm', timestamp: now }
+          event.preventDefault()
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          setView('month')
+          return
+        }
+        case 'y': {
+          const now = Date.now()
+          lastCalendarHotkeyRef.current = { key: 'y', timestamp: now }
+          event.preventDefault()
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          setView('year')
+          return
+        }
+        default: {
+          lastCalendarHotkeyRef.current = { key, timestamp: Date.now() }
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [
+    calendarView,
+    focusMultiDayOption,
+    multiDayCount,
+    setMultiDayCount,
+    setView,
+    setShowMultiDayChooser,
+    showMultiDayChooser,
+  ])
 
   // Outside-React updater for the calendar now-line to keep UI smooth without full re-renders
   useEffect(() => {
@@ -3883,8 +4047,9 @@ export default function ReflectionPage() {
 
   const handleMultiDayDoubleClick = useCallback(() => {
     setView('3d')
+    multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
     setShowMultiDayChooser(true)
-  }, [setView])
+  }, [multiDayCount, setView])
 
   const handleCalendarAreaPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!(calendarView === 'day' || calendarView === '3d' || calendarView === 'week')) {
@@ -6172,11 +6337,12 @@ export default function ReflectionPage() {
                           role="dialog"
                           aria-label="Choose day count"
                         >
-                          {[2, 3, 4, 5, 6].map((n) => (
+                          {Array.from(MULTI_DAY_OPTIONS).map((n) => (
                             <button
                               key={`chooser-${n}`}
                               type="button"
                               className={`calendar-multi-day-chooser__option${multiDayCount === n ? ' is-active' : ''}`}
+                              data-day-count={n}
                               onClick={() => {
                                 setMultiDayCount(n)
                                 setShowMultiDayChooser(false)
