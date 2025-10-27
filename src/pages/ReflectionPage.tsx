@@ -3620,6 +3620,15 @@ export default function ReflectionPage() {
       if (e.key === 'Escape') handleCloseCalendarPreview()
     }
     const onReposition = () => {
+      if (typeof window !== 'undefined' && 'visualViewport' in window) {
+        const vv = window.visualViewport
+        if (vv) {
+          // Skip repositioning for tiny viewport heights (likely keyboard).
+          if (vv.height < window.innerHeight * 0.6) {
+            return
+          }
+        }
+      }
       positionCalendarPreview(calendarPreview.anchorEl || null)
       // After moving, clamp again based on actual size (DOM-only)
       const pop = calendarPreviewRef.current
