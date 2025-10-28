@@ -848,10 +848,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   useEffect(() => {
     const unsubscribe = subscribeToGoalsSnapshot((snapshot) => {
       setGoalsSnapshot(snapshot)
-      refreshGoalsSnapshotFromSupabase('snapshot-event')
     })
     return unsubscribe
-  }, [refreshGoalsSnapshotFromSupabase])
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -869,15 +868,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     }
     window.addEventListener('focus', handleFocus)
     document.addEventListener('visibilitychange', handleVisibility)
-    const interval = window.setInterval(() => {
-      if (!document.hidden) {
-        refreshGoalsSnapshotFromSupabase('interval')
-      }
-    }, 60000)
     return () => {
       window.removeEventListener('focus', handleFocus)
       document.removeEventListener('visibilitychange', handleVisibility)
-      window.clearInterval(interval)
     }
   }, [refreshGoalsSnapshotFromSupabase])
 
@@ -1174,9 +1167,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       }
       notebookNotesLatestRef.current.set(taskId, notes)
       if (typeof window === 'undefined') {
-        void apiUpdateTaskNotes(taskId, notes)
-          .then(() => refreshGoalsSnapshotFromSupabase('taskwatch-notes-save'))
-          .catch((error) => console.warn('[Taskwatch] Failed to persist notes for task:', error))
+        void apiUpdateTaskNotes(taskId, notes).catch((error) =>
+          console.warn('[Taskwatch] Failed to persist notes for task:', error),
+        )
         return
       }
       const timers = notebookNotesSaveTimersRef.current
@@ -1187,9 +1180,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       const handle = window.setTimeout(() => {
         timers.delete(taskId)
         const latest = notebookNotesLatestRef.current.get(taskId) ?? ''
-        void apiUpdateTaskNotes(taskId, latest)
-          .then(() => refreshGoalsSnapshotFromSupabase('taskwatch-notes-save'))
-          .catch((error) => console.warn('[Taskwatch] Failed to persist notes for task:', error))
+        void apiUpdateTaskNotes(taskId, latest).catch((error) =>
+          console.warn('[Taskwatch] Failed to persist notes for task:', error),
+        )
       }, 500)
       timers.set(taskId, handle)
     },
@@ -1224,9 +1217,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           text: subtask.text,
           completed: subtask.completed,
           sort_index: subtask.sortIndex,
-        })
-          .then(() => refreshGoalsSnapshotFromSupabase('taskwatch-subtask-save'))
-          .catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
+        }).catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
         return
       }
       const timers = notebookSubtaskSaveTimersRef.current
@@ -1245,9 +1236,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           text: latest.text,
           completed: latest.completed,
           sort_index: latest.sortIndex,
-        })
-          .then(() => refreshGoalsSnapshotFromSupabase('taskwatch-subtask-save'))
-          .catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
+        }).catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
       }, 400)
       timers.set(key, handle)
     },
@@ -1423,9 +1412,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     prevSubtasks.forEach((subtask) => {
       if (!nextSubtasks.some((item) => item.id === subtask.id)) {
         cancelNotebookSubtaskPersist(activeTaskId, subtask.id)
-        void apiDeleteTaskSubtask(activeTaskId, subtask.id)
-          .then(() => refreshGoalsSnapshotFromSupabase('taskwatch-subtask-delete'))
-          .catch((error) => console.warn('[Taskwatch] Failed to remove subtask during sync:', error))
+        void apiDeleteTaskSubtask(activeTaskId, subtask.id).catch((error) =>
+          console.warn('[Taskwatch] Failed to remove subtask during sync:', error),
+        )
       }
     })
     lastPersistedNotebookRef.current = {

@@ -4673,13 +4673,39 @@ export default function GoalsPage(): ReactElement {
             // ignore
           })
       }
-      refreshGoalsFromSupabase('snapshot-event')
     })
     return () => {
       cancelled = true
       unsubscribe()
     }
   }, [mergeIncomingGoals, mergeIncomingTaskDetails, refreshGoalsFromSupabase])
+
+  // Load once on mount and refresh when the user returns focus to this tab
+  useEffect(() => {
+    refreshGoalsFromSupabase('initial-load')
+  }, [refreshGoalsFromSupabase])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return
+    }
+    const handleFocus = () => {
+      if (!document.hidden) {
+        refreshGoalsFromSupabase('window-focus')
+      }
+    }
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        refreshGoalsFromSupabase('document-visible')
+      }
+    }
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [refreshGoalsFromSupabase])
 
   useEffect(() => {
     const validTaskIds = new Set<string>()
