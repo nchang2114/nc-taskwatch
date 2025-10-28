@@ -5090,7 +5090,7 @@ export default function GoalsPage(): ReactElement {
   )
 
   const restoreTaskDetailsAfterDrag = useCallback(
-    (draggedTaskId: string) => {
+    (_draggedTaskId: string) => {
       const snapshot = new Map(taskDetailsDragSnapshotRef.current)
       taskDetailsDragSnapshotRef.current = new Map()
       draggingTaskIdRef.current = null
