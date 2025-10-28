@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
   type CSSProperties,
   type FormEvent,
   type HTMLAttributes,
@@ -14,12 +13,12 @@ import {
   type MouseEvent,
   type TouchEvent,
   type PointerEvent as ReactPointerEvent,
-  type RefObject,
+  type ChangeEvent,
   type ReactElement,
+  type RefObject,
 } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import './ReflectionPage.css'
-import { fetchRepeatingSessionRules, createRepeatingRuleForEntry, deactivateMatchingRulesForEntry, type RepeatingSessionRule } from '../lib/repeatingSessions.ts'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
 import {
   DEFAULT_SURFACE_STYLE,
@@ -44,15 +43,21 @@ import {
   readStoredHistory as readPersistedHistory,
   persistHistorySnapshot,
   syncHistoryWithSupabase,
-  areHistorySubtasksEqual,
   type HistoryEntry,
   type HistorySubtask,
+  areHistorySubtasksEqual,
 } from '../lib/sessionHistory'
+import {
+  fetchRepeatingSessionRules,
+  createRepeatingRuleForEntry,
+  deactivateMatchingRulesForEntry,
+  type RepeatingSessionRule,
+} from '../lib/repeatingSessions'
 
 const JOURNAL_PROMPTS = [
   "What was today's biggest win?",
-  "What drained your energy?",
-  "Any blockers you noticed recurring?",
+  'What drained your energy?',
+  'Any blockers you noticed recurring?',
   "What's one small improvement for tomorrow?",
 ]
 
@@ -77,14 +82,11 @@ const PAN_FLICK_VELOCITY_PX_PER_MS = 0.6
 const PAN_MIN_ANIMATION_MS = 220
 const PAN_MAX_ANIMATION_MS = 450
 const MAX_BUFFER_DAYS = 28
+const ENABLE_HISTORY_INSPECTOR_PANEL = false
+const INSPECTOR_DELETED_MESSAGE = 'This entry was deleted.'
 const MULTI_DAY_OPTIONS = [2, 3, 4, 5, 6] as const
 const isValidMultiDayOption = (value: number): value is (typeof MULTI_DAY_OPTIONS)[number] =>
   (MULTI_DAY_OPTIONS as readonly number[]).includes(value)
-
-const INSPECTOR_DELETED_MESSAGE = 'Session deleted. Select another entry to view details.'
-
-const ENABLE_HISTORY_INSPECTOR_PANEL = false
-
 const getCalendarBufferDays = (visibleDayCount: number): number => {
   if (!Number.isFinite(visibleDayCount) || visibleDayCount <= 0) {
     return 4
@@ -5029,7 +5031,7 @@ useEffect(() => {
                   try { window.clearTimeout(touchHoldTimer) } catch {}
                   touchHoldTimer = null
                 }
-                // If horizontal movement dominates, treat this as a calendar pan even though we started on an event
+                // Decide between horizontal pan vs immediate vertical drag
                 const absX = Math.abs(dx)
                 const absY = Math.abs(dy)
                 if (absX > absY && area) {
@@ -5081,6 +5083,11 @@ useEffect(() => {
                   }
                   return
                 }
+                if (absY > absX) {
+                  // Activate drag immediately for dominant vertical movement
+                  activateDrag()
+                }
+                // If roughly equal, keep waiting for hold
                 return
               }
               // Not activated yet, and not moved enough — keep waiting for hold
