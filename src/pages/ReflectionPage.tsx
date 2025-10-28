@@ -1861,16 +1861,29 @@ export default function ReflectionPage() {
     lastAppliedDx: number
   } | null>(null)
   const calendarPanCleanupRef = useRef<((shouldCommit: boolean) => void) | null>(null)
+  const calendarPanFallbackTimeoutRef = useRef<number | null>(null)
   const calendarPanDesiredOffsetRef = useRef<number>(historyDayOffset)
+
+  const clearCalendarPanFallbackTimeout = useCallback(() => {
+    const timeoutId = calendarPanFallbackTimeoutRef.current
+    if (timeoutId === null) {
+      return
+    }
+    calendarPanFallbackTimeoutRef.current = null
+    if (typeof window !== 'undefined') {
+      window.clearTimeout(timeoutId)
+    }
+  }, [])
 
   const stopCalendarPanAnimation = useCallback(
     (options?: { commit?: boolean }) => {
+      clearCalendarPanFallbackTimeout()
       const cleanup = calendarPanCleanupRef.current
       if (!cleanup) return
       calendarPanCleanupRef.current = null
       cleanup(options?.commit ?? true)
     },
-    [],
+    [clearCalendarPanFallbackTimeout],
   )
   const resetCalendarPanTransform = useCallback(() => {
     const base = calendarBaseTranslateRef.current
@@ -1987,6 +2000,7 @@ export default function ReflectionPage() {
       }
 
       calendarPanCleanupRef.current = (shouldCommit: boolean) => {
+        clearCalendarPanFallbackTimeout()
         daysEl.removeEventListener('transitionend', onTransitionEnd)
         finalize(shouldCommit)
       }
@@ -2000,7 +2014,12 @@ export default function ReflectionPage() {
       })
 
       daysEl.addEventListener('transitionend', onTransitionEnd)
-      window.setTimeout(() => {
+      clearCalendarPanFallbackTimeout()
+      const timeoutId = window.setTimeout(() => {
+        if (calendarPanFallbackTimeoutRef.current !== timeoutId) {
+          return
+        }
+        calendarPanFallbackTimeoutRef.current = null
         const cleanup = calendarPanCleanupRef.current
         if (!cleanup) {
           return
@@ -2008,8 +2027,9 @@ export default function ReflectionPage() {
         calendarPanCleanupRef.current = null
         cleanup(true)
       }, duration + 60)
+      calendarPanFallbackTimeoutRef.current = timeoutId
     },
-    [stopCalendarPanAnimation, setHistoryDayOffset],
+    [stopCalendarPanAnimation, setHistoryDayOffset, clearCalendarPanFallbackTimeout],
   )
 
   const resolvePanSnap = useCallback(
