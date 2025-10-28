@@ -1947,10 +1947,12 @@ export default function ReflectionPage() {
           hdrEl.style.transform = `translateX(${baseAfter}px)`
           calendarPanDesiredOffsetRef.current = baseOffset
           historyDayOffsetRef.current = baseOffset
+          calendarBaseTranslateRef.current = baseAfter
         } else {
-          const baseAfter = calendarBaseTranslateRef.current
-          daysEl.style.transform = `translateX(${baseAfter}px)`
-          hdrEl.style.transform = `translateX(${baseAfter}px)`
+          const committedTransform = endTransform
+          daysEl.style.transform = `translateX(${committedTransform}px)`
+          hdrEl.style.transform = `translateX(${committedTransform}px)`
+          calendarBaseTranslateRef.current = committedTransform
           calendarPanDesiredOffsetRef.current = targetOffset
           historyDayOffsetRef.current = targetOffset
           if (targetOffset !== baseOffset) {
