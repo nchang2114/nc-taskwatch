@@ -2147,6 +2147,7 @@ export default function ReflectionPage() {
   const [calendarInspectorEntryId, setCalendarInspectorEntryId] = useState<string | null>(null)
   const calendarEditorRef = useRef<HTMLDivElement | null>(null)
   const calendarInspectorRef = useRef<HTMLDivElement | null>(null)
+  const [calendarViewportVersion, setCalendarViewportVersion] = useState(0)
   // Ref to the session name input inside the calendar editor modal (for autofocus on new entries)
   const calendarEditorNameInputRef = useRef<HTMLInputElement | null>(null)
   const [activeTooltipOffsets, setActiveTooltipOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -6178,6 +6179,72 @@ export default function ReflectionPage() {
     )
   }, [calendarEditorEntryId, history, historyDraft.bucketName, historyDraft.goalName, historyDraft.taskName, availableBucketOptions.length, bucketDropdownId, bucketDropdownOptions, goalDropdownId, goalDropdownOptions, handleCancelHistoryEdit, handleHistoryFieldChange, handleHistoryFieldKeyDown, handleSaveHistoryDraft, updateHistoryDraftField])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const area = calendarDaysAreaRef.current
+    if (!area) {
+      let lastWindowWidth = window.innerWidth
+      let lastWindowHeight = window.innerHeight
+      const handleWindowResize = () => {
+        const nextWidth = window.innerWidth
+        const nextHeight = window.innerHeight
+        if (nextWidth === lastWindowWidth && nextHeight === lastWindowHeight) {
+          return
+        }
+        lastWindowWidth = nextWidth
+        lastWindowHeight = nextHeight
+        setCalendarViewportVersion((value) => value + 1)
+      }
+      window.addEventListener('resize', handleWindowResize)
+      handleWindowResize()
+      return () => {
+        window.removeEventListener('resize', handleWindowResize)
+      }
+    }
+    let frame: number | null = null
+    let lastWidth = area.clientWidth
+    let lastHeight = area.clientHeight
+    const scheduleMeasurement = () => {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame)
+      }
+      frame = window.requestAnimationFrame(() => {
+        frame = null
+        const target = calendarDaysAreaRef.current
+        if (!target) {
+          return
+        }
+        const nextWidth = target.clientWidth
+        const nextHeight = target.clientHeight
+        if (nextWidth !== lastWidth || nextHeight !== lastHeight) {
+          lastWidth = nextWidth
+          lastHeight = nextHeight
+          setCalendarViewportVersion((value) => value + 1)
+        }
+      })
+    }
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => scheduleMeasurement()) : null
+    if (resizeObserver) {
+      resizeObserver.observe(area)
+    } else {
+      window.addEventListener('resize', scheduleMeasurement)
+    }
+    scheduleMeasurement()
+    return () => {
+      if (resizeObserver) {
+        resizeObserver.disconnect()
+      } else {
+        window.removeEventListener('resize', scheduleMeasurement)
+      }
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame)
+      }
+    }
+  }, [calendarView])
+
   // Keep the buffered track centered on the visible window (apply base translate)
   useLayoutEffect(() => {
     if (!(calendarView === 'day' || calendarView === '3d' || calendarView === 'week')) return
@@ -6192,7 +6259,7 @@ export default function ReflectionPage() {
     calendarBaseTranslateRef.current = base
     daysEl.style.transform = `translateX(${base}px)`
     hdrEl.style.transform = `translateX(${base}px)`
-  }, [anchorDate, calendarInspectorEntryId, calendarView, multiDayCount])
+  }, [anchorDate, calendarInspectorEntryId, calendarView, multiDayCount, calendarViewportVersion])
 
   useEffect(() => {
     return () => {
