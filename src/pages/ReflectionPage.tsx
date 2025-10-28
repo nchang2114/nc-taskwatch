@@ -6604,10 +6604,6 @@ export default function ReflectionPage() {
       return formatDateRange(resolvedStart, resolvedEnd)
     })()
     const sortedSubtasks = historyDraft.subtasks.slice().sort((a, b) => a.sortIndex - b.sortIndex)
-    const completedSubtasks = sortedSubtasks.reduce((count, subtask) => (subtask.completed ? count + 1 : count), 0)
-    const inspectorSubtasksSummary =
-      sortedSubtasks.length > 0 ? `${completedSubtasks}/${sortedSubtasks.length} subtasks` : 'No subtasks'
-    const inspectorNotesSummary = historyDraft.notes.trim().length > 0 ? 'Notes added' : 'No notes'
     if (ENABLE_HISTORY_INSPECTOR_PANEL) {
       calendarInspectorPanel = (
       <aside className="calendar-inspector" aria-label="Session inspector">
