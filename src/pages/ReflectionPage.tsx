@@ -3574,7 +3574,7 @@ export default function ReflectionPage() {
 
   const handleOpenCalendarPreview = useCallback(
     (entry: HistoryEntry, targetEl: HTMLElement) => {
-      // Select entry for consistency with other flows
+      // Select entry for consistency with other flows.
       handleSelectHistorySegment(entry)
       // Compute an initial position immediately
       const rect = targetEl.getBoundingClientRect()
