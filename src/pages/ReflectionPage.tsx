@@ -2226,28 +2226,65 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     longPressCancelHandlersRef.current = null
   }, [])
   // Helper: toggle global scroll lock (prevents page scroll on touch during active event drags)
-  const setPageScrollLock = useCallback((locked: boolean) => {
+  const setPageScrollLock = (locked: boolean) => {
     if (typeof document === 'undefined') return
+    const root = document.documentElement
     const body = document.body as HTMLBodyElement & { dataset: DOMStringMap }
+    const ua = navigator.userAgent || ''
+    const isIOS = /iP(ad|hone|od)/.test(ua) || (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1)
     if (locked) {
+      // If already locked, no-op
       if (body.dataset.scrollLockActive === '1') return
-      const y = (window.scrollY || (document.scrollingElement?.scrollTop ?? 0) || 0)
       body.dataset.scrollLockActive = '1'
+      const y = (window.scrollY || root.scrollTop || (document.scrollingElement?.scrollTop ?? 0) || 0)
       body.dataset.scrollLockY = String(y)
-      body.style.position = 'fixed'
-      body.style.top = `-${y}px`
-      body.style.width = '100%'
+      if (isIOS) {
+        // iOS Safari: avoid position:fixed to prevent address bar/UI jumps; block scrolling via global touchmove preventer
+        const preventer: EventListener = (e: Event) => {
+          try { e.preventDefault() } catch {}
+        }
+        ;(window as any).__scrollLockTouchPreventer = preventer
+        try { window.addEventListener('touchmove', preventer, { passive: false }) } catch {}
+      } else {
+        root.classList.add('scroll-lock')
+        body.classList.add('scroll-lock')
+        // Non-iOS fallback: freeze body to prevent any viewport scroll reliably
+        body.style.position = 'fixed'
+        body.style.top = `-${y}px`
+        body.style.left = '0'
+        body.style.right = '0'
+        body.style.width = '100%'
+        body.style.overflow = 'hidden'
+      }
     } else {
+      // If not locked, no-op
       if (body.dataset.scrollLockActive !== '1') return
-      const y = Number(body.dataset.scrollLockY || '0') || 0
       delete body.dataset.scrollLockActive
+      const yStr = body.dataset.scrollLockY || root.dataset.scrollLockY
       delete body.dataset.scrollLockY
-      body.style.position = ''
-      body.style.top = ''
-      body.style.width = ''
+      delete root.dataset.scrollLockY
+      // Remove iOS touchmove preventer if present
+      const preventer = (window as any).__scrollLockTouchPreventer as EventListener | undefined
+      if (preventer) {
+        try { window.removeEventListener('touchmove', preventer) } catch {}
+        delete (window as any).__scrollLockTouchPreventer
+      }
+      // Restore body styles (for non-iOS fallback)
+      if (body.style.position === 'fixed') {
+        body.style.position = ''
+        body.style.top = ''
+        body.style.left = ''
+        body.style.right = ''
+        body.style.width = ''
+        body.style.overflow = ''
+        root.classList.remove('scroll-lock')
+        body.classList.remove('scroll-lock')
+      }
+      // Restore scroll position
+      const y = yStr ? parseInt(yStr, 10) : (window.scrollY || 0)
       try { window.scrollTo(0, y) } catch {}
     }
-  }, [])
+  }
 
   useEffect(() => {
     // Cleanup double-tap timer on unmount
@@ -5031,7 +5068,7 @@ useEffect(() => {
                   try { window.clearTimeout(touchHoldTimer) } catch {}
                   touchHoldTimer = null
                 }
-                // Decide between horizontal pan vs immediate vertical drag
+                // If horizontal movement dominates, treat this as a calendar pan even though we started on an event
                 const absX = Math.abs(dx)
                 const absY = Math.abs(dy)
                 if (absX > absY && area) {
@@ -5077,17 +5114,12 @@ useEffect(() => {
                         const totalPx = calendarBaseTranslateRef.current + constrainedDx
                         const daysEl = calendarDaysRef.current
                         if (daysEl) daysEl.style.transform = `translateX(${totalPx}px)`
-                        const hdrEl = calendarHeadersRef.current
-                        if (hdrEl) hdrEl.style.transform = `translateX(${totalPx}px)`
+                      const hdrEl = calendarHeadersRef.current
+                      if (hdrEl) hdrEl.style.transform = `translateX(${totalPx}px)`
                     }
                   }
                   return
                 }
-                if (absY > absX) {
-                  // Activate drag immediately for dominant vertical movement
-                  activateDrag()
-                }
-                // If roughly equal, keep waiting for hold
                 return
               }
               // Not activated yet, and not moved enough — keep waiting for hold
