@@ -1878,12 +1878,50 @@ html[data-theme='light'] .calendar-now-line::before {
 }
 .calendar-popover__repeat {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  align-items: baseline;
+  gap: 0.45rem;
   color: var(--text-secondary);
+  flex-wrap: nowrap;
 }
 .calendar-popover__repeat-label {
-  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.86rem;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.calendar-popover__repeat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: 1rem;
+  position: relative;
+  top: 0.5px;
+}
+.calendar-popover__repeat-icon--caret {
+  font-size: 1.1rem;
+}
+.calendar-popover__repeat-text {
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+.calendar-popover__repeat .history-dropdown {
+  flex: 0 0 auto;
+  min-width: 6.5rem;
+  width: auto;
+  align-self: baseline;
+}
+.calendar-popover__repeat .history-dropdown__button {
+  min-width: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.5rem;
+  min-height: 1.65rem;
+}
+.calendar-popover__repeat .history-dropdown__value {
+  font-size: 0.86rem;
+  line-height: 1.2;
 }
 .calendar-popover__summary {
   display: flex;

@@ -6098,7 +6098,11 @@ useEffect(() => {
         <div className="calendar-popover__meta">
           <div className="calendar-popover__time">{dateLabel}</div>
           <div className="calendar-popover__repeat" aria-label="Repeat">
-            <span className="calendar-popover__repeat-label" aria-hidden>⟳ Repeat ▸</span>
+            <span className="calendar-popover__repeat-label" aria-hidden>
+              <span className="calendar-popover__repeat-icon calendar-popover__repeat-icon--loop">⟳</span>
+              <span className="calendar-popover__repeat-text">Repeat</span>
+              <span className="calendar-popover__repeat-icon calendar-popover__repeat-icon--caret">▸</span>
+            </span>
             {(() => {
               const start = new Date(entry.startedAt)
               const minutes = start.getHours() * 60 + start.getMinutes()
