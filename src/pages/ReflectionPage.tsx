@@ -1931,7 +1931,9 @@ export default function ReflectionPage() {
       }
 
       stopCalendarPanAnimation()
-
+      const desiredAfterSnap = baseTransform + snapDays * dayWidth
+      const releaseBaseTransform = baseTransform
+      calendarBaseTranslateRef.current = desiredAfterSnap
       const distanceFactor = Math.min(1.8, Math.max(1, Math.abs(deltaPx) / Math.max(dayWidth, 1)))
       const duration = Math.round(
         Math.min(PAN_MAX_ANIMATION_MS, Math.max(PAN_MIN_ANIMATION_MS, PAN_MIN_ANIMATION_MS * distanceFactor)),
@@ -1942,11 +1944,12 @@ export default function ReflectionPage() {
         daysEl.style.transition = ''
         hdrEl.style.transition = ''
         if (!shouldCommit) {
-          const baseAfter = calendarBaseTranslateRef.current
+          const baseAfter = releaseBaseTransform
           daysEl.style.transform = `translateX(${baseAfter}px)`
           hdrEl.style.transform = `translateX(${baseAfter}px)`
           calendarPanDesiredOffsetRef.current = baseOffset
           historyDayOffsetRef.current = baseOffset
+          calendarBaseTranslateRef.current = baseAfter
         } else {
           calendarPanDesiredOffsetRef.current = targetOffset
           historyDayOffsetRef.current = targetOffset
