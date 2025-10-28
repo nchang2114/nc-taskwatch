@@ -1931,9 +1931,6 @@ export default function ReflectionPage() {
       }
 
       stopCalendarPanAnimation()
-      const desiredAfterSnap = baseTransform + snapDays * dayWidth
-      const releaseBaseTransform = baseTransform
-      calendarBaseTranslateRef.current = desiredAfterSnap
       const distanceFactor = Math.min(1.8, Math.max(1, Math.abs(deltaPx) / Math.max(dayWidth, 1)))
       const duration = Math.round(
         Math.min(PAN_MAX_ANIMATION_MS, Math.max(PAN_MIN_ANIMATION_MS, PAN_MIN_ANIMATION_MS * distanceFactor)),
@@ -1943,13 +1940,11 @@ export default function ReflectionPage() {
       const finalize = (shouldCommit: boolean) => {
         daysEl.style.transition = ''
         hdrEl.style.transition = ''
-        if (!shouldCommit) {
-          const baseAfter = releaseBaseTransform
-          daysEl.style.transform = `translateX(${baseAfter}px)`
-          hdrEl.style.transform = `translateX(${baseAfter}px)`
+        if (!shouldCommit || snapDays === 0) {
+          daysEl.style.transform = `translateX(${baseTransform}px)`
+          hdrEl.style.transform = `translateX(${baseTransform}px)`
           calendarPanDesiredOffsetRef.current = baseOffset
           historyDayOffsetRef.current = baseOffset
-          calendarBaseTranslateRef.current = baseAfter
         } else {
           calendarPanDesiredOffsetRef.current = targetOffset
           historyDayOffsetRef.current = targetOffset
@@ -1962,9 +1957,9 @@ export default function ReflectionPage() {
               setHistoryDayOffset(targetOffset)
             }
           }
-          const baseAfter = calendarBaseTranslateRef.current
-          daysEl.style.transform = `translateX(${baseAfter}px)`
-          hdrEl.style.transform = `translateX(${baseAfter}px)`
+          calendarBaseTranslateRef.current = baseTransform
+          // Leave the transform at endTransform temporarily; the next layout effect will
+          // reapply the base translate with the updated window data to avoid a visible flicker.
         }
       }
 
