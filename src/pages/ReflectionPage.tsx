@@ -16,7 +16,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from 'react'
-import { createPortal } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import './ReflectionPage.css'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
 import {
@@ -1947,16 +1947,17 @@ export default function ReflectionPage() {
           hdrEl.style.transform = `translateX(${baseAfter}px)`
           calendarPanDesiredOffsetRef.current = baseOffset
           historyDayOffsetRef.current = baseOffset
-          calendarBaseTranslateRef.current = baseAfter
         } else {
-          const committedTransform = endTransform
-          daysEl.style.transform = `translateX(${committedTransform}px)`
-          hdrEl.style.transform = `translateX(${committedTransform}px)`
-          calendarBaseTranslateRef.current = committedTransform
           calendarPanDesiredOffsetRef.current = targetOffset
           historyDayOffsetRef.current = targetOffset
           if (targetOffset !== baseOffset) {
-            setHistoryDayOffset(targetOffset)
+            if (typeof flushSync === 'function') {
+              flushSync(() => {
+                setHistoryDayOffset(targetOffset)
+              })
+            } else {
+              setHistoryDayOffset(targetOffset)
+            }
           }
         }
       }
