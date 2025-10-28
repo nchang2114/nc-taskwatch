@@ -300,6 +300,62 @@
   color: rgba(214, 220, 255, 0.55);
 }
 
+.calendar-inspector__empty {
+  padding: clamp(1.2rem, 4vw, 1.8rem);
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+html[data-theme='light'] .calendar-inspector__empty {
+  color: rgba(71, 80, 132, 0.82);
+}
+
+.calendar-inspector__footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.8rem;
+}
+
+.calendar-inspector__delete-button {
+  border-color: rgba(220, 76, 92, 0.65);
+  color: #fecaca;
+  background: rgba(112, 18, 28, 0.45);
+}
+
+.calendar-inspector__delete-button:hover,
+.calendar-inspector__delete-button:focus-visible {
+  border-color: rgba(255, 128, 144, 0.8);
+  color: #fff;
+  background: rgba(180, 24, 38, 0.75);
+}
+
+html[data-theme='light'] .calendar-inspector__delete-button {
+  border-color: rgba(218, 96, 110, 0.6);
+  color: rgba(148, 24, 36, 0.85);
+  background: rgba(246, 214, 218, 0.85);
+}
+
+html[data-theme='light'] .calendar-inspector__delete-button:hover,
+html[data-theme='light'] .calendar-inspector__delete-button:focus-visible {
+  border-color: rgba(192, 52, 66, 0.7);
+  color: rgba(122, 18, 30, 0.95);
+  background: rgba(248, 182, 188, 0.95);
+}
+
+.legacy-editor-panel__empty {
+  padding: clamp(1.2rem, 4vw, 1.8rem);
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+html[data-theme='light'] .legacy-editor-panel__empty {
+  color: rgba(71, 80, 132, 0.82);
+}
+
 .history-timeline__extras {
   display: flex;
   flex-direction: column;
