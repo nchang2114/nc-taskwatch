@@ -2957,10 +2957,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       }}
                                       aria-label={
                                         isDetailsOpen
-                                          ? 'Hide notes and subtasks'
+                                          ? 'Hide subtasks and notes'
                                           : hasDetailsContent
-                                          ? 'Show notes and subtasks'
-                                          : 'Add notes or subtasks'
+                                          ? 'Show subtasks and notes'
+                                          : 'Add subtasks or notes'
                                       }
                                       aria-expanded={isDetailsOpen}
                                     >
@@ -3614,10 +3614,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           }}
                                           aria-label={
                                             isDetailsOpen
-                                              ? 'Hide notes and subtasks'
+                                              ? 'Hide subtasks and notes'
                                               : hasDetailsContent
-                                              ? 'Show notes and subtasks'
-                                              : 'Add notes or subtasks'
+                                              ? 'Show subtasks and notes'
+                                              : 'Add subtasks or notes'
                                           }
                                           aria-expanded={isDetailsOpen}
                                         >
