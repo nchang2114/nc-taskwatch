@@ -1959,6 +1959,9 @@ export default function ReflectionPage() {
               setHistoryDayOffset(targetOffset)
             }
           }
+          const baseAfter = calendarBaseTranslateRef.current
+          daysEl.style.transform = `translateX(${baseAfter}px)`
+          hdrEl.style.transform = `translateX(${baseAfter}px)`
         }
       }
 
