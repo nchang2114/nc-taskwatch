@@ -82,7 +82,9 @@ const PAN_FLICK_VELOCITY_PX_PER_MS = 0.6
 const PAN_MIN_ANIMATION_MS = 220
 const PAN_MAX_ANIMATION_MS = 450
 const MAX_BUFFER_DAYS = 28
-const ENABLE_HISTORY_INSPECTOR_PANEL = false
+
+// IMPORTANT BOOL FLAG
+const ENABLE_HISTORY_INSPECTOR_PANEL = true
 const INSPECTOR_DELETED_MESSAGE = 'This entry was deleted.'
 const MULTI_DAY_OPTIONS = [2, 3, 4, 5, 6] as const
 const isValidMultiDayOption = (value: number): value is (typeof MULTI_DAY_OPTIONS)[number] =>
@@ -3195,7 +3197,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
         setCalendarInspectorEntryId(null)
       }
     },
-    [handleStartEditingHistoryEntry, setCalendarEditorEntryId, setCalendarInspectorEntryId, setInspectorFallbackMessage],
+    [ENABLE_HISTORY_INSPECTOR_PANEL, handleStartEditingHistoryEntry],
   )
 
   useEffect(() => {
@@ -6900,6 +6902,68 @@ useEffect(() => {
         return formatDateRange(resolvedStart, resolvedEnd)
       })()
 
+      const inspectorRepeatControl = (() => {
+        const start = new Date(inspectorEntry.startedAt)
+        const minutes = start.getHours() * 60 + start.getMinutes()
+        const durMin = Math.max(1, Math.round((inspectorEntry.endedAt - inspectorEntry.startedAt) / 60000))
+        const dow = start.getDay()
+        const matches = (r: RepeatingSessionRule) =>
+          r.isActive &&
+          r.timeOfDayMinutes === minutes &&
+          r.durationMinutes === durMin &&
+          (r.taskName?.trim() || '') === (inspectorEntry.taskName?.trim() || '') &&
+          (r.goalName?.trim() || null) === (inspectorEntry.goalName?.trim() || null) &&
+          (r.bucketName?.trim() || null) === (inspectorEntry.bucketName?.trim() || null)
+        const hasDaily = repeatingRules.some((r) => matches(r) && r.frequency === 'daily')
+        const hasWeekly = repeatingRules.some((r) => matches(r) && r.frequency === 'weekly' && r.dayOfWeek === dow)
+        const currentVal: 'none' | 'daily' | 'weekly' = hasDaily ? 'daily' : hasWeekly ? 'weekly' : 'none'
+        return (
+          <div className="calendar-inspector__repeat" aria-label="Repeat schedule">
+            <span className="calendar-inspector__repeat-label" aria-hidden>
+              <span className="calendar-inspector__repeat-icon calendar-inspector__repeat-icon--loop">⟳</span>
+              <span className="calendar-inspector__repeat-text">Repeat</span>
+              <span className="calendar-inspector__repeat-icon calendar-inspector__repeat-icon--caret">▸</span>
+            </span>
+            <HistoryDropdown
+              id={`repeat-inspector-${inspectorEntry.id}`}
+              value={currentVal}
+              placeholder="None"
+              options={[
+                { value: 'none', label: 'None' },
+                { value: 'daily', label: 'Daily' },
+                { value: 'weekly', label: 'Weekly' },
+              ]}
+              onChange={async (v) => {
+                const val = v as 'none' | 'daily' | 'weekly'
+                if (val === 'none') {
+                  const ids = await deactivateMatchingRulesForEntry(inspectorEntry)
+                  if (Array.isArray(ids) && ids.length > 0) {
+                    setRepeatingRules((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, isActive: false } : r)))
+                  } else {
+                    setRepeatingRules((prev) =>
+                      prev.map((r) => {
+                        const labelMatch =
+                          (r.taskName?.trim() || '') === (inspectorEntry.taskName?.trim() || '') &&
+                          (r.goalName?.trim() || null) === (inspectorEntry.goalName?.trim() || null) &&
+                          (r.bucketName?.trim() || null) === (inspectorEntry.bucketName?.trim() || null)
+                        const timeMatch = r.timeOfDayMinutes === minutes && r.durationMinutes === durMin
+                        const freqMatch = r.frequency === 'daily' || (r.frequency === 'weekly' && r.dayOfWeek === dow)
+                        return labelMatch && timeMatch && freqMatch ? { ...r, isActive: false } : r
+                      }),
+                    )
+                  }
+                  return
+                }
+                const created = await createRepeatingRuleForEntry(inspectorEntry, val)
+                if (created) {
+                  setRepeatingRules((prev) => [...prev, created])
+                }
+              }}
+            />
+          </div>
+        )
+      })()
+
       if (ENABLE_HISTORY_INSPECTOR_PANEL) {
         calendarInspectorPanel = (
           <aside className="calendar-inspector" aria-label="Session inspector">
@@ -6933,74 +6997,79 @@ useEffect(() => {
                       onKeyDown={handleHistoryFieldKeyDown}
                     />
                   </label>
-                  <label className="history-timeline__field">
-                    <span className="history-timeline__field-text">Start</span>
-                    <div className="history-timeline__field-row">
-                      <input
-                        className="history-timeline__field-input history-timeline__field-input--split"
-                        type="date"
-                        value={startDateInputValue}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          setHistoryDraft((draft) => {
-                            if (value.trim().length === 0) return draft
-                            const parsed = parseLocalDateTime(value, startTimeInputValue)
-                            return parsed === null ? draft : { ...draft, startedAt: parsed }
-                          })
-                        }}
-                        onKeyDown={handleHistoryFieldKeyDown}
-                      />
-                      <input
-                        className="history-timeline__field-input history-timeline__field-input--split"
-                        type="time"
-                        step={60}
-                        value={startTimeInputValue}
-                        onChange={(event) => {
-                          const { value } = event.target
-                          setHistoryDraft((draft) => {
-                            if (value.trim().length === 0) return { ...draft, startedAt: null }
-                            const parsed = parseLocalDateTime(startDateInputValue, value)
-                            return parsed === null ? draft : { ...draft, startedAt: parsed }
-                          })
-                        }}
-                        onKeyDown={handleHistoryFieldKeyDown}
-                      />
+                  <div className="calendar-inspector__schedule">
+                    <div className="calendar-inspector__schedule-row">
+                      <label className="calendar-inspector__schedule-group">
+                        <span className="calendar-inspector__schedule-heading">Start</span>
+                        <div className="calendar-inspector__schedule-inputs">
+                          <input
+                            className="history-timeline__field-input history-timeline__field-input--split"
+                            type="date"
+                            value={startDateInputValue}
+                            onChange={(event) => {
+                              const value = event.target.value
+                              setHistoryDraft((draft) => {
+                                if (value.trim().length === 0) return draft
+                                const parsed = parseLocalDateTime(value, startTimeInputValue)
+                                return parsed === null ? draft : { ...draft, startedAt: parsed }
+                              })
+                            }}
+                            onKeyDown={handleHistoryFieldKeyDown}
+                          />
+                          <input
+                            className="history-timeline__field-input history-timeline__field-input--split"
+                            type="time"
+                            step={60}
+                            value={startTimeInputValue}
+                            onChange={(event) => {
+                              const { value } = event.target
+                              setHistoryDraft((draft) => {
+                                if (value.trim().length === 0) return { ...draft, startedAt: null }
+                                const parsed = parseLocalDateTime(startDateInputValue, value)
+                                return parsed === null ? draft : { ...draft, startedAt: parsed }
+                              })
+                            }}
+                            onKeyDown={handleHistoryFieldKeyDown}
+                          />
+                        </div>
+                      </label>
+                      <label className="calendar-inspector__schedule-group">
+                        <span className="calendar-inspector__schedule-heading">End</span>
+                        <div className="calendar-inspector__schedule-inputs">
+                          <input
+                            className="history-timeline__field-input history-timeline__field-input--split"
+                            type="date"
+                            value={endDateInputValue}
+                            onChange={(event) => {
+                              const value = event.target.value
+                              setHistoryDraft((draft) => {
+                                if (value.trim().length === 0) return draft
+                                const parsed = parseLocalDateTime(value, endTimeInputValue)
+                                return parsed === null ? draft : { ...draft, endedAt: parsed }
+                              })
+                            }}
+                            onKeyDown={handleHistoryFieldKeyDown}
+                          />
+                          <input
+                            className="history-timeline__field-input history-timeline__field-input--split"
+                            type="time"
+                            step={60}
+                            value={endTimeInputValue}
+                            onChange={(event) => {
+                              const { value } = event.target
+                              setHistoryDraft((draft) => {
+                                if (value.trim().length === 0) return { ...draft, endedAt: null }
+                                const parsed = parseLocalDateTime(endDateInputValue, value)
+                                return parsed === null ? draft : { ...draft, endedAt: parsed }
+                              })
+                            }}
+                            onKeyDown={handleHistoryFieldKeyDown}
+                          />
+                        </div>
+                      </label>
                     </div>
-                  </label>
-                  <label className="history-timeline__field">
-                    <span className="history-timeline__field-text">End</span>
-                    <div className="history-timeline__field-row">
-                      <input
-                        className="history-timeline__field-input history-timeline__field-input--split"
-                        type="date"
-                        value={endDateInputValue}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          setHistoryDraft((draft) => {
-                            if (value.trim().length === 0) return draft
-                            const parsed = parseLocalDateTime(value, endTimeInputValue)
-                            return parsed === null ? draft : { ...draft, endedAt: parsed }
-                          })
-                        }}
-                        onKeyDown={handleHistoryFieldKeyDown}
-                      />
-                      <input
-                        className="history-timeline__field-input history-timeline__field-input--split"
-                        type="time"
-                        step={60}
-                        value={endTimeInputValue}
-                        onChange={(event) => {
-                          const { value } = event.target
-                          setHistoryDraft((draft) => {
-                            if (value.trim().length === 0) return { ...draft, endedAt: null }
-                            const parsed = parseLocalDateTime(endDateInputValue, value)
-                            return parsed === null ? draft : { ...draft, endedAt: parsed }
-                          })
-                        }}
-                        onKeyDown={handleHistoryFieldKeyDown}
-                      />
-                    </div>
-                  </label>
+                  </div>
+                  {inspectorRepeatControl}
                   <label className="history-timeline__field">
                     <span className="history-timeline__field-text">Goal</span>
                     <HistoryDropdown
@@ -7137,80 +7206,79 @@ useEffect(() => {
                   onKeyDown={handleHistoryFieldKeyDown}
                 />
               </label>
-              <div className="legacy-editor-panel__row">
-                <label className="history-timeline__field legacy-editor-panel__field">
-                  <span className="history-timeline__field-text">Start date</span>
-                  <input
-                    className="history-timeline__field-input"
-                    type="date"
-                    value={startDateInputValue}
-                    onChange={(event) => {
-                      const value = event.target.value
-                      setHistoryDraft((draft) => {
-                        if (value.trim().length === 0) return draft
-                        const parsed = parseLocalDateTime(value, startTimeInputValue)
-                        return parsed === null ? draft : { ...draft, startedAt: parsed }
-                      })
-                    }}
-                    onKeyDown={handleHistoryFieldKeyDown}
-                  />
-                </label>
-                <label className="history-timeline__field legacy-editor-panel__field">
-                  <span className="history-timeline__field-text">Start time</span>
-                  <input
-                    className="history-timeline__field-input"
-                    type="time"
-                    step={60}
-                    value={startTimeInputValue}
-                    onChange={(event) => {
-                      const { value } = event.target
-                      setHistoryDraft((draft) => {
-                        if (value.trim().length === 0) return { ...draft, startedAt: null }
-                        const parsed = parseLocalDateTime(startDateInputValue, value)
-                        return parsed === null ? draft : { ...draft, startedAt: parsed }
-                      })
-                    }}
-                    onKeyDown={handleHistoryFieldKeyDown}
-                  />
-                </label>
+              <div className="calendar-inspector__schedule legacy-editor-panel__schedule">
+                <div className="calendar-inspector__schedule-row">
+                  <label className="calendar-inspector__schedule-group">
+                    <span className="calendar-inspector__schedule-heading">Start</span>
+                    <div className="calendar-inspector__schedule-inputs">
+                      <input
+                        className="history-timeline__field-input history-timeline__field-input--split"
+                        type="date"
+                        value={startDateInputValue}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setHistoryDraft((draft) => {
+                            if (value.trim().length === 0) return draft
+                            const parsed = parseLocalDateTime(value, startTimeInputValue)
+                            return parsed === null ? draft : { ...draft, startedAt: parsed }
+                          })
+                        }}
+                        onKeyDown={handleHistoryFieldKeyDown}
+                      />
+                      <input
+                        className="history-timeline__field-input history-timeline__field-input--split"
+                        type="time"
+                        step={60}
+                        value={startTimeInputValue}
+                        onChange={(event) => {
+                          const { value } = event.target
+                          setHistoryDraft((draft) => {
+                            if (value.trim().length === 0) return { ...draft, startedAt: null }
+                            const parsed = parseLocalDateTime(startDateInputValue, value)
+                            return parsed === null ? draft : { ...draft, startedAt: parsed }
+                          })
+                        }}
+                        onKeyDown={handleHistoryFieldKeyDown}
+                      />
+                    </div>
+                  </label>
+                  <label className="calendar-inspector__schedule-group">
+                    <span className="calendar-inspector__schedule-heading">End</span>
+                    <div className="calendar-inspector__schedule-inputs">
+                      <input
+                        className="history-timeline__field-input history-timeline__field-input--split"
+                        type="date"
+                        value={endDateInputValue}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setHistoryDraft((draft) => {
+                            if (value.trim().length === 0) return draft
+                            const parsed = parseLocalDateTime(value, endTimeInputValue)
+                            return parsed === null ? draft : { ...draft, endedAt: parsed }
+                          })
+                        }}
+                        onKeyDown={handleHistoryFieldKeyDown}
+                      />
+                      <input
+                        className="history-timeline__field-input history-timeline__field-input--split"
+                        type="time"
+                        step={60}
+                        value={endTimeInputValue}
+                        onChange={(event) => {
+                          const { value } = event.target
+                          setHistoryDraft((draft) => {
+                            if (value.trim().length === 0) return { ...draft, endedAt: null }
+                            const parsed = parseLocalDateTime(endDateInputValue, value)
+                            return parsed === null ? draft : { ...draft, endedAt: parsed }
+                          })
+                        }}
+                        onKeyDown={handleHistoryFieldKeyDown}
+                      />
+                    </div>
+                  </label>
+                </div>
               </div>
-              <div className="legacy-editor-panel__row">
-                <label className="history-timeline__field legacy-editor-panel__field">
-                  <span className="history-timeline__field-text">End date</span>
-                  <input
-                    className="history-timeline__field-input"
-                    type="date"
-                    value={endDateInputValue}
-                    onChange={(event) => {
-                      const value = event.target.value
-                      setHistoryDraft((draft) => {
-                        if (value.trim().length === 0) return draft
-                        const parsed = parseLocalDateTime(value, endTimeInputValue)
-                        return parsed === null ? draft : { ...draft, endedAt: parsed }
-                      })
-                    }}
-                    onKeyDown={handleHistoryFieldKeyDown}
-                  />
-                </label>
-                <label className="history-timeline__field legacy-editor-panel__field">
-                  <span className="history-timeline__field-text">End time</span>
-                  <input
-                    className="history-timeline__field-input"
-                    type="time"
-                    step={60}
-                    value={endTimeInputValue}
-                    onChange={(event) => {
-                      const { value } = event.target
-                      setHistoryDraft((draft) => {
-                        if (value.trim().length === 0) return { ...draft, endedAt: null }
-                        const parsed = parseLocalDateTime(endDateInputValue, value)
-                        return parsed === null ? draft : { ...draft, endedAt: parsed }
-                      })
-                    }}
-                    onKeyDown={handleHistoryFieldKeyDown}
-                  />
-                </label>
-              </div>
+              {inspectorRepeatControl}
               <div className="legacy-editor-panel__row">
                 <label className="history-timeline__field legacy-editor-panel__field">
                   <span className="history-timeline__field-text">Goal</span>
