@@ -18,6 +18,13 @@ const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
 
 type HistoryPendingAction = 'upsert' | 'delete'
 
+export type HistorySubtask = {
+  id: string
+  text: string
+  completed: boolean
+  sortIndex: number
+}
+
 export type HistoryEntry = {
   id: string
   taskName: string
@@ -31,6 +38,8 @@ export type HistoryEntry = {
   taskId: string | null
   goalSurface: SurfaceStyle
   bucketSurface: SurfaceStyle | null
+  notes: string
+  subtasks: HistorySubtask[]
 }
 
 export type HistoryRecord = HistoryEntry & {
@@ -52,6 +61,8 @@ type HistoryCandidate = {
   taskId?: unknown
   goalSurface?: unknown
   bucketSurface?: unknown
+  notes?: unknown
+  subtasks?: unknown
 }
 
 type HistoryRecordCandidate = HistoryCandidate & {
@@ -63,6 +74,66 @@ type HistoryRecordCandidate = HistoryCandidate & {
 const LIFE_ROUTINE_BUCKET_SURFACES = new Map(
   LIFE_ROUTINE_DEFAULTS.map((routine) => [routine.title.trim().toLowerCase(), routine.surfaceStyle]),
 )
+
+const sanitizeHistorySubtasks = (value: unknown): HistorySubtask[] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .map((item, index) => {
+      if (typeof item !== 'object' || item === null) {
+        return null
+      }
+      const candidate = item as Record<string, unknown>
+      const rawId = typeof candidate.id === 'string' ? candidate.id : null
+      if (!rawId) {
+        return null
+      }
+      const text = typeof candidate.text === 'string' ? candidate.text : ''
+      const completed = Boolean(candidate.completed)
+      const sortSource = candidate.sortIndex
+      const sortIndex =
+        typeof sortSource === 'number' && Number.isFinite(sortSource)
+          ? sortSource
+          : typeof sortSource === 'string'
+            ? Number(sortSource)
+            : index
+      const normalizedSortIndex = Number.isFinite(sortIndex) ? sortIndex : index
+      return {
+        id: rawId,
+        text,
+        completed,
+        sortIndex: normalizedSortIndex,
+      }
+    })
+    .filter((subtask): subtask is HistorySubtask => Boolean(subtask))
+    .sort((a, b) => a.sortIndex - b.sortIndex)
+}
+
+export const areHistorySubtasksEqual = (a: HistorySubtask[], b: HistorySubtask[]): boolean => {
+  if (a === b) {
+    return true
+  }
+  if (!Array.isArray(a) || !Array.isArray(b)) {
+    return false
+  }
+  if (a.length !== b.length) {
+    return false
+  }
+  for (let i = 0; i < a.length; i += 1) {
+    const left = a[i]
+    const right = b[i]
+    if (
+      left.id !== right.id ||
+      left.text !== right.text ||
+      left.completed !== right.completed ||
+      left.sortIndex !== right.sortIndex
+    ) {
+      return false
+    }
+  }
+  return true
+}
 
 const clampNumber = (value: unknown, fallback: number): number => {
   const num = typeof value === 'number' ? value : Number(value)
@@ -109,6 +180,8 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
       const taskIdRaw = typeof candidate.taskId === 'string' ? candidate.taskId : null
       const goalSurfaceRaw = sanitizeSurfaceStyle(candidate.goalSurface)
       const bucketSurfaceRaw = sanitizeSurfaceStyle(candidate.bucketSurface)
+      const notesRaw = typeof candidate.notes === 'string' ? candidate.notes : ''
+      const subtasksRaw = sanitizeHistorySubtasks(candidate.subtasks)
 
       const normalizedGoalName = goalNameRaw.trim()
       const normalizedBucketName = bucketNameRaw.trim()
@@ -142,6 +215,8 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
         taskId: taskIdRaw,
         goalSurface: ensureSurfaceStyle(goalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE),
         bucketSurface: bucketSurface ? ensureSurfaceStyle(bucketSurface, DEFAULT_SURFACE_STYLE) : null,
+        notes: notesRaw,
+        subtasks: subtasksRaw,
       }
     })
     .filter((entry): entry is HistoryEntry => Boolean(entry))
@@ -242,7 +317,9 @@ const recordEqualsEntry = (record: HistoryRecord, entry: HistoryEntry): boolean 
   record.bucketId === entry.bucketId &&
   record.taskId === entry.taskId &&
   record.goalSurface === entry.goalSurface &&
-  record.bucketSurface === entry.bucketSurface
+  record.bucketSurface === entry.bucketSurface &&
+  record.notes === entry.notes &&
+  areHistorySubtasksEqual(record.subtasks, entry.subtasks)
 
 const updateRecordWithEntry = (record: HistoryRecord, entry: HistoryEntry, timestamp: number): HistoryRecord => {
   if (recordEqualsEntry(record, entry) && record.pendingAction !== 'delete') {
@@ -359,6 +436,8 @@ const mapDbRowToRecord = (row: Record<string, unknown>): HistoryRecord | null =>
     taskId: typeof row.task_id === 'string' ? row.task_id : null,
     goalSurface: typeof row.goal_surface === 'string' ? row.goal_surface : null,
     bucketSurface: typeof row.bucket_surface === 'string' ? row.bucket_surface : null,
+    notes: typeof row.notes === 'string' ? row.notes : null,
+    subtasks: row.subtasks ?? null,
   }
 
   const entry = sanitizeHistoryEntries([candidate])[0]

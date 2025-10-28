@@ -15,6 +15,7 @@ import {
   type TouchEvent,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
+  type ReactElement,
 } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import './ReflectionPage.css'
@@ -42,7 +43,9 @@ import {
   readStoredHistory as readPersistedHistory,
   persistHistorySnapshot,
   syncHistoryWithSupabase,
+  areHistorySubtasksEqual,
   type HistoryEntry,
+  type HistorySubtask,
 } from '../lib/sessionHistory'
 
 const JOURNAL_PROMPTS = [
@@ -76,6 +79,8 @@ const MAX_BUFFER_DAYS = 28
 const MULTI_DAY_OPTIONS = [2, 3, 4, 5, 6] as const
 const isValidMultiDayOption = (value: number): value is (typeof MULTI_DAY_OPTIONS)[number] =>
   (MULTI_DAY_OPTIONS as readonly number[]).includes(value)
+
+const ENABLE_HISTORY_INSPECTOR_PANEL = false
 
 const getCalendarBufferDays = (visibleDayCount: number): number => {
   if (!Number.isFinite(visibleDayCount) || visibleDayCount <= 0) {
@@ -167,6 +172,33 @@ type HistoryDraftState = {
   bucketName: string
   startedAt: number | null
   endedAt: number | null
+  notes: string
+  subtasks: HistorySubtask[]
+}
+
+const cloneHistorySubtasks = (subtasks: HistorySubtask[]): HistorySubtask[] =>
+  subtasks.map((subtask) => ({ ...subtask }))
+
+const createHistoryDraftFromEntry = (entry?: HistoryEntry | null): HistoryDraftState => ({
+  taskName: entry?.taskName ?? '',
+  goalName: entry?.goalName ?? '',
+  bucketName: entry?.bucketName ?? '',
+  startedAt: entry?.startedAt ?? null,
+  endedAt: entry?.endedAt ?? null,
+  notes: entry?.notes ?? '',
+  subtasks: entry ? cloneHistorySubtasks(entry.subtasks) : [],
+})
+
+const createEmptyHistoryDraft = (): HistoryDraftState => createHistoryDraftFromEntry(null)
+
+const HISTORY_SUBTASK_SORT_STEP = 1024
+
+const getNextHistorySubtaskSortIndex = (subtasks: HistorySubtask[]): number => {
+  if (subtasks.length === 0) {
+    return HISTORY_SUBTASK_SORT_STEP
+  }
+  const maxSort = subtasks.reduce((max, subtask) => Math.max(max, subtask.sortIndex), subtasks[0]?.sortIndex ?? 0)
+  return maxSort + HISTORY_SUBTASK_SORT_STEP
 }
 
 type CalendarPopoverEditingState = {
@@ -2085,13 +2117,7 @@ export default function ReflectionPage() {
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
   const [pendingNewHistoryId, setPendingNewHistoryId] = useState<string | null>(null)
   const [hoveredHistoryId, setHoveredHistoryId] = useState<string | null>(null)
-  const [historyDraft, setHistoryDraft] = useState<HistoryDraftState>({
-    taskName: '',
-    goalName: '',
-    bucketName: '',
-    startedAt: null,
-    endedAt: null,
-  })
+  const [historyDraft, setHistoryDraft] = useState<HistoryDraftState>(() => createEmptyHistoryDraft())
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
   // When set, shows a modal editor for a calendar entry
   const [calendarEditorEntryId, setCalendarEditorEntryId] = useState<string | null>(null)
@@ -2116,8 +2142,11 @@ export default function ReflectionPage() {
   const timelineBarRef = useRef<HTMLDivElement | null>(null)
   const activeTooltipRef = useRef<HTMLDivElement | null>(null)
   const editingTooltipRef = useRef<HTMLDivElement | null>(null)
+  const historyCalendarRef = useRef<HTMLDivElement | null>(null)
   // Ref to the calendar editor panel so global outside-click handlers don't cancel edits when interacting with the modal
+  const [calendarInspectorEntryId, setCalendarInspectorEntryId] = useState<string | null>(null)
   const calendarEditorRef = useRef<HTMLDivElement | null>(null)
+  const calendarInspectorRef = useRef<HTMLDivElement | null>(null)
   // Ref to the session name input inside the calendar editor modal (for autofocus on new entries)
   const calendarEditorNameInputRef = useRef<HTMLInputElement | null>(null)
   const [activeTooltipOffsets, setActiveTooltipOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -2236,7 +2265,7 @@ export default function ReflectionPage() {
     setSelectedHistoryId(null)
     setHoveredHistoryId(null)
     setEditingHistoryId(null)
-    setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
+    setHistoryDraft(createEmptyHistoryDraft())
     setDragPreview(null)
     dragStateRef.current = null
     dragPreviewRef.current = null
@@ -2570,13 +2599,7 @@ export default function ReflectionPage() {
       setEditingHistoryId(null)
       return
     }
-    setHistoryDraft({
-      taskName: selectedHistoryEntry.taskName,
-      goalName: selectedHistoryEntry.goalName ?? '',
-      bucketName: selectedHistoryEntry.bucketName ?? '',
-      startedAt: selectedHistoryEntry.startedAt,
-      endedAt: selectedHistoryEntry.endedAt,
-    })
+    setHistoryDraft(createHistoryDraftFromEntry(selectedHistoryEntry))
     setEditingHistoryId((current) => (current === selectedHistoryEntry.id ? current : null))
     taskNameAutofilledRef.current = false
   }, [selectedHistoryEntry])
@@ -2646,7 +2669,7 @@ export default function ReflectionPage() {
       if (selectedHistoryId === entryId) {
         setSelectedHistoryId(null)
         setEditingHistoryId(null)
-        setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
+        setHistoryDraft(createEmptyHistoryDraft())
       }
       if (pendingNewHistoryId === entryId) {
         setPendingNewHistoryId(null)
@@ -2688,6 +2711,8 @@ export default function ReflectionPage() {
       endedAt,
       goalSurface: DEFAULT_SURFACE_STYLE,
       bucketSurface: null,
+      notes: '',
+      subtasks: [],
     }
     updateHistory((current) => {
       const next = [...current, entry]
@@ -2698,37 +2723,39 @@ export default function ReflectionPage() {
     setSelectedHistoryId(entry.id)
     setEditingHistoryId(entry.id)
     setPendingNewHistoryId(entry.id)
-    setHistoryDraft({
-      taskName: 'New session',
-      goalName: '',
-      bucketName: '',
-      startedAt,
-      endedAt,
-    })
-    // Immediately open the full editor modal for the new entry
-    setCalendarEditorEntryId(entry.id)
-  }, [historyDayOffset, updateHistory])
+    setHistoryDraft(createHistoryDraftFromEntry(entry))
+    taskNameAutofilledRef.current = false
+    if (ENABLE_HISTORY_INSPECTOR_PANEL) {
+      setCalendarInspectorEntryId(entry.id)
+      setCalendarEditorEntryId(null)
+    } else {
+      setCalendarEditorEntryId(entry.id)
+      setCalendarInspectorEntryId(null)
+    }
+  }, [historyDayOffset, setCalendarEditorEntryId, setCalendarInspectorEntryId, updateHistory])
 
   const handleSelectHistorySegment = useCallback(
     (entry: HistoryEntry) => {
       if (selectedHistoryId === entry.id) {
+        const editorIsOpen = ENABLE_HISTORY_INSPECTOR_PANEL ? calendarInspectorEntryId : calendarEditorEntryId
+        if (editorIsOpen) {
+          return
+        }
         setSelectedHistoryId(null)
         setEditingHistoryId(null)
-        setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
+        setHistoryDraft(createEmptyHistoryDraft())
         setHoveredHistoryId((current) => (current === entry.id ? null : current))
         return
       }
-      setHistoryDraft({
-        taskName: deriveEntryTaskName(entry),
-        goalName: entry.goalName ?? '',
-        bucketName: entry.bucketName ?? '',
-        startedAt: entry.startedAt,
-        endedAt: entry.endedAt,
+      setHistoryDraft(() => {
+        const base = createHistoryDraftFromEntry(entry)
+        base.taskName = deriveEntryTaskName(entry)
+        return base
       })
       setSelectedHistoryId(entry.id)
       setEditingHistoryId(null)
     },
-    [selectedHistoryId],
+    [calendarEditorEntryId, calendarInspectorEntryId, selectedHistoryId],
   )
 
   const updateHistoryDraftField = useCallback(
@@ -2761,6 +2788,47 @@ export default function ReflectionPage() {
     [updateHistoryDraftField],
   )
 
+  const handleHistoryNotesChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
+    const { value } = event.target
+    setHistoryDraft((draft) => ({ ...draft, notes: value }))
+  }, [])
+
+  const handleAddHistorySubtask = useCallback(() => {
+    setHistoryDraft((draft) => {
+      const sortIndex = getNextHistorySubtaskSortIndex(draft.subtasks)
+      const newSubtask: HistorySubtask = {
+        id: makeHistoryId(),
+        text: '',
+        completed: false,
+        sortIndex,
+      }
+      return { ...draft, subtasks: [...draft.subtasks, newSubtask] }
+    })
+  }, [])
+
+  const handleUpdateHistorySubtaskText = useCallback((id: string, value: string) => {
+    setHistoryDraft((draft) => ({
+      ...draft,
+      subtasks: draft.subtasks.map((subtask) => (subtask.id === id ? { ...subtask, text: value } : subtask)),
+    }))
+  }, [])
+
+  const handleToggleHistorySubtaskCompletion = useCallback((id: string) => {
+    setHistoryDraft((draft) => ({
+      ...draft,
+      subtasks: draft.subtasks.map((subtask) =>
+        subtask.id === id ? { ...subtask, completed: !subtask.completed } : subtask,
+      ),
+    }))
+  }, [])
+
+  const handleDeleteHistorySubtask = useCallback((id: string) => {
+    setHistoryDraft((draft) => ({
+      ...draft,
+      subtasks: draft.subtasks.filter((subtask) => subtask.id !== id),
+    }))
+  }, [])
+
   const commitHistoryDraft = useCallback(() => {
     if (!selectedHistoryEntry) {
       return
@@ -2769,6 +2837,8 @@ export default function ReflectionPage() {
     const nextTaskName = historyDraft.taskName.trim()
     const nextGoalName = historyDraft.goalName.trim()
     const nextBucketName = historyDraft.bucketName.trim()
+    const nextNotes = historyDraft.notes
+    const nextSubtasks = cloneHistorySubtasks(historyDraft.subtasks)
     const draftStartedAt = historyDraft.startedAt ?? selectedHistoryEntry.startedAt
     const draftEndedAt = historyDraft.endedAt ?? selectedHistoryEntry.endedAt
     let nextStartedAt = Number.isFinite(draftStartedAt) ? draftStartedAt : selectedHistoryEntry.startedAt
@@ -2835,7 +2905,9 @@ export default function ReflectionPage() {
         target.startedAt === nextStartedAt &&
         target.endedAt === nextEndedAt &&
         target.goalSurface === resolvedGoalSurface &&
-        target.bucketSurface === resolvedBucketSurface
+        target.bucketSurface === resolvedBucketSurface &&
+        target.notes === nextNotes &&
+        areHistorySubtasksEqual(target.subtasks, nextSubtasks)
       ) {
         return current
       }
@@ -2850,6 +2922,8 @@ export default function ReflectionPage() {
         elapsed: nextElapsed,
         goalSurface: resolvedGoalSurface,
         bucketSurface: resolvedBucketSurface,
+        notes: nextNotes,
+        subtasks: nextSubtasks,
       }
       return next
     })
@@ -2859,6 +2933,8 @@ export default function ReflectionPage() {
       bucketName: normalizedBucketName,
       startedAt: nextStartedAt,
       endedAt: nextEndedAt,
+      notes: nextNotes,
+      subtasks: cloneHistorySubtasks(nextSubtasks),
     })
     setEditingHistoryId(null)
   }, [bucketSurfaceLookup, goalSurfaceLookup, historyDraft, lifeRoutineSurfaceLookup, selectedHistoryEntry, updateHistory])
@@ -2878,19 +2954,29 @@ export default function ReflectionPage() {
       } else if (event.key === 'Escape') {
         event.preventDefault()
         if (selectedHistoryEntry) {
-          setHistoryDraft({
-            taskName: deriveEntryTaskName(selectedHistoryEntry),
-            goalName: selectedHistoryEntry.goalName ?? '',
-            bucketName: selectedHistoryEntry.bucketName ?? '',
-            startedAt: selectedHistoryEntry.startedAt,
-            endedAt: selectedHistoryEntry.endedAt,
+          setHistoryDraft(() => {
+            const base = createHistoryDraftFromEntry(selectedHistoryEntry)
+            base.taskName = deriveEntryTaskName(selectedHistoryEntry)
+            return base
           })
+        } else {
+          setHistoryDraft(createEmptyHistoryDraft())
         }
         setEditingHistoryId(null)
       }
     },
     [calendarEditorEntryId, commitHistoryDraft, pendingNewHistoryId, selectedHistoryEntry, selectedHistoryId],
   )
+
+  useEffect(() => {
+    if (!calendarInspectorEntryId) {
+      return
+    }
+    const exists = history.some((entry) => entry.id === calendarInspectorEntryId)
+    if (!exists) {
+      setCalendarInspectorEntryId(null)
+    }
+  }, [calendarInspectorEntryId, history])
 
   const handleCancelHistoryEdit = useCallback(() => {
     // If we're cancelling a newly added (pending) entry, delete it only if untouched (no field edits)
@@ -2907,12 +2993,17 @@ export default function ReflectionPage() {
       const entryEnd = entry?.endedAt ?? null
       const draftStart = draft.startedAt ?? entryStart
       const draftEnd = draft.endedAt ?? entryEnd
+      const entryNotes = entry?.notes ?? ''
+      const draftNotes = draft.notes ?? ''
+      const subtasksEqual = areHistorySubtasksEqual(entry?.subtasks ?? [], draft.subtasks)
       const untouched =
         entryTask === draftTask &&
         entryGoal === draftGoal &&
         entryBucket === draftBucket &&
         entryStart === draftStart &&
-        entryEnd === draftEnd
+        entryEnd === draftEnd &&
+        entryNotes === draftNotes &&
+        subtasksEqual
 
       if (untouched && entry) {
         // Remove the new entry since user dismissed without editing
@@ -2922,22 +3013,14 @@ export default function ReflectionPage() {
       setSelectedHistoryId(null)
       setEditingHistoryId(null)
       setHoveredHistoryId(null)
-      setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
+      setCalendarInspectorEntryId(null)
+      setHistoryDraft(createEmptyHistoryDraft())
       return
     }
-    if (selectedHistoryEntry) {
-      setHistoryDraft({
-        taskName: selectedHistoryEntry.taskName,
-        goalName: selectedHistoryEntry.goalName ?? '',
-        bucketName: selectedHistoryEntry.bucketName ?? '',
-        startedAt: selectedHistoryEntry.startedAt,
-        endedAt: selectedHistoryEntry.endedAt,
-      })
-    } else {
-      setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
-    }
+    setHistoryDraft(() => (selectedHistoryEntry ? createHistoryDraftFromEntry(selectedHistoryEntry) : createEmptyHistoryDraft()))
+    setCalendarInspectorEntryId(null)
     setEditingHistoryId(null)
-  }, [pendingNewHistoryId, selectedHistoryEntry, selectedHistoryId])
+  }, [pendingNewHistoryId, selectedHistoryEntry, selectedHistoryId, setCalendarInspectorEntryId])
 
   const handleSaveHistoryDraft = useCallback(() => {
     // If we were editing a newly added entry, it's no longer pending after save
@@ -2947,20 +3030,43 @@ export default function ReflectionPage() {
     commitHistoryDraft()
   }, [commitHistoryDraft, pendingNewHistoryId, selectedHistoryId])
 
+  useEffect(() => {
+    if (!calendarInspectorEntryId) {
+      return
+    }
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        handleCancelHistoryEdit()
+        setCalendarInspectorEntryId(null)
+      }
+    }
+    document.addEventListener('keydown', onKeyDown as EventListener)
+    return () => document.removeEventListener('keydown', onKeyDown as EventListener)
+  }, [calendarInspectorEntryId, handleCancelHistoryEdit])
+
   const handleStartEditingHistoryEntry = useCallback((entry: HistoryEntry) => {
     setSelectedHistoryId(entry.id)
     setHoveredHistoryId(entry.id)
     setEditingHistoryId(entry.id)
     taskNameAutofilledRef.current = false
-    setHistoryDraft({
-      // Use the stored taskName verbatim so intentional blanks stay blank
-      taskName: entry.taskName,
-      goalName: entry.goalName ?? '',
-      bucketName: entry.bucketName ?? '',
-      startedAt: entry.startedAt,
-      endedAt: entry.endedAt,
-    })
+    setHistoryDraft(createHistoryDraftFromEntry(entry))
   }, [])
+
+  // Kick off editing using whichever UI is currently enabled (inspector or legacy modal).
+  const openCalendarInspector = useCallback(
+    (entry: HistoryEntry) => {
+      handleStartEditingHistoryEntry(entry)
+      if (ENABLE_HISTORY_INSPECTOR_PANEL) {
+        setCalendarInspectorEntryId(entry.id)
+        setCalendarEditorEntryId(null)
+      } else {
+        setCalendarEditorEntryId(entry.id)
+        setCalendarInspectorEntryId(null)
+      }
+    },
+    [handleStartEditingHistoryEntry, setCalendarEditorEntryId, setCalendarInspectorEntryId],
+  )
 
   useEffect(() => {
     if (!selectedHistoryId) {
@@ -2993,16 +3099,26 @@ export default function ReflectionPage() {
       ) {
         return
       }
+      if (calendarInspectorEntryId) {
+        return
+      }
       handleCancelHistoryEdit()
       setSelectedHistoryId(null)
-      setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
+      setHistoryDraft(createEmptyHistoryDraft())
       setHoveredHistoryId(null)
     }
     document.addEventListener('pointerdown', handlePointerDown)
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown)
     }
-  }, [handleCancelHistoryEdit, selectedHistoryId, timelineRef])
+  }, [calendarInspectorEntryId, handleCancelHistoryEdit, selectedHistoryId, timelineRef])
+
+  useEffect(() => {
+    if (!calendarInspectorEntryId) {
+      return
+    }
+    setCalendarPreview(null)
+  }, [calendarInspectorEntryId])
 
   useEffect(() => {
     const goalName = historyDraft.goalName.trim()
@@ -3033,7 +3149,7 @@ export default function ReflectionPage() {
       } else if (event.key === 'Escape' && selectedHistoryId === entry.id) {
         event.preventDefault()
         setSelectedHistoryId(null)
-        setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
+        setHistoryDraft(createEmptyHistoryDraft())
         setEditingHistoryId(null)
       }
     },
@@ -3041,11 +3157,14 @@ export default function ReflectionPage() {
   )
 
   const handleTimelineBackgroundClick = useCallback(() => {
+    if (calendarInspectorEntryId) {
+      return
+    }
     setSelectedHistoryId(null)
-    setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
+    setHistoryDraft(createEmptyHistoryDraft())
     setEditingHistoryId(null)
     setHoveredHistoryId(null)
-  }, [])
+  }, [calendarInspectorEntryId])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -3150,6 +3269,8 @@ export default function ReflectionPage() {
       taskId: activeSession.taskId,
       goalSurface: activeSession.goalSurface,
       bucketSurface: activeSession.bucketSurface,
+      notes: '',
+      subtasks: [],
     }
     const filteredHistory = history.filter((entry) => entry.id !== activeEntry.id)
     return [activeEntry, ...filteredHistory]
@@ -3162,7 +3283,7 @@ export default function ReflectionPage() {
     const exists = effectiveHistory.some((entry) => entry.id === selectedHistoryId)
     if (!exists) {
       setSelectedHistoryId(null)
-      setHistoryDraft({ taskName: '', goalName: '', bucketName: '', startedAt: null, endedAt: null })
+      setHistoryDraft(createEmptyHistoryDraft())
     }
   }, [effectiveHistory, selectedHistoryId])
 
@@ -3404,6 +3525,8 @@ export default function ReflectionPage() {
           endedAt: end,
           goalSurface: DEFAULT_SURFACE_STYLE,
           bucketSurface: null,
+          notes: '',
+          subtasks: [],
         }
         entries.push({ entry: syntheticEntry, start, end })
       }
@@ -3596,6 +3719,11 @@ export default function ReflectionPage() {
     (entry: HistoryEntry, targetEl: HTMLElement) => {
       // Select entry for consistency with other flows.
       handleSelectHistorySegment(entry)
+      if (calendarInspectorEntryId) {
+        openCalendarInspector(entry)
+        setCalendarPreview(null)
+        return
+      }
       // Compute an initial position immediately
       const rect = targetEl.getBoundingClientRect()
       const viewportPadding = 8
@@ -3651,7 +3779,7 @@ export default function ReflectionPage() {
       // Position on next frame to refine based on actual size
       requestAnimationFrame(() => positionCalendarPreview(targetEl))
     },
-    [handleSelectHistorySegment, positionCalendarPreview],
+    [calendarInspectorEntryId, handleSelectHistorySegment, openCalendarInspector, positionCalendarPreview],
   )
 
   const handleCloseCalendarPreview = useCallback(() => setCalendarPreview(null), [])
@@ -5266,6 +5394,8 @@ export default function ReflectionPage() {
                           endedAt,
                           goalSurface: DEFAULT_SURFACE_STYLE,
                           bucketSurface: null,
+                          notes: '',
+                          subtasks: [],
                         }
                         updateHistory((current) => {
                           const next = [...current, newEntry]
@@ -5274,9 +5404,7 @@ export default function ReflectionPage() {
                         })
                         setPendingNewHistoryId(newId)
                         setTimeout(() => {
-                          handleStartEditingHistoryEntry(newEntry)
-                          // Open the full editor for new entries immediately
-                          setCalendarEditorEntryId(newId)
+                          openCalendarInspector(newEntry)
                         }, 0)
                       }
                       calendarEventDragRef.current = null
@@ -5367,14 +5495,8 @@ export default function ReflectionPage() {
                           setHoveredHistoryId(ev.entry.id)
                           setEditingHistoryId(ev.entry.id)
                           taskNameAutofilledRef.current = false
-                          setHistoryDraft({
-                            taskName: ev.entry.taskName,
-                            goalName: ev.entry.goalName ?? '',
-                            bucketName: ev.entry.bucketName ?? '',
-                            startedAt: ev.entry.startedAt,
-                            endedAt: ev.entry.endedAt,
-                          })
-                          setCalendarEditorEntryId(ev.entry.id)
+                          setHistoryDraft(createHistoryDraftFromEntry(ev.entry))
+                          openCalendarInspector(ev.entry)
                           // Close any open preview popover to avoid stacking
                           handleCloseCalendarPreview()
                         }}
@@ -5569,7 +5691,12 @@ export default function ReflectionPage() {
     const startValue = entry.taskName ?? ''
     const initialDisplayValue = title || ''
     const duplicateHistoryEntry = (source: HistoryEntry): HistoryEntry => {
-      const newEntry: HistoryEntry = { ...source, id: makeHistoryId() }
+      const newEntry: HistoryEntry = {
+        ...source,
+        id: makeHistoryId(),
+        notes: source.notes,
+        subtasks: source.subtasks.map((subtask) => ({ ...subtask })),
+      }
       updateHistory((current) => {
         const next = [...current, newEntry]
         next.sort((a, b) => a.startedAt - b.startedAt)
@@ -5730,6 +5857,11 @@ export default function ReflectionPage() {
     }
     const goal = entry.goalName || 'No goal'
     const bucket = entry.bucketName || 'No bucket'
+    const subtaskCount = entry.subtasks.length
+    const completedSubtasks = entry.subtasks.reduce((count, subtask) => (subtask.completed ? count + 1 : count), 0)
+    const hasNotes = entry.notes.trim().length > 0
+    const subtasksSummary = subtaskCount > 0 ? `${completedSubtasks}/${subtaskCount} subtasks` : 'No subtasks'
+    const notesSummary = hasNotes ? 'Notes added' : 'No notes'
     return createPortal(
       <div
         className="calendar-popover"
@@ -5773,14 +5905,8 @@ export default function ReflectionPage() {
                 setHoveredHistoryId(entry.id)
                 setEditingHistoryId(entry.id)
                 taskNameAutofilledRef.current = false
-                setHistoryDraft({
-                  taskName: entry.taskName,
-                  goalName: entry.goalName ?? '',
-                  bucketName: entry.bucketName ?? '',
-                  startedAt: entry.startedAt,
-                  endedAt: entry.endedAt,
-                })
-                setCalendarEditorEntryId(entry.id)
+                setHistoryDraft(createHistoryDraftFromEntry(entry))
+                openCalendarInspector(entry)
                 handleCloseCalendarPreview()
               }}
             >
@@ -5795,13 +5921,7 @@ export default function ReflectionPage() {
                 setSelectedHistoryId(dup.id)
                 setEditingHistoryId(dup.id)
                 taskNameAutofilledRef.current = false
-                setHistoryDraft({
-                  taskName: dup.taskName,
-                  goalName: dup.goalName ?? '',
-                  bucketName: dup.bucketName ?? '',
-                  startedAt: dup.startedAt,
-                  endedAt: dup.endedAt,
-                })
+                setHistoryDraft(createHistoryDraftFromEntry(dup))
               }}
             />
             <button
@@ -5836,6 +5956,14 @@ export default function ReflectionPage() {
         <div className="calendar-popover__meta">
           <div className="calendar-popover__time">{dateLabel}</div>
           <div className="calendar-popover__goal">{goal}{bucket ? ` → ${bucket}` : ''}</div>
+          <div
+            className="calendar-popover__summary"
+            aria-label={`Subtasks ${subtasksSummary}; ${notesSummary}`}
+          >
+            <span className="calendar-popover__summary-item">{subtasksSummary}</span>
+            <span className="calendar-popover__summary-separator" aria-hidden="true">•</span>
+            <span className="calendar-popover__summary-item">{notesSummary}</span>
+          </div>
         </div>
       </div>,
       document.body,
@@ -6064,7 +6192,7 @@ export default function ReflectionPage() {
     calendarBaseTranslateRef.current = base
     daysEl.style.transform = `translateX(${base}px)`
     hdrEl.style.transform = `translateX(${base}px)`
-  }, [calendarView, multiDayCount, anchorDate])
+  }, [anchorDate, calendarInspectorEntryId, calendarView, multiDayCount])
 
   useEffect(() => {
     return () => {
@@ -6175,6 +6303,8 @@ export default function ReflectionPage() {
             endedAt,
             goalSurface: DEFAULT_SURFACE_STYLE,
             bucketSurface: null,
+            notes: '',
+            subtasks: [],
           }
           updateHistory((current) => {
             const next = [...current, newEntry]
@@ -6380,6 +6510,436 @@ export default function ReflectionPage() {
     [dayStart, dayEnd, handleWindowPointerMove, handleWindowPointerUp],
   )
 
+  const inspectorEntry =
+    calendarInspectorEntryId ? history.find((entry) => entry.id === calendarInspectorEntryId) ?? null : null
+
+  let calendarInspectorPanel: ReactElement | null = null
+  if (inspectorEntry) {
+    const startBase = inspectorEntry.startedAt
+    const endBase = inspectorEntry.endedAt
+    const resolvedStart = resolveTimestamp(historyDraft.startedAt, startBase)
+    const resolvedEnd = resolveTimestamp(historyDraft.endedAt, endBase)
+    const startDateInputValue = formatDateInputValue(resolvedStart)
+    const endDateInputValue = formatDateInputValue(resolvedEnd)
+    const startTimeInputValue = formatTimeInputValue(resolvedStart)
+    const endTimeInputValue = formatTimeInputValue(resolvedEnd)
+    const inspectorDateLabel = (() => {
+      const startD = new Date(resolvedStart)
+      const endD = new Date(resolvedEnd)
+      const sameDay =
+        startD.getFullYear() === endD.getFullYear() &&
+        startD.getMonth() === endD.getMonth() &&
+        startD.getDate() === endD.getDate()
+      if (sameDay) {
+        const dateFmt = startD.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+        return `${dateFmt} · ${formatTimeOfDay(resolvedStart)} — ${formatTimeOfDay(resolvedEnd)}`
+      }
+      return formatDateRange(resolvedStart, resolvedEnd)
+    })()
+    const sortedSubtasks = historyDraft.subtasks.slice().sort((a, b) => a.sortIndex - b.sortIndex)
+    const completedSubtasks = sortedSubtasks.reduce((count, subtask) => (subtask.completed ? count + 1 : count), 0)
+    const inspectorSubtasksSummary =
+      sortedSubtasks.length > 0 ? `${completedSubtasks}/${sortedSubtasks.length} subtasks` : 'No subtasks'
+    const inspectorNotesSummary = historyDraft.notes.trim().length > 0 ? 'Notes added' : 'No notes'
+    if (ENABLE_HISTORY_INSPECTOR_PANEL) {
+      calendarInspectorPanel = (
+      <aside className="calendar-inspector" aria-label="Session inspector">
+        <div className="calendar-inspector__inner" ref={calendarInspectorRef}>
+          <div className="calendar-inspector__header">
+            <div className="calendar-inspector__heading">
+              <h3 className="calendar-inspector__title">
+                {deriveEntryTaskName(inspectorEntry) || 'Untitled session'}
+              </h3>
+              <p className="calendar-inspector__subtitle">{inspectorDateLabel}</p>
+              <div className="calendar-inspector__chips">
+                <span className="calendar-inspector__chip">{inspectorSubtasksSummary}</span>
+                <span className="calendar-inspector__chip">{inspectorNotesSummary}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="calendar-inspector__close"
+              aria-label="Close inspector"
+              onClick={handleCancelHistoryEdit}
+            >
+              ×
+            </button>
+          </div>
+          <div className="calendar-inspector__content">
+            <div className="calendar-inspector__body">
+              <label className="history-timeline__field">
+                <span className="history-timeline__field-text">Session name</span>
+                <input
+                  className="history-timeline__field-input"
+                  type="text"
+                  value={historyDraft.taskName}
+                  placeholder="Describe the focus block"
+                  onChange={handleHistoryFieldChange('taskName')}
+                  onKeyDown={handleHistoryFieldKeyDown}
+                />
+              </label>
+              <label className="history-timeline__field">
+                <span className="history-timeline__field-text">Start</span>
+                <div className="history-timeline__field-row">
+                  <input
+                    className="history-timeline__field-input"
+                    type="date"
+                    value={startDateInputValue}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setHistoryDraft((draft) => {
+                        if (value.trim().length === 0) return draft
+                        const parsed = parseLocalDateTime(value, startTimeInputValue)
+                        return parsed === null ? draft : { ...draft, startedAt: parsed }
+                      })
+                    }}
+                    onKeyDown={handleHistoryFieldKeyDown}
+                  />
+                  <input
+                    className="history-timeline__field-input"
+                    type="time"
+                    step={60}
+                    value={startTimeInputValue}
+                    onChange={(event) => {
+                      const { value } = event.target
+                      setHistoryDraft((draft) => {
+                        if (value.trim().length === 0) return { ...draft, startedAt: null }
+                        const parsed = parseLocalDateTime(startDateInputValue, value)
+                        return parsed === null ? draft : { ...draft, startedAt: parsed }
+                      })
+                    }}
+                    onKeyDown={handleHistoryFieldKeyDown}
+                  />
+                </div>
+              </label>
+              <label className="history-timeline__field">
+                <span className="history-timeline__field-text">End</span>
+                <div className="history-timeline__field-row">
+                  <input
+                    className="history-timeline__field-input"
+                    type="date"
+                    value={endDateInputValue}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setHistoryDraft((draft) => {
+                        if (value.trim().length === 0) return draft
+                        const parsed = parseLocalDateTime(value, endTimeInputValue)
+                        return parsed === null ? draft : { ...draft, endedAt: parsed }
+                      })
+                    }}
+                    onKeyDown={handleHistoryFieldKeyDown}
+                  />
+                  <input
+                    className="history-timeline__field-input"
+                    type="time"
+                    step={60}
+                    value={endTimeInputValue}
+                    onChange={(event) => {
+                      const { value } = event.target
+                      setHistoryDraft((draft) => {
+                        if (value.trim().length === 0) return { ...draft, endedAt: null }
+                        const parsed = parseLocalDateTime(endDateInputValue, value)
+                        return parsed === null ? draft : { ...draft, endedAt: parsed }
+                      })
+                    }}
+                    onKeyDown={handleHistoryFieldKeyDown}
+                  />
+                </div>
+              </label>
+              <label className="history-timeline__field">
+                <span className="history-timeline__field-text">Goal</span>
+                <HistoryDropdown
+                  id={goalDropdownId}
+                  value={historyDraft.goalName}
+                  placeholder="Select goal"
+                  options={goalDropdownOptions}
+                  onChange={(nextValue) => updateHistoryDraftField('goalName', nextValue)}
+                />
+              </label>
+              <label className="history-timeline__field">
+                <span className="history-timeline__field-text">Bucket</span>
+                <HistoryDropdown
+                  id={bucketDropdownId}
+                  value={historyDraft.bucketName}
+                  placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
+                  options={bucketDropdownOptions}
+                  onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
+                  disabled={availableBucketOptions.length === 0}
+                />
+              </label>
+              <div className="calendar-inspector__subtasks">
+                <div className="calendar-inspector__subtasks-header">
+                  <span className="history-timeline__field-text">Subtasks</span>
+                  <button
+                    type="button"
+                    className="calendar-inspector__subtasks-add"
+                    onClick={handleAddHistorySubtask}
+                  >
+                    Add subtask
+                  </button>
+                </div>
+                {sortedSubtasks.length > 0 ? (
+                  <ul className="calendar-inspector__subtask-list">
+                    {sortedSubtasks.map((subtask) => (
+                      <li key={subtask.id} className="calendar-inspector__subtask">
+                        <label className="calendar-inspector__subtask-toggle">
+                          <input
+                            type="checkbox"
+                            checked={subtask.completed}
+                            onChange={() => handleToggleHistorySubtaskCompletion(subtask.id)}
+                            aria-label={`Mark ${subtask.text.trim().length > 0 ? subtask.text : 'subtask'} ${
+                              subtask.completed ? 'incomplete' : 'complete'
+                            }`}
+                          />
+                        </label>
+                        <input
+                          className="calendar-inspector__subtask-input"
+                          type="text"
+                          value={subtask.text}
+                          placeholder="Add details"
+                          onChange={(event) => handleUpdateHistorySubtaskText(subtask.id, event.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="calendar-inspector__subtask-delete"
+                          aria-label="Delete subtask"
+                          onClick={() => handleDeleteHistorySubtask(subtask.id)}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="calendar-inspector__subtasks-empty">No subtasks yet.</p>
+                )}
+              </div>
+              <label className="history-timeline__field">
+                <span className="history-timeline__field-text">Notes</span>
+                <textarea
+                  className="calendar-inspector__notes"
+                  value={historyDraft.notes}
+                  placeholder="Capture context, outcomes, or follow-ups"
+                  onChange={handleHistoryNotesChange}
+                />
+              </label>
+            </div>
+            <div className="calendar-inspector__footer">
+              <button
+                type="button"
+                className="history-timeline__action-button history-timeline__action-button--primary"
+                onClick={handleSaveHistoryDraft}
+              >
+                Save changes
+              </button>
+              <button
+                type="button"
+                className="history-timeline__action-button"
+                onClick={handleCancelHistoryEdit}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+      )
+    } else {
+      calendarInspectorPanel = (
+        <aside className="legacy-editor-panel" ref={calendarInspectorRef} aria-label="Session details">
+          <div className="legacy-editor-panel__header">
+            <div className="legacy-editor-panel__heading">
+              <h3 className="legacy-editor-panel__title">{deriveEntryTaskName(inspectorEntry) || 'Untitled session'}</h3>
+              <p className="legacy-editor-panel__subtitle">{inspectorDateLabel}</p>
+            </div>
+            <button
+              type="button"
+              className="legacy-editor-panel__close"
+              aria-label="Close inspector"
+              onClick={handleCancelHistoryEdit}
+            >
+              ×
+            </button>
+          </div>
+          <div className="legacy-editor-panel__body">
+            <label className="history-timeline__field">
+              <span className="history-timeline__field-text">Session name</span>
+              <input
+                className="history-timeline__field-input"
+                type="text"
+                value={historyDraft.taskName}
+                placeholder="Describe the focus block"
+                onChange={handleHistoryFieldChange('taskName')}
+                onKeyDown={handleHistoryFieldKeyDown}
+              />
+            </label>
+            <div className="legacy-editor-panel__row">
+              <label className="history-timeline__field legacy-editor-panel__field">
+                <span className="history-timeline__field-text">Start date</span>
+                <input
+                  className="history-timeline__field-input"
+                  type="date"
+                  value={startDateInputValue}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setHistoryDraft((draft) => {
+                      if (value.trim().length === 0) return draft
+                      const parsed = parseLocalDateTime(value, startTimeInputValue)
+                      return parsed === null ? draft : { ...draft, startedAt: parsed }
+                    })
+                  }}
+                  onKeyDown={handleHistoryFieldKeyDown}
+                />
+              </label>
+              <label className="history-timeline__field legacy-editor-panel__field">
+                <span className="history-timeline__field-text">Start time</span>
+                <input
+                  className="history-timeline__field-input"
+                  type="time"
+                  step={60}
+                  value={startTimeInputValue}
+                  onChange={(event) => {
+                    const { value } = event.target
+                    setHistoryDraft((draft) => {
+                      if (value.trim().length === 0) return { ...draft, startedAt: null }
+                      const parsed = parseLocalDateTime(startDateInputValue, value)
+                      return parsed === null ? draft : { ...draft, startedAt: parsed }
+                    })
+                  }}
+                  onKeyDown={handleHistoryFieldKeyDown}
+                />
+              </label>
+            </div>
+            <div className="legacy-editor-panel__row">
+              <label className="history-timeline__field legacy-editor-panel__field">
+                <span className="history-timeline__field-text">End date</span>
+                <input
+                  className="history-timeline__field-input"
+                  type="date"
+                  value={endDateInputValue}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setHistoryDraft((draft) => {
+                      if (value.trim().length === 0) return draft
+                      const parsed = parseLocalDateTime(value, endTimeInputValue)
+                      return parsed === null ? draft : { ...draft, endedAt: parsed }
+                    })
+                  }}
+                  onKeyDown={handleHistoryFieldKeyDown}
+                />
+              </label>
+              <label className="history-timeline__field legacy-editor-panel__field">
+                <span className="history-timeline__field-text">End time</span>
+                <input
+                  className="history-timeline__field-input"
+                  type="time"
+                  step={60}
+                  value={endTimeInputValue}
+                  onChange={(event) => {
+                    const { value } = event.target
+                    setHistoryDraft((draft) => {
+                      if (value.trim().length === 0) return { ...draft, endedAt: null }
+                      const parsed = parseLocalDateTime(endDateInputValue, value)
+                      return parsed === null ? draft : { ...draft, endedAt: parsed }
+                    })
+                  }}
+                  onKeyDown={handleHistoryFieldKeyDown}
+                />
+              </label>
+            </div>
+            <div className="legacy-editor-panel__row">
+              <label className="history-timeline__field legacy-editor-panel__field">
+                <span className="history-timeline__field-text">Goal</span>
+                <HistoryDropdown
+                  id={goalDropdownId}
+                  value={historyDraft.goalName}
+                  placeholder="Select goal"
+                  options={goalDropdownOptions}
+                  onChange={(nextValue) => updateHistoryDraftField('goalName', nextValue)}
+                />
+              </label>
+              <label className="history-timeline__field legacy-editor-panel__field">
+                <span className="history-timeline__field-text">Bucket</span>
+                <HistoryDropdown
+                  id={bucketDropdownId}
+                  value={historyDraft.bucketName}
+                  placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
+                  options={bucketDropdownOptions}
+                  onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
+                  disabled={availableBucketOptions.length === 0}
+                />
+              </label>
+            </div>
+            <div className="legacy-editor-panel__subtasks">
+              <div className="legacy-editor-panel__subtasks-header">
+                <span className="history-timeline__field-text">Subtasks</span>
+                <button type="button" className="calendar-inspector__subtasks-add" onClick={handleAddHistorySubtask}>
+                  Add subtask
+                </button>
+              </div>
+              {sortedSubtasks.length > 0 ? (
+                <ul className="calendar-inspector__subtask-list">
+                  {sortedSubtasks.map((subtask) => (
+                    <li key={subtask.id} className="calendar-inspector__subtask">
+                      <label className="calendar-inspector__subtask-toggle">
+                        <input
+                          type="checkbox"
+                          checked={subtask.completed}
+                          onChange={() => handleToggleHistorySubtaskCompletion(subtask.id)}
+                          aria-label={`Mark ${subtask.text.trim().length > 0 ? subtask.text : 'subtask'} ${
+                            subtask.completed ? 'incomplete' : 'complete'
+                          }`}
+                        />
+                      </label>
+                      <input
+                        className="calendar-inspector__subtask-input"
+                        type="text"
+                        value={subtask.text}
+                        placeholder="Add details"
+                        onChange={(event) => handleUpdateHistorySubtaskText(subtask.id, event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="calendar-inspector__subtask-delete"
+                        aria-label="Delete subtask"
+                        onClick={() => handleDeleteHistorySubtask(subtask.id)}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="calendar-inspector__subtasks-empty">No subtasks yet.</p>
+              )}
+            </div>
+            <label className="history-timeline__field">
+              <span className="history-timeline__field-text">Notes</span>
+              <textarea
+                className="calendar-inspector__notes"
+                value={historyDraft.notes}
+                placeholder="Capture context, outcomes, or follow-ups"
+                onChange={handleHistoryNotesChange}
+              />
+            </label>
+          </div>
+          <div className="legacy-editor-panel__footer">
+            <button
+              type="button"
+              className="history-timeline__action-button history-timeline__action-button--primary"
+              onClick={handleSaveHistoryDraft}
+            >
+              Save changes
+            </button>
+            <button type="button" className="history-timeline__action-button" onClick={handleCancelHistoryEdit}>
+              Cancel
+            </button>
+          </div>
+        </aside>
+      )
+    }
+  }
+
   return (
     <section className="site-main__inner reflection-page" aria-label="Reflection">
       <div className="reflection-intro">
@@ -6394,110 +6954,114 @@ export default function ReflectionPage() {
             Review today’s focus sessions, fine-tune their timing, and capture what made each block productive.
           </p>
         </div>
-        <div className="calendar-toolbar">
-          <div className="calendar-toolbar__left">
-            <button
-              type="button"
-              className="calendar-nav-button"
-              onClick={handlePrevWindow}
-              aria-label="Previous"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              className="calendar-nav-button"
-              onClick={handleNextWindow}
-              aria-label="Next"
-            >
-              ›
-            </button>
-            <h2 className="calendar-title" aria-live="polite">{monthAndYearLabel}</h2>
-          </div>
-          <div className="calendar-toolbar__right">
-            <button
-              type="button"
-              className="calendar-today-button"
-              onClick={handleJumpToToday}
-              aria-label="Jump to today"
-            >
-              Today
-            </button>
-            <div className="calendar-toggle-group" role="tablist" aria-label="Calendar views">
-              {(() => {
-                const nDays = Math.max(2, Math.min(multiDayCount, 14))
-                const options: Array<{
-                  key: CalendarViewMode
-                  full: string
-                  short: string
-                }> = [
-                  { key: 'day', full: 'Day', short: 'D' },
-                  { key: '3d', full: `${nDays} days`, short: `${nDays}D` },
-                  { key: 'week', full: 'Week', short: 'W' },
-                  { key: 'month', full: 'Month', short: 'M' },
-                  { key: 'year', full: 'Year', short: 'Y' },
-                ]
-                return options.map((opt) => {
-                  const button = (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      role="tab"
-                      aria-selected={calendarView === opt.key}
-                      aria-label={opt.full}
-                      className={`calendar-toggle${calendarView === opt.key ? ' calendar-toggle--active' : ''}`}
-                      onClick={() => setView(opt.key)}
-                      onDoubleClick={opt.key === '3d' ? handleMultiDayDoubleClick : undefined}
-                    >
-                      <span className="calendar-toggle__label calendar-toggle__label--full">{opt.full}</span>
-                      <span className="calendar-toggle__label calendar-toggle__label--short" aria-hidden>
-                        {opt.short}
-                      </span>
-                    </button>
-                  )
-                  if (opt.key !== '3d') {
-                    return button
-                  }
-                  // Wrap the 3-day toggle so the chooser anchors under this button
-                  return (
-                    <div key={opt.key} className="calendar-toggle-wrap">
-                      {button}
-                      {calendarView === '3d' && showMultiDayChooser ? (
-                        <div
-                          className="calendar-multi-day-chooser"
-                          ref={multiChooserRef}
-                          role="dialog"
-                          aria-label="Choose day count"
+        <div className="history-layout">
+          <div className="history-layout__primary">
+            <div className="calendar-toolbar">
+              <div className="calendar-toolbar__left">
+                <button
+                  type="button"
+                  className="calendar-nav-button"
+                  onClick={handlePrevWindow}
+                  aria-label="Previous"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  className="calendar-nav-button"
+                  onClick={handleNextWindow}
+                  aria-label="Next"
+                >
+                  ›
+                </button>
+                <h2 className="calendar-title" aria-live="polite">{monthAndYearLabel}</h2>
+              </div>
+              <div className="calendar-toolbar__right">
+                <button
+                  type="button"
+                  className="calendar-today-button"
+                  onClick={handleJumpToToday}
+                  aria-label="Jump to today"
+                >
+                  Today
+                </button>
+                <div className="calendar-toggle-group" role="tablist" aria-label="Calendar views">
+                  {(() => {
+                    const nDays = Math.max(2, Math.min(multiDayCount, 14))
+                    const options: Array<{
+                      key: CalendarViewMode
+                      full: string
+                      short: string
+                    }> = [
+                      { key: 'day', full: 'Day', short: 'D' },
+                      { key: '3d', full: `${nDays} days`, short: `${nDays}D` },
+                      { key: 'week', full: 'Week', short: 'W' },
+                      { key: 'month', full: 'Month', short: 'M' },
+                      { key: 'year', full: 'Year', short: 'Y' },
+                    ]
+                    return options.map((opt) => {
+                      const button = (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          role="tab"
+                          aria-selected={calendarView === opt.key}
+                          aria-label={opt.full}
+                          className={`calendar-toggle${calendarView === opt.key ? ' calendar-toggle--active' : ''}`}
+                          onClick={() => setView(opt.key)}
+                          onDoubleClick={opt.key === '3d' ? handleMultiDayDoubleClick : undefined}
                         >
-                          {Array.from(MULTI_DAY_OPTIONS).map((n) => (
-                            <button
-                              key={`chooser-${n}`}
-                              type="button"
-                              className={`calendar-multi-day-chooser__option${multiDayCount === n ? ' is-active' : ''}`}
-                              data-day-count={n}
-                              onClick={() => {
-                                setMultiDayCount(n)
-                                setShowMultiDayChooser(false)
-                              }}
+                          <span className="calendar-toggle__label calendar-toggle__label--full">{opt.full}</span>
+                          <span className="calendar-toggle__label calendar-toggle__label--short" aria-hidden>
+                            {opt.short}
+                          </span>
+                        </button>
+                      )
+                      if (opt.key !== '3d') {
+                        return button
+                      }
+                      // Wrap the 3-day toggle so the chooser anchors under this button
+                      return (
+                        <div key={opt.key} className="calendar-toggle-wrap">
+                          {button}
+                          {calendarView === '3d' && showMultiDayChooser ? (
+                            <div
+                              className="calendar-multi-day-chooser"
+                              ref={multiChooserRef}
+                              role="dialog"
+                              aria-label="Choose day count"
                             >
-                              {n}
-                            </button>
-                          ))}
+                              {Array.from(MULTI_DAY_OPTIONS).map((n) => (
+                                <button
+                                  key={`chooser-${n}`}
+                                  type="button"
+                                  className={`calendar-multi-day-chooser__option${multiDayCount === n ? ' is-active' : ''}`}
+                                  data-day-count={n}
+                                  onClick={() => {
+                                    setMultiDayCount(n)
+                                    setShowMultiDayChooser(false)
+                                  }}
+                                >
+                                  {n}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
-                    </div>
-                  )
-                })
-              })()}
+                      )
+                    })
+                  })()}
+                </div>
+              </div>
             </div>
+            <div className="history-calendar" aria-label="Calendar display" ref={historyCalendarRef}>
+              {renderCalendarContent()}
+            </div>
+            {renderCalendarPopover()}
           </div>
+          {calendarInspectorPanel}
         </div>
-
-        <div className="history-calendar" aria-label="Calendar display">
-          {renderCalendarContent()}
-        </div>
-        {renderCalendarPopover()}
-        {renderCalendarEditor()}
+        {!ENABLE_HISTORY_INSPECTOR_PANEL ? renderCalendarEditor() : null}
 
   {false ? (
   <section className={`history-section${dayEntryCount > 0 ? '' : ' history-section--empty'}`} aria-label="Session History">
@@ -6744,7 +7308,7 @@ export default function ReflectionPage() {
                   now - prev.time <= DOUBLE_TAP_DELAY_MS &&
                   Math.hypot(x - prev.x, y - prev.y) <= DOUBLE_TAP_DISTANCE_PX
                 ) {
-                  // Double-tap detected: open edit panel (if not active session)
+                  // Double-tap detected: open inspector (if not active session)
                   lastTapRef.current = null
                   if (!isActiveSessionSegment) {
                     // Prevent following click from toggling selection
@@ -6752,8 +7316,7 @@ export default function ReflectionPage() {
                     event.preventDefault()
                     event.stopPropagation()
                     clearLongPressWatch()
-                    handleStartEditingHistoryEntry(segment.entry)
-                    setCalendarEditorEntryId(segment.entry.id)
+                    openCalendarInspector(segment.entry)
                   }
                   return
                 }
@@ -6944,7 +7507,7 @@ export default function ReflectionPage() {
                             onClick={(event) => {
                               event.stopPropagation()
                               if (!isActiveSessionSegment) {
-                                handleStartEditingHistoryEntry(segment.entry)
+                                openCalendarInspector(segment.entry)
                               }
                             }}
                             disabled={isActiveSessionSegment}
@@ -7037,9 +7600,7 @@ export default function ReflectionPage() {
                     // If this is the second click in a double-click sequence, open edit immediately (desktop reliability)
                     if (event.detail === 2) {
                       if (!isActiveSessionSegment) {
-                        handleStartEditingHistoryEntry(segment.entry)
-                        // Open full-screen editor modal on double-click
-                        setCalendarEditorEntryId(segment.entry.id)
+                        openCalendarInspector(segment.entry)
                       }
                       return
                     }
@@ -7054,8 +7615,7 @@ export default function ReflectionPage() {
                       dragPreventClickRef.current = false
                     }
                     if (!isActiveSessionSegment) {
-                      handleStartEditingHistoryEntry(segment.entry)
-                      setCalendarEditorEntryId(segment.entry.id)
+                      openCalendarInspector(segment.entry)
                     }
                   }}
                   onMouseEnter={() =>

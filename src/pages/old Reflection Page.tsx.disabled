@@ -16,7 +16,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from 'react'
-import { createPortal } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import './ReflectionPage.css'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
 import {
@@ -1838,6 +1838,7 @@ export default function ReflectionPage() {
   const [multiDayCount, setMultiDayCount] = useState<number>(4)
   const [showMultiDayChooser, setShowMultiDayChooser] = useState(false)
   const [historyDayOffset, setHistoryDayOffset] = useState(0)
+  const historyDayOffsetRef = useRef(historyDayOffset)
   const multiChooserRef = useRef<HTMLDivElement | null>(null)
   const lastCalendarHotkeyRef = useRef<{ key: string; timestamp: number } | null>(null)
   const multiDayKeyboardStateRef = useRef<{ active: boolean; selection: number }>({
@@ -1860,6 +1861,7 @@ export default function ReflectionPage() {
     lastAppliedDx: number
   } | null>(null)
   const calendarPanCleanupRef = useRef<((shouldCommit: boolean) => void) | null>(null)
+  const calendarPanDesiredOffsetRef = useRef<number>(historyDayOffset)
 
   const stopCalendarPanAnimation = useCallback(
     (options?: { commit?: boolean }) => {
@@ -1870,6 +1872,20 @@ export default function ReflectionPage() {
     },
     [],
   )
+  const resetCalendarPanTransform = useCallback(() => {
+    const base = calendarBaseTranslateRef.current
+    if (!Number.isFinite(base)) {
+      return
+    }
+    const daysEl = calendarDaysRef.current
+    if (daysEl) {
+      daysEl.style.transform = `translateX(${base}px)`
+    }
+    const hdrEl = calendarHeadersRef.current
+    if (hdrEl) {
+      hdrEl.style.transform = `translateX(${base}px)`
+    }
+  }, [])
   const focusMultiDayOption = useCallback((value: number) => {
     const chooser = multiChooserRef.current
     if (!chooser) {
@@ -1884,6 +1900,8 @@ export default function ReflectionPage() {
   const animateCalendarPan = useCallback(
     (snapDays: number, dayWidth: number, baseOffset: number) => {
       const targetOffset = baseOffset - snapDays
+      calendarPanDesiredOffsetRef.current = targetOffset
+      historyDayOffsetRef.current = targetOffset
       const daysEl = calendarDaysRef.current
       const hdrEl = calendarHeadersRef.current
       if (!daysEl || !hdrEl || !Number.isFinite(dayWidth) || dayWidth <= 0) {
@@ -1927,7 +1945,6 @@ export default function ReflectionPage() {
       }
 
       stopCalendarPanAnimation()
-
       const distanceFactor = Math.min(1.8, Math.max(1, Math.abs(deltaPx) / Math.max(dayWidth, 1)))
       const duration = Math.round(
         Math.min(PAN_MAX_ANIMATION_MS, Math.max(PAN_MIN_ANIMATION_MS, PAN_MIN_ANIMATION_MS * distanceFactor)),
@@ -1937,13 +1954,26 @@ export default function ReflectionPage() {
       const finalize = (shouldCommit: boolean) => {
         daysEl.style.transition = ''
         hdrEl.style.transition = ''
-        if (!shouldCommit) {
-          const baseAfter = calendarBaseTranslateRef.current
-          daysEl.style.transform = `translateX(${baseAfter}px)`
-          hdrEl.style.transform = `translateX(${baseAfter}px)`
-        }
-        if (shouldCommit && targetOffset !== baseOffset) {
-          setHistoryDayOffset(targetOffset)
+        if (!shouldCommit || snapDays === 0) {
+          daysEl.style.transform = `translateX(${baseTransform}px)`
+          hdrEl.style.transform = `translateX(${baseTransform}px)`
+          calendarPanDesiredOffsetRef.current = baseOffset
+          historyDayOffsetRef.current = baseOffset
+        } else {
+          calendarPanDesiredOffsetRef.current = targetOffset
+          historyDayOffsetRef.current = targetOffset
+          if (targetOffset !== baseOffset) {
+            if (typeof flushSync === 'function') {
+              flushSync(() => {
+                setHistoryDayOffset(targetOffset)
+              })
+            } else {
+              setHistoryDayOffset(targetOffset)
+            }
+          }
+          calendarBaseTranslateRef.current = baseTransform
+          // Leave the transform at endTransform temporarily; the next layout effect will
+          // reapply the base translate with the updated window data to avoid a visible flicker.
         }
       }
 
@@ -3544,7 +3574,7 @@ export default function ReflectionPage() {
 
   const handleOpenCalendarPreview = useCallback(
     (entry: HistoryEntry, targetEl: HTMLElement) => {
-      // Select entry for consistency with other flows
+      // Select entry for consistency with other flows.
       handleSelectHistorySegment(entry)
       // Compute an initial position immediately
       const rect = targetEl.getBoundingClientRect()
@@ -3774,17 +3804,66 @@ export default function ReflectionPage() {
     [daysInMonth, multiDayCount],
   )
 
+  useEffect(() => {
+    historyDayOffsetRef.current = historyDayOffset
+    calendarPanDesiredOffsetRef.current = historyDayOffset
+  }, [historyDayOffset])
+
+  const navigateByDelta = useCallback(
+    (delta: number) => {
+      if (delta === 0) {
+        return
+      }
+      const baseOffset = calendarPanDesiredOffsetRef.current
+      const targetOffset = baseOffset + delta
+      if (!(calendarView === 'day' || calendarView === '3d' || calendarView === 'week')) {
+        calendarPanDesiredOffsetRef.current = targetOffset
+        historyDayOffsetRef.current = targetOffset
+        setHistoryDayOffset(targetOffset)
+        return
+      }
+      const area = calendarDaysAreaRef.current
+      if (!area) {
+        calendarPanDesiredOffsetRef.current = targetOffset
+        historyDayOffsetRef.current = targetOffset
+        setHistoryDayOffset(targetOffset)
+        return
+      }
+      const visibleDayCount =
+        calendarView === '3d'
+          ? Math.max(2, Math.min(multiDayCount, 14))
+          : calendarView === 'week'
+            ? 7
+            : 1
+      const dayWidth = area.clientWidth / Math.max(1, visibleDayCount)
+      if (!Number.isFinite(dayWidth) || dayWidth <= 0) {
+        calendarPanDesiredOffsetRef.current = targetOffset
+        historyDayOffsetRef.current = targetOffset
+        setHistoryDayOffset(targetOffset)
+        return
+      }
+      stopCalendarPanAnimation({ commit: true })
+      resetCalendarPanTransform()
+      calendarPanDesiredOffsetRef.current = targetOffset
+      historyDayOffsetRef.current = targetOffset
+      const snapDays = -(targetOffset - baseOffset)
+      animateCalendarPan(snapDays, dayWidth, baseOffset)
+    },
+    [animateCalendarPan, calendarView, multiDayCount, resetCalendarPanTransform, stopCalendarPanAnimation],
+  )
+
   const handlePrevWindow = useCallback(() => {
-    setHistoryDayOffset((offset) => offset - stepSizeByView[calendarView])
-  }, [calendarView, stepSizeByView])
+    navigateByDelta(-stepSizeByView[calendarView])
+  }, [calendarView, navigateByDelta, stepSizeByView])
 
   const handleNextWindow = useCallback(() => {
-    setHistoryDayOffset((offset) => offset + stepSizeByView[calendarView])
-  }, [calendarView, stepSizeByView])
+    navigateByDelta(stepSizeByView[calendarView])
+  }, [calendarView, navigateByDelta, stepSizeByView])
 
   const handleJumpToToday = useCallback(() => {
-    setHistoryDayOffset(0)
-  }, [])
+    const currentOffset = historyDayOffsetRef.current
+    navigateByDelta(-currentOffset)
+  }, [navigateByDelta])
 
   const setView = useCallback((view: CalendarViewMode) => {
     setCalendarView(view)
@@ -3931,6 +4010,33 @@ export default function ReflectionPage() {
           setView('year')
           return
         }
+        case 'p': {
+          const now = Date.now()
+          lastCalendarHotkeyRef.current = { key: 'p', timestamp: now }
+          event.preventDefault()
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          handlePrevWindow()
+          return
+        }
+        case 'n': {
+          const now = Date.now()
+          lastCalendarHotkeyRef.current = { key: 'n', timestamp: now }
+          event.preventDefault()
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          handleNextWindow()
+          return
+        }
+        case 't': {
+          const now = Date.now()
+          lastCalendarHotkeyRef.current = { key: 't', timestamp: now }
+          event.preventDefault()
+          setShowMultiDayChooser(false)
+          multiDayKeyboardStateRef.current = { active: false, selection: multiDayCount }
+          handleJumpToToday()
+          return
+        }
         default: {
           lastCalendarHotkeyRef.current = { key, timestamp: Date.now() }
         }
@@ -4073,7 +4179,9 @@ export default function ReflectionPage() {
     if (hdrEl) {
       hdrEl.style.transition = ''
     }
+    resetCalendarPanTransform()
     const dayCount = calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
+    const baseOffset = calendarPanDesiredOffsetRef.current
     calendarDragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -4081,7 +4189,7 @@ export default function ReflectionPage() {
       startTime: typeof performance !== 'undefined' ? performance.now() : Date.now(),
       areaWidth: rect.width,
       dayCount,
-      baseOffset: historyDayOffset,
+      baseOffset,
       mode: 'pending',
       lastAppliedDx: 0,
     }
@@ -4175,7 +4283,7 @@ export default function ReflectionPage() {
     window.addEventListener('pointermove', handleMove)
     window.addEventListener('pointerup', handleUp)
     window.addEventListener('pointercancel', handleUp)
-  }, [calendarView, multiDayCount, historyDayOffset, stopCalendarPanAnimation, resolvePanSnap, animateCalendarPan])
+  }, [calendarView, multiDayCount, resetCalendarPanTransform, stopCalendarPanAnimation, resolvePanSnap, animateCalendarPan])
 
   // Build minimal calendar content for non-day views
   const renderCalendarContent = useCallback(() => {
@@ -4689,6 +4797,8 @@ export default function ReflectionPage() {
                       const hdrEl = calendarHeadersRef.current
                       if (daysEl) daysEl.style.transition = ''
                       if (hdrEl) hdrEl.style.transition = ''
+                      resetCalendarPanTransform()
+                      const baseOffset = calendarPanDesiredOffsetRef.current
                       calendarDragRef.current = {
                         pointerId: s.pointerId,
                         startX: s.startX,
@@ -4696,7 +4806,7 @@ export default function ReflectionPage() {
                         startTime: now,
                         areaWidth: rect.width,
                         dayCount,
-                        baseOffset: historyDayOffset,
+                        baseOffset,
                         mode: 'hdrag',
                         lastAppliedDx: 0,
                       }
@@ -4983,6 +5093,8 @@ export default function ReflectionPage() {
                     const hdrEl = calendarHeadersRef.current
                     if (daysEl) daysEl.style.transition = ''
                     if (hdrEl) hdrEl.style.transition = ''
+                    resetCalendarPanTransform()
+                    const baseOffset = calendarPanDesiredOffsetRef.current
                     calendarDragRef.current = {
                       pointerId,
                       startX,
@@ -4990,7 +5102,7 @@ export default function ReflectionPage() {
                       startTime: now,
                       areaWidth: rect.width,
                       dayCount,
-                      baseOffset: historyDayOffset,
+                      baseOffset,
                       mode: 'hdrag',
                       lastAppliedDx: 0,
                     }
@@ -5391,7 +5503,7 @@ export default function ReflectionPage() {
     }
 
     return null
-  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, stopCalendarPanAnimation])
+  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, resetCalendarPanTransform, stopCalendarPanAnimation])
 
   // Simple inline icons for popover actions
   const IconEdit = () => (

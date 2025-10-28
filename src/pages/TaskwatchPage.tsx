@@ -2737,6 +2737,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         taskId: contextTaskId ?? null,
         goalSurface: normalizedGoalSurface,
         bucketSurface: normalizedBucketSurface,
+        notes: '',
+        subtasks: [],
       }
 
       applyLocalHistoryChange((current) => {
@@ -2836,6 +2838,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       taskId: context.taskId,
       goalSurface: markerGoalSurface,
       bucketSurface: markerBucketSurface,
+      notes: '',
+      subtasks: [],
     }
 
     applyLocalHistoryChange((current) => {
