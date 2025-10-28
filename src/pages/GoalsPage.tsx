@@ -5104,8 +5104,8 @@ export default function GoalsPage(): ReactElement {
           if (!details) {
             return
           }
-          const targetExpanded = taskId === draggedTaskId ? false : previous.expanded
-          const targetSubtasksCollapsed = taskId === draggedTaskId ? true : previous.subtasksCollapsed
+          const targetExpanded = previous.expanded
+          const targetSubtasksCollapsed = previous.subtasksCollapsed
           if (details.expanded !== targetExpanded || details.subtasksCollapsed !== targetSubtasksCollapsed) {
             if (!mutated) {
               mutated = { ...current }
