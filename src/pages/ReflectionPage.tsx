@@ -4158,6 +4158,7 @@ export default function ReflectionPage() {
       hdrEl.style.transition = ''
     }
     const dayCount = calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
+    const baseOffset = calendarPanDesiredOffsetRef.current
     calendarDragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -4165,7 +4166,7 @@ export default function ReflectionPage() {
       startTime: typeof performance !== 'undefined' ? performance.now() : Date.now(),
       areaWidth: rect.width,
       dayCount,
-      baseOffset: historyDayOffset,
+      baseOffset,
       mode: 'pending',
       lastAppliedDx: 0,
     }
@@ -4259,7 +4260,7 @@ export default function ReflectionPage() {
     window.addEventListener('pointermove', handleMove)
     window.addEventListener('pointerup', handleUp)
     window.addEventListener('pointercancel', handleUp)
-  }, [calendarView, multiDayCount, historyDayOffset, stopCalendarPanAnimation, resolvePanSnap, animateCalendarPan])
+  }, [calendarView, multiDayCount, stopCalendarPanAnimation, resolvePanSnap, animateCalendarPan])
 
   // Build minimal calendar content for non-day views
   const renderCalendarContent = useCallback(() => {
@@ -4773,6 +4774,7 @@ export default function ReflectionPage() {
                       const hdrEl = calendarHeadersRef.current
                       if (daysEl) daysEl.style.transition = ''
                       if (hdrEl) hdrEl.style.transition = ''
+                      const baseOffset = calendarPanDesiredOffsetRef.current
                       calendarDragRef.current = {
                         pointerId: s.pointerId,
                         startX: s.startX,
@@ -4780,7 +4782,7 @@ export default function ReflectionPage() {
                         startTime: now,
                         areaWidth: rect.width,
                         dayCount,
-                        baseOffset: historyDayOffset,
+                        baseOffset,
                         mode: 'hdrag',
                         lastAppliedDx: 0,
                       }
@@ -5067,6 +5069,7 @@ export default function ReflectionPage() {
                     const hdrEl = calendarHeadersRef.current
                     if (daysEl) daysEl.style.transition = ''
                     if (hdrEl) hdrEl.style.transition = ''
+                    const baseOffset = calendarPanDesiredOffsetRef.current
                     calendarDragRef.current = {
                       pointerId,
                       startX,
@@ -5074,7 +5077,7 @@ export default function ReflectionPage() {
                       startTime: now,
                       areaWidth: rect.width,
                       dayCount,
-                      baseOffset: historyDayOffset,
+                      baseOffset,
                       mode: 'hdrag',
                       lastAppliedDx: 0,
                     }
