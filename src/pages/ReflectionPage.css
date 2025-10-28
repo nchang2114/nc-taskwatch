@@ -300,6 +300,53 @@
   color: rgba(214, 220, 255, 0.55);
 }
 
+.history-timeline__extras {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+
+.history-timeline__extras-toggle {
+  align-self: flex-start;
+  border: 1px solid rgba(126, 142, 244, 0.45);
+  background: rgba(32, 40, 90, 0.55);
+  color: rgba(214, 220, 255, 0.92);
+  border-radius: 999px;
+  padding: 0.28rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.history-timeline__extras-toggle:hover,
+.history-timeline__extras-toggle:focus-visible {
+  background: rgba(84, 98, 194, 0.75);
+  border-color: rgba(150, 168, 252, 0.6);
+  color: #fff;
+  outline: none;
+}
+
+.history-timeline__extras-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.8rem;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: max-height 0.26s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+.history-timeline__extras-panel.is-open {
+  max-height: 800px;
+  opacity: 1;
+  transform: translateY(0);
+  margin-top: 0.1rem;
+  padding-top: 0.2rem;
+}
+
 .legacy-editor-panel {
   flex: 0 0 clamp(280px, 24vw, 340px);
   align-self: flex-start;
@@ -472,6 +519,19 @@ html[data-theme='light'] .calendar-inspector__subtasks-add {
 html[data-theme='light'] .calendar-inspector__subtasks-add:hover,
 html[data-theme='light'] .calendar-inspector__subtasks-add:focus-visible {
   background: rgba(198, 208, 255, 0.95);
+}
+
+html[data-theme='light'] .history-timeline__extras-toggle {
+  border-color: rgba(172, 184, 250, 0.55);
+  background: rgba(236, 240, 255, 0.95);
+  color: rgba(52, 60, 112, 0.9);
+}
+
+html[data-theme='light'] .history-timeline__extras-toggle:hover,
+html[data-theme='light'] .history-timeline__extras-toggle:focus-visible {
+  background: rgba(210, 220, 255, 0.95);
+  border-color: rgba(132, 146, 236, 0.65);
+  color: rgba(32, 40, 86, 0.95);
 }
 
 html[data-theme='light'] .calendar-inspector__subtask {

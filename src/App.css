@@ -3372,6 +3372,17 @@ html[data-theme='light'] .taskwatch-notes__empty-text {
   transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
 
+.history-timeline__field-row .history-timeline__field-input--split {
+  flex: 1 1 clamp(10rem, 28vw, 12rem);
+  width: auto;
+  min-width: clamp(7.5rem, 22vw, 11rem);
+}
+
+.history-timeline__field-row .history-timeline__field-input--split[type='time'] {
+  flex: 0 1 clamp(6rem, 18vw, 7.5rem);
+  min-width: clamp(5.5rem, 18vw, 7rem);
+}
+
 .history-timeline__field-input--select {
   appearance: none;
   -webkit-appearance: none;

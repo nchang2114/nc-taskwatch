@@ -80,7 +80,7 @@ const MULTI_DAY_OPTIONS = [2, 3, 4, 5, 6] as const
 const isValidMultiDayOption = (value: number): value is (typeof MULTI_DAY_OPTIONS)[number] =>
   (MULTI_DAY_OPTIONS as readonly number[]).includes(value)
 
-const ENABLE_HISTORY_INSPECTOR_PANEL = false
+const ENABLE_HISTORY_INSPECTOR_PANEL = true
 
 const getCalendarBufferDays = (visibleDayCount: number): number => {
   if (!Number.isFinite(visibleDayCount) || visibleDayCount <= 0) {
@@ -2148,6 +2148,9 @@ export default function ReflectionPage() {
   const calendarEditorRef = useRef<HTMLDivElement | null>(null)
   const calendarInspectorRef = useRef<HTMLDivElement | null>(null)
   const [calendarViewportVersion, setCalendarViewportVersion] = useState(0)
+  const [showInspectorExtras, setShowInspectorExtras] = useState(false)
+  const [showEditorExtras, setShowEditorExtras] = useState(false)
+  const [showInlineExtras, setShowInlineExtras] = useState(false)
   // Ref to the session name input inside the calendar editor modal (for autofocus on new entries)
   const calendarEditorNameInputRef = useRef<HTMLInputElement | null>(null)
   const [activeTooltipOffsets, setActiveTooltipOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -2830,6 +2833,11 @@ export default function ReflectionPage() {
     }))
   }, [])
 
+  const sortedSubtasks = useMemo(
+    () => historyDraft.subtasks.slice().sort((a, b) => a.sortIndex - b.sortIndex),
+    [historyDraft.subtasks],
+  )
+
   const commitHistoryDraft = useCallback(() => {
     if (!selectedHistoryEntry) {
       return
@@ -3120,6 +3128,15 @@ export default function ReflectionPage() {
     }
     setCalendarPreview(null)
   }, [calendarInspectorEntryId])
+
+useEffect(() => {
+  setShowInspectorExtras(false)
+  setShowEditorExtras(false)
+}, [calendarInspectorEntryId, calendarEditorEntryId])
+
+useEffect(() => {
+  setShowInlineExtras(false)
+}, [editingHistoryId, selectedHistoryId])
 
   useEffect(() => {
     const goalName = historyDraft.goalName.trim()
@@ -6065,7 +6082,7 @@ export default function ReflectionPage() {
               <span className="history-timeline__field-text">Start</span>
               <div className="history-timeline__field-row">
                 <input
-                  className="history-timeline__field-input"
+                  className="history-timeline__field-input history-timeline__field-input--split"
                   type="date"
                   value={startDateInputValue}
                   onChange={(event) => {
@@ -6079,7 +6096,7 @@ export default function ReflectionPage() {
                   onKeyDown={handleHistoryFieldKeyDown}
                 />
                 <input
-                  className="history-timeline__field-input"
+                  className="history-timeline__field-input history-timeline__field-input--split"
                   type="time"
                   step={60}
                   value={startTimeInputValue}
@@ -6099,7 +6116,7 @@ export default function ReflectionPage() {
               <span className="history-timeline__field-text">End</span>
               <div className="history-timeline__field-row">
                 <input
-                  className="history-timeline__field-input"
+                  className="history-timeline__field-input history-timeline__field-input--split"
                   type="date"
                   value={endDateInputValue}
                   onChange={(event) => {
@@ -6113,7 +6130,7 @@ export default function ReflectionPage() {
                   onKeyDown={handleHistoryFieldKeyDown}
                 />
                 <input
-                  className="history-timeline__field-input"
+                  className="history-timeline__field-input history-timeline__field-input--split"
                   type="time"
                   step={60}
                   value={endTimeInputValue}
@@ -6150,6 +6167,74 @@ export default function ReflectionPage() {
                 disabled={availableBucketOptions.length === 0}
               />
             </label>
+            <div className="history-timeline__extras">
+              <button
+                type="button"
+                className="history-timeline__extras-toggle"
+                onClick={() => setShowEditorExtras((value) => !value)}
+                aria-expanded={showEditorExtras}
+                aria-controls="history-details-extras-editor"
+              >
+                {showEditorExtras ? 'Hide subtasks & notes' : 'Show subtasks & notes'}
+              </button>
+              <div
+                id="history-details-extras-editor"
+                className={`history-timeline__extras-panel${showEditorExtras ? ' is-open' : ''}`}
+              >
+                <div className="calendar-inspector__subtasks">
+                  <div className="calendar-inspector__subtasks-header">
+                    <span className="history-timeline__field-text">Subtasks</span>
+                    <button type="button" className="calendar-inspector__subtasks-add" onClick={handleAddHistorySubtask}>
+                      Add subtask
+                    </button>
+                  </div>
+                  {sortedSubtasks.length > 0 ? (
+                    <ul className="calendar-inspector__subtask-list">
+                      {sortedSubtasks.map((subtask) => (
+                        <li key={subtask.id} className="calendar-inspector__subtask">
+                          <label className="calendar-inspector__subtask-toggle">
+                            <input
+                              type="checkbox"
+                              checked={subtask.completed}
+                              onChange={() => handleToggleHistorySubtaskCompletion(subtask.id)}
+                              aria-label={`Mark ${subtask.text.trim().length > 0 ? subtask.text : 'subtask'} ${
+                                subtask.completed ? 'incomplete' : 'complete'
+                              }`}
+                            />
+                          </label>
+                          <input
+                            className="calendar-inspector__subtask-input"
+                            type="text"
+                            value={subtask.text}
+                            placeholder="Add details"
+                            onChange={(event) => handleUpdateHistorySubtaskText(subtask.id, event.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="calendar-inspector__subtask-delete"
+                            aria-label="Delete subtask"
+                            onClick={() => handleDeleteHistorySubtask(subtask.id)}
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="calendar-inspector__subtasks-empty">No subtasks yet.</p>
+                  )}
+                </div>
+                <label className="history-timeline__field">
+                  <span className="history-timeline__field-text">Notes</span>
+                  <textarea
+                    className="calendar-inspector__notes"
+                    value={historyDraft.notes}
+                    placeholder="Capture context, outcomes, or follow-ups"
+                    onChange={handleHistoryNotesChange}
+                  />
+                </label>
+              </div>
+            </div>
           </div>
           <div className="calendar-editor__footer">
             <button
@@ -6177,7 +6262,32 @@ export default function ReflectionPage() {
       </div>,
       document.body,
     )
-  }, [calendarEditorEntryId, history, historyDraft.bucketName, historyDraft.goalName, historyDraft.taskName, availableBucketOptions.length, bucketDropdownId, bucketDropdownOptions, goalDropdownId, goalDropdownOptions, handleCancelHistoryEdit, handleHistoryFieldChange, handleHistoryFieldKeyDown, handleSaveHistoryDraft, updateHistoryDraftField])
+  }, [
+    calendarEditorEntryId,
+    history,
+    historyDraft.bucketName,
+    historyDraft.goalName,
+    historyDraft.taskName,
+    historyDraft.notes,
+    historyDraft.subtasks,
+    availableBucketOptions.length,
+    bucketDropdownId,
+    bucketDropdownOptions,
+    goalDropdownId,
+    goalDropdownOptions,
+    handleAddHistorySubtask,
+    handleCancelHistoryEdit,
+    handleHistoryFieldChange,
+    handleHistoryFieldKeyDown,
+    handleHistoryNotesChange,
+    handleSaveHistoryDraft,
+    handleToggleHistorySubtaskCompletion,
+    handleUpdateHistorySubtaskText,
+    setShowEditorExtras,
+    showEditorExtras,
+    sortedSubtasks,
+    updateHistoryDraftField,
+  ])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -6603,8 +6713,7 @@ export default function ReflectionPage() {
       }
       return formatDateRange(resolvedStart, resolvedEnd)
     })()
-    const sortedSubtasks = historyDraft.subtasks.slice().sort((a, b) => a.sortIndex - b.sortIndex)
-    if (ENABLE_HISTORY_INSPECTOR_PANEL) {
+      if (ENABLE_HISTORY_INSPECTOR_PANEL) {
       calendarInspectorPanel = (
       <aside className="calendar-inspector" aria-label="Session inspector">
         <div className="calendar-inspector__inner" ref={calendarInspectorRef}>
@@ -6641,7 +6750,7 @@ export default function ReflectionPage() {
                 <span className="history-timeline__field-text">Start</span>
                 <div className="history-timeline__field-row">
                   <input
-                    className="history-timeline__field-input"
+                    className="history-timeline__field-input history-timeline__field-input--split"
                     type="date"
                     value={startDateInputValue}
                     onChange={(event) => {
@@ -6655,7 +6764,7 @@ export default function ReflectionPage() {
                     onKeyDown={handleHistoryFieldKeyDown}
                   />
                   <input
-                    className="history-timeline__field-input"
+                    className="history-timeline__field-input history-timeline__field-input--split"
                     type="time"
                     step={60}
                     value={startTimeInputValue}
@@ -6675,7 +6784,7 @@ export default function ReflectionPage() {
                 <span className="history-timeline__field-text">End</span>
                 <div className="history-timeline__field-row">
                   <input
-                    className="history-timeline__field-input"
+                    className="history-timeline__field-input history-timeline__field-input--split"
                     type="date"
                     value={endDateInputValue}
                     onChange={(event) => {
@@ -6689,7 +6798,7 @@ export default function ReflectionPage() {
                     onKeyDown={handleHistoryFieldKeyDown}
                   />
                   <input
-                    className="history-timeline__field-input"
+                    className="history-timeline__field-input history-timeline__field-input--split"
                     type="time"
                     step={60}
                     value={endTimeInputValue}
@@ -6726,62 +6835,78 @@ export default function ReflectionPage() {
                   disabled={availableBucketOptions.length === 0}
                 />
               </label>
-              <div className="calendar-inspector__subtasks">
-                <div className="calendar-inspector__subtasks-header">
-                  <span className="history-timeline__field-text">Subtasks</span>
-                  <button
-                    type="button"
-                    className="calendar-inspector__subtasks-add"
-                    onClick={handleAddHistorySubtask}
-                  >
-                    Add subtask
-                  </button>
+              <div className="history-timeline__extras">
+                <button
+                  type="button"
+                  className="history-timeline__extras-toggle"
+                  onClick={() => setShowInspectorExtras((value) => !value)}
+                  aria-expanded={showInspectorExtras}
+                  aria-controls="history-details-extras-inspector"
+                >
+                  {showInspectorExtras ? 'Hide subtasks & notes' : 'Show subtasks & notes'}
+                </button>
+                <div
+                  id="history-details-extras-inspector"
+                  className={`history-timeline__extras-panel${showInspectorExtras ? ' is-open' : ''}`}
+                >
+                  <div className="calendar-inspector__subtasks">
+                    <div className="calendar-inspector__subtasks-header">
+                      <span className="history-timeline__field-text">Subtasks</span>
+                      <button
+                        type="button"
+                        className="calendar-inspector__subtasks-add"
+                        onClick={handleAddHistorySubtask}
+                      >
+                        Add subtask
+                      </button>
+                    </div>
+                    {sortedSubtasks.length > 0 ? (
+                      <ul className="calendar-inspector__subtask-list">
+                        {sortedSubtasks.map((subtask) => (
+                          <li key={subtask.id} className="calendar-inspector__subtask">
+                            <label className="calendar-inspector__subtask-toggle">
+                              <input
+                                type="checkbox"
+                                checked={subtask.completed}
+                                onChange={() => handleToggleHistorySubtaskCompletion(subtask.id)}
+                                aria-label={`Mark ${subtask.text.trim().length > 0 ? subtask.text : 'subtask'} ${
+                                  subtask.completed ? 'incomplete' : 'complete'
+                                }`}
+                              />
+                            </label>
+                            <input
+                              className="calendar-inspector__subtask-input"
+                              type="text"
+                              value={subtask.text}
+                              placeholder="Add details"
+                              onChange={(event) => handleUpdateHistorySubtaskText(subtask.id, event.target.value)}
+                            />
+                            <button
+                              type="button"
+                              className="calendar-inspector__subtask-delete"
+                              aria-label="Delete subtask"
+                              onClick={() => handleDeleteHistorySubtask(subtask.id)}
+                            >
+                              ×
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="calendar-inspector__subtasks-empty">No subtasks yet.</p>
+                    )}
+                  </div>
+                  <label className="history-timeline__field">
+                    <span className="history-timeline__field-text">Notes</span>
+                    <textarea
+                      className="calendar-inspector__notes"
+                      value={historyDraft.notes}
+                      placeholder="Capture context, outcomes, or follow-ups"
+                      onChange={handleHistoryNotesChange}
+                    />
+                  </label>
                 </div>
-                {sortedSubtasks.length > 0 ? (
-                  <ul className="calendar-inspector__subtask-list">
-                    {sortedSubtasks.map((subtask) => (
-                      <li key={subtask.id} className="calendar-inspector__subtask">
-                        <label className="calendar-inspector__subtask-toggle">
-                          <input
-                            type="checkbox"
-                            checked={subtask.completed}
-                            onChange={() => handleToggleHistorySubtaskCompletion(subtask.id)}
-                            aria-label={`Mark ${subtask.text.trim().length > 0 ? subtask.text : 'subtask'} ${
-                              subtask.completed ? 'incomplete' : 'complete'
-                            }`}
-                          />
-                        </label>
-                        <input
-                          className="calendar-inspector__subtask-input"
-                          type="text"
-                          value={subtask.text}
-                          placeholder="Add details"
-                          onChange={(event) => handleUpdateHistorySubtaskText(subtask.id, event.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="calendar-inspector__subtask-delete"
-                          aria-label="Delete subtask"
-                          onClick={() => handleDeleteHistorySubtask(subtask.id)}
-                        >
-                          ×
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="calendar-inspector__subtasks-empty">No subtasks yet.</p>
-                )}
               </div>
-              <label className="history-timeline__field">
-                <span className="history-timeline__field-text">Notes</span>
-                <textarea
-                  className="calendar-inspector__notes"
-                  value={historyDraft.notes}
-                  placeholder="Capture context, outcomes, or follow-ups"
-                  onChange={handleHistoryNotesChange}
-                />
-              </label>
             </div>
             <div className="calendar-inspector__footer">
               <button
@@ -6929,58 +7054,74 @@ export default function ReflectionPage() {
                 />
               </label>
             </div>
-            <div className="legacy-editor-panel__subtasks">
-              <div className="legacy-editor-panel__subtasks-header">
-                <span className="history-timeline__field-text">Subtasks</span>
-                <button type="button" className="calendar-inspector__subtasks-add" onClick={handleAddHistorySubtask}>
-                  Add subtask
-                </button>
+            <div className="history-timeline__extras">
+              <button
+                type="button"
+                className="history-timeline__extras-toggle"
+                onClick={() => setShowInspectorExtras((value) => !value)}
+                aria-expanded={showInspectorExtras}
+                aria-controls="history-details-extras-legacy"
+              >
+                {showInspectorExtras ? 'Hide subtasks & notes' : 'Show subtasks & notes'}
+              </button>
+              <div
+                id="history-details-extras-legacy"
+                className={`history-timeline__extras-panel${showInspectorExtras ? ' is-open' : ''}`}
+              >
+                <div className="calendar-inspector__subtasks">
+                  <div className="calendar-inspector__subtasks-header">
+                    <span className="history-timeline__field-text">Subtasks</span>
+                    <button type="button" className="calendar-inspector__subtasks-add" onClick={handleAddHistorySubtask}>
+                      Add subtask
+                    </button>
+                  </div>
+                  {sortedSubtasks.length > 0 ? (
+                    <ul className="calendar-inspector__subtask-list">
+                      {sortedSubtasks.map((subtask) => (
+                        <li key={subtask.id} className="calendar-inspector__subtask">
+                          <label className="calendar-inspector__subtask-toggle">
+                            <input
+                              type="checkbox"
+                              checked={subtask.completed}
+                              onChange={() => handleToggleHistorySubtaskCompletion(subtask.id)}
+                              aria-label={`Mark ${subtask.text.trim().length > 0 ? subtask.text : 'subtask'} ${
+                                subtask.completed ? 'incomplete' : 'complete'
+                              }`}
+                            />
+                          </label>
+                          <input
+                            className="calendar-inspector__subtask-input"
+                            type="text"
+                            value={subtask.text}
+                            placeholder="Add details"
+                            onChange={(event) => handleUpdateHistorySubtaskText(subtask.id, event.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="calendar-inspector__subtask-delete"
+                            aria-label="Delete subtask"
+                            onClick={() => handleDeleteHistorySubtask(subtask.id)}
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="calendar-inspector__subtasks-empty">No subtasks yet.</p>
+                  )}
+                </div>
+                <label className="history-timeline__field">
+                  <span className="history-timeline__field-text">Notes</span>
+                  <textarea
+                    className="calendar-inspector__notes"
+                    value={historyDraft.notes}
+                    placeholder="Capture context, outcomes, or follow-ups"
+                    onChange={handleHistoryNotesChange}
+                  />
+                </label>
               </div>
-              {sortedSubtasks.length > 0 ? (
-                <ul className="calendar-inspector__subtask-list">
-                  {sortedSubtasks.map((subtask) => (
-                    <li key={subtask.id} className="calendar-inspector__subtask">
-                      <label className="calendar-inspector__subtask-toggle">
-                        <input
-                          type="checkbox"
-                          checked={subtask.completed}
-                          onChange={() => handleToggleHistorySubtaskCompletion(subtask.id)}
-                          aria-label={`Mark ${subtask.text.trim().length > 0 ? subtask.text : 'subtask'} ${
-                            subtask.completed ? 'incomplete' : 'complete'
-                          }`}
-                        />
-                      </label>
-                      <input
-                        className="calendar-inspector__subtask-input"
-                        type="text"
-                        value={subtask.text}
-                        placeholder="Add details"
-                        onChange={(event) => handleUpdateHistorySubtaskText(subtask.id, event.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="calendar-inspector__subtask-delete"
-                        aria-label="Delete subtask"
-                        onClick={() => handleDeleteHistorySubtask(subtask.id)}
-                      >
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="calendar-inspector__subtasks-empty">No subtasks yet.</p>
-              )}
             </div>
-            <label className="history-timeline__field">
-              <span className="history-timeline__field-text">Notes</span>
-              <textarea
-                className="calendar-inspector__notes"
-                value={historyDraft.notes}
-                placeholder="Capture context, outcomes, or follow-ups"
-                onChange={handleHistoryNotesChange}
-              />
-            </label>
           </div>
           <div className="legacy-editor-panel__footer">
             <button
@@ -7440,7 +7581,7 @@ export default function ReflectionPage() {
                               <span className="history-timeline__field-text">Start</span>
                               <div className="history-timeline__field-row">
                                 <input
-                                  className="history-timeline__field-input"
+                                  className="history-timeline__field-input history-timeline__field-input--split"
                                   type="date"
                                   value={startDateInputValue}
                                   onChange={(event) => {
@@ -7455,7 +7596,7 @@ export default function ReflectionPage() {
                                   onKeyDown={handleHistoryFieldKeyDown}
                                 />
                                 <input
-                                  className="history-timeline__field-input"
+                                  className="history-timeline__field-input history-timeline__field-input--split"
                                   type="time"
                                   step={60}
                                   value={startTimeInputValue}
@@ -7468,7 +7609,7 @@ export default function ReflectionPage() {
                               <span className="history-timeline__field-text">End</span>
                               <div className="history-timeline__field-row">
                                 <input
-                                  className="history-timeline__field-input"
+                                  className="history-timeline__field-input history-timeline__field-input--split"
                                   type="date"
                                   value={endDateInputValue}
                                   onChange={(event) => {
@@ -7483,7 +7624,7 @@ export default function ReflectionPage() {
                                   onKeyDown={handleHistoryFieldKeyDown}
                                 />
                                 <input
-                                  className="history-timeline__field-input"
+                                  className="history-timeline__field-input history-timeline__field-input--split"
                                   type="time"
                                   step={60}
                                   value={endTimeInputValue}
@@ -7525,6 +7666,78 @@ export default function ReflectionPage() {
                                 disabled={availableBucketOptions.length === 0}
                               />
                             </label>
+                            <div className="history-timeline__extras">
+                              <button
+                                type="button"
+                                className="history-timeline__extras-toggle"
+                                onClick={() => setShowInlineExtras((value) => !value)}
+                                aria-expanded={showInlineExtras}
+                                aria-controls="history-details-extras-inline"
+                              >
+                                {showInlineExtras ? 'Hide subtasks & notes' : 'Show subtasks & notes'}
+                              </button>
+                              <div
+                                id="history-details-extras-inline"
+                                className={`history-timeline__extras-panel${showInlineExtras ? ' is-open' : ''}`}
+                              >
+                                <div className="calendar-inspector__subtasks">
+                                  <div className="calendar-inspector__subtasks-header">
+                                    <span className="history-timeline__field-text">Subtasks</span>
+                                    <button
+                                      type="button"
+                                      className="calendar-inspector__subtasks-add"
+                                      onClick={handleAddHistorySubtask}
+                                    >
+                                      Add subtask
+                                    </button>
+                                  </div>
+                                  {sortedSubtasks.length > 0 ? (
+                                    <ul className="calendar-inspector__subtask-list">
+                                      {sortedSubtasks.map((subtask) => (
+                                        <li key={subtask.id} className="calendar-inspector__subtask">
+                                          <label className="calendar-inspector__subtask-toggle">
+                                            <input
+                                              type="checkbox"
+                                              checked={subtask.completed}
+                                              onChange={() => handleToggleHistorySubtaskCompletion(subtask.id)}
+                                              aria-label={`Mark ${subtask.text.trim().length > 0 ? subtask.text : 'subtask'} ${
+                                                subtask.completed ? 'incomplete' : 'complete'
+                                              }`}
+                                            />
+                                          </label>
+                                          <input
+                                            className="calendar-inspector__subtask-input"
+                                            type="text"
+                                            value={subtask.text}
+                                            placeholder="Add details"
+                                            onChange={(event) => handleUpdateHistorySubtaskText(subtask.id, event.target.value)}
+                                          />
+                                          <button
+                                            type="button"
+                                            className="calendar-inspector__subtask-delete"
+                                            aria-label="Delete subtask"
+                                            onClick={() => handleDeleteHistorySubtask(subtask.id)}
+                                          >
+                                            ×
+                                          </button>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <p className="calendar-inspector__subtasks-empty">No subtasks yet.</p>
+                                  )}
+                                </div>
+                                <label className="history-timeline__field">
+                                  <span className="history-timeline__field-text">Notes</span>
+                                  <textarea
+                                    className="calendar-inspector__notes"
+                                    value={historyDraft.notes}
+                                    placeholder="Capture context, outcomes, or follow-ups"
+                                    onChange={handleHistoryNotesChange}
+                                  />
+                                </label>
+                              </div>
+                            </div>
                           </div>
                           <div className="history-timeline__actions">
                             <button
