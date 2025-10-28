@@ -150,24 +150,6 @@
   color: var(--text-secondary);
 }
 
-.calendar-inspector__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.calendar-inspector__chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 0.18rem 0.6rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  background: rgba(92, 108, 220, 0.18);
-  color: rgba(214, 220, 255, 0.85);
-}
-
 .calendar-inspector__close {
   border: none;
   background: rgba(126, 136, 220, 0.16);
@@ -458,11 +440,6 @@ html[data-theme='light'] .calendar-inspector__inner {
 
 html[data-theme='light'] .calendar-inspector__subtitle {
   color: rgba(71, 80, 132, 0.85);
-}
-
-html[data-theme='light'] .calendar-inspector__chip {
-  background: rgba(130, 142, 238, 0.2);
-  color: rgba(46, 54, 100, 0.78);
 }
 
 html[data-theme='light'] .calendar-inspector__close {

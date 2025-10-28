@@ -6551,10 +6551,6 @@ export default function ReflectionPage() {
                 {deriveEntryTaskName(inspectorEntry) || 'Untitled session'}
               </h3>
               <p className="calendar-inspector__subtitle">{inspectorDateLabel}</p>
-              <div className="calendar-inspector__chips">
-                <span className="calendar-inspector__chip">{inspectorSubtasksSummary}</span>
-                <span className="calendar-inspector__chip">{inspectorNotesSummary}</span>
-              </div>
             </div>
             <button
               type="button"
