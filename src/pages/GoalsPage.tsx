@@ -1361,6 +1361,8 @@ interface GoalRowProps {
   handleToggleSubtaskSection: (taskId: string) => void
   handleToggleSubtaskCompleted: (taskId: string, subtaskId: string) => void
   handleRemoveSubtask: (taskId: string, subtaskId: string) => void
+  onCollapseTaskDetailsForDrag: (taskId: string) => void
+  onRestoreTaskDetailsAfterDrag: (taskId: string) => void
   taskDrafts: Record<string, string>
   onStartTaskDraft: (goalId: string, bucketId: string) => void
   onTaskDraftChange: (goalId: string, bucketId: string, value: string) => void
@@ -1563,6 +1565,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
   handleToggleSubtaskSection,
   handleToggleSubtaskCompleted,
   handleRemoveSubtask,
+  onCollapseTaskDetailsForDrag,
+  onRestoreTaskDetailsAfterDrag,
   taskDrafts,
   onStartTaskDraft,
   onTaskDraftChange,
@@ -2868,6 +2872,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     draggable
                                   onDragStart={(e) => {
                                     onRevealDeleteTask(null)
+                                    onCollapseTaskDetailsForDrag(task.id)
                                     e.dataTransfer.setData('text/plain', task.id)
                                     e.dataTransfer.effectAllowed = 'move'
                                     const row = e.currentTarget as HTMLElement
@@ -2876,10 +2881,11 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     const clone = row.cloneNode(true) as HTMLElement
                                     // Preserve task modifiers so difficulty/priority visuals stay intact
                                     clone.className = `${row.className} goal-drag-clone`
-                                    clone.classList.remove('dragging', 'goal-task-row--collapsed')
+                                    clone.classList.remove('dragging', 'goal-task-row--collapsed', 'goal-task-row--expanded')
                                     // Match row width to avoid layout surprises in the ghost
                                     const rowRect = row.getBoundingClientRect()
                                     clone.style.width = `${Math.floor(rowRect.width)}px`
+                                    clone.style.minHeight = `${Math.max(1, Math.round(rowRect.height))}px`
                                     // Copy visual styles from the source row so colors match (including gradients/shadows)
                                     copyVisualStyles(row, clone)
                                     // Force single-line text in clone even if original contains line breaks
@@ -2891,6 +2897,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       const oneLine = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim()
                                       el.textContent = oneLine
                                     })
+                                    clone.querySelectorAll('.goal-task-details').forEach((node) => node.parentNode?.removeChild(node))
                                     // Width already matched above
                                     document.body.appendChild(clone)
                                     dragCloneRef.current = clone
@@ -2914,6 +2921,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
     ;(window as any).__dragTaskInfo = null
     setDragHover(null)
     setDragLine(null)
+    onRestoreTaskDetailsAfterDrag(task.id)
     const row = e.currentTarget as HTMLElement
     row.classList.remove('goal-task-row--collapsed')
     const ghost = dragCloneRef.current
@@ -3528,15 +3536,17 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         }}
                                         onDragStart={(e) => {
                                           onRevealDeleteTask(null)
+                                          onCollapseTaskDetailsForDrag(task.id)
                                           e.dataTransfer.setData('text/plain', task.id)
                                           e.dataTransfer.effectAllowed = 'move'
                                           const row = e.currentTarget as HTMLElement
                                           row.classList.add('dragging')
                                           const clone = row.cloneNode(true) as HTMLElement
                                           clone.className = `${row.className} goal-drag-clone`
-                                          clone.classList.remove('dragging', 'goal-task-row--collapsed')
+                                          clone.classList.remove('dragging', 'goal-task-row--collapsed', 'goal-task-row--expanded')
                                           const rowRect = row.getBoundingClientRect()
                                           clone.style.width = `${Math.floor(rowRect.width)}px`
+                                          clone.style.minHeight = `${Math.max(1, Math.round(rowRect.height))}px`
                                           copyVisualStyles(row, clone)
                                           // Force single-line text in clone even if original contains line breaks
                                           const textNodes = clone.querySelectorAll('.goal-task-text, .goal-task-input, .goal-task-text--button')
@@ -3546,6 +3556,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                             const oneLine = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim()
                                             el.textContent = oneLine
                                           })
+                                          clone.querySelectorAll('.goal-task-details').forEach((node) => node.parentNode?.removeChild(node))
                                           // Width already matched above
                                           document.body.appendChild(clone)
                                           dragCloneRef.current = clone
@@ -3568,6 +3579,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
     ;(window as any).__dragTaskInfo = null
     setDragHover(null)
     setDragLine(null)
+    onRestoreTaskDetailsAfterDrag(task.id)
     const row = e.currentTarget as HTMLElement
     row.classList.remove('goal-task-row--collapsed')
     const ghost = dragCloneRef.current
@@ -4431,6 +4443,8 @@ export default function GoalsPage(): ReactElement {
   const [searchTerm, setSearchTerm] = useState('')
   const [taskDetails, setTaskDetails] = useState<TaskDetailsState>(() => readStoredTaskDetails())
   const taskDetailsRef = useRef<TaskDetailsState>(taskDetails)
+  const taskDetailsDragSnapshotRef = useRef<Map<string, { expanded: boolean; subtasksCollapsed: boolean }>>(new Map())
+  const draggingTaskIdRef = useRef<string | null>(null)
   const pendingGoalSubtaskFocusRef = useRef<{ taskId: string; subtaskId: string } | null>(null)
   const taskNotesSaveTimersRef = useRef<Map<string, number>>(new Map())
   const taskNotesLatestRef = useRef<Map<string, string>>(new Map())
@@ -5038,6 +5052,79 @@ export default function GoalsPage(): ReactElement {
       }))
     },
     [updateTaskDetails],
+  )
+  const collapseAllTaskDetailsForDrag = useCallback(
+    (draggingTaskId: string) => {
+      if (draggingTaskIdRef.current === draggingTaskId) {
+        return
+      }
+      draggingTaskIdRef.current = draggingTaskId
+      setTaskDetails((current) => {
+        const snapshot = new Map<string, { expanded: boolean; subtasksCollapsed: boolean }>()
+        let mutated: TaskDetailsState | null = null
+        Object.entries(current).forEach(([taskId, details]) => {
+          if (details.expanded || !details.subtasksCollapsed) {
+            snapshot.set(taskId, {
+              expanded: details.expanded,
+              subtasksCollapsed: details.subtasksCollapsed,
+            })
+            if (!mutated) {
+              mutated = { ...current }
+            }
+            mutated[taskId] = {
+              ...details,
+              expanded: false,
+              subtasksCollapsed: true,
+            }
+          }
+        })
+        taskDetailsDragSnapshotRef.current = snapshot
+        if (!mutated) {
+          return current
+        }
+        taskDetailsRef.current = mutated
+        return mutated
+      })
+    },
+    [setTaskDetails],
+  )
+
+  const restoreTaskDetailsAfterDrag = useCallback(
+    (draggedTaskId: string) => {
+      const snapshot = new Map(taskDetailsDragSnapshotRef.current)
+      taskDetailsDragSnapshotRef.current = new Map()
+      draggingTaskIdRef.current = null
+      if (snapshot.size === 0) {
+        return
+      }
+      setTaskDetails((current) => {
+        let mutated: TaskDetailsState | null = null
+        snapshot.forEach((previous, taskId) => {
+          const details = current[taskId]
+          if (!details) {
+            return
+          }
+          const targetExpanded = taskId === draggedTaskId ? false : previous.expanded
+          const targetSubtasksCollapsed = taskId === draggedTaskId ? true : previous.subtasksCollapsed
+          if (details.expanded !== targetExpanded || details.subtasksCollapsed !== targetSubtasksCollapsed) {
+            if (!mutated) {
+              mutated = { ...current }
+            }
+            mutated[taskId] = {
+              ...details,
+              expanded: targetExpanded,
+              subtasksCollapsed: targetSubtasksCollapsed,
+            }
+          }
+        })
+        if (!mutated) {
+          return current
+        }
+        taskDetailsRef.current = mutated
+        return mutated
+      })
+    },
+    [setTaskDetails],
   )
 
   const handleToggleSubtaskCompleted = useCallback(
@@ -7696,6 +7783,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     handleToggleSubtaskSection={handleToggleSubtaskSection}
                     handleToggleSubtaskCompleted={handleToggleSubtaskCompleted}
                     handleRemoveSubtask={handleRemoveSubtask}
+                    onCollapseTaskDetailsForDrag={collapseAllTaskDetailsForDrag}
+                    onRestoreTaskDetailsAfterDrag={restoreTaskDetailsAfterDrag}
                     taskDrafts={taskDrafts}
                     onStartTaskDraft={startTaskDraft}
                     onTaskDraftChange={handleTaskDraftChange}
@@ -7823,6 +7912,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                         handleToggleSubtaskSection={handleToggleSubtaskSection}
                         handleToggleSubtaskCompleted={handleToggleSubtaskCompleted}
                         handleRemoveSubtask={handleRemoveSubtask}
+                        onCollapseTaskDetailsForDrag={collapseAllTaskDetailsForDrag}
+                        onRestoreTaskDetailsAfterDrag={restoreTaskDetailsAfterDrag}
                         taskDrafts={taskDrafts}
                         onStartTaskDraft={startTaskDraft}
                         onTaskDraftChange={handleTaskDraftChange}
