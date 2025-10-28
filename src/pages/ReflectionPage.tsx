@@ -1872,6 +1872,20 @@ export default function ReflectionPage() {
     },
     [],
   )
+  const resetCalendarPanTransform = useCallback(() => {
+    const base = calendarBaseTranslateRef.current
+    if (!Number.isFinite(base)) {
+      return
+    }
+    const daysEl = calendarDaysRef.current
+    if (daysEl) {
+      daysEl.style.transform = `translateX(${base}px)`
+    }
+    const hdrEl = calendarHeadersRef.current
+    if (hdrEl) {
+      hdrEl.style.transform = `translateX(${base}px)`
+    }
+  }, [])
   const focusMultiDayOption = useCallback((value: number) => {
     const chooser = multiChooserRef.current
     if (!chooser) {
@@ -3829,12 +3843,13 @@ export default function ReflectionPage() {
         return
       }
       stopCalendarPanAnimation({ commit: true })
+      resetCalendarPanTransform()
       calendarPanDesiredOffsetRef.current = targetOffset
       historyDayOffsetRef.current = targetOffset
       const snapDays = -(targetOffset - baseOffset)
       animateCalendarPan(snapDays, dayWidth, baseOffset)
     },
-    [animateCalendarPan, calendarView, multiDayCount, stopCalendarPanAnimation],
+    [animateCalendarPan, calendarView, multiDayCount, resetCalendarPanTransform, stopCalendarPanAnimation],
   )
 
   const handlePrevWindow = useCallback(() => {
@@ -4164,6 +4179,7 @@ export default function ReflectionPage() {
     if (hdrEl) {
       hdrEl.style.transition = ''
     }
+    resetCalendarPanTransform()
     const dayCount = calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
     const baseOffset = calendarPanDesiredOffsetRef.current
     calendarDragRef.current = {
@@ -4267,7 +4283,7 @@ export default function ReflectionPage() {
     window.addEventListener('pointermove', handleMove)
     window.addEventListener('pointerup', handleUp)
     window.addEventListener('pointercancel', handleUp)
-  }, [calendarView, multiDayCount, stopCalendarPanAnimation, resolvePanSnap, animateCalendarPan])
+  }, [calendarView, multiDayCount, resetCalendarPanTransform, stopCalendarPanAnimation, resolvePanSnap, animateCalendarPan])
 
   // Build minimal calendar content for non-day views
   const renderCalendarContent = useCallback(() => {
@@ -4781,6 +4797,7 @@ export default function ReflectionPage() {
                       const hdrEl = calendarHeadersRef.current
                       if (daysEl) daysEl.style.transition = ''
                       if (hdrEl) hdrEl.style.transition = ''
+                      resetCalendarPanTransform()
                       const baseOffset = calendarPanDesiredOffsetRef.current
                       calendarDragRef.current = {
                         pointerId: s.pointerId,
@@ -5076,6 +5093,7 @@ export default function ReflectionPage() {
                     const hdrEl = calendarHeadersRef.current
                     if (daysEl) daysEl.style.transition = ''
                     if (hdrEl) hdrEl.style.transition = ''
+                    resetCalendarPanTransform()
                     const baseOffset = calendarPanDesiredOffsetRef.current
                     calendarDragRef.current = {
                       pointerId,
@@ -5485,7 +5503,7 @@ export default function ReflectionPage() {
     }
 
     return null
-  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, stopCalendarPanAnimation])
+  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, resetCalendarPanTransform, stopCalendarPanAnimation])
 
   // Simple inline icons for popover actions
   const IconEdit = () => (
