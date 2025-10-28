@@ -19,6 +19,7 @@ import {
 } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import './ReflectionPage.css'
+import { fetchRepeatingSessionRules, createRepeatingRuleForEntry, deactivateMatchingRulesForEntry, type RepeatingSessionRule } from '../lib/repeatingSessions.ts'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
 import {
   DEFAULT_SURFACE_STYLE,
@@ -1897,6 +1898,8 @@ export default function ReflectionPage() {
   const calendarPanCleanupRef = useRef<((shouldCommit: boolean) => void) | null>(null)
   const calendarPanFallbackTimeoutRef = useRef<number | null>(null)
   const calendarPanDesiredOffsetRef = useRef<number>(historyDayOffset)
+  // Repeating sessions (rules fetched from backend)
+  const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
 
   const clearCalendarPanFallbackTimeout = useCallback(() => {
     const timeoutId = calendarPanFallbackTimeoutRef.current
@@ -1906,6 +1909,23 @@ export default function ReflectionPage() {
     calendarPanFallbackTimeoutRef.current = null
     if (typeof window !== 'undefined') {
       window.clearTimeout(timeoutId)
+    }
+  }, [])
+
+  // Load repeating session rules once (single-user dev auth handled in supabase client)
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const rules = await fetchRepeatingSessionRules()
+        if (!cancelled) setRepeatingRules(rules)
+      } catch (err) {
+        console.warn('[calendar] Failed to load repeating sessions', err)
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -2202,6 +2222,29 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       window.removeEventListener('pointercancel', handlers.cancel)
     }
     longPressCancelHandlersRef.current = null
+  }, [])
+  // Helper: toggle global scroll lock (prevents page scroll on touch during active event drags)
+  const setPageScrollLock = useCallback((locked: boolean) => {
+    if (typeof document === 'undefined') return
+    const body = document.body as HTMLBodyElement & { dataset: DOMStringMap }
+    if (locked) {
+      if (body.dataset.scrollLockActive === '1') return
+      const y = (window.scrollY || (document.scrollingElement?.scrollTop ?? 0) || 0)
+      body.dataset.scrollLockActive = '1'
+      body.dataset.scrollLockY = String(y)
+      body.style.position = 'fixed'
+      body.style.top = `-${y}px`
+      body.style.width = '100%'
+    } else {
+      if (body.dataset.scrollLockActive !== '1') return
+      const y = Number(body.dataset.scrollLockY || '0') || 0
+      delete body.dataset.scrollLockActive
+      delete body.dataset.scrollLockY
+      body.style.position = ''
+      body.style.top = ''
+      body.style.width = ''
+      try { window.scrollTo(0, y) } catch {}
+    }
   }, [])
 
   useEffect(() => {
@@ -3846,6 +3889,11 @@ useEffect(() => {
     const onDocPointerDown = (e: PointerEvent) => {
       const node = e.target as Node | null
       if (!node) return
+      // Ignore interactions with dropdown overlays rendered in a portal
+      if (node instanceof Element) {
+        const dropdownMenu = node.closest('.history-dropdown__menu')
+        if (dropdownMenu) return
+      }
       // Ignore clicks inside the popover
       if (calendarPreviewRef.current && calendarPreviewRef.current.contains(node)) return
       // If tapping a calendar event while a popover is open, immediately open that event's popover (single tap behavior)
@@ -4544,6 +4592,9 @@ useEffect(() => {
         zIndex: number
         showLabel: boolean
         showTime: boolean
+        // Guide (repeating) sessions support
+        baseColor?: string
+        isGuide?: boolean
       }
 
       const computeDayEvents = (startMs: number): DayEvent[] => {
@@ -4582,19 +4633,70 @@ useEffect(() => {
           .filter((v): v is RawEvent => Boolean(v))
           .sort((a, b) => (a.start === b.start ? a.end - b.end : a.start - b.start))
 
-        if (raw.length === 0) {
+        // Synthesize guide events from repeating session rules for this day
+        const guideRaw: RawEvent[] = (() => {
+          if (!Array.isArray(repeatingRules) || repeatingRules.length === 0) return []
+          const day = new Date(startMs)
+          const dow = day.getDay() // 0=Sun
+          return repeatingRules
+            .filter((rule) => rule.isActive && (rule.frequency === 'daily' || (rule.frequency === 'weekly' && rule.dayOfWeek === dow)))
+            .filter((rule) => {
+              // Only render guides for days on/after the rule activation day (local timezone)
+              const createdMs = (rule as any).createdAtMs as number | undefined
+              if (!Number.isFinite(createdMs as number)) return true
+              const t = new Date(createdMs as number)
+              t.setHours(0, 0, 0, 0)
+              const activationDayStart = t.getTime()
+              // Show next repeat only (skip the activation day itself)
+              return startMs > activationDayStart
+            })
+            .map((rule) => {
+              const startOfDay = startMs
+              const startedAt = startOfDay + Math.max(0, Math.min(1439, rule.timeOfDayMinutes)) * MINUTE_MS
+              const durationMs = Math.max(1, (rule.durationMinutes ?? 60) * MINUTE_MS)
+              const endedAt = Math.min(startedAt + durationMs, startOfDay + DAY_DURATION_MS)
+              const entryId = `repeat:${rule.id}:${startOfDay}`
+              const entry: HistoryEntry = {
+                id: entryId,
+                taskName: rule.taskName?.trim() || 'Session',
+                elapsed: Math.max(endedAt - startedAt, 1),
+                startedAt,
+                endedAt,
+                goalName: rule.goalName?.trim() || null,
+                bucketName: rule.bucketName?.trim() || null,
+                goalId: null,
+                bucketId: null,
+                taskId: null,
+                goalSurface: DEFAULT_SURFACE_STYLE,
+                bucketSurface: null,
+                notes: '',
+                subtasks: [],
+              }
+              return {
+                entry,
+                start: Math.max(startedAt, startMs),
+                end: Math.min(endedAt, endMs),
+                previewStart: startedAt,
+                previewEnd: endedAt,
+              } as RawEvent
+            })
+        })()
+
+        const combined: RawEvent[] = [...raw, ...guideRaw].sort((a, b) => (a.start === b.start ? a.end - b.end : a.start - b.start))
+
+        if (combined.length === 0) {
           return []
         }
 
         const breakpointsSet = new Set<number>([startMs, endMs])
-        raw.forEach(({ start, end }) => {
+        combined.forEach(({ start, end }) => {
           breakpointsSet.add(start)
           breakpointsSet.add(end)
         })
         const breakpoints = Array.from(breakpointsSet).sort((a, b) => a - b)
 
         const allEvents = new Map<string, RawEvent>()
-        raw.forEach((info) => {
+        combined.forEach((info) => {
           allEvents.set(info.entry.id, info)
         })
 
@@ -4778,12 +4880,13 @@ useEffect(() => {
           })
         }
 
-        return raw.map((info, index) => {
+        return combined.map((info, index) => {
           const metadata = resolveGoalMetadata(info.entry, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup)
           const gradientCss = metadata.colorInfo?.gradient?.css
           const solidColor = metadata.colorInfo?.solidColor
           const fallbackLabel = deriveEntryTaskName(info.entry)
           const color = gradientCss ?? solidColor ?? getPaletteColorForLabel(fallbackLabel)
+          const baseColor = solidColor ?? metadata.colorInfo?.gradient?.start ?? getPaletteColorForLabel(fallbackLabel)
 
           const segments = mergeSegments(eventSlices.get(info.entry.id) ?? [{ start: 0, end: 1, left: 0, right: 1 }])
           const clipPath = buildClipPath(segments)
@@ -4800,6 +4903,7 @@ useEffect(() => {
           const durationMinutes = duration / MINUTE_MS
           const showLabel = durationMinutes >= 8
           const showTime = durationMinutes >= 20
+          const isGuide = info.entry.id.startsWith('repeat:')
 
           return {
             entry: info.entry,
@@ -4813,6 +4917,8 @@ useEffect(() => {
             zIndex,
             showLabel,
             showTime,
+            baseColor,
+            isGuide,
           }
         })
       }
@@ -4823,67 +4929,6 @@ useEffect(() => {
         t.setHours(0, 0, 0, 0)
         return t.getTime()
       })()
-
-      // Helper: toggle global scroll lock (prevents page scroll on touch during active drags)
-      const setPageScrollLock = (locked: boolean) => {
-        if (typeof document === 'undefined') return
-        const root = document.documentElement
-        const body = document.body as HTMLBodyElement & { dataset: DOMStringMap }
-        const ua = navigator.userAgent || ''
-        const isIOS = /iP(ad|hone|od)/.test(ua) || (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1)
-        if (locked) {
-          // If already locked, no-op
-          if (body.dataset.scrollLockActive === '1') return
-          body.dataset.scrollLockActive = '1'
-          const y = (window.scrollY || root.scrollTop || (document.scrollingElement?.scrollTop ?? 0) || 0)
-          body.dataset.scrollLockY = String(y)
-          if (isIOS) {
-            // iOS Safari: avoid position:fixed to prevent address bar/UI jumps; block scrolling via global touchmove preventer
-            const preventer: EventListener = (e: Event) => {
-              try { e.preventDefault() } catch {}
-            }
-            ;(window as any).__scrollLockTouchPreventer = preventer
-            try { window.addEventListener('touchmove', preventer, { passive: false }) } catch {}
-          } else {
-            root.classList.add('scroll-lock')
-            body.classList.add('scroll-lock')
-            // Non-iOS fallback: freeze body to prevent any viewport scroll reliably
-            body.style.position = 'fixed'
-            body.style.top = `-${y}px`
-            body.style.left = '0'
-            body.style.right = '0'
-            body.style.width = '100%'
-            body.style.overflow = 'hidden'
-          }
-        } else {
-          // If not locked, no-op
-          if (body.dataset.scrollLockActive !== '1') return
-          delete body.dataset.scrollLockActive
-          const yStr = body.dataset.scrollLockY || root.dataset.scrollLockY
-          delete body.dataset.scrollLockY
-          delete root.dataset.scrollLockY
-          // Remove iOS touchmove preventer if present
-          const preventer = (window as any).__scrollLockTouchPreventer as EventListener | undefined
-          if (preventer) {
-            try { window.removeEventListener('touchmove', preventer) } catch {}
-            delete (window as any).__scrollLockTouchPreventer
-          }
-          // Restore body styles (for non-iOS fallback)
-          if (body.style.position === 'fixed') {
-            body.style.position = ''
-            body.style.top = ''
-            body.style.left = ''
-            body.style.right = ''
-            body.style.width = ''
-            body.style.overflow = ''
-            root.classList.remove('scroll-lock')
-            body.classList.remove('scroll-lock')
-          }
-          // Restore scroll position
-          const y = yStr ? parseInt(yStr, 10) : (window.scrollY || 0)
-          try { window.scrollTo(0, y) } catch {}
-        }
-      }
 
       // Drag state for calendar events (move only, vertical + cross-day)
       const calendarEventDragRef = {
@@ -5505,28 +5550,29 @@ useEffect(() => {
                     {events.map((ev, idx) => {
                       const isDragging = dragPreview?.entryId === ev.entry.id
                       const dragTime = isDragging ? ev.rangeLabel : undefined
-                      const backgroundStyle: CSSProperties = {
-                        background: ev.gradientCss ?? ev.color,
-                      }
+                      const backgroundStyle: CSSProperties = ev.isGuide
+                        ? { background: 'transparent' }
+                        : { background: ev.gradientCss ?? ev.color }
                       if (ev.clipPath) {
                         backgroundStyle.clipPath = ev.clipPath
                       }
                       return (
                       <div
                         key={`ev-${di}-${idx}-${ev.entry.id}`}
-                        className={`calendar-event${isDragging ? ' calendar-event--dragging' : ''}`}
+                        className={`calendar-event${isDragging ? ' calendar-event--dragging' : ''}${ev.isGuide ? ' calendar-event--guide' : ''}`}
                         style={{
                           top: `${ev.topPct}%`,
                           height: `${ev.heightPct}%`,
                           left: '2px',
                           width: 'calc(100% - 4px)',
                           zIndex: ev.zIndex,
+                          ...(ev.isGuide ? { color: ev.baseColor ?? ev.color, boxShadow: 'none' } : {}),
                         }}
                         data-drag-time={dragTime}
                         data-entry-id={ev.entry.id}
-                        role="button"
-                        aria-label={`${ev.label} ${ev.rangeLabel}`}
-                        onClick={(e) => {
+                        role={ev.isGuide ? 'presentation' : 'button'}
+                        aria-label={ev.isGuide ? undefined : `${ev.label} ${ev.rangeLabel}`}
+                        onClick={ev.isGuide ? undefined : (e) => {
                           // Only open the preview on genuine clicks; suppress after any drag intent
                           if (dragPreventClickRef.current) {
                             dragPreventClickRef.current = false
@@ -5544,7 +5590,7 @@ useEffect(() => {
                           }
                           handleOpenCalendarPreview(ev.entry, e.currentTarget)
                         }}
-                        onDoubleClick={(e) => {
+                        onDoubleClick={ev.isGuide ? undefined : (e) => {
                           e.preventDefault()
                           e.stopPropagation()
                           // Prepare draft + selection state and open the full editor modal
@@ -5557,10 +5603,10 @@ useEffect(() => {
                           // Close any open preview popover to avoid stacking
                           handleCloseCalendarPreview()
                         }}
-                        onPointerUp={() => {
+                        onPointerUp={ev.isGuide ? undefined : () => {
                           // No-op: click handler will decide whether to open based on dragPreventClickRef
                         }}
-                        onPointerDown={(pev) => {
+                        onPointerDown={ev.isGuide ? undefined : (pev) => {
                           // Clear any hover-set cursor before deciding drag kind
                           delete (pev.currentTarget as HTMLDivElement).dataset.cursor
                           handleCalendarEventPointerDown(ev.entry, start)(pev)
@@ -5702,7 +5748,7 @@ useEffect(() => {
     }
 
     return null
-  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, resetCalendarPanTransform, stopCalendarPanAnimation])
+  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, resetCalendarPanTransform, stopCalendarPanAnimation, repeatingRules])
 
   // Simple inline icons for popover actions
   const IconEdit = () => (
@@ -6012,6 +6058,63 @@ useEffect(() => {
         </div>
         <div className="calendar-popover__meta">
           <div className="calendar-popover__time">{dateLabel}</div>
+          <div className="calendar-popover__repeat" aria-label="Repeat">
+            <span className="calendar-popover__repeat-label" aria-hidden>⟳ Repeat ▸</span>
+            {(() => {
+              const start = new Date(entry.startedAt)
+              const minutes = start.getHours() * 60 + start.getMinutes()
+              const durMin = Math.max(1, Math.round((entry.endedAt - entry.startedAt) / 60000))
+              const dow = start.getDay()
+              const matches = (r: RepeatingSessionRule) =>
+                r.isActive &&
+                r.timeOfDayMinutes === minutes &&
+                r.durationMinutes === durMin &&
+                (r.taskName?.trim() || '') === (entry.taskName?.trim() || '') &&
+                (r.goalName?.trim() || null) === (entry.goalName?.trim() || null) &&
+                (r.bucketName?.trim() || null) === (entry.bucketName?.trim() || null)
+              const hasDaily = repeatingRules.some((r) => matches(r) && r.frequency === 'daily')
+              const hasWeekly = repeatingRules.some((r) => matches(r) && r.frequency === 'weekly' && r.dayOfWeek === dow)
+              const currentVal: 'none' | 'daily' | 'weekly' = hasDaily ? 'daily' : hasWeekly ? 'weekly' : 'none'
+              return (
+                <HistoryDropdown
+                  id={`repeat-${entry.id}`}
+                  value={currentVal}
+                  placeholder="None"
+                  options={[
+                    { value: 'none', label: 'None' },
+                    { value: 'daily', label: 'Daily' },
+                    { value: 'weekly', label: 'Weekly' },
+                  ]}
+                  onChange={async (v) => {
+                    const val = (v as 'none' | 'daily' | 'weekly')
+                    if (val === 'none') {
+                      const ids = await deactivateMatchingRulesForEntry(entry)
+                      if (Array.isArray(ids) && ids.length > 0) {
+                        setRepeatingRules((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, isActive: false } : r)))
+                      } else {
+                        // Fallback: local state match by label/time/duration (covers local-only paths)
+                        const start = new Date(entry.startedAt)
+                        const minutes = start.getHours() * 60 + start.getMinutes()
+                        const durMin = Math.max(1, Math.round((entry.endedAt - entry.startedAt) / 60000))
+                        const dow = start.getDay()
+                        setRepeatingRules((prev) => prev.map((r) => {
+                          const labelMatch = (r.taskName?.trim() || '') === (entry.taskName?.trim() || '') && (r.goalName?.trim() || null) === (entry.goalName?.trim() || null) && (r.bucketName?.trim() || null) === (entry.bucketName?.trim() || null)
+                          const timeMatch = r.timeOfDayMinutes === minutes && r.durationMinutes === durMin
+                          const freqMatch = r.frequency === 'daily' || (r.frequency === 'weekly' && r.dayOfWeek === dow)
+                          return labelMatch && timeMatch && freqMatch ? { ...r, isActive: false } : r
+                        }))
+                      }
+                      return
+                    }
+                    const created = await createRepeatingRuleForEntry(entry, val)
+                    if (created) {
+                      setRepeatingRules((prev) => [...prev, created])
+                    }
+                  }}
+                />
+              )
+            })()}
+          </div>
           <div className="calendar-popover__goal">{goal}{bucket ? ` → ${bucket}` : ''}</div>
           <div
             className="calendar-popover__summary"
@@ -6025,7 +6128,7 @@ useEffect(() => {
       </div>,
       document.body,
     )
-  }, [calendarPreview, calendarPopoverEditing, effectiveHistory, handleCloseCalendarPreview, handleDeleteHistoryEntry, handleStartEditingHistoryEntry, updateHistory])
+  }, [calendarPreview, calendarPopoverEditing, effectiveHistory, handleCloseCalendarPreview, handleDeleteHistoryEntry, handleStartEditingHistoryEntry, updateHistory, repeatingRules])
 
   // Calendar editor modal
   useEffect(() => {

@@ -1727,6 +1727,20 @@ html[data-theme='light'] .calendar-now-line::before {
   transition: clip-path 160ms ease;
 }
 
+/* Guide (repeating) sessions: dotted outline, transparent fill */
+.calendar-event--guide {
+  box-shadow: none;
+  /* Make guides non-interactive: they won't block clicks/drags on the grid */
+  pointer-events: none;
+}
+.calendar-event--guide .calendar-event__background {
+  background: transparent !important;
+  border: 1.5px dashed currentColor;
+}
+.calendar-event--guide .calendar-event__time {
+  opacity: 0.9;
+}
+
 .calendar-event__content {
   position: relative;
   z-index: 1;
@@ -1861,6 +1875,15 @@ html[data-theme='light'] .calendar-now-line::before {
 }
 .calendar-popover__goal {
   color: var(--text-secondary);
+}
+.calendar-popover__repeat {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+}
+.calendar-popover__repeat-label {
+  font-size: 0.85rem;
 }
 .calendar-popover__summary {
   display: flex;
