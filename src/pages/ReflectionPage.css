@@ -2070,8 +2070,8 @@ html[data-theme='light'] .calendar-now-line::before {
 /* Guide (repeating) sessions: dotted outline, transparent fill */
 .calendar-event--guide {
   box-shadow: none;
-  /* Make guides non-interactive: they won't block clicks/drags on the grid */
-  pointer-events: none;
+  /* Guides are now interactive (click to open popover), keep transparent look */
+  pointer-events: auto;
 }
 .calendar-event--guide .calendar-event__background {
   background: transparent !important;

@@ -81,3 +81,44 @@ export default defineConfig([
   },
 ])
 ```
+
+## Repeating sessions: guides, confirmations, and exceptions
+
+Interactive guide entries (suggested by repeating rules) are supported:
+
+- Guides open a popover like normal sessions.
+- Actions in the popover:
+  - Confirm: converts the guide into a real session and tags it with the originating rule and local occurrence date.
+  - Skip this repetition: records an exception so the guide is hidden on that date.
+- Guides auto-hide if:
+  - A real entry exists with matching routine_id + occurrence_date (client-side optional tags), or
+  - An exception exists for that rule/date.
+
+Implementation details:
+
+- History entries carry optional local tags:
+  - routineId: string | null
+  - occurrenceDate: YYYY-MM-DD (local) | null
+- Exceptions persist locally in localStorage under `nc-taskwatch-repeating-exceptions`. Optional remote sync is gated by env.
+
+Supabase schema proposal (optional, recommended for cross-device):
+
+- Alter `session_history` to add:
+  - routine_id: uuid or text, nullable
+  - occurrence_date: date, nullable
+- Create table `repeating_exceptions`:
+  - id uuid primary key
+  - user_id uuid (FK → auth.users.id)
+  - routine_id uuid/text (FK → repeating_sessions.id if uuid)
+  - occurrence_date date
+  - action text check in ('skipped','rescheduled')
+  - new_started_at timestamptz null
+  - new_ended_at timestamptz null
+  - notes text null
+  - created_at timestamptz default now()
+  - updated_at timestamptz default now()
+
+Env flags for safe rollout:
+
+- VITE_ENABLE_ROUTINE_TAGS=true to include routine_id and occurrence_date in session_history sync.
+- VITE_ENABLE_REPEATING_EXCEPTIONS=true to sync exceptions to repeating_exceptions; otherwise they remain local-only.

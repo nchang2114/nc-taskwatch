@@ -42,6 +42,10 @@ export type HistoryEntry = {
   bucketSurface: SurfaceStyle | null
   notes: string
   subtasks: HistorySubtask[]
+  // Optional tags to link a real entry back to a repeating rule occurrence
+  // routineId: id of repeating_sessions rule; occurrenceDate: local YYYY-MM-DD for the occurrence day
+  routineId?: string | null
+  occurrenceDate?: string | null
 }
 
 export type HistoryRecord = HistoryEntry & {
@@ -65,6 +69,8 @@ type HistoryCandidate = {
   bucketSurface?: unknown
   notes?: unknown
   subtasks?: unknown
+  routineId?: unknown
+  occurrenceDate?: unknown
 }
 
 type HistoryRecordCandidate = HistoryCandidate & {
@@ -184,6 +190,10 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
       const bucketSurfaceRaw = sanitizeSurfaceStyle(candidate.bucketSurface)
       const notesRaw = typeof candidate.notes === 'string' ? candidate.notes : ''
       const subtasksRaw = sanitizeHistorySubtasks(candidate.subtasks)
+      const routineIdRaw: string | null =
+        typeof (candidate as any).routineId === 'string' ? ((candidate as any).routineId as string) : null
+      const occurrenceDateRaw: string | null =
+        typeof (candidate as any).occurrenceDate === 'string' ? ((candidate as any).occurrenceDate as string) : null
 
       const normalizedGoalName = goalNameRaw.trim()
       const normalizedBucketName = bucketNameRaw.trim()
@@ -204,7 +214,7 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
         }
       }
 
-      return {
+      const normalized: HistoryEntry = {
         id,
         taskName,
         elapsed,
@@ -219,7 +229,10 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
         bucketSurface: bucketSurface ? ensureSurfaceStyle(bucketSurface, DEFAULT_SURFACE_STYLE) : null,
         notes: notesRaw,
         subtasks: subtasksRaw,
+        routineId: routineIdRaw,
+        occurrenceDate: occurrenceDateRaw,
       }
+      return normalized
     })
     .filter((entry): entry is HistoryEntry => Boolean(entry))
 }
@@ -395,6 +408,7 @@ const payloadFromRecord = (
   overrideUpdatedAt?: number,
 ): Record<string, unknown> => {
   const updatedAt = overrideUpdatedAt ?? record.updatedAt
+  const ENABLE_ROUTINE_TAGS = Boolean((import.meta as any)?.env?.VITE_ENABLE_ROUTINE_TAGS)
   return {
     id: record.id,
     user_id: userId,
@@ -411,6 +425,9 @@ const payloadFromRecord = (
     bucket_surface: record.bucketSurface,
     created_at: new Date(record.createdAt).toISOString(),
     updated_at: new Date(updatedAt).toISOString(),
+    // Only include routine tags if the DB has these columns; gate with env flag to avoid PostgREST errors
+    ...(ENABLE_ROUTINE_TAGS && record.routineId ? { routine_id: record.routineId } : {}),
+    ...(ENABLE_ROUTINE_TAGS && record.occurrenceDate ? { occurrence_date: record.occurrenceDate } : {}),
   }
 }
 
@@ -440,6 +457,8 @@ const mapDbRowToRecord = (row: Record<string, unknown>): HistoryRecord | null =>
     bucketSurface: typeof row.bucket_surface === 'string' ? row.bucket_surface : null,
     notes: typeof row.notes === 'string' ? row.notes : null,
     subtasks: row.subtasks ?? null,
+    routineId: typeof (row as any).routine_id === 'string' ? (row as any).routine_id : null,
+    occurrenceDate: typeof (row as any).occurrence_date === 'string' ? (row as any).occurrence_date : null,
   }
 
   const entry = sanitizeHistoryEntries([candidate])[0]

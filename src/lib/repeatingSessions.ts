@@ -330,3 +330,79 @@ export async function deactivateMatchingRulesForEntry(entry: HistoryEntry): Prom
 
   return ids
 }
+
+// Delete all rules that match the given entry (label/time/duration and weekly dow when applicable).
+// Returns the list of deleted rule ids. Local fallback removes from local cache.
+export async function deleteMatchingRulesForEntry(entry: HistoryEntry): Promise<string[]> {
+  const startLocal = new Date(entry.startedAt)
+  const minutes = startLocal.getHours() * 60 + startLocal.getMinutes()
+  const durationMs = Math.max(1, entry.endedAt - entry.startedAt)
+  const durationMinutes = Math.max(1, Math.round(durationMs / 60000))
+  const dow = startLocal.getDay()
+  const task = entry.taskName ?? ''
+  const goal = entry.goalName ?? null
+  const bucket = entry.bucketName ?? null
+
+  const deleteLocal = (): string[] => {
+    const rules = readLocalRules()
+    const ids: string[] = []
+    const next = rules.filter((r) => {
+      const labelMatch = (r.taskName ?? '') === task && (r.goalName ?? null) === goal && (r.bucketName ?? null) === bucket
+      const timeMatch = r.timeOfDayMinutes === minutes && r.durationMinutes === durationMinutes
+      const freqMatch = r.frequency === 'daily' || (r.frequency === 'weekly' && r.dayOfWeek === dow)
+      const match = labelMatch && timeMatch && freqMatch
+      if (match) ids.push(r.id)
+      return !match
+    })
+    writeLocalRules(next)
+    return ids
+  }
+
+  if (!supabase) {
+    return deleteLocal()
+  }
+  const session = await ensureSingleUserSession()
+  if (!session) {
+    return deleteLocal()
+  }
+
+  const ids: string[] = []
+  // Daily
+  const { data: dailyRows, error: dailyErr } = await supabase
+    .from('repeating_sessions')
+    .delete()
+    .eq('user_id', session.user.id)
+    .eq('frequency', 'daily')
+    .eq('time_of_day_minutes', minutes)
+    .eq('duration_minutes', durationMinutes)
+    .eq('task_name', task)
+    .eq('goal_name', goal)
+    .eq('bucket_name', bucket)
+    .select('id')
+  if (dailyErr) {
+    console.warn('[repeatingSessions] delete daily match error', dailyErr)
+  } else if (Array.isArray(dailyRows)) {
+    ids.push(...dailyRows.map((r: any) => String(r.id)))
+  }
+
+  // Weekly (same dow)
+  const { data: weeklyRows, error: weeklyErr } = await supabase
+    .from('repeating_sessions')
+    .delete()
+    .eq('user_id', session.user.id)
+    .eq('frequency', 'weekly')
+    .eq('day_of_week', dow)
+    .eq('time_of_day_minutes', minutes)
+    .eq('duration_minutes', durationMinutes)
+    .eq('task_name', task)
+    .eq('goal_name', goal)
+    .eq('bucket_name', bucket)
+    .select('id')
+  if (weeklyErr) {
+    console.warn('[repeatingSessions] delete weekly match error', weeklyErr)
+  } else if (Array.isArray(weeklyRows)) {
+    ids.push(...weeklyRows.map((r: any) => String(r.id)))
+  }
+
+  return ids
+}

@@ -51,8 +51,15 @@ import {
   fetchRepeatingSessionRules,
   createRepeatingRuleForEntry,
   deactivateMatchingRulesForEntry,
+  deleteMatchingRulesForEntry,
   type RepeatingSessionRule,
 } from '../lib/repeatingSessions'
+import {
+  readRepeatingExceptions,
+  subscribeRepeatingExceptions,
+  upsertRepeatingException,
+  type RepeatingException,
+} from '../lib/repeatingExceptions'
 
 const JOURNAL_PROMPTS = [
   "What was today's biggest win?",
@@ -84,7 +91,7 @@ const PAN_MAX_ANIMATION_MS = 450
 const MAX_BUFFER_DAYS = 28
 
 // IMPORTANT BOOL FLAG
-const ENABLE_HISTORY_INSPECTOR_PANEL = true
+const ENABLE_HISTORY_INSPECTOR_PANEL = false
 const INSPECTOR_DELETED_MESSAGE = 'This entry was deleted.'
 const MULTI_DAY_OPTIONS = [2, 3, 4, 5, 6] as const
 const isValidMultiDayOption = (value: number): value is (typeof MULTI_DAY_OPTIONS)[number] =>
@@ -1395,6 +1402,15 @@ const getPaletteColorForLabel = (label: string) => {
   return CHART_COLORS[index]
 }
 
+const formatLocalYmd = (ms: number): string => {
+  const d = new Date(ms)
+  const y = d.getFullYear()
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  const pad = (n: number) => (n < 10 ? `0${n}` : String(n))
+  return `${y}-${pad(m)}-${pad(day)}`
+}
+
 type LoopSlice = {
   key: string
   path: string
@@ -2440,6 +2456,7 @@ export default function ReflectionPage() {
   )
   const [activeRange, setActiveRange] = useState<ReflectionRangeKey>('24h')
   const [history, setHistory] = useState<HistoryEntry[]>(() => readPersistedHistory())
+  const [repeatingExceptions, setRepeatingExceptions] = useState<RepeatingException[]>(() => readRepeatingExceptions())
   const latestHistoryRef = useRef(history)
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
   const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
@@ -2798,6 +2815,15 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
   useEffect(() => {
     latestHistoryRef.current = history
   }, [history])
+
+  // Subscribe to repeating exceptions updates
+  useEffect(() => {
+    setRepeatingExceptions(readRepeatingExceptions())
+  const unsub = subscribeRepeatingExceptions((rows: RepeatingException[]) => setRepeatingExceptions(rows))
+    return () => {
+      unsub?.()
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -3408,6 +3434,11 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       cancelPending()
       return
     }
+    // When the calendar editor modal is open, defer auto-commit to avoid fighting with typing in inputs.
+    if (calendarEditorEntryId) {
+      cancelPending()
+      return
+    }
     const lastCommitted = lastCommittedHistoryDraftRef.current
     if (areHistoryDraftsEqual(historyDraft, lastCommitted)) {
       return
@@ -3418,7 +3449,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       commitHistoryDraft()
     })
     return cancelPending
-  }, [commitHistoryDraft, historyDraft, selectedHistoryEntry])
+  }, [calendarEditorEntryId, commitHistoryDraft, historyDraft, selectedHistoryEntry])
 
   const handleHistoryFieldKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
@@ -4109,6 +4140,7 @@ useEffect(() => {
     | null
     | {
         entryId: string
+        entrySnapshot?: HistoryEntry | null
         top: number
         left: number
         anchorEl: HTMLElement | null
@@ -4288,7 +4320,7 @@ useEffect(() => {
         left = Math.min(Math.max(left, viewportPadding), Math.max(viewportPadding, window.innerWidth - viewportPadding - assumedWidth))
         top = Math.min(Math.max(top, viewportPadding), Math.max(viewportPadding, window.innerHeight - viewportPadding - assumedHeight))
       }
-      setCalendarPreview({ entryId: entry.id, top, left, anchorEl: targetEl })
+  setCalendarPreview({ entryId: entry.id, entrySnapshot: entry, top, left, anchorEl: targetEl })
       // Position on next frame to refine based on actual size
       requestAnimationFrame(() => positionCalendarPreview(targetEl))
     },
@@ -4309,25 +4341,22 @@ useEffect(() => {
       }
       // Ignore clicks inside the popover
       if (calendarPreviewRef.current && calendarPreviewRef.current.contains(node)) return
-      // If tapping a calendar event while a popover is open, immediately open that event's popover (single tap behavior)
+      // If tapping a calendar event while a popover is open, handle toggle for the same entry id.
+      // For a different event, let its own onClick open the popover so guides (not in effectiveHistory) work too.
       if (node instanceof Element) {
         const evEl = node.closest('.calendar-event') as HTMLElement | null
-        if (evEl && evEl.dataset.entryId) {
-          const entry = effectiveHistory.find((h) => h.id === evEl.dataset.entryId)
-          if (entry) {
-            // Suppress the subsequent click from re-triggering
+        const tappedId = evEl?.dataset.entryId
+        if (tappedId) {
+          if (calendarPreview && calendarPreview.entryId === tappedId) {
             suppressNextEventOpen()
-            // If this is the same entry that's already open, toggle it closed
-            if (calendarPreview && calendarPreview.entryId === entry.id) {
-              handleCloseCalendarPreview()
-              return
-            }
-            // Otherwise open the tapped entry
-            handleOpenCalendarPreview(entry, evEl)
+            handleCloseCalendarPreview()
             return
           }
+          // Different event tapped: allow its own onClick to open
+          return
         }
       }
+      // Clicked outside both the popover and any event: close
       handleCloseCalendarPreview()
     }
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
@@ -5046,53 +5075,115 @@ useEffect(() => {
           .filter((v): v is RawEvent => Boolean(v))
           .sort((a, b) => (a.start === b.start ? a.end - b.end : a.start - b.start))
 
+        // Build lookup for confirmed occurrences and exceptions to suppress guides
+        const confirmedKeySet = (() => {
+          const set = new Set<string>()
+          effectiveHistory.forEach((h) => {
+            const rid = (h as any).routineId as string | undefined | null
+            const od = (h as any).occurrenceDate as string | undefined | null
+            if (rid && od) set.add(`${rid}:${od}`)
+          })
+          return set
+        })()
+        const excKeySet = (() => {
+          const set = new Set<string>()
+          repeatingExceptions.forEach((r) => set.add(`${r.routineId}:${r.occurrenceDate}`))
+          return set
+        })()
+
         // Synthesize guide events from repeating session rules for this day
         const guideRaw: RawEvent[] = (() => {
           if (!Array.isArray(repeatingRules) || repeatingRules.length === 0) return []
-          const day = new Date(startMs)
-          const dow = day.getDay() // 0=Sun
-          return repeatingRules
-            .filter((rule) => rule.isActive && (rule.frequency === 'daily' || (rule.frequency === 'weekly' && rule.dayOfWeek === dow)))
-            .filter((rule) => {
-              // Only render guides for days on/after the rule activation day (local timezone)
-              const createdMs = (rule as any).createdAtMs as number | undefined
-              if (!Number.isFinite(createdMs as number)) return true
-              const t = new Date(createdMs as number)
-              t.setHours(0, 0, 0, 0)
-              const activationDayStart = t.getTime()
-              // Show next repeat only (skip the activation day itself)
-              return startMs > activationDayStart
-            })
-            .map((rule) => {
-              const startOfDay = startMs
-              const startedAt = startOfDay + Math.max(0, Math.min(1439, rule.timeOfDayMinutes)) * MINUTE_MS
-              const durationMs = Math.max(1, (rule.durationMinutes ?? 60) * MINUTE_MS)
-              const endedAt = Math.min(startedAt + durationMs, startOfDay + DAY_DURATION_MS)
-              const entryId = `repeat:${rule.id}:${startOfDay}`
-              const entry: HistoryEntry = {
-                id: entryId,
-                taskName: rule.taskName?.trim() || 'Session',
-                elapsed: Math.max(endedAt - startedAt, 1),
-                startedAt,
-                endedAt,
-                goalName: rule.goalName?.trim() || null,
-                bucketName: rule.bucketName?.trim() || null,
-                goalId: null,
-                bucketId: null,
-                taskId: null,
-                goalSurface: DEFAULT_SURFACE_STYLE,
-                bucketSurface: null,
-                notes: '',
-                subtasks: [],
-              }
-              return {
-                entry,
-                start: Math.max(startedAt, startMs),
-                end: Math.min(endedAt, endMs),
-                previewStart: startedAt,
-                previewEnd: endedAt,
-              } as RawEvent
-            })
+          // Resolve basic day info (not needed explicitly here; kept via startMs)
+
+          const makeOccurrenceKey = (ruleId: string, baseMs: number) => `${ruleId}:${formatLocalYmd(baseMs)}`
+
+          const isRuleScheduledForDay = (rule: RepeatingSessionRule, dayStart: number) => {
+            if (!rule.isActive) return false
+            if (rule.frequency === 'daily') return true
+            if (rule.frequency === 'weekly') {
+              const d = new Date(dayStart)
+              return rule.dayOfWeek === d.getDay()
+            }
+            return false
+          }
+
+          const isAfterActivation = (rule: RepeatingSessionRule, dayStart: number) => {
+            const createdMs = (rule as any).createdAtMs as number | undefined
+            if (!Number.isFinite(createdMs as number)) return true
+            const t = new Date(createdMs as number)
+            t.setHours(0, 0, 0, 0)
+            const activationDayStart = t.getTime()
+            // Show next repeat only (skip the activation day itself)
+            return dayStart > activationDayStart
+          }
+
+          const buildGuideForDay = (rule: RepeatingSessionRule, baseDayStart: number): RawEvent | null => {
+            // Suppression by confirmed/exception for this occurrence date
+            const occKey = makeOccurrenceKey(rule.id, baseDayStart)
+            if (confirmedKeySet.has(occKey) || excKeySet.has(occKey)) return null
+            // Fallback suppression if an identical real session exists for this occurrence's full timing
+            const startedAt = baseDayStart + Math.max(0, Math.min(1439, rule.timeOfDayMinutes)) * MINUTE_MS
+            const durationMs = Math.max(1, (rule.durationMinutes ?? 60) * MINUTE_MS)
+            // Allow crossing midnight: DO NOT clamp to end of day here
+            const endedAt = startedAt + durationMs
+            const task = (rule.taskName?.trim() || 'Session')
+            const goal = rule.goalName?.trim() || null
+            const bucket = rule.bucketName?.trim() || null
+            const duplicateReal = effectiveHistory.some(
+              (h) => h.startedAt === startedAt && h.endedAt === endedAt && (h.taskName?.trim() || 'Session') === task && (h.goalName ?? null) === goal && (h.bucketName ?? null) === bucket,
+            )
+            if (duplicateReal) return null
+            const entryId = `repeat:${rule.id}:${baseDayStart}`
+            const entry: HistoryEntry = {
+              id: entryId,
+              taskName: task,
+              elapsed: Math.max(endedAt - startedAt, 1),
+              startedAt,
+              endedAt,
+              goalName: goal,
+              bucketName: bucket,
+              goalId: null,
+              bucketId: null,
+              taskId: null,
+              goalSurface: DEFAULT_SURFACE_STYLE,
+              bucketSurface: null,
+              notes: '',
+              subtasks: [],
+            }
+            return {
+              entry,
+              start: Math.max(startedAt, startMs),
+              end: Math.min(endedAt, endMs),
+              previewStart: startedAt,
+              previewEnd: endedAt,
+            }
+          }
+
+          const guides: RawEvent[] = []
+
+          // Today’s scheduled occurrence
+          for (const rule of repeatingRules) {
+            if (!isRuleScheduledForDay(rule, startMs)) continue
+            if (!isAfterActivation(rule, startMs)) continue
+            const ev = buildGuideForDay(rule, startMs)
+            if (ev) guides.push(ev)
+          }
+
+          // Carryover from previous day if duration crosses midnight
+          const prevStartMs = startMs - DAY_DURATION_MS
+          for (const rule of repeatingRules) {
+            // Only consider rules scheduled on the previous day
+            if (!isRuleScheduledForDay(rule, prevStartMs)) continue
+            if (!isAfterActivation(rule, prevStartMs)) continue
+            const durationMin = Math.max(1, (rule.durationMinutes ?? 60))
+            const timeOfDayMin = Math.max(0, Math.min(1439, rule.timeOfDayMinutes))
+            if (timeOfDayMin + durationMin <= 24 * 60) continue // no cross-midnight, nothing to carry
+            const ev = buildGuideForDay(rule, prevStartMs)
+            if (ev) guides.push(ev)
+          }
+
+          return guides
         })()
 
         const combined: RawEvent[] = [...raw, ...guideRaw].sort((a, b) => (a.start === b.start ? a.end - b.end : a.start - b.start))
@@ -5421,6 +5512,30 @@ useEffect(() => {
           const s = calendarEventDragRef.current
           if (!s || s.activated) return
           s.activated = true
+          // If dragging a guide (repeating) entry, materialize it now so all drag/resize semantics match real entries
+          if (entry.id.startsWith('repeat:')) {
+            try {
+              const parts = entry.id.split(':')
+              const ruleId = parts[1]
+              const dayStart = Number(parts[2])
+              const ymd = formatLocalYmd(dayStart)
+              const realEntry: HistoryEntry = {
+                ...entry,
+                id: makeHistoryId(),
+                routineId: ruleId,
+                occurrenceDate: ymd,
+              }
+              updateHistory((current) => {
+                const next = [...current, realEntry]
+                next.sort((a, b) => a.startedAt - b.startedAt)
+                return next
+              })
+              // Update the drag state to reference the new real entry id and baseline times
+              s.entryId = realEntry.id
+              s.initialStart = realEntry.startedAt
+              s.initialEnd = realEntry.endedAt
+            } catch {}
+          }
           // Close any open calendar popover as soon as a drag is activated
           handleCloseCalendarPreview()
           // Lock page scroll on touch while dragging an event
@@ -5502,8 +5617,9 @@ useEffect(() => {
               if (Math.hypot(dx, dy) <= threshold) {
                 return
               }
-              s.activated = true
-              handleCloseCalendarPreview()
+              // For mouse/pen, activate the drag using the same path as touch
+              // so guide entries materialize consistently on drag start.
+              activateDrag()
             }
           }
           // Prevent page/area scrolling while dragging an event
@@ -5983,9 +6099,9 @@ useEffect(() => {
                         }}
                         data-drag-time={dragTime}
                         data-entry-id={ev.entry.id}
-                        role={ev.isGuide ? 'presentation' : 'button'}
-                        aria-label={ev.isGuide ? undefined : `${ev.label} ${ev.rangeLabel}`}
-                        onClick={ev.isGuide ? undefined : (e) => {
+                        role={'button'}
+                        aria-label={`${ev.label} ${ev.rangeLabel}`}
+                        onClick={(e) => {
                           // Only open the preview on genuine clicks; suppress after any drag intent
                           if (dragPreventClickRef.current) {
                             dragPreventClickRef.current = false
@@ -6003,25 +6119,51 @@ useEffect(() => {
                           }
                           handleOpenCalendarPreview(ev.entry, e.currentTarget)
                         }}
-                        onDoubleClick={ev.isGuide ? undefined : (e) => {
+                        onDoubleClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
-                          // Prepare draft + selection state and open the full editor modal
-                          setSelectedHistoryId(ev.entry.id)
-                          setHoveredHistoryId(ev.entry.id)
-                          setEditingHistoryId(ev.entry.id)
-                          taskNameAutofilledRef.current = false
-                          setHistoryDraft(createHistoryDraftFromEntry(ev.entry))
-                          openCalendarInspector(ev.entry)
-                          // Close any open preview popover to avoid stacking
-                          handleCloseCalendarPreview()
+                          if (!ev.isGuide) {
+                            // Prepare draft + selection state and open the full editor modal
+                            setSelectedHistoryId(ev.entry.id)
+                            setHoveredHistoryId(ev.entry.id)
+                            setEditingHistoryId(ev.entry.id)
+                            taskNameAutofilledRef.current = false
+                            setHistoryDraft(createHistoryDraftFromEntry(ev.entry))
+                            openCalendarInspector(ev.entry)
+                            handleCloseCalendarPreview()
+                          } else {
+                            // Materialize guide then open editor
+                            const parts = ev.entry.id.split(':')
+                            const ruleId = parts[1]
+                            const dayStart = Number(parts[2])
+                            const ymd = formatLocalYmd(dayStart)
+                            const newEntry: HistoryEntry = {
+                              ...ev.entry,
+                              id: makeHistoryId(),
+                              routineId: ruleId,
+                              occurrenceDate: ymd,
+                            }
+                            updateHistory((current) => {
+                              const next = [...current, newEntry]
+                              next.sort((a, b) => a.startedAt - b.startedAt)
+                              return next
+                            })
+                            setSelectedHistoryId(newEntry.id)
+                            setHoveredHistoryId(newEntry.id)
+                            setEditingHistoryId(newEntry.id)
+                            taskNameAutofilledRef.current = false
+                            setHistoryDraft(createHistoryDraftFromEntry(newEntry))
+                            openCalendarInspector(newEntry)
+                            handleCloseCalendarPreview()
+                          }
                         }}
-                        onPointerUp={ev.isGuide ? undefined : () => {
+                        onPointerUp={() => {
                           // No-op: click handler will decide whether to open based on dragPreventClickRef
                         }}
-                        onPointerDown={ev.isGuide ? undefined : (pev) => {
+                        onPointerDown={(pev) => {
                           // Clear any hover-set cursor before deciding drag kind
                           delete (pev.currentTarget as HTMLDivElement).dataset.cursor
+                          // Start drag logic (for guides, conversion happens only if drag actually activates)
                           handleCalendarEventPointerDown(ev.entry, start)(pev)
                         }}
                         onPointerMove={(pev) => {
@@ -6187,7 +6329,7 @@ useEffect(() => {
   // Render the popover outside the heavy calendar grid to avoid re-running grid computations on open/close
   const renderCalendarPopover = useCallback(() => {
     if (!calendarPreview || typeof document === 'undefined') return null
-    const entry = effectiveHistory.find((h) => h.id === calendarPreview.entryId) || null
+  const entry = effectiveHistory.find((h) => h.id === calendarPreview.entryId) || calendarPreview.entrySnapshot || null
     if (!entry) return null
     const dateLabel = (() => {
       const startD = new Date(entry.startedAt)
@@ -6378,6 +6520,16 @@ useEffect(() => {
     const hasNotes = entry.notes.trim().length > 0
     const subtasksSummary = subtaskCount > 0 ? `${completedSubtasks}/${subtaskCount} subtasks` : 'No subtasks'
     const notesSummary = hasNotes ? 'Notes added' : 'No notes'
+    const isGuide = entry.id.startsWith('repeat:')
+    const parsedGuide = (() => {
+      if (!isGuide) return null
+      const parts = entry.id.split(':')
+      if (parts.length < 3) return null
+      const ruleId = parts[1]
+      const dayStart = Number(parts[2])
+      const ymd = formatLocalYmd(dayStart)
+      return { ruleId, dayStart, ymd }
+    })()
     return createPortal(
       <div
         className="calendar-popover"
@@ -6428,32 +6580,36 @@ useEffect(() => {
             >
               <IconEdit />
             </button>
-            <CalendarActionsKebab
-              previewRef={calendarPreviewRef}
-              onDuplicate={() => {
-                const dup = duplicateHistoryEntry(entry)
-                if (!dup) return
-                setHoveredHistoryId(dup.id)
-                setSelectedHistoryId(dup.id)
-                setEditingHistoryId(dup.id)
-                taskNameAutofilledRef.current = false
-                setHistoryDraft(createHistoryDraftFromEntry(dup))
-              }}
-            />
-            <button
-              type="button"
-              className="calendar-popover__action calendar-popover__action--danger"
-              aria-label="Delete session"
-              onPointerDown={(ev) => {
-                ev.preventDefault()
-                ev.stopPropagation()
-                suppressNextEventOpen()
-                handleDeleteHistoryEntry(entry.id)(ev as any)
-                handleCloseCalendarPreview()
-              }}
-            >
-              <IconTrash />
-            </button>
+            {isGuide ? null : (
+              <>
+                <CalendarActionsKebab
+                  previewRef={calendarPreviewRef}
+                  onDuplicate={() => {
+                    const dup = duplicateHistoryEntry(entry)
+                    if (!dup) return
+                    setHoveredHistoryId(dup.id)
+                    setSelectedHistoryId(dup.id)
+                    setEditingHistoryId(dup.id)
+                    taskNameAutofilledRef.current = false
+                    setHistoryDraft(createHistoryDraftFromEntry(dup))
+                  }}
+                />
+                <button
+                  type="button"
+                  className="calendar-popover__action calendar-popover__action--danger"
+                  aria-label="Delete session"
+                  onPointerDown={(ev) => {
+                    ev.preventDefault()
+                    ev.stopPropagation()
+                    suppressNextEventOpen()
+                    handleDeleteHistoryEntry(entry.id)(ev as any)
+                    handleCloseCalendarPreview()
+                  }}
+                >
+                  <IconTrash />
+                </button>
+              </>
+            )}
             <button
               type="button"
               className="calendar-popover__action calendar-popover__action--close"
@@ -6505,20 +6661,20 @@ useEffect(() => {
                   onChange={async (v) => {
                     const val = (v as 'none' | 'daily' | 'weekly')
                     if (val === 'none') {
-                      const ids = await deactivateMatchingRulesForEntry(entry)
+                      const ids = await deleteMatchingRulesForEntry(entry)
                       if (Array.isArray(ids) && ids.length > 0) {
-                        setRepeatingRules((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, isActive: false } : r)))
+                        setRepeatingRules((prev) => prev.filter((r) => !ids.includes(r.id)))
                       } else {
-                        // Fallback: local state match by label/time/duration (covers local-only paths)
+                        // Fallback: remove locally
                         const start = new Date(entry.startedAt)
                         const minutes = start.getHours() * 60 + start.getMinutes()
                         const durMin = Math.max(1, Math.round((entry.endedAt - entry.startedAt) / 60000))
                         const dow = start.getDay()
-                        setRepeatingRules((prev) => prev.map((r) => {
+                        setRepeatingRules((prev) => prev.filter((r) => {
                           const labelMatch = (r.taskName?.trim() || '') === (entry.taskName?.trim() || '') && (r.goalName?.trim() || null) === (entry.goalName?.trim() || null) && (r.bucketName?.trim() || null) === (entry.bucketName?.trim() || null)
                           const timeMatch = r.timeOfDayMinutes === minutes && r.durationMinutes === durMin
                           const freqMatch = r.frequency === 'daily' || (r.frequency === 'weekly' && r.dayOfWeek === dow)
-                          return labelMatch && timeMatch && freqMatch ? { ...r, isActive: false } : r
+                          return !(labelMatch && timeMatch && freqMatch)
                         }))
                       }
                       return
@@ -6541,6 +6697,49 @@ useEffect(() => {
             <span className="calendar-popover__summary-separator" aria-hidden="true">•</span>
             <span className="calendar-popover__summary-item">{notesSummary}</span>
           </div>
+            {isGuide ? (
+              <div className="calendar-popover__cta-row" style={{ display: 'flex', gap: '0.5rem', marginTop: '0.65rem' }}>
+                <button
+                  type="button"
+                  className="history-timeline__action-button history-timeline__action-button--primary"
+                  onClick={() => {
+                    if (!parsedGuide) return
+                    const newEntry: HistoryEntry = {
+                      ...entry,
+                      id: makeHistoryId(),
+                      routineId: parsedGuide.ruleId,
+                      occurrenceDate: parsedGuide.ymd,
+                    }
+                    updateHistory((current) => {
+                      const next = [...current, newEntry]
+                      next.sort((a, b) => a.startedAt - b.startedAt)
+                      return next
+                    })
+                    handleCloseCalendarPreview()
+                  }}
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  className="history-timeline__action-button"
+                  onClick={async () => {
+                    if (!parsedGuide) return
+                    await upsertRepeatingException({
+                      routineId: parsedGuide.ruleId,
+                      occurrenceDate: parsedGuide.ymd,
+                      action: 'skipped',
+                      newStartedAt: null,
+                      newEndedAt: null,
+                      notes: null,
+                    })
+                    handleCloseCalendarPreview()
+                  }}
+                >
+                  Skip
+                </button>
+              </div>
+            ) : null}
         </div>
       </div>,
       document.body,
