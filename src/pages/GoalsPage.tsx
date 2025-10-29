@@ -30,6 +30,7 @@ import {
   upsertTaskSubtask as apiUpsertTaskSubtask,
   deleteTaskSubtask as apiDeleteTaskSubtask,
   seedGoalsIfEmpty,
+  fetchTaskNotes as apiFetchTaskNotes,
 } from '../lib/goalsApi'
 import {
   DEFAULT_SURFACE_STYLE,
@@ -4448,6 +4449,7 @@ export default function GoalsPage(): ReactElement {
   const pendingGoalSubtaskFocusRef = useRef<{ taskId: string; subtaskId: string } | null>(null)
   const taskNotesSaveTimersRef = useRef<Map<string, number>>(new Map())
   const taskNotesLatestRef = useRef<Map<string, string>>(new Map())
+  const requestedTaskNotesRef = useRef<Set<string>>(new Set())
   const subtaskSaveTimersRef = useRef<Map<string, number>>(new Map())
   const subtaskLatestRef = useRef<Map<string, TaskSubtask>>(new Map())
   const isMountedRef = useRef(true)
@@ -4939,12 +4941,35 @@ export default function GoalsPage(): ReactElement {
 
   const handleToggleTaskDetails = useCallback(
     (taskId: string) => {
+      const wasExpanded = Boolean(taskDetailsRef.current[taskId]?.expanded)
+      const willExpand = !wasExpanded
       updateTaskDetails(taskId, (current) => ({
         ...current,
-        expanded: !current.expanded,
+        expanded: willExpand,
       }))
+      // Lazy-load notes when opening the details panel for the first time
+      if (willExpand) {
+        const existingNotes = taskDetailsRef.current[taskId]?.notes ?? ''
+        if (existingNotes.trim().length > 0) {
+          return
+        }
+        if (!requestedTaskNotesRef.current.has(taskId)) {
+          requestedTaskNotesRef.current.add(taskId)
+          void apiFetchTaskNotes(taskId)
+            .then((notes) => {
+              if (typeof notes === 'string' && notes.length > 0) {
+                // Update local details state and in-memory goals snapshot
+                updateTaskDetails(taskId, (current) => ({ ...current, notes }))
+                syncGoalTaskNotes(taskId, notes)
+              }
+            })
+            .catch((error) => {
+              console.warn('[GoalsPage] Failed to lazy-load task notes:', error)
+            })
+        }
+      }
     },
-    [updateTaskDetails],
+    [updateTaskDetails, apiFetchTaskNotes, syncGoalTaskNotes],
   )
 
   const handleTaskNotesChange = useCallback(

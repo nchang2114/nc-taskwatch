@@ -28,6 +28,7 @@ export type DbTask = {
   difficulty: 'none' | 'green' | 'yellow' | 'red'
   priority: boolean
   sort_index: number
+  // Notes can be large; avoid fetching by default in list APIs
   notes: string | null
 }
 
@@ -128,7 +129,8 @@ export async function fetchGoalsHierarchy(): Promise<
   const { data: tasks, error: tErr } = bucketIds.length
     ? await supabase
         .from('tasks')
-        .select('id, user_id, bucket_id, text, completed, difficulty, priority, sort_index, notes')
+        // Omit notes here to reduce payload; fetch lazily per-task when needed
+        .select('id, user_id, bucket_id, text, completed, difficulty, priority, sort_index')
         .in('bucket_id', bucketIds)
         .order('completed', { ascending: true })
         .order('priority', { ascending: false })
@@ -195,7 +197,7 @@ export async function fetchGoalsHierarchy(): Promise<
         completed: !!t.completed,
         difficulty: (t.difficulty as any) ?? 'none',
         priority: !!(t as any).priority,
-        notes: typeof (t as any).notes === 'string' ? (t as any).notes : null,
+        // Notes intentionally omitted in bulk fetch; loaded on demand
         subtasks: subtasks.map((subtask) => ({
           id: subtask.id,
           text: subtask.text ?? '',
@@ -227,6 +229,23 @@ export async function fetchGoalsHierarchy(): Promise<
   })
 
   return { goals: tree }
+}
+
+/** Fetch notes for a single task lazily to avoid large egress during list loads. */
+export async function fetchTaskNotes(taskId: string): Promise<string> {
+  if (!supabase) return ''
+  await ensureSingleUserSession()
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('notes')
+    .eq('id', taskId)
+    .maybeSingle()
+  if (error) {
+    console.warn('[goalsApi] fetchTaskNotes error', error.message ?? error)
+    return ''
+  }
+  const raw = (data as any)?.notes
+  return typeof raw === 'string' ? raw : ''
 }
 
 // ---------- Helpers: sort index utilities ----------

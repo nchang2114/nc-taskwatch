@@ -39,6 +39,20 @@ export default defineConfig([
 ])
 ```
 
+## Data egress optimizations
+
+This app uses Supabase PostgREST under the hood. To keep payload sizes small:
+
+- Goals list no longer includes the potentially large `tasks.notes` field. Notes are fetched lazily per task the first time you expand its details panel.
+- Session history sync is limited to a recent window (default 30 days) using the `updated_at` column to reduce egress on each load.
+
+These changes live in:
+
+- `src/lib/goalsApi.ts` — bulk fetch omits notes; `fetchTaskNotes(taskId)` loads them on demand.
+- `src/pages/GoalsPage.tsx` — triggers the lazy notes request when expanding a task.
+- `src/lib/sessionHistory.ts` — adds a 30‑day `updated_at` filter by default.
+
+You can tune the history window via `HISTORY_REMOTE_WINDOW_DAYS` in `sessionHistory.ts`.
 You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
 ```js

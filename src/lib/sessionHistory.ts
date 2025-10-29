@@ -12,6 +12,8 @@ export const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
 export const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 export const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 export const HISTORY_LIMIT = 250
+// Reduce remote fetch window to limit egress; adjust as needed
+export const HISTORY_REMOTE_WINDOW_DAYS = 30
 
 const LIFE_ROUTINES_NAME = 'Life Routines'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
@@ -501,10 +503,14 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     const selectColumns =
       'id, task_name, elapsed_ms, started_at, ended_at, goal_name, bucket_name, goal_id, bucket_id, task_id, goal_surface, bucket_surface, created_at, updated_at'
 
+    // Limit remote fetch to a recent window to reduce egress
+    const sinceIso = new Date(now - HISTORY_REMOTE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
     const { data: remoteRows, error: fetchError } = await supabase
       .from('session_history')
       .select(selectColumns)
       .eq('user_id', userId)
+      .gte('updated_at', sinceIso)
+      .order('updated_at', { ascending: false })
     if (fetchError) {
       console.warn('Failed to fetch session history delta from Supabase', fetchError)
       return null
@@ -530,9 +536,13 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     })
 
     // Remove records that were deleted remotely (not present in remoteMap and no local pending action)
+    // Only apply delete within the remote window; keep older local records intact to avoid accidental purge.
+    const sinceMs = now - HISTORY_REMOTE_WINDOW_DAYS * 24 * 60 * 60 * 1000
     recordsById.forEach((record, id) => {
       if (!remoteMap.has(id) && !record.pendingAction) {
-        recordsById.delete(id)
+        if (record.updatedAt >= sinceMs) {
+          recordsById.delete(id)
+        }
       }
     })
 
