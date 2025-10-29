@@ -19,7 +19,8 @@ import {
 } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import './ReflectionPage.css'
-import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
+import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, publishGoalsSnapshot, createGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
+import { createTask as apiCreateTask, fetchGoalsHierarchy } from '../lib/goalsApi'
 import {
   DEFAULT_SURFACE_STYLE,
   ensureSurfaceStyle,
@@ -2878,7 +2879,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     const ordered: string[] = []
     goalsSnapshot.forEach((goal) => {
       const trimmed = goal.name?.trim()
-      if (!trimmed) {
+      if (!trimmed || goal.archived) {
         return
       }
       const normalized = trimmed.toLowerCase()
@@ -2898,10 +2899,11 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     const map = new Map<string, string[]>()
     goalsSnapshot.forEach((goal) => {
       const goalName = goal.name?.trim()
-      if (!goalName) {
+      if (!goalName || goal.archived) {
         return
       }
       const bucketNames = goal.buckets
+        .filter((bucket) => !bucket.archived)
         .map((bucket) => bucket.name?.trim())
         .filter((name): name is string => Boolean(name))
         .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
@@ -2918,7 +2920,9 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
   const allBucketOptions = useMemo(() => {
     const set = new Set<string>()
     goalsSnapshot.forEach((goal) => {
+      if (goal.archived) return
       goal.buckets.forEach((bucket) => {
+        if (bucket.archived) return
         const trimmed = bucket.name?.trim()
         if (trimmed) {
           set.add(trimmed)
@@ -2934,10 +2938,10 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     const map = new Map<string, string[]>()
     goalsSnapshot.forEach((goal) => {
       const goalName = goal.name?.trim()
-      if (!goalName) return
+      if (!goalName || goal.archived) return
       goal.buckets.forEach((bucket) => {
         const bucketName = bucket.name?.trim()
-        if (!bucketName) return
+        if (!bucketName || bucket.archived) return
         const key = bucketName.toLowerCase()
         const arr = map.get(key) ?? []
         if (!arr.includes(goalName)) arr.push(goalName)
@@ -2961,13 +2965,14 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     const byGoalBucket = new Map<string, Map<string, string[]>>()
     goalsSnapshot.forEach((goal) => {
       const goalName = goal.name?.trim()
-      if (!goalName) return
+      if (!goalName || goal.archived) return // skip archived goals
       const bucketMap = byGoalBucket.get(goalName) ?? new Map<string, string[]>()
       goal.buckets.forEach((bucket) => {
         const bucketName = bucket.name?.trim()
-        if (!bucketName) return
+        if (!bucketName || bucket.archived) return // skip archived buckets
         const list = bucketMap.get(bucketName) ?? []
         bucket.tasks.forEach((task) => {
+          if (task.completed) return // only show active (not completed) tasks
           const text = task.text?.trim()
           if (text && !list.includes(text)) list.push(text)
         })
@@ -2982,8 +2987,11 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
   const allTaskOptions = useMemo(() => {
     const set = new Set<string>()
     goalsSnapshot.forEach((goal) => {
+      if (goal.archived) return
       goal.buckets.forEach((bucket) => {
+        if (bucket.archived) return
         bucket.tasks.forEach((task) => {
+          if (task.completed) return // exclude completed tasks
           const text = task.text?.trim()
           if (text) set.add(text)
         })
@@ -2997,11 +3005,12 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     const map = new Map<string, TaskOwner[]>()
     goalsSnapshot.forEach((goal) => {
       const gName = goal.name?.trim()
-      if (!gName) return
+      if (!gName || goal.archived) return
       goal.buckets.forEach((bucket) => {
         const bName = bucket.name?.trim()
-        if (!bName) return
+        if (!bName || bucket.archived) return
         bucket.tasks.forEach((task) => {
+          if (task.completed) return // only map active tasks
           const key = task.text?.trim().toLowerCase()
           if (!key) return
           const owners = map.get(key) ?? []
@@ -3010,6 +3019,26 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
           }
           map.set(key, owners)
         })
+      })
+    })
+    return map
+  }, [goalsSnapshot])
+
+  // Lookup bucket id from goal+bucket names (for creating a task)
+  const bucketIdLookup = useMemo(() => {
+    const map = new Map<string, string>() // key: `${goalName.toLowerCase()}::${bucketName.toLowerCase()}` -> bucketId
+    goalsSnapshot.forEach((goal) => {
+      if (goal.archived) return
+      const gName = goal.name?.trim()
+      if (!gName) return
+      goal.buckets.forEach((bucket) => {
+        if (bucket.archived) return
+        const bName = bucket.name?.trim()
+        if (!bName) return
+        const key = `${gName.toLowerCase()}::${bName.toLowerCase()}`
+        if (!map.has(key)) {
+          map.set(key, bucket.id)
+        }
       })
     })
     return map
@@ -3059,13 +3088,34 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     return allTaskOptions
   }, [trimmedDraftGoal, trimmedDraftBucket, tasksByGoalBucket, allTaskOptions])
 
-  const taskDropdownOptions = useMemo<HistoryDropdownOption[]>(
-    () => [
-      { value: '', label: 'No task' },
-      ...availableTaskOptions.map((option) => ({ value: option, label: option })),
-    ],
-    [availableTaskOptions],
-  )
+  const taskDropdownOptions = useMemo<HistoryDropdownOption[]>(() => {
+    const options: HistoryDropdownOption[] = [{ value: '', label: 'No task' }]
+    const name = historyDraft.taskName.trim()
+    const goal = historyDraft.goalName.trim()
+    const bucket = historyDraft.bucketName.trim()
+    const isLifeRoutine = goal.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
+    const taskExistsInBucket =
+      goal.length > 0 && bucket.length > 0
+        ? (tasksByGoalBucket.get(goal)?.get(bucket)?.some((t) => t.toLowerCase() === name.toLowerCase()) ?? false)
+        : false
+    const bucketKey = `${goal.toLowerCase()}::${bucket.toLowerCase()}`
+    const hasBucketId = bucketIdLookup.has(bucketKey)
+    const canOfferCreate =
+      name.length > 0 && goal.length > 0 && bucket.length > 0 && hasBucketId && !isLifeRoutine && !taskExistsInBucket
+    if (canOfferCreate) {
+      // Add a clear header for the create action
+      options.push({ value: '__hdr_create__', label: 'Create from session', disabled: true })
+      const label = `➕ Add as new task: “${name}” → ${goal} › ${bucket}`
+      options.push({ value: '__add_session_task__', label })
+      if (availableTaskOptions.length > 0) {
+        options.push({ value: '__hdr_existing__', label: 'Existing tasks', disabled: true })
+      }
+    }
+    options.push(...availableTaskOptions.map((option) => ({ value: option, label: option })))
+    return options
+  }, [availableTaskOptions, historyDraft.taskName, historyDraft.goalName, historyDraft.bucketName, tasksByGoalBucket, bucketIdLookup])
+
+  
 
   const goalDropdownId = useId()
   const bucketDropdownId = useId()
@@ -3364,6 +3414,38 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     const { value } = event.target
     setHistoryDraft((draft) => ({ ...draft, notes: value }))
   }, [])
+
+  // Handle special Task dropdown action to add the current session name as a task to the linked bucket
+  const handleTaskDropdownChange = useCallback(
+    (nextValue: string) => {
+      if (nextValue !== '__add_session_task__') {
+        updateHistoryDraftField('taskName', nextValue)
+        return
+      }
+      const name = historyDraft.taskName.trim()
+      const goal = historyDraft.goalName.trim()
+      const bucket = historyDraft.bucketName.trim()
+      const key = `${goal.toLowerCase()}::${bucket.toLowerCase()}`
+      const bucketId = bucketIdLookup.get(key) ?? null
+      if (!bucketId || name.length === 0) {
+        return
+      }
+      ;(async () => {
+        try {
+          await apiCreateTask(bucketId, name)
+          const result = await fetchGoalsHierarchy()
+          if (result?.goals) {
+            const snapshot = createGoalsSnapshot(result.goals)
+            publishGoalsSnapshot(snapshot)
+          }
+          updateHistoryDraftField('taskName', name)
+        } catch (error) {
+          console.warn('[ReflectionPage] Failed to create task from session:', error)
+        }
+      })()
+    },
+    [bucketIdLookup, historyDraft.bucketName, historyDraft.goalName, historyDraft.taskName, updateHistoryDraftField],
+  )
 
   const handleAddHistorySubtask = useCallback(() => {
     setHistoryDraft((draft) => {
@@ -7030,8 +7112,8 @@ useEffect(() => {
                                 value={historyDraft.taskName}
                                 placeholder={availableTaskOptions.length ? 'Select task' : 'No tasks available'}
                                 options={taskDropdownOptions}
-                                onChange={(nextValue) => updateHistoryDraftField('taskName', nextValue)}
-                                disabled={availableTaskOptions.length === 0}
+                                onChange={handleTaskDropdownChange}
+                                disabled={taskDropdownOptions.length === 0}
                               />
                             </div>
             <div className="history-timeline__extras">
@@ -7753,8 +7835,8 @@ useEffect(() => {
                       value={historyDraft.taskName}
                       placeholder={availableTaskOptions.length ? 'Select task' : 'No tasks available'}
                       options={taskDropdownOptions}
-                      onChange={(nextValue) => updateHistoryDraftField('taskName', nextValue)}
-                      disabled={availableTaskOptions.length === 0}
+                      onChange={handleTaskDropdownChange}
+                      disabled={taskDropdownOptions.length === 0}
                     />
                   </div>
                   <div className="history-timeline__extras">
@@ -7954,8 +8036,8 @@ useEffect(() => {
                   value={historyDraft.taskName}
                   placeholder={availableTaskOptions.length ? 'Select task' : 'No tasks available'}
                   options={taskDropdownOptions}
-                  onChange={(nextValue) => updateHistoryDraftField('taskName', nextValue)}
-                  disabled={availableTaskOptions.length === 0}
+                  onChange={handleTaskDropdownChange}
+                  disabled={taskDropdownOptions.length === 0}
                 />
               </div>
               <div className="history-timeline__extras">
@@ -8597,8 +8679,8 @@ useEffect(() => {
                                 value={historyDraft.taskName}
                                 placeholder={availableTaskOptions.length ? 'Select task' : 'No tasks available'}
                                 options={taskDropdownOptions}
-                                onChange={(nextValue) => updateHistoryDraftField('taskName', nextValue)}
-                                disabled={availableTaskOptions.length === 0}
+                                onChange={handleTaskDropdownChange}
+                                disabled={taskDropdownOptions.length === 0}
                               />
                             </div>
                             <div className="history-timeline__extras">
