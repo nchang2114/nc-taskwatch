@@ -547,9 +547,10 @@ type HistoryDropdownProps = {
   options: HistoryDropdownOption[]
   onChange: (value: string) => void
   disabled?: boolean
+  labelId?: string
 }
 
-const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }: HistoryDropdownProps) => {
+const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled, labelId }: HistoryDropdownProps) => {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
@@ -563,6 +564,10 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }
   const selectedOption = useMemo(() => options.find((option) => option.value === value) ?? null, [options, value])
   const displayLabel = selectedOption?.label ?? placeholder
   const isPlaceholder = !selectedOption
+  const valueElementId = id ? `${id}-value` : undefined
+  const buttonLabelledBy =
+    labelId && valueElementId ? `${labelId} ${valueElementId}` : labelId ?? undefined
+  const menuLabelledBy = labelId ?? id
 
   const updateMenuPosition = useCallback(() => {
     const button = buttonRef.current
@@ -810,11 +815,14 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-disabled={disabled || undefined}
+        aria-labelledby={buttonLabelledBy}
         onClick={handleButtonClick}
         onKeyDown={handleButtonKeyDown}
         disabled={disabled}
       >
-        <span className="history-dropdown__value">{displayLabel}</span>
+        <span className="history-dropdown__value" id={valueElementId}>
+          {displayLabel}
+        </span>
         <span className="history-dropdown__chevron" aria-hidden="true">
           ▾
         </span>
@@ -825,7 +833,7 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled }
               ref={menuRef}
               role="listbox"
               className="history-dropdown__menu history-dropdown__menu--overlay"
-              aria-labelledby={id}
+              aria-labelledby={menuLabelledBy}
               tabIndex={-1}
               style={{
                 position: 'fixed',
@@ -2950,6 +2958,8 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
 
   const goalDropdownId = useId()
   const bucketDropdownId = useId()
+  const goalDropdownLabelId = `${goalDropdownId}-label`
+  const bucketDropdownLabelId = `${bucketDropdownId}-label`
 
   const goalDropdownOptions = useMemo<HistoryDropdownOption[]>(() => {
     const normalizedLifeRoutines = LIFE_ROUTINES_NAME.toLowerCase()
@@ -6695,27 +6705,33 @@ useEffect(() => {
                 />
               </div>
             </label>
-            <label className="history-timeline__field">
-              <span className="history-timeline__field-text">Goal</span>
-              <HistoryDropdown
-                id={goalDropdownId}
-                value={historyDraft.goalName}
-                placeholder="Select goal"
-                options={goalDropdownOptions}
-                onChange={(nextValue) => updateHistoryDraftField('goalName', nextValue)}
-              />
-            </label>
-            <label className="history-timeline__field">
-              <span className="history-timeline__field-text">Bucket</span>
-              <HistoryDropdown
-                id={bucketDropdownId}
-                value={historyDraft.bucketName}
-                placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
-                options={bucketDropdownOptions}
-                onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
-                disabled={availableBucketOptions.length === 0}
-              />
-            </label>
+                            <div className="history-timeline__field">
+                              <label className="history-timeline__field-text" htmlFor={goalDropdownId} id={goalDropdownLabelId}>
+                                Goal
+                              </label>
+                              <HistoryDropdown
+                                id={goalDropdownId}
+                                labelId={goalDropdownLabelId}
+                                value={historyDraft.goalName}
+                                placeholder="Select goal"
+                                options={goalDropdownOptions}
+                                onChange={(nextValue) => updateHistoryDraftField('goalName', nextValue)}
+                              />
+                            </div>
+                            <div className="history-timeline__field">
+                              <label className="history-timeline__field-text" htmlFor={bucketDropdownId} id={bucketDropdownLabelId}>
+                                Bucket
+                              </label>
+                              <HistoryDropdown
+                                id={bucketDropdownId}
+                                labelId={bucketDropdownLabelId}
+                                value={historyDraft.bucketName}
+                                placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
+                                options={bucketDropdownOptions}
+                                onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
+                                disabled={availableBucketOptions.length === 0}
+                              />
+                            </div>
             <div className="history-timeline__extras">
               <button
                 type="button"
@@ -7398,27 +7414,33 @@ useEffect(() => {
                     </div>
                   </div>
                   {inspectorRepeatControl}
-                  <label className="history-timeline__field">
-                    <span className="history-timeline__field-text">Goal</span>
+                  <div className="history-timeline__field">
+                    <label className="history-timeline__field-text" htmlFor={goalDropdownId} id={goalDropdownLabelId}>
+                      Goal
+                    </label>
                     <HistoryDropdown
                       id={goalDropdownId}
+                      labelId={goalDropdownLabelId}
                       value={historyDraft.goalName}
                       placeholder="Select goal"
                       options={goalDropdownOptions}
                       onChange={(nextValue) => updateHistoryDraftField('goalName', nextValue)}
                     />
-                  </label>
-                  <label className="history-timeline__field">
-                    <span className="history-timeline__field-text">Bucket</span>
+                  </div>
+                  <div className="history-timeline__field">
+                    <label className="history-timeline__field-text" htmlFor={bucketDropdownId} id={bucketDropdownLabelId}>
+                      Bucket
+                    </label>
                     <HistoryDropdown
                       id={bucketDropdownId}
+                      labelId={bucketDropdownLabelId}
                       value={historyDraft.bucketName}
                       placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
                       options={bucketDropdownOptions}
                       onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
                       disabled={availableBucketOptions.length === 0}
                     />
-                  </label>
+                  </div>
                   <div className="history-timeline__extras">
                     <button
                       type="button"
@@ -7578,27 +7600,33 @@ useEffect(() => {
               </div>
               {inspectorRepeatControl}
               <div className="legacy-editor-panel__row">
-                <label className="history-timeline__field legacy-editor-panel__field">
-                  <span className="history-timeline__field-text">Goal</span>
+                <div className="history-timeline__field legacy-editor-panel__field">
+                  <label className="history-timeline__field-text" htmlFor={goalDropdownId} id={goalDropdownLabelId}>
+                    Goal
+                  </label>
                   <HistoryDropdown
                     id={goalDropdownId}
+                    labelId={goalDropdownLabelId}
                     value={historyDraft.goalName}
                     placeholder="Select goal"
                     options={goalDropdownOptions}
                     onChange={(nextValue) => updateHistoryDraftField('goalName', nextValue)}
                   />
-                </label>
-                <label className="history-timeline__field legacy-editor-panel__field">
-                  <span className="history-timeline__field-text">Bucket</span>
+                </div>
+                <div className="history-timeline__field legacy-editor-panel__field">
+                  <label className="history-timeline__field-text" htmlFor={bucketDropdownId} id={bucketDropdownLabelId}>
+                    Bucket
+                  </label>
                   <HistoryDropdown
                     id={bucketDropdownId}
+                    labelId={bucketDropdownLabelId}
                     value={historyDraft.bucketName}
                     placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
                     options={bucketDropdownOptions}
                     onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
                     disabled={availableBucketOptions.length === 0}
                   />
-                </label>
+                </div>
               </div>
               <div className="history-timeline__extras">
                 <button
@@ -8229,27 +8257,33 @@ useEffect(() => {
                                 onKeyDown={handleHistoryFieldKeyDown}
                               />
                             </label>
-                            <label className="history-timeline__field">
-                              <span className="history-timeline__field-text">Goal</span>
+                            <div className="history-timeline__field">
+                              <label className="history-timeline__field-text" htmlFor={goalDropdownId} id={goalDropdownLabelId}>
+                                Goal
+                              </label>
                               <HistoryDropdown
                                 id={goalDropdownId}
+                                labelId={goalDropdownLabelId}
                                 value={historyDraft.goalName}
                                 placeholder="Select goal"
                                 options={goalDropdownOptions}
                                 onChange={(nextValue) => updateHistoryDraftField('goalName', nextValue)}
                               />
-                            </label>
-                            <label className="history-timeline__field">
-                              <span className="history-timeline__field-text">Bucket</span>
+                            </div>
+                            <div className="history-timeline__field">
+                              <label className="history-timeline__field-text" htmlFor={bucketDropdownId} id={bucketDropdownLabelId}>
+                                Bucket
+                              </label>
                               <HistoryDropdown
                                 id={bucketDropdownId}
+                                labelId={bucketDropdownLabelId}
                                 value={historyDraft.bucketName}
                                 placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
                                 options={bucketDropdownOptions}
                                 onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
                                 disabled={availableBucketOptions.length === 0}
                               />
-                            </label>
+                            </div>
                             <div className="history-timeline__extras">
                               <button
                                 type="button"
