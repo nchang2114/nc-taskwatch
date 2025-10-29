@@ -194,6 +194,7 @@
   top: calc(100% + 0.45rem);
   left: 0;
   z-index: 40;
+  box-sizing: border-box;
   border-radius: 0.75rem;
   border: 1px solid rgba(148, 160, 255, 0.35);
   background: rgba(20, 24, 52, 0.96);
@@ -204,9 +205,18 @@
   min-width: 220px;
 }
 .inspector-picker__popover--time {
-  min-width: 200px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
   max-height: 16rem;
   overflow: hidden;
+  padding: 0;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(152, 166, 244, 0.38);
+  background: rgba(18, 22, 48, 0.95);
+  box-shadow:
+    0 14px 28px rgba(8, 12, 36, 0.28),
+    0 4px 12px rgba(8, 12, 28, 0.2);
 }
 .inspector-date-picker__header {
   display: flex;
@@ -274,37 +284,62 @@
   background: rgba(116, 130, 255, 0.35);
 }
 .inspector-time-picker {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   max-height: 12rem;
   overflow-y: auto;
-  padding-right: 0.25rem;
+  width: 100%;
+  padding: 0.25rem 0;
   list-style: none;
   margin: 0;
   padding-left: 0;
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(132, 146, 220, 0.55) transparent;
+}
+.inspector-time-picker::-webkit-scrollbar {
+  width: 6px;
+}
+.inspector-time-picker::-webkit-scrollbar-track {
+  background: transparent;
+}
+.inspector-time-picker::-webkit-scrollbar-thumb {
+  background: rgba(132, 146, 220, 0.55);
+  border-radius: 999px;
+}
+.inspector-time-picker::-webkit-scrollbar-thumb:hover {
+  background: rgba(160, 170, 240, 0.8);
 }
 .inspector-time-picker__option {
   width: 100%;
-  border-radius: 0.55rem;
-  border: 1px solid rgba(148, 160, 255, 0.25);
-  background: rgba(64, 74, 150, 0.22);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: inherit;
-  padding: 0.35rem 0.6rem;
+  padding: 0.5rem 0.9rem;
   cursor: pointer;
   text-align: left;
   font-size: 0.9rem;
+  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.16s ease, color 0.16s ease;
 }
 .inspector-time-picker__option--selected {
-  background: linear-gradient(135deg, #646dff 0%, #3ecbff 100%);
-  color: #0c1024;
+  background: rgba(160, 170, 240, 0.28);
+  color: inherit;
   font-weight: 600;
-  border-color: transparent;
+  border-radius: 0.35rem;
 }
 .inspector-time-picker__option:hover,
 .inspector-time-picker__option:focus-visible {
-  background: rgba(116, 130, 255, 0.35);
-  border-color: rgba(172, 184, 255, 0.6);
+  background: rgba(108, 122, 232, 0.22);
+  outline: none;
+}
+html[data-theme='light'] .inspector-time-picker__option:hover,
+html[data-theme='light'] .inspector-time-picker__option:focus-visible {
+  background: rgba(144, 154, 236, 0.24);
 }
 .calendar-inspector__repeat {
   display: flex;
@@ -888,13 +923,28 @@ html[data-theme='light'] .inspector-date-picker__cell--selected {
 }
 
 html[data-theme='light'] .inspector-time-picker__option {
-  background: rgba(214, 222, 255, 0.6);
-  color: rgba(32, 40, 82, 0.9);
-  border-color: rgba(152, 164, 232, 0.45);
+  color: rgba(32, 40, 82, 0.92);
+}
+html[data-theme='light'] .inspector-picker__popover--time {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(180, 190, 250, 0.62);
+  box-shadow:
+    0 14px 28px rgba(132, 142, 224, 0.18),
+    0 4px 12px rgba(132, 142, 224, 0.14);
+}
+html[data-theme='light'] .inspector-time-picker {
+  scrollbar-color: rgba(136, 148, 218, 0.8) transparent;
+}
+html[data-theme='light'] .inspector-time-picker::-webkit-scrollbar-thumb {
+  background: rgba(136, 148, 218, 0.8);
+}
+html[data-theme='light'] .inspector-time-picker::-webkit-scrollbar-thumb:hover {
+  background: rgba(104, 118, 208, 0.9);
 }
 
 html[data-theme='light'] .inspector-time-picker__option--selected {
   color: #101431;
+  background: rgba(172, 184, 246, 0.32);
 }
 
 html[data-theme='light'] .calendar-inspector__subtask-delete:hover,
