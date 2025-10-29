@@ -1042,26 +1042,7 @@ const MIN_SESSION_DURATION_DRAG_MS = MINUTE_MS
 const DOUBLE_TAP_DELAY_MS = 220
 const DOUBLE_TAP_DISTANCE_PX = 8
 
-const formatTimeInputValue = (timestamp: number | null): string => {
-  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
-    return ''
-  }
-  const date = new Date(timestamp)
-  const hours = date.getHours().toString().padStart(2, '0')
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  return `${hours}:${minutes}`
-}
-
-const formatDateInputValue = (timestamp: number | null): string => {
-  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
-    return ''
-  }
-  const date = new Date(timestamp)
-  const year = date.getFullYear().toString().padStart(4, '0')
-  const month = (date.getMonth() + 1).toString().padStart(2, '0')
-  const day = date.getDate().toString().padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
+// Removed legacy native input formatters; using unified Inspector pickers instead
 
 const formatDateDisplay = (timestamp: number): string => {
   const date = new Date(timestamp)
@@ -1343,14 +1324,7 @@ const InspectorTimeInput = ({ value, onChange, ariaLabel }: InspectorTimeInputPr
   )
 }
 
-const parseLocalDateTime = (dateValue: string, timeValue: string): number | null => {
-  if (typeof dateValue !== 'string' || dateValue.trim().length === 0) {
-    return null
-  }
-  const time = typeof timeValue === 'string' && timeValue.trim().length > 0 ? timeValue : '00:00'
-  const parsed = Date.parse(`${dateValue}T${time}`)
-  return Number.isFinite(parsed) ? parsed : null
-}
+// Removed legacy parser used for native inputs; Inspector pickers provide timestamps directly
 
 const resolveTimestamp = (value: number | null | undefined, fallback: number): number => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -6789,10 +6763,7 @@ useEffect(() => {
     const endBase = entry.endedAt
     const resolvedStart = resolveTimestamp(historyDraft.startedAt, startBase)
     const resolvedEnd = resolveTimestamp(historyDraft.endedAt, endBase)
-    const startDateInputValue = formatDateInputValue(resolvedStart)
-    const endDateInputValue = formatDateInputValue(resolvedEnd)
-    const startTimeInputValue = formatTimeInputValue(resolvedStart)
-    const endTimeInputValue = formatTimeInputValue(resolvedEnd)
+  // Using inspector pickers for date/time in the editor panel; input-formatted strings no longer needed here
 
     return createPortal(
       <div
@@ -6838,69 +6809,39 @@ useEffect(() => {
             </label>
             <label className="history-timeline__field">
               <span className="history-timeline__field-text">Start</span>
-              <div className="history-timeline__field-row">
-                <input
-                  className="history-timeline__field-input history-timeline__field-input--split"
-                  type="date"
-                  value={startDateInputValue}
-                  onChange={(event) => {
-                    const value = event.target.value
-                    setHistoryDraft((draft) => {
-                      if (value.trim().length === 0) return draft
-                      const parsed = parseLocalDateTime(value, startTimeInputValue)
-                      return parsed === null ? draft : { ...draft, startedAt: parsed }
-                    })
+              <div className="calendar-inspector__schedule-inputs">
+                <InspectorDateInput
+                  value={resolvedStart}
+                  onChange={(timestamp) => {
+                    setHistoryDraft((draft) => ({ ...draft, startedAt: timestamp }))
                   }}
-                  onKeyDown={handleHistoryFieldKeyDown}
+                  ariaLabel="Select start date"
                 />
-                <input
-                  className="history-timeline__field-input history-timeline__field-input--split"
-                  type="time"
-                  step={60}
-                  value={startTimeInputValue}
-                  onChange={(event) => {
-                    const { value } = event.target
-                    setHistoryDraft((draft) => {
-                      if (value.trim().length === 0) return { ...draft, startedAt: null }
-                      const parsed = parseLocalDateTime(startDateInputValue, value)
-                      return parsed === null ? draft : { ...draft, startedAt: parsed }
-                    })
+                <InspectorTimeInput
+                  value={resolvedStart}
+                  onChange={(timestamp) => {
+                    setHistoryDraft((draft) => ({ ...draft, startedAt: timestamp }))
                   }}
-                  onKeyDown={handleHistoryFieldKeyDown}
+                  ariaLabel="Select start time"
                 />
               </div>
             </label>
             <label className="history-timeline__field">
               <span className="history-timeline__field-text">End</span>
-              <div className="history-timeline__field-row">
-                <input
-                  className="history-timeline__field-input history-timeline__field-input--split"
-                  type="date"
-                  value={endDateInputValue}
-                  onChange={(event) => {
-                    const value = event.target.value
-                    setHistoryDraft((draft) => {
-                      if (value.trim().length === 0) return draft
-                      const parsed = parseLocalDateTime(value, endTimeInputValue)
-                      return parsed === null ? draft : { ...draft, endedAt: parsed }
-                    })
+              <div className="calendar-inspector__schedule-inputs">
+                <InspectorDateInput
+                  value={resolvedEnd}
+                  onChange={(timestamp) => {
+                    setHistoryDraft((draft) => ({ ...draft, endedAt: timestamp }))
                   }}
-                  onKeyDown={handleHistoryFieldKeyDown}
+                  ariaLabel="Select end date"
                 />
-                <input
-                  className="history-timeline__field-input history-timeline__field-input--split"
-                  type="time"
-                  step={60}
-                  value={endTimeInputValue}
-                  onChange={(event) => {
-                    const { value } = event.target
-                    setHistoryDraft((draft) => {
-                      if (value.trim().length === 0) return { ...draft, endedAt: null }
-                      const parsed = parseLocalDateTime(endDateInputValue, value)
-                      return parsed === null ? draft : { ...draft, endedAt: parsed }
-                    })
+                <InspectorTimeInput
+                  value={resolvedEnd}
+                  onChange={(timestamp) => {
+                    setHistoryDraft((draft) => ({ ...draft, endedAt: timestamp }))
                   }}
-                  onKeyDown={handleHistoryFieldKeyDown}
+                  ariaLabel="Select end time"
                 />
               </div>
             </label>
@@ -8182,29 +8123,8 @@ useEffect(() => {
               })()
               const durationLabel = formatDuration(resolvedDurationMs)
               const overlayTitleId = !isEditing ? `history-tooltip-title-${segment.id}` : undefined
-              const startDateInputValue = formatDateInputValue(resolveTimestamp(historyDraft.startedAt, resolvedStartedAt))
-              const endDateInputValue = formatDateInputValue(resolveTimestamp(historyDraft.endedAt, resolvedEndedAt))
-              const startTimeInputValue = formatTimeInputValue(resolvedStartedAt)
-              const endTimeInputValue = formatTimeInputValue(resolvedEndedAt)
+              // Using inspector pickers; no need for separate formatted date strings here
               const durationMinutesValue = Math.max(1, Math.round(resolvedDurationMs / MINUTE_MS)).toString()
-              const handleStartTimeInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-                const { value } = event.target
-                setHistoryDraft((draft) => {
-                  if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
-                  if (value.trim().length === 0) return { ...draft, startedAt: null }
-                  const parsed = parseLocalDateTime(startDateInputValue, value)
-                  return parsed === null ? draft : { ...draft, startedAt: parsed }
-                })
-              }
-              const handleEndTimeInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-                const { value } = event.target
-                setHistoryDraft((draft) => {
-                  if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
-                  if (value.trim().length === 0) return { ...draft, endedAt: null }
-                  const parsed = parseLocalDateTime(endDateInputValue, value)
-                  return parsed === null ? draft : { ...draft, endedAt: parsed }
-                })
-              }
               const handleDurationInputChange = (event: ChangeEvent<HTMLInputElement>) => {
                 const minutes = Number(event.target.value)
                 setHistoryDraft((draft) => {
@@ -8390,57 +8310,51 @@ useEffect(() => {
                             </label>
                             <label className="history-timeline__field">
                               <span className="history-timeline__field-text">Start</span>
-                              <div className="history-timeline__field-row">
-                                <input
-                                  className="history-timeline__field-input history-timeline__field-input--split"
-                                  type="date"
-                                  value={startDateInputValue}
-                                  onChange={(event) => {
-                                    const value = event.target.value
+                              <div className="calendar-inspector__schedule-inputs">
+                                <InspectorDateInput
+                                  value={resolvedStartedAt}
+                                  onChange={(timestamp) => {
                                     setHistoryDraft((draft) => {
                                       if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
-                                      if (value.trim().length === 0) return draft
-                                      const parsed = parseLocalDateTime(value, startTimeInputValue)
-                                      return parsed === null ? draft : { ...draft, startedAt: parsed }
+                                      return { ...draft, startedAt: timestamp }
                                     })
                                   }}
-                                  onKeyDown={handleHistoryFieldKeyDown}
+                                  ariaLabel="Select start date"
                                 />
-                                <input
-                                  className="history-timeline__field-input history-timeline__field-input--split"
-                                  type="time"
-                                  step={60}
-                                  value={startTimeInputValue}
-                                  onChange={handleStartTimeInputChange}
-                                  onKeyDown={handleHistoryFieldKeyDown}
+                                <InspectorTimeInput
+                                  value={resolvedStartedAt}
+                                  onChange={(timestamp) => {
+                                    setHistoryDraft((draft) => {
+                                      if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
+                                      return { ...draft, startedAt: timestamp }
+                                    })
+                                  }}
+                                  ariaLabel="Select start time"
                                 />
                               </div>
                             </label>
                             <label className="history-timeline__field">
                               <span className="history-timeline__field-text">End</span>
-                              <div className="history-timeline__field-row">
-                                <input
-                                  className="history-timeline__field-input history-timeline__field-input--split"
-                                  type="date"
-                                  value={endDateInputValue}
-                                  onChange={(event) => {
-                                    const value = event.target.value
+                              <div className="calendar-inspector__schedule-inputs">
+                                <InspectorDateInput
+                                  value={resolvedEndedAt}
+                                  onChange={(timestamp) => {
                                     setHistoryDraft((draft) => {
                                       if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
-                                      if (value.trim().length === 0) return draft
-                                      const parsed = parseLocalDateTime(value, endTimeInputValue)
-                                      return parsed === null ? draft : { ...draft, endedAt: parsed }
+                                      return { ...draft, endedAt: timestamp }
                                     })
                                   }}
-                                  onKeyDown={handleHistoryFieldKeyDown}
+                                  ariaLabel="Select end date"
                                 />
-                                <input
-                                  className="history-timeline__field-input history-timeline__field-input--split"
-                                  type="time"
-                                  step={60}
-                                  value={endTimeInputValue}
-                                  onChange={handleEndTimeInputChange}
-                                  onKeyDown={handleHistoryFieldKeyDown}
+                                <InspectorTimeInput
+                                  value={resolvedEndedAt}
+                                  onChange={(timestamp) => {
+                                    setHistoryDraft((draft) => {
+                                      if (!isEditing || selectedHistoryId !== segment.entry.id) return draft
+                                      return { ...draft, endedAt: timestamp }
+                                    })
+                                  }}
+                                  ariaLabel="Select end time"
                                 />
                               </div>
                             </label>
