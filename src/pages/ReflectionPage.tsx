@@ -2956,6 +2956,65 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     return map
   }, [goalsSnapshot, lifeRoutineBucketOptions])
 
+  // Tasks by goal and bucket, and a reverse lookup from task text -> owners
+  const tasksByGoalBucket = useMemo(() => {
+    const byGoalBucket = new Map<string, Map<string, string[]>>()
+    goalsSnapshot.forEach((goal) => {
+      const goalName = goal.name?.trim()
+      if (!goalName) return
+      const bucketMap = byGoalBucket.get(goalName) ?? new Map<string, string[]>()
+      goal.buckets.forEach((bucket) => {
+        const bucketName = bucket.name?.trim()
+        if (!bucketName) return
+        const list = bucketMap.get(bucketName) ?? []
+        bucket.tasks.forEach((task) => {
+          const text = task.text?.trim()
+          if (text && !list.includes(text)) list.push(text)
+        })
+        list.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+        bucketMap.set(bucketName, list)
+      })
+      byGoalBucket.set(goalName, bucketMap)
+    })
+    return byGoalBucket
+  }, [goalsSnapshot])
+
+  const allTaskOptions = useMemo(() => {
+    const set = new Set<string>()
+    goalsSnapshot.forEach((goal) => {
+      goal.buckets.forEach((bucket) => {
+        bucket.tasks.forEach((task) => {
+          const text = task.text?.trim()
+          if (text) set.add(text)
+        })
+      })
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+  }, [goalsSnapshot])
+
+  type TaskOwner = { goalName: string; bucketName: string }
+  const taskToOwners = useMemo(() => {
+    const map = new Map<string, TaskOwner[]>()
+    goalsSnapshot.forEach((goal) => {
+      const gName = goal.name?.trim()
+      if (!gName) return
+      goal.buckets.forEach((bucket) => {
+        const bName = bucket.name?.trim()
+        if (!bName) return
+        bucket.tasks.forEach((task) => {
+          const key = task.text?.trim().toLowerCase()
+          if (!key) return
+          const owners = map.get(key) ?? []
+          if (!owners.some((o) => o.goalName === gName && o.bucketName === bName)) {
+            owners.push({ goalName: gName, bucketName: bName })
+          }
+          map.set(key, owners)
+        })
+      })
+    })
+    return map
+  }, [goalsSnapshot])
+
   const trimmedDraftGoal = historyDraft.goalName.trim()
   const trimmedDraftBucket = historyDraft.bucketName.trim()
 
@@ -2983,10 +3042,37 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     return availableBucketOptions
   }, [availableBucketOptions, trimmedDraftBucket])
 
+  const availableTaskOptions = useMemo(() => {
+    // Prefer bucket -> goal -> all
+    if (trimmedDraftGoal.length > 0 && trimmedDraftBucket.length > 0) {
+      const tasks = tasksByGoalBucket.get(trimmedDraftGoal)?.get(trimmedDraftBucket)
+      if (tasks && tasks.length > 0) return tasks
+    }
+    if (trimmedDraftGoal.length > 0) {
+      const bucketMap = tasksByGoalBucket.get(trimmedDraftGoal)
+      if (bucketMap) {
+        const merged = new Set<string>()
+        bucketMap.forEach((list) => list.forEach((t) => merged.add(t)))
+        if (merged.size > 0) return Array.from(merged).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+      }
+    }
+    return allTaskOptions
+  }, [trimmedDraftGoal, trimmedDraftBucket, tasksByGoalBucket, allTaskOptions])
+
+  const taskDropdownOptions = useMemo<HistoryDropdownOption[]>(
+    () => [
+      { value: '', label: 'No task' },
+      ...availableTaskOptions.map((option) => ({ value: option, label: option })),
+    ],
+    [availableTaskOptions],
+  )
+
   const goalDropdownId = useId()
   const bucketDropdownId = useId()
+  const taskDropdownId = useId()
   const goalDropdownLabelId = `${goalDropdownId}-label`
   const bucketDropdownLabelId = `${bucketDropdownId}-label`
+  const taskDropdownLabelId = `${taskDropdownId}-label`
 
   const goalDropdownOptions = useMemo<HistoryDropdownOption[]>(() => {
     const normalizedLifeRoutines = LIFE_ROUTINES_NAME.toLowerCase()
@@ -3213,6 +3299,25 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     (field: 'taskName' | 'goalName' | 'bucketName', nextValue: string) => {
       setHistoryDraft((draft) => {
         let base = { ...draft, [field]: nextValue }
+        if (field === 'taskName') {
+          const chosenTask = nextValue.trim()
+          if (chosenTask.length > 0) {
+            const owners = taskToOwners.get(chosenTask.toLowerCase())
+            if (owners && owners.length > 0) {
+              const currentGoal = base.goalName.trim()
+              const currentBucket = base.bucketName.trim()
+              let owner = owners[0]
+              if (currentBucket.length > 0) {
+                const match = owners.find((o) => o.bucketName.toLowerCase() === currentBucket.toLowerCase())
+                if (match) owner = match
+              } else if (currentGoal.length > 0) {
+                const match = owners.find((o) => o.goalName.toLowerCase() === currentGoal.toLowerCase())
+                if (match) owner = match
+              }
+              base = { ...base, goalName: owner.goalName, bucketName: owner.bucketName }
+            }
+          }
+        }
         // When selecting a bucket, auto-select the corresponding goal if determinable.
         if (field === 'bucketName') {
           const nextBucket = nextValue.trim()
@@ -3244,7 +3349,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
         return base
       })
     },
-    [bucketOptionsByGoal, bucketToGoals],
+    [bucketOptionsByGoal, bucketToGoals, taskToOwners],
   )
 
   const handleHistoryFieldChange = useCallback(
@@ -6915,6 +7020,20 @@ useEffect(() => {
                                 disabled={availableBucketOptions.length === 0}
                               />
                             </div>
+                            <div className="history-timeline__field">
+                              <label className="history-timeline__field-text" htmlFor={taskDropdownId} id={taskDropdownLabelId}>
+                                Task
+                              </label>
+                              <HistoryDropdown
+                                id={taskDropdownId}
+                                labelId={taskDropdownLabelId}
+                                value={historyDraft.taskName}
+                                placeholder={availableTaskOptions.length ? 'Select task' : 'No tasks available'}
+                                options={taskDropdownOptions}
+                                onChange={(nextValue) => updateHistoryDraftField('taskName', nextValue)}
+                                disabled={availableTaskOptions.length === 0}
+                              />
+                            </div>
             <div className="history-timeline__extras">
               <button
                 type="button"
@@ -7624,6 +7743,20 @@ useEffect(() => {
                       disabled={availableBucketOptions.length === 0}
                     />
                   </div>
+                  <div className="history-timeline__field">
+                    <label className="history-timeline__field-text" htmlFor={taskDropdownId} id={taskDropdownLabelId}>
+                      Task
+                    </label>
+                    <HistoryDropdown
+                      id={taskDropdownId}
+                      labelId={taskDropdownLabelId}
+                      value={historyDraft.taskName}
+                      placeholder={availableTaskOptions.length ? 'Select task' : 'No tasks available'}
+                      options={taskDropdownOptions}
+                      onChange={(nextValue) => updateHistoryDraftField('taskName', nextValue)}
+                      disabled={availableTaskOptions.length === 0}
+                    />
+                  </div>
                   <div className="history-timeline__extras">
                     <button
                       type="button"
@@ -7810,6 +7943,20 @@ useEffect(() => {
                     disabled={availableBucketOptions.length === 0}
                   />
                 </div>
+              </div>
+              <div className="history-timeline__field">
+                <label className="history-timeline__field-text" htmlFor={taskDropdownId} id={taskDropdownLabelId}>
+                  Task
+                </label>
+                <HistoryDropdown
+                  id={taskDropdownId}
+                  labelId={taskDropdownLabelId}
+                  value={historyDraft.taskName}
+                  placeholder={availableTaskOptions.length ? 'Select task' : 'No tasks available'}
+                  options={taskDropdownOptions}
+                  onChange={(nextValue) => updateHistoryDraftField('taskName', nextValue)}
+                  disabled={availableTaskOptions.length === 0}
+                />
               </div>
               <div className="history-timeline__extras">
                 <button
@@ -8438,6 +8585,20 @@ useEffect(() => {
                                 options={bucketDropdownOptions}
                                 onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
                                 disabled={availableBucketOptions.length === 0}
+                              />
+                            </div>
+                            <div className="history-timeline__field">
+                              <label className="history-timeline__field-text" htmlFor={taskDropdownId} id={taskDropdownLabelId}>
+                                Task
+                              </label>
+                              <HistoryDropdown
+                                id={taskDropdownId}
+                                labelId={taskDropdownLabelId}
+                                value={historyDraft.taskName}
+                                placeholder={availableTaskOptions.length ? 'Select task' : 'No tasks available'}
+                                options={taskDropdownOptions}
+                                onChange={(nextValue) => updateHistoryDraftField('taskName', nextValue)}
+                                disabled={availableTaskOptions.length === 0}
                               />
                             </div>
                             <div className="history-timeline__extras">
