@@ -2929,6 +2929,33 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
   }, [goalsSnapshot, lifeRoutineBucketOptions])
 
+  // Reverse lookup: for a given bucket name (case-insensitive), which goal(s) contain it?
+  const bucketToGoals = useMemo(() => {
+    const map = new Map<string, string[]>()
+    goalsSnapshot.forEach((goal) => {
+      const goalName = goal.name?.trim()
+      if (!goalName) return
+      goal.buckets.forEach((bucket) => {
+        const bucketName = bucket.name?.trim()
+        if (!bucketName) return
+        const key = bucketName.toLowerCase()
+        const arr = map.get(key) ?? []
+        if (!arr.includes(goalName)) arr.push(goalName)
+        map.set(key, arr)
+      })
+    })
+    // Include Life Routine buckets mapped to the Life Routines pseudo-goal
+    lifeRoutineBucketOptions.forEach((title) => {
+      const trimmed = title.trim()
+      if (!trimmed) return
+      const key = trimmed.toLowerCase()
+      const arr = map.get(key) ?? []
+      if (!arr.includes(LIFE_ROUTINES_NAME)) arr.push(LIFE_ROUTINES_NAME)
+      map.set(key, arr)
+    })
+    return map
+  }, [goalsSnapshot, lifeRoutineBucketOptions])
+
   const trimmedDraftGoal = historyDraft.goalName.trim()
   const trimmedDraftBucket = historyDraft.bucketName.trim()
 
@@ -3185,12 +3212,28 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
   const updateHistoryDraftField = useCallback(
     (field: 'taskName' | 'goalName' | 'bucketName', nextValue: string) => {
       setHistoryDraft((draft) => {
-        const base = { ...draft, [field]: nextValue }
-        // Only auto-fill once: when choosing a Life Routine bucket, and only if name is effectively empty or default
+        let base = { ...draft, [field]: nextValue }
+        // When selecting a bucket, auto-select the corresponding goal if determinable.
         if (field === 'bucketName') {
-          const nextGoal = base.goalName.trim()
           const nextBucket = nextValue.trim()
-          const isLifeRoutine = nextGoal.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
+          if (nextBucket.length > 0) {
+            const currentGoal = base.goalName.trim()
+            const bucketKey = nextBucket.toLowerCase()
+            // If current goal already contains this bucket, keep it; otherwise pick a goal that owns it.
+            const currentGoalHasBucket = currentGoal.length > 0
+              ? (bucketOptionsByGoal.get(currentGoal)?.some((b) => b.toLowerCase() === bucketKey) ?? false)
+              : false
+            if (!currentGoalHasBucket) {
+              const candidates = bucketToGoals.get(bucketKey)
+              const autoGoal = candidates?.[0] // pick first if ambiguous
+              if (autoGoal && autoGoal !== currentGoal) {
+                base = { ...base, goalName: autoGoal }
+              }
+            }
+          }
+          // Only auto-fill once: when choosing a Life Routine bucket, and only if name is effectively empty or default
+          const effectiveGoal = base.goalName.trim()
+          const isLifeRoutine = effectiveGoal.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
           const trimmedTask = base.taskName.trim()
           const looksDefault = trimmedTask.length === 0 || /^new session$/i.test(trimmedTask)
           if (isLifeRoutine && nextBucket.length > 0 && looksDefault && !taskNameAutofilledRef.current) {
@@ -3201,7 +3244,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
         return base
       })
     },
-    [],
+    [bucketOptionsByGoal, bucketToGoals],
   )
 
   const handleHistoryFieldChange = useCallback(
