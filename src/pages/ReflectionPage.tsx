@@ -198,6 +198,24 @@ const createHistoryDraftFromEntry = (entry?: HistoryEntry | null): HistoryDraftS
 
 const createEmptyHistoryDraft = (): HistoryDraftState => createHistoryDraftFromEntry(null)
 
+const areHistoryDraftsEqual = (a: HistoryDraftState | null, b: HistoryDraftState | null): boolean => {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b) {
+    return false
+  }
+  return (
+    a.taskName === b.taskName &&
+    a.goalName === b.goalName &&
+    a.bucketName === b.bucketName &&
+    a.startedAt === b.startedAt &&
+    a.endedAt === b.endedAt &&
+    a.notes === b.notes &&
+    areHistorySubtasksEqual(a.subtasks, b.subtasks)
+  )
+}
+
 const HISTORY_SUBTASK_SORT_STEP = 1024
 
 const getNextHistorySubtaskSortIndex = (subtasks: HistorySubtask[]): number => {
@@ -1028,6 +1046,286 @@ const formatDateInputValue = (timestamp: number | null): string => {
   const month = (date.getMonth() + 1).toString().padStart(2, '0')
   const day = date.getDate().toString().padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+const formatDateDisplay = (timestamp: number): string => {
+  const date = new Date(timestamp)
+  return date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+const startOfMonth = (value: number): number => {
+  const date = new Date(value)
+  date.setHours(0, 0, 0, 0)
+  date.setDate(1)
+  return date.getTime()
+}
+
+type InspectorDateInputProps = {
+  value: number
+  onChange: (timestamp: number) => void
+  ariaLabel: string
+}
+
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const InspectorDateInput = ({ value, onChange, ariaLabel }: InspectorDateInputProps) => {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
+  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(value))
+
+  useEffect(() => {
+    if (!open) {
+      setVisibleMonth(startOfMonth(value))
+    }
+  }, [value, open])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const handlePointer = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (triggerRef.current?.contains(target)) return
+      if (popoverRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    const handleKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setOpen(false)
+      }
+    }
+    window.addEventListener('pointerdown', handlePointer, true)
+    window.addEventListener('keydown', handleKey)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointer, true)
+      window.removeEventListener('keydown', handleKey)
+    }
+  }, [open])
+
+  const monthDate = new Date(visibleMonth)
+  const monthLabel = monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1)
+  const startDayIndex = firstDay.getDay()
+  const baseDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1 - startDayIndex)
+  const cells: Date[] = []
+  for (let index = 0; index < 42; index += 1) {
+    cells.push(new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + index))
+  }
+
+  const selected = new Date(value)
+  selected.setHours(0, 0, 0, 0)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const handleSelect = (date: Date) => {
+    const next = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    const current = new Date(value)
+    next.setHours(current.getHours(), current.getMinutes(), current.getSeconds(), current.getMilliseconds())
+    onChange(next.getTime())
+    setOpen(false)
+  }
+
+  const handleMonthShift = (delta: number) => {
+    setVisibleMonth((prev) => {
+      const next = new Date(prev)
+      next.setMonth(next.getMonth() + delta)
+      return next.getTime()
+    })
+  }
+
+  return (
+    <div className="inspector-picker">
+      <button
+        type="button"
+        ref={triggerRef}
+        className="inspector-picker__button history-timeline__field-input history-timeline__field-input--button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+      >
+        {formatDateDisplay(value)}
+      </button>
+      {open ? (
+        <div className="inspector-picker__popover inspector-picker__popover--date" ref={popoverRef} role="dialog">
+          <div className="inspector-date-picker">
+            <div className="inspector-date-picker__header">
+              <button type="button" className="inspector-date-picker__nav" onClick={() => handleMonthShift(-1)} aria-label="Previous month">
+                ‹
+              </button>
+              <div className="inspector-date-picker__label">{monthLabel}</div>
+              <button type="button" className="inspector-date-picker__nav" onClick={() => handleMonthShift(1)} aria-label="Next month">
+                ›
+              </button>
+            </div>
+            <div className="inspector-date-picker__grid">
+              {WEEKDAY_SHORT.map((day) => (
+                <div key={day} className="inspector-date-picker__weekday" aria-hidden="true">
+                  {day}
+                </div>
+              ))}
+              {cells.map((date) => {
+                const isCurrentMonth = date.getMonth() === monthDate.getMonth()
+                const cellDay = date.getDate()
+                const cellKey = date.toISOString()
+                const isToday =
+                  date.getTime() === today.getTime()
+                const isSelected = date.getTime() === selected.getTime()
+                const className = [
+                  'inspector-date-picker__cell',
+                  isCurrentMonth ? '' : 'inspector-date-picker__cell--adjacent',
+                  isToday ? 'inspector-date-picker__cell--today' : '',
+                  isSelected ? 'inspector-date-picker__cell--selected' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')
+                return (
+                  <button
+                    key={cellKey}
+                    type="button"
+                    className={className}
+                    aria-pressed={isSelected}
+                    aria-selected={isSelected}
+                    aria-current={isToday ? 'date' : undefined}
+                    aria-label={formatDateDisplay(date.getTime())}
+                    onClick={() => handleSelect(date)}
+                  >
+                    {cellDay}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+type InspectorTimeInputProps = {
+  value: number
+  onChange: (timestamp: number) => void
+  ariaLabel: string
+}
+
+const buildTimeOptions = () => {
+  const options: Array<{ label: string; minutes: number }> = []
+  for (let hour = 0; hour < 24; hour += 1) {
+    for (let minute = 0; minute < 60; minute += 15) {
+      const minutesTotal = hour * 60 + minute
+      const sample = new Date(2020, 0, 1, hour, minute)
+      const label = formatTimeOfDay(sample.getTime())
+      options.push({ label, minutes: minutesTotal })
+    }
+  }
+  return options
+}
+
+const TIME_OPTIONS = buildTimeOptions()
+
+const InspectorTimeInput = ({ value, onChange, ariaLabel }: InspectorTimeInputProps) => {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
+  const selectedRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handlePointer = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (triggerRef.current?.contains(target)) return
+      if (popoverRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    const handleKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setOpen(false)
+      }
+    }
+    window.addEventListener('pointerdown', handlePointer, true)
+    window.addEventListener('keydown', handleKey)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointer, true)
+      window.removeEventListener('keydown', handleKey)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (open && selectedRef.current) {
+      selectedRef.current.scrollIntoView({ block: 'nearest' })
+    }
+  }, [open])
+
+  const date = new Date(value)
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
+  const label = formatTimeOfDay(value)
+  const currentMinutes = hours * 60 + minutes
+  const highlightedMinutes = Math.min(23 * 60 + 45, Math.max(0, Math.round(currentMinutes / 15) * 15))
+
+  const handleSelect = (totalMinutes: number) => {
+    const next = new Date(value)
+    const hoursPart = Math.floor(totalMinutes / 60)
+    const minutesPart = totalMinutes % 60
+    next.setHours(hoursPart, minutesPart, 0, 0)
+    onChange(next.getTime())
+    setOpen(false)
+  }
+
+  return (
+    <div className="inspector-picker">
+      <button
+        type="button"
+        ref={triggerRef}
+        className="inspector-picker__button history-timeline__field-input history-timeline__field-input--button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+      >
+        {label}
+      </button>
+      {open ? (
+        <div className="inspector-picker__popover inspector-picker__popover--time" ref={popoverRef} role="listbox">
+          <ul className="inspector-time-picker">
+            {TIME_OPTIONS.map((option) => {
+              const selected = option.minutes === highlightedMinutes
+              const itemClass = [
+                'inspector-time-picker__option',
+                selected ? 'inspector-time-picker__option--selected' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
+              return (
+                <li key={option.minutes}>
+                  <button
+                    type="button"
+                    className={itemClass}
+                    role="option"
+                    aria-selected={selected}
+                    ref={selected ? selectedRef : undefined}
+                    onClick={() => handleSelect(option.minutes)}
+                  >
+                    {option.label}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 const parseLocalDateTime = (dateValue: string, timeValue: string): number | null => {
@@ -2201,6 +2499,8 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
   const lastTapTimeoutRef = useRef<number | null>(null)
   // One-time auto-fill guard for session name when selecting Life Routine bucket
   const taskNameAutofilledRef = useRef(false)
+  const lastCommittedHistoryDraftRef = useRef<HistoryDraftState | null>(null)
+  const autoCommitFrameRef = useRef<number | null>(null)
   // Mouse pre-drag detection to preserve click/double-click semantics
   const mousePreDragRef = useRef<{
     pointerId: number
@@ -2687,10 +2987,20 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
 
   useEffect(() => {
     if (!selectedHistoryEntry) {
+      if (typeof window !== 'undefined' && autoCommitFrameRef.current !== null) {
+        window.cancelAnimationFrame(autoCommitFrameRef.current)
+        autoCommitFrameRef.current = null
+      }
+      lastCommittedHistoryDraftRef.current = null
       setEditingHistoryId(null)
       return
     }
-    setHistoryDraft(createHistoryDraftFromEntry(selectedHistoryEntry))
+    const nextDraft = createHistoryDraftFromEntry(selectedHistoryEntry)
+    setHistoryDraft(nextDraft)
+    lastCommittedHistoryDraftRef.current = {
+      ...nextDraft,
+      subtasks: cloneHistorySubtasks(nextDraft.subtasks),
+    }
     setEditingHistoryId((current) => (current === selectedHistoryEntry.id ? current : null))
     taskNameAutofilledRef.current = false
   }, [selectedHistoryEntry])
@@ -2943,13 +3253,14 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       return
     }
     // Preserve blank names if the user cleared it intentionally
-    const nextTaskName = historyDraft.taskName.trim()
-    const nextGoalName = historyDraft.goalName.trim()
-    const nextBucketName = historyDraft.bucketName.trim()
-    const nextNotes = historyDraft.notes
-    const nextSubtasks = cloneHistorySubtasks(historyDraft.subtasks)
-    const draftStartedAt = historyDraft.startedAt ?? selectedHistoryEntry.startedAt
-    const draftEndedAt = historyDraft.endedAt ?? selectedHistoryEntry.endedAt
+    const draft = historyDraft
+    const nextTaskName = draft.taskName.trim()
+    const nextGoalName = draft.goalName.trim()
+    const nextBucketName = draft.bucketName.trim()
+    const nextNotes = draft.notes
+    const nextSubtasks = cloneHistorySubtasks(draft.subtasks)
+    const draftStartedAt = draft.startedAt ?? selectedHistoryEntry.startedAt
+    const draftEndedAt = draft.endedAt ?? selectedHistoryEntry.endedAt
     let nextStartedAt = Number.isFinite(draftStartedAt) ? draftStartedAt : selectedHistoryEntry.startedAt
     let nextEndedAt = Number.isFinite(draftEndedAt) ? draftEndedAt : selectedHistoryEntry.endedAt
     if (!Number.isFinite(nextStartedAt)) {
@@ -3001,6 +3312,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       const fallback = bucketSurfaceLookup.byName.get(bucketKey)
       return fallback ? ensureSurfaceStyle(fallback, DEFAULT_SURFACE_STYLE) : null
     })()
+    let didUpdateHistory = false
     updateHistory((current) => {
       const index = current.findIndex((entry) => entry.id === selectedHistoryEntry.id)
       if (index === -1) {
@@ -3034,9 +3346,10 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
         notes: nextNotes,
         subtasks: nextSubtasks,
       }
+      didUpdateHistory = true
       return next
     })
-    setHistoryDraft({
+    const normalizedDraft: HistoryDraftState = {
       taskName: nextTaskName,
       goalName: normalizedGoalName,
       bucketName: normalizedBucketName,
@@ -3044,9 +3357,58 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       endedAt: nextEndedAt,
       notes: nextNotes,
       subtasks: cloneHistorySubtasks(nextSubtasks),
+    }
+    const draftChanged = !areHistoryDraftsEqual(draft, normalizedDraft)
+    if (draftChanged) {
+      setHistoryDraft(normalizedDraft)
+    }
+    lastCommittedHistoryDraftRef.current = {
+      ...normalizedDraft,
+      subtasks: cloneHistorySubtasks(normalizedDraft.subtasks),
+    }
+    if (didUpdateHistory || draftChanged) {
+      if (pendingNewHistoryId && selectedHistoryId === pendingNewHistoryId) {
+        setPendingNewHistoryId(null)
+      }
+      setEditingHistoryId(null)
+    }
+  }, [
+    bucketSurfaceLookup,
+    goalSurfaceLookup,
+    historyDraft,
+    lifeRoutineSurfaceLookup,
+    pendingNewHistoryId,
+    selectedHistoryEntry,
+    selectedHistoryId,
+    setPendingNewHistoryId,
+    updateHistory,
+  ])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const cancelPending = () => {
+      if (autoCommitFrameRef.current !== null) {
+        window.cancelAnimationFrame(autoCommitFrameRef.current)
+        autoCommitFrameRef.current = null
+      }
+    }
+    if (!selectedHistoryEntry) {
+      cancelPending()
+      return
+    }
+    const lastCommitted = lastCommittedHistoryDraftRef.current
+    if (areHistoryDraftsEqual(historyDraft, lastCommitted)) {
+      return
+    }
+    cancelPending()
+    autoCommitFrameRef.current = window.requestAnimationFrame(() => {
+      autoCommitFrameRef.current = null
+      commitHistoryDraft()
     })
-    setEditingHistoryId(null)
-  }, [bucketSurfaceLookup, goalSurfaceLookup, historyDraft, lifeRoutineSurfaceLookup, selectedHistoryEntry, updateHistory])
+    return cancelPending
+  }, [commitHistoryDraft, historyDraft, selectedHistoryEntry])
 
   const handleHistoryFieldKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
@@ -6884,10 +7246,6 @@ useEffect(() => {
       const endBase = inspectorEntry.endedAt
       const resolvedStart = resolveTimestamp(historyDraft.startedAt, startBase)
       const resolvedEnd = resolveTimestamp(historyDraft.endedAt, endBase)
-      const startDateInputValue = formatDateInputValue(resolvedStart)
-      const endDateInputValue = formatDateInputValue(resolvedEnd)
-      const startTimeInputValue = formatTimeInputValue(resolvedStart)
-      const endTimeInputValue = formatTimeInputValue(resolvedEnd)
       const inspectorDateLabel = (() => {
         const startD = new Date(resolvedStart)
         const endD = new Date(resolvedEnd)
@@ -7002,68 +7360,38 @@ useEffect(() => {
                       <label className="calendar-inspector__schedule-group">
                         <span className="calendar-inspector__schedule-heading">Start</span>
                         <div className="calendar-inspector__schedule-inputs">
-                          <input
-                            className="history-timeline__field-input history-timeline__field-input--split"
-                            type="date"
-                            value={startDateInputValue}
-                            onChange={(event) => {
-                              const value = event.target.value
-                              setHistoryDraft((draft) => {
-                                if (value.trim().length === 0) return draft
-                                const parsed = parseLocalDateTime(value, startTimeInputValue)
-                                return parsed === null ? draft : { ...draft, startedAt: parsed }
-                              })
+                          <InspectorDateInput
+                            value={resolvedStart}
+                            onChange={(timestamp) => {
+                              setHistoryDraft((draft) => ({ ...draft, startedAt: timestamp }))
                             }}
-                            onKeyDown={handleHistoryFieldKeyDown}
+                            ariaLabel="Select start date"
                           />
-                          <input
-                            className="history-timeline__field-input history-timeline__field-input--split"
-                            type="time"
-                            step={60}
-                            value={startTimeInputValue}
-                            onChange={(event) => {
-                              const { value } = event.target
-                              setHistoryDraft((draft) => {
-                                if (value.trim().length === 0) return { ...draft, startedAt: null }
-                                const parsed = parseLocalDateTime(startDateInputValue, value)
-                                return parsed === null ? draft : { ...draft, startedAt: parsed }
-                              })
+                          <InspectorTimeInput
+                            value={resolvedStart}
+                            onChange={(timestamp) => {
+                              setHistoryDraft((draft) => ({ ...draft, startedAt: timestamp }))
                             }}
-                            onKeyDown={handleHistoryFieldKeyDown}
+                            ariaLabel="Select start time"
                           />
                         </div>
                       </label>
                       <label className="calendar-inspector__schedule-group">
                         <span className="calendar-inspector__schedule-heading">End</span>
                         <div className="calendar-inspector__schedule-inputs">
-                          <input
-                            className="history-timeline__field-input history-timeline__field-input--split"
-                            type="date"
-                            value={endDateInputValue}
-                            onChange={(event) => {
-                              const value = event.target.value
-                              setHistoryDraft((draft) => {
-                                if (value.trim().length === 0) return draft
-                                const parsed = parseLocalDateTime(value, endTimeInputValue)
-                                return parsed === null ? draft : { ...draft, endedAt: parsed }
-                              })
+                          <InspectorDateInput
+                            value={resolvedEnd}
+                            onChange={(timestamp) => {
+                              setHistoryDraft((draft) => ({ ...draft, endedAt: timestamp }))
                             }}
-                            onKeyDown={handleHistoryFieldKeyDown}
+                            ariaLabel="Select end date"
                           />
-                          <input
-                            className="history-timeline__field-input history-timeline__field-input--split"
-                            type="time"
-                            step={60}
-                            value={endTimeInputValue}
-                            onChange={(event) => {
-                              const { value } = event.target
-                              setHistoryDraft((draft) => {
-                                if (value.trim().length === 0) return { ...draft, endedAt: null }
-                                const parsed = parseLocalDateTime(endDateInputValue, value)
-                                return parsed === null ? draft : { ...draft, endedAt: parsed }
-                              })
+                          <InspectorTimeInput
+                            value={resolvedEnd}
+                            onChange={(timestamp) => {
+                              setHistoryDraft((draft) => ({ ...draft, endedAt: timestamp }))
                             }}
-                            onKeyDown={handleHistoryFieldKeyDown}
+                            ariaLabel="Select end time"
                           />
                         </div>
                       </label>
@@ -7211,68 +7539,38 @@ useEffect(() => {
                   <label className="calendar-inspector__schedule-group">
                     <span className="calendar-inspector__schedule-heading">Start</span>
                     <div className="calendar-inspector__schedule-inputs">
-                      <input
-                        className="history-timeline__field-input history-timeline__field-input--split"
-                        type="date"
-                        value={startDateInputValue}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          setHistoryDraft((draft) => {
-                            if (value.trim().length === 0) return draft
-                            const parsed = parseLocalDateTime(value, startTimeInputValue)
-                            return parsed === null ? draft : { ...draft, startedAt: parsed }
-                          })
+                      <InspectorDateInput
+                        value={resolvedStart}
+                        onChange={(timestamp) => {
+                          setHistoryDraft((draft) => ({ ...draft, startedAt: timestamp }))
                         }}
-                        onKeyDown={handleHistoryFieldKeyDown}
+                        ariaLabel="Select start date"
                       />
-                      <input
-                        className="history-timeline__field-input history-timeline__field-input--split"
-                        type="time"
-                        step={60}
-                        value={startTimeInputValue}
-                        onChange={(event) => {
-                          const { value } = event.target
-                          setHistoryDraft((draft) => {
-                            if (value.trim().length === 0) return { ...draft, startedAt: null }
-                            const parsed = parseLocalDateTime(startDateInputValue, value)
-                            return parsed === null ? draft : { ...draft, startedAt: parsed }
-                          })
+                      <InspectorTimeInput
+                        value={resolvedStart}
+                        onChange={(timestamp) => {
+                          setHistoryDraft((draft) => ({ ...draft, startedAt: timestamp }))
                         }}
-                        onKeyDown={handleHistoryFieldKeyDown}
+                        ariaLabel="Select start time"
                       />
                     </div>
                   </label>
                   <label className="calendar-inspector__schedule-group">
                     <span className="calendar-inspector__schedule-heading">End</span>
                     <div className="calendar-inspector__schedule-inputs">
-                      <input
-                        className="history-timeline__field-input history-timeline__field-input--split"
-                        type="date"
-                        value={endDateInputValue}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          setHistoryDraft((draft) => {
-                            if (value.trim().length === 0) return draft
-                            const parsed = parseLocalDateTime(value, endTimeInputValue)
-                            return parsed === null ? draft : { ...draft, endedAt: parsed }
-                          })
+                      <InspectorDateInput
+                        value={resolvedEnd}
+                        onChange={(timestamp) => {
+                          setHistoryDraft((draft) => ({ ...draft, endedAt: timestamp }))
                         }}
-                        onKeyDown={handleHistoryFieldKeyDown}
+                        ariaLabel="Select end date"
                       />
-                      <input
-                        className="history-timeline__field-input history-timeline__field-input--split"
-                        type="time"
-                        step={60}
-                        value={endTimeInputValue}
-                        onChange={(event) => {
-                          const { value } = event.target
-                          setHistoryDraft((draft) => {
-                            if (value.trim().length === 0) return { ...draft, endedAt: null }
-                            const parsed = parseLocalDateTime(endDateInputValue, value)
-                            return parsed === null ? draft : { ...draft, endedAt: parsed }
-                          })
+                      <InspectorTimeInput
+                        value={resolvedEnd}
+                        onChange={(timestamp) => {
+                          setHistoryDraft((draft) => ({ ...draft, endedAt: timestamp }))
                         }}
-                        onKeyDown={handleHistoryFieldKeyDown}
+                        ariaLabel="Select end time"
                       />
                     </div>
                   </label>
