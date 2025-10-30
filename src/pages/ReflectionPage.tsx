@@ -20,7 +20,7 @@ import {
 import { createPortal, flushSync } from 'react-dom'
 import './ReflectionPage.css'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, publishGoalsSnapshot, createGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
-import { createTask as apiCreateTask, fetchGoalsHierarchy } from '../lib/goalsApi'
+import { createTask as apiCreateTask, fetchGoalsHierarchy, moveTaskToBucket } from '../lib/goalsApi'
 import {
   DEFAULT_SURFACE_STYLE,
   ensureSurfaceStyle,
@@ -3044,6 +3044,29 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     return map
   }, [goalsSnapshot])
 
+  // Lookup task id from goal+bucket+task name (case-insensitive)
+  const taskIdLookup = useMemo(() => {
+    const map = new Map<string, string>() // key: `${goal.toLowerCase()}::${bucket.toLowerCase()}::${task.toLowerCase()}` -> taskId
+    goalsSnapshot.forEach((goal) => {
+      if (goal.archived) return
+      const gName = goal.name?.trim()
+      if (!gName) return
+      goal.buckets.forEach((bucket) => {
+        if (bucket.archived) return
+        const bName = bucket.name?.trim()
+        if (!bName) return
+        bucket.tasks.forEach((task) => {
+          if (task.completed) return
+          const tName = task.text?.trim()
+          if (!tName) return
+          const key = `${gName.toLowerCase()}::${bName.toLowerCase()}::${tName.toLowerCase()}`
+          if (!map.has(key)) map.set(key, task.id)
+        })
+      })
+    })
+    return map
+  }, [goalsSnapshot])
+
   const trimmedDraftGoal = historyDraft.goalName.trim()
   const trimmedDraftBucket = historyDraft.bucketName.trim()
 
@@ -3447,6 +3470,71 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       })()
     },
     [bucketIdLookup, historyDraft.bucketName, historyDraft.goalName, historyDraft.taskName, updateHistoryDraftField],
+  )
+
+  // When changing the bucket while a known existing task is selected, move that task to the new bucket in Goals/DB.
+  const handleBucketDropdownChange = useCallback(
+    (nextValue: string) => {
+      const prevBucket = historyDraft.bucketName.trim()
+      const currentGoal = historyDraft.goalName.trim()
+      const taskName = historyDraft.taskName.trim()
+      // Update local draft first (this will also auto-select goal if needed)
+      updateHistoryDraftField('bucketName', nextValue)
+
+      // Only proceed if a real task is selected and both previous and next buckets are non-empty
+      if (taskName.length === 0) return
+      if (prevBucket.length === 0) return
+      const owners = taskToOwners.get(taskName.toLowerCase())
+      if (!owners || owners.length === 0) return // not an existing task
+
+      // Resolve source goal for prev bucket: prefer current goal if it owns the bucket; else pick first owner goal for that bucket
+      const prevBucketKey = prevBucket.toLowerCase()
+      const currentGoalOwnsPrev = currentGoal.length > 0
+        ? (bucketOptionsByGoal.get(currentGoal)?.some((b) => b.toLowerCase() === prevBucketKey) ?? false)
+        : false
+      const prevGoal = currentGoalOwnsPrev
+        ? currentGoal
+        : (bucketToGoals.get(prevBucketKey)?.[0] ?? currentGoal)
+
+      const fromBucketId = prevGoal && prevBucket
+        ? bucketIdLookup.get(`${prevGoal.toLowerCase()}::${prevBucket.toLowerCase()}`) ?? null
+        : null
+
+      const nextBucket = nextValue.trim()
+      if (nextBucket.length === 0) return
+      const nextBucketKey = nextBucket.toLowerCase()
+      // Resolve destination goal using the same auto-select policy used in updateHistoryDraftField
+      const currentGoalOwnsNext = currentGoal.length > 0
+        ? (bucketOptionsByGoal.get(currentGoal)?.some((b) => b.toLowerCase() === nextBucketKey) ?? false)
+        : false
+      const nextGoal = currentGoalOwnsNext
+        ? currentGoal
+        : (bucketToGoals.get(nextBucketKey)?.[0] ?? currentGoal)
+
+      const toBucketId = nextGoal && nextBucket
+        ? bucketIdLookup.get(`${nextGoal.toLowerCase()}::${nextBucket.toLowerCase()}`) ?? null
+        : null
+
+      if (!fromBucketId || !toBucketId || fromBucketId === toBucketId) return
+
+      const taskKey = `${prevGoal?.toLowerCase() ?? ''}::${prevBucket.toLowerCase()}::${taskName.toLowerCase()}`
+      const taskId = taskIdLookup.get(taskKey) ?? null
+      if (!taskId) return
+
+      ;(async () => {
+        try {
+          await moveTaskToBucket(taskId, fromBucketId, toBucketId)
+          const result = await fetchGoalsHierarchy()
+          if (result?.goals) {
+            const snapshot = createGoalsSnapshot(result.goals)
+            publishGoalsSnapshot(snapshot)
+          }
+        } catch (error) {
+          console.warn('[ReflectionPage] Failed to move task to new bucket:', error)
+        }
+      })()
+    },
+    [bucketIdLookup, bucketOptionsByGoal, bucketToGoals, historyDraft.bucketName, historyDraft.goalName, historyDraft.taskName, moveTaskToBucket, taskIdLookup, taskToOwners, updateHistoryDraftField],
   )
 
   const handleAddHistorySubtask = useCallback(() => {
@@ -7110,7 +7198,7 @@ useEffect(() => {
                                 value={historyDraft.bucketName}
                                 placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
                                 options={bucketDropdownOptions}
-                                onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
+                                onChange={handleBucketDropdownChange}
                                 disabled={availableBucketOptions.length === 0}
                               />
                             </div>
@@ -7833,7 +7921,7 @@ useEffect(() => {
                       value={historyDraft.bucketName}
                       placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
                       options={bucketDropdownOptions}
-                      onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
+                      onChange={handleBucketDropdownChange}
                       disabled={availableBucketOptions.length === 0}
                     />
                   </div>
@@ -8033,7 +8121,7 @@ useEffect(() => {
                     value={historyDraft.bucketName}
                     placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
                     options={bucketDropdownOptions}
-                    onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
+                    onChange={handleBucketDropdownChange}
                     disabled={availableBucketOptions.length === 0}
                   />
                 </div>
@@ -8679,7 +8767,7 @@ useEffect(() => {
                                 value={historyDraft.bucketName}
                                 placeholder={availableBucketOptions.length ? 'Select bucket' : 'No buckets available'}
                                 options={bucketDropdownOptions}
-                                onChange={(nextValue) => updateHistoryDraftField('bucketName', nextValue)}
+                                onChange={handleBucketDropdownChange}
                                 disabled={availableBucketOptions.length === 0}
                               />
                             </div>

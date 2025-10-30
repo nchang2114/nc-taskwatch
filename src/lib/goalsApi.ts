@@ -731,6 +731,36 @@ export async function setTaskSortIndex(bucketId: string, section: 'active' | 'co
   await updateTaskWithGuard(taskId, bucketId, { sort_index: newSort }, 'id')
 }
 
+/** Move a task to a different bucket while preserving completion/priority and assigning a sensible sort_index.
+ * Priority tasks are placed at the top of their new section; non-priority tasks are appended to the end. */
+export async function moveTaskToBucket(taskId: string, fromBucketId: string, toBucketId: string) {
+  if (!supabase) throw new Error('Supabase client unavailable')
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) {
+    throw new Error('[goalsApi] Missing Supabase session for task move')
+  }
+  if (fromBucketId === toBucketId) return
+  // Fetch current flags to compute section placement
+  const { data: taskRow, error } = await supabase
+    .from('tasks')
+    .select('id, completed, priority')
+    .eq('id', taskId)
+    .eq('bucket_id', fromBucketId)
+    .maybeSingle()
+  if (error) throw error
+  const completed = Boolean((taskRow as any)?.completed)
+  const priority = Boolean((taskRow as any)?.priority)
+  // Compute new sort index in destination bucket
+  let sort_index: number
+  if (priority) {
+    sort_index = await prependSortIndexForTasks(toBucketId, completed)
+  } else {
+    sort_index = await nextSortIndex('tasks', { bucket_id: toBucketId, completed })
+  }
+  // Guarded update that ensures the row still belongs to the expected source bucket
+  await updateTaskWithGuard(taskId, fromBucketId, { bucket_id: toBucketId, sort_index }, 'id, bucket_id, sort_index')
+}
+
 export async function upsertTaskSubtask(
   taskId: string,
   subtask: { id: string; text: string; completed: boolean; sort_index: number },
