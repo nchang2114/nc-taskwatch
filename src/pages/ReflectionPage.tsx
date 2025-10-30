@@ -62,6 +62,7 @@ import {
   upsertRepeatingException,
   type RepeatingException,
 } from '../lib/repeatingExceptions'
+import { broadcastFocusTask } from '../lib/focusChannel'
 
 const JOURNAL_PROMPTS = [
   "What was today's biggest win?",
@@ -982,7 +983,8 @@ const historiesAreEqual = (a: HistoryEntry[], b: HistoryEntry[]): boolean => {
       left.bucketId !== right.bucketId ||
       left.taskId !== right.taskId ||
       left.goalSurface !== right.goalSurface ||
-      left.bucketSurface !== right.bucketSurface
+      left.bucketSurface !== right.bucketSurface ||
+      Boolean((left as any).futureSession) !== Boolean((right as any).futureSession)
     ) {
       return false
     }
@@ -2867,6 +2869,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       if (!detail) return
       // Ensure week view
       setActiveRange('7d')
+      setCalendarView('week')
       // Compute a start time one hour from now, snapped to minute
       const now = Date.now()
       const start = Math.max(now + 60 * 60 * 1000, now + 60 * 1000)
@@ -6888,7 +6891,11 @@ useEffect(() => {
     const hasNotes = entry.notes.trim().length > 0
     const subtasksSummary = subtaskCount > 0 ? `${completedSubtasks}/${subtaskCount} subtasks` : 'No subtasks'
     const notesSummary = hasNotes ? 'Notes added' : 'No notes'
-    const isGuide = entry.id.startsWith('repeat:')
+  const isGuide = entry.id.startsWith('repeat:')
+  const nowTs = Date.now()
+  const isPlanned = Boolean((entry as any).futureSession)
+  const isPastPlanned = isPlanned && entry.startedAt <= nowTs
+  const isUpcomingPlanned = isPlanned && entry.startedAt > nowTs
     const parsedGuide = (() => {
       if (!isGuide) return null
       const parts = entry.id.split(':')
@@ -7105,6 +7112,77 @@ useEffect(() => {
                   }}
                 >
                   Skip
+                </button>
+              </div>
+            ) : null}
+            {!isGuide && isPastPlanned ? (
+              <div className="calendar-popover__cta-row" style={{ display: 'flex', gap: '0.5rem', marginTop: '0.65rem' }}>
+                <button
+                  type="button"
+                  className="history-timeline__action-button history-timeline__action-button--primary"
+                  onClick={() => {
+                    // Confirm: convert planned entry into a real session (clear future flag) and close.
+                    updateHistory((current) => {
+                      const idx = current.findIndex((e) => e.id === entry.id)
+                      if (idx === -1) return current
+                      const next = [...current]
+                      next[idx] = { ...next[idx], futureSession: false }
+                      return next
+                    })
+                    handleCloseCalendarPreview()
+                  }}
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  className="history-timeline__action-button"
+                  onClick={() => {
+                    // Skip: delete the planned entry.
+                    try {
+                      const handler = handleDeleteHistoryEntry(entry.id)
+                      ;(handler as any)({ preventDefault: () => {}, stopPropagation: () => {} })
+                    } catch {
+                      updateHistory((current) => current.filter((e) => e.id !== entry.id))
+                    }
+                    handleCloseCalendarPreview()
+                  }}
+                >
+                  Skip
+                </button>
+              </div>
+            ) : null}
+            {!isGuide && isUpcomingPlanned ? (
+              <div className="calendar-popover__cta-row" style={{ display: 'flex', gap: '0.5rem', marginTop: '0.65rem' }}>
+                <button
+                  type="button"
+                  className="history-timeline__action-button history-timeline__action-button--primary"
+                  onClick={() => {
+                    // Start now: launch as focus task and switch to Taskwatch (App listens to focus events).
+                    const taskLabel = deriveEntryTaskName(entry)
+                    const broadcastSubtasks = (entry.subtasks || []).map((s) => ({
+                      id: s.id,
+                      text: s.text,
+                      completed: s.completed,
+                      sortIndex: (s as any).sortIndex ?? undefined,
+                    }))
+                    broadcastFocusTask({
+                      goalId: entry.goalId ?? '',
+                      goalName: entry.goalName ?? '',
+                      bucketId: entry.bucketId ?? '',
+                      bucketName: entry.bucketName ?? '',
+                      taskId: entry.taskId ?? '',
+                      taskName: taskLabel,
+                      goalSurface: entry.goalSurface ?? undefined,
+                      bucketSurface: entry.bucketSurface ?? undefined,
+                      autoStart: true,
+                      notes: entry.notes ?? '',
+                      subtasks: broadcastSubtasks,
+                    })
+                    handleCloseCalendarPreview()
+                  }}
+                >
+                  Start now
                 </button>
               </div>
             ) : null}
