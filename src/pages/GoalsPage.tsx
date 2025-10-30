@@ -357,6 +357,16 @@ const makeGoalSubtaskInputId = (taskId: string, subtaskId: string): string =>
 
 const SHOW_TASK_DETAILS = true as const
 
+// Auto-size a textarea to fit its content without requiring focus
+const autosizeTextArea = (el: HTMLTextAreaElement | null) => {
+  if (!el) return
+  try {
+    el.style.height = 'auto'
+    const next = `${el.scrollHeight}px`
+    el.style.height = next
+  } catch {}
+}
+
 type FocusPromptTarget = {
   goalId: string
   bucketId: string
@@ -3302,26 +3312,38 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                   )}
                                                 >
                                                   <label className="goal-task-details__subtask-item">
-                                                    <input
-                                                      type="checkbox"
-                                                      className="goal-task-details__checkbox"
-                                                      checked={subtask.completed}
-                                                      onChange={(event) => {
-                                                        event.stopPropagation()
-                                                        handleToggleSubtaskCompleted(task.id, subtask.id)
-                                                      }}
-                                                      onPointerDown={(event) => event.stopPropagation()}
-                                                    />
-                                                    <input
+                                                    <div className="goal-subtask-field">
+                                                      <input
+                                                        type="checkbox"
+                                                        className="goal-task-details__checkbox"
+                                                        checked={subtask.completed}
+                                                        onChange={(event) => {
+                                                          event.stopPropagation()
+                                                          handleToggleSubtaskCompleted(task.id, subtask.id)
+                                                        }}
+                                                        onPointerDown={(event) => event.stopPropagation()}
+                                                      />
+                                                      <textarea
                                                       id={makeGoalSubtaskInputId(task.id, subtask.id)}
-                                                      type="text"
                                                       className="goal-task-details__subtask-input"
+                                                      rows={1}
+                                                        ref={(el) => autosizeTextArea(el)}
                                                       value={subtask.text}
-                                                      onChange={(event) =>
+                                                      onChange={(event) => {
+                                                        const el = event.currentTarget
+                                                        // auto-resize height
+                                                        el.style.height = 'auto'
+                                                        el.style.height = `${el.scrollHeight}px`
                                                         handleSubtaskTextChange(task.id, subtask.id, event.target.value)
-                                                      }
+                                                      }}
+                                                      onInput={(event) => {
+                                                        const el = event.currentTarget
+                                                        el.style.height = 'auto'
+                                                        el.style.height = `${el.scrollHeight}px`
+                                                      }}
                                                       onKeyDown={(event) => {
-                                                        if (event.key === 'Enter') {
+                                                        // Enter commits a new subtask; Shift+Enter inserts newline
+                                                        if (event.key === 'Enter' && !event.shiftKey) {
                                                           event.preventDefault()
                                                           const value = event.currentTarget.value.trim()
                                                           if (value.length === 0) {
@@ -3329,11 +3351,26 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                           }
                                                           handleAddSubtask(task.id, { focus: true })
                                                         }
+                                                         // Escape on empty behaves like clicking off (remove empty)
+                                                         if (event.key === 'Escape') {
+                                                           const value = event.currentTarget.value
+                                                           if (value.trim().length === 0) {
+                                                             event.preventDefault()
+                                                             // trigger blur to run empty-removal logic
+                                                             event.currentTarget.blur()
+                                                           }
+                                                         }
+                                                      }}
+                                                      onFocus={(event) => {
+                                                        const el = event.currentTarget
+                                                        el.style.height = 'auto'
+                                                        el.style.height = `${el.scrollHeight}px`
                                                       }}
                                                       onBlur={() => handleSubtaskBlur(task.id, subtask.id)}
                                                       onPointerDown={(event) => event.stopPropagation()}
                                                       placeholder="Describe subtask"
-                                                    />
+                                                      />
+                                                    </div>
                                                   </label>
                                                   <button
                                                     type="button"
@@ -3867,26 +3904,36 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                   )}
                                                 >
                                                   <label className="goal-task-details__subtask-item">
-                                                    <input
-                                                      type="checkbox"
-                                                      className="goal-task-details__checkbox"
-                                                      checked={subtask.completed}
-                                                      onChange={(event) => {
-                                                        event.stopPropagation()
-                                                        handleToggleSubtaskCompleted(task.id, subtask.id)
-                                                      }}
-                                                      onPointerDown={(event) => event.stopPropagation()}
-                                                    />
-                                                    <input
+                                                    <div className="goal-subtask-field">
+                                                      <input
+                                                        type="checkbox"
+                                                        className="goal-task-details__checkbox"
+                                                        checked={subtask.completed}
+                                                        onChange={(event) => {
+                                                          event.stopPropagation()
+                                                          handleToggleSubtaskCompleted(task.id, subtask.id)
+                                                        }}
+                                                        onPointerDown={(event) => event.stopPropagation()}
+                                                      />
+                                                      <textarea
                                                       id={makeGoalSubtaskInputId(task.id, subtask.id)}
-                                                      type="text"
                                                       className="goal-task-details__subtask-input"
+                                                      rows={1}
+                                                        ref={(el) => autosizeTextArea(el)}
                                                       value={subtask.text}
-                                                      onChange={(event) =>
+                                                      onChange={(event) => {
+                                                        const el = event.currentTarget
+                                                        el.style.height = 'auto'
+                                                        el.style.height = `${el.scrollHeight}px`
                                                         handleSubtaskTextChange(task.id, subtask.id, event.target.value)
-                                                      }
+                                                      }}
+                                                      onInput={(event) => {
+                                                        const el = event.currentTarget
+                                                        el.style.height = 'auto'
+                                                        el.style.height = `${el.scrollHeight}px`
+                                                      }}
                                                       onKeyDown={(event) => {
-                                                        if (event.key === 'Enter') {
+                                                        if (event.key === 'Enter' && !event.shiftKey) {
                                                           event.preventDefault()
                                                           const value = event.currentTarget.value.trim()
                                                           if (value.length === 0) {
@@ -3894,11 +3941,24 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                           }
                                                           handleAddSubtask(task.id, { focus: true })
                                                         }
+                                                         if (event.key === 'Escape') {
+                                                           const value = event.currentTarget.value
+                                                           if (value.trim().length === 0) {
+                                                             event.preventDefault()
+                                                             event.currentTarget.blur()
+                                                           }
+                                                         }
+                                                      }}
+                                                      onFocus={(event) => {
+                                                        const el = event.currentTarget
+                                                        el.style.height = 'auto'
+                                                        el.style.height = `${el.scrollHeight}px`
                                                       }}
                                                       onBlur={() => handleSubtaskBlur(task.id, subtask.id)}
                                                       onPointerDown={(event) => event.stopPropagation()}
                                                       placeholder="Describe subtask"
-                                                    />
+                                                      />
+                                                    </div>
                                                   </label>
                                                   <button
                                                     type="button"
