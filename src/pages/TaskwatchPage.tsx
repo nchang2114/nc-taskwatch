@@ -150,6 +150,16 @@ const sanitizeDomIdSegment = (value: string): string => value.replace(/[^a-z0-9]
 const makeNotebookSubtaskInputId = (entryKey: string, subtaskId: string): string =>
   `taskwatch-subtask-${sanitizeDomIdSegment(entryKey)}-${sanitizeDomIdSegment(subtaskId)}`
 
+// Auto-size a textarea to fit its content without requiring focus
+const autosizeTextArea = (el: HTMLTextAreaElement | null) => {
+  if (!el) return
+  try {
+    el.style.height = 'auto'
+    const next = `${el.scrollHeight}px`
+    el.style.height = next
+  } catch {}
+}
+
 const createEmptySessionMetadata = (taskLabel: string): SessionMetadata => ({
   goalId: null,
   bucketId: null,
@@ -1931,50 +1941,78 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             </button>
           </div>
           {notebookSubtasks.length === 0 ? (
-            <p className="taskwatch-notes__empty-text">No subtasks yet</p>
+            <p className="goal-task-details__empty-text">No subtasks yet</p>
           ) : (
-            <ul className="taskwatch-notes__list">
+            <ul className="goal-task-details__subtask-list">
               {notebookSubtasks.map((subtask) => (
                 <li
                   key={subtask.id}
                   className={classNames(
-                    'taskwatch-notes__item',
-                    subtask.completed && 'taskwatch-notes__item--completed',
+                    'goal-task-details__subtask',
+                    subtask.completed && 'goal-task-details__subtask--completed',
                   )}
                 >
-                  <div className="taskwatch-notes__subtask">
-                    <input
-                      type="checkbox"
-                      className="taskwatch-notes__checkbox goal-task-details__checkbox"
-                      checked={subtask.completed}
-                      onChange={() => handleNotebookSubtaskToggle(subtask.id)}
-                      aria-label={
-                        subtask.text.trim().length > 0 ? `Mark "${subtask.text}" complete` : 'Toggle subtask'
-                      }
-                    />
-                    <input
-                      id={makeNotebookSubtaskInputId(notebookKey, subtask.id)}
-                      type="text"
-                      className="taskwatch-notes__input"
-                      value={subtask.text}
-                      onChange={(event) => handleNotebookSubtaskTextChange(subtask.id, event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          const currentValue = event.currentTarget.value.trim()
-                          if (currentValue.length === 0) {
-                            return
-                          }
-                          handleAddNotebookSubtask()
+                  <label className="goal-task-details__subtask-item">
+                    <div className="goal-subtask-field">
+                      <input
+                        type="checkbox"
+                        className="goal-task-details__checkbox"
+                        checked={subtask.completed}
+                        onChange={() => handleNotebookSubtaskToggle(subtask.id)}
+                        aria-label={
+                          subtask.text.trim().length > 0 ? `Mark "${subtask.text}" complete` : 'Toggle subtask'
                         }
-                      }}
-                      onBlur={() => handleNotebookSubtaskBlur(subtask.id)}
-                      placeholder="Describe subtask"
-                    />
-                  </div>
+                      />
+                      <textarea
+                        id={makeNotebookSubtaskInputId(notebookKey, subtask.id)}
+                        className="goal-task-details__subtask-input"
+                        rows={1}
+                        ref={(el) => autosizeTextArea(el)}
+                        value={subtask.text}
+                        onChange={(event) => {
+                          const el = event.currentTarget
+                          // auto-resize height
+                          el.style.height = 'auto'
+                          el.style.height = `${el.scrollHeight}px`
+                          handleNotebookSubtaskTextChange(subtask.id, event.target.value)
+                        }}
+                        onInput={(event) => {
+                          const el = event.currentTarget
+                          el.style.height = 'auto'
+                          el.style.height = `${el.scrollHeight}px`
+                        }}
+                        onKeyDown={(event) => {
+                          // Enter commits a new subtask; Shift+Enter inserts newline
+                          if (event.key === 'Enter' && !event.shiftKey) {
+                            event.preventDefault()
+                            const value = event.currentTarget.value.trim()
+                            if (value.length === 0) {
+                              return
+                            }
+                            handleAddNotebookSubtask()
+                          }
+                          // Escape on empty behaves like clicking off (remove empty)
+                          if (event.key === 'Escape') {
+                            const value = event.currentTarget.value
+                            if (value.trim().length === 0) {
+                              event.preventDefault()
+                              event.currentTarget.blur()
+                            }
+                          }
+                        }}
+                        onFocus={(event) => {
+                          const el = event.currentTarget
+                          el.style.height = 'auto'
+                          el.style.height = `${el.scrollHeight}px`
+                        }}
+                        onBlur={() => handleNotebookSubtaskBlur(subtask.id)}
+                        placeholder="Describe subtask"
+                      />
+                    </div>
+                  </label>
                   <button
                     type="button"
-                    className="taskwatch-notes__remove"
+                    className="goal-task-details__remove"
                     onClick={() => handleNotebookSubtaskRemove(subtask.id)}
                     aria-label="Remove subtask"
                   >
@@ -1992,7 +2030,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           </label>
           <textarea
             id={notesFieldId}
-            className="taskwatch-notes__textarea"
+            className="goal-task-details__textarea"
             value={notebookNotes}
             onChange={handleNotebookNotesChange}
             placeholder="Capture quick ideas, wins, or blockers while you work..."
