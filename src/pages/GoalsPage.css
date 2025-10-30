@@ -2427,7 +2427,7 @@ html[data-theme='light'] .goal-task-text {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0; /* remove extra spacing below header to pull tasks closer */
 }
 
 
@@ -2485,6 +2485,11 @@ html[data-theme='light'] .goal-task-add:focus-visible {
   border-color: rgba(118, 142, 255, 0.16);
   box-shadow: 0 16px 28px -22px rgba(2, 6, 24, 0.22);
   backdrop-filter: none;
+}
+
+/* Remove extra top padding from the task list so header sits closer */
+.goal-bucket-body > ul {
+  padding-top: 0;
 }
 
 .goal-bucket-item--surface-midnight {
@@ -2885,6 +2890,13 @@ html[data-theme='light'] .goal-insert-line {
   padding-bottom: 8px;
   /* Clip slide-out animation within the list section */
   overflow: hidden;
+}
+
+/* In bucket bodies, pull the list up tight against the header */
+.goal-bucket-body > .mt-2.space-y-2,
+.goal-bucket-body > .goal-task-list,
+.goal-bucket-body > .goal-completed__list {
+  padding-top: 0;
 }
 
 /* Ensure bucket list can host absolute insert line */
