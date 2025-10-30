@@ -962,6 +962,114 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     [focusCandidates],
   )
 
+  // Promote scheduled (planned) sessions that overlap 'now' to the top of the selector
+  type ScheduledSuggestion = FocusCandidate & { startedAt: number; endedAt: number }
+  const scheduledNowSuggestions = useMemo<ScheduledSuggestion[]>(() => {
+    const now = Date.now()
+    const overlapping = history.filter((h) => (h as any).futureSession && h.startedAt <= now && h.endedAt >= now)
+    if (overlapping.length === 0) return []
+    const suggestions: ScheduledSuggestion[] = []
+    overlapping.forEach((entry) => {
+      // Try to enrich from goals snapshot by id first, else by names
+      let match: FocusCandidate | null = null
+      if (entry.taskId) {
+        outer: for (let gi = 0; gi < activeGoalSnapshots.length; gi += 1) {
+          const goal = activeGoalSnapshots[gi]
+          for (let bi = 0; bi < goal.buckets.length; bi += 1) {
+            const bucket = goal.buckets[bi]
+            const task = bucket.tasks.find((t) => t.id === entry.taskId)
+            if (task) {
+              match = {
+                goalId: goal.id,
+                goalName: goal.name,
+                bucketId: bucket.id,
+                bucketName: bucket.name,
+                taskId: task.id,
+                taskName: task.text,
+                completed: task.completed,
+                priority: !!task.priority,
+                difficulty: (task.difficulty as any) ?? 'none',
+                goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+                bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+                notes: typeof task.notes === 'string' ? task.notes : '',
+                subtasks: Array.isArray(task.subtasks)
+                  ? task.subtasks.map((s, idx) => ({ id: s.id, text: s.text, completed: s.completed, sortIndex: typeof s.sortIndex === 'number' ? s.sortIndex : (idx + 1) * NOTEBOOK_SUBTASK_SORT_STEP }))
+                  : [],
+              }
+              break outer
+            }
+          }
+        }
+      }
+      if (!match) {
+        // Fallback: match by labels
+        outer2: for (let gi = 0; gi < activeGoalSnapshots.length; gi += 1) {
+          const goal = activeGoalSnapshots[gi]
+          if ((entry.goalName ?? '').trim() && goal.name.trim() !== (entry.goalName ?? '').trim()) continue
+          for (let bi = 0; bi < goal.buckets.length; bi += 1) {
+            const bucket = goal.buckets[bi]
+            if ((entry.bucketName ?? '').trim() && bucket.name.trim() !== (entry.bucketName ?? '').trim()) continue
+            const task = bucket.tasks.find((t) => t.text.trim() === (entry.taskName ?? '').trim())
+            if (task) {
+              match = {
+                goalId: goal.id,
+                goalName: goal.name,
+                bucketId: bucket.id,
+                bucketName: bucket.name,
+                taskId: task.id,
+                taskName: task.text,
+                completed: task.completed,
+                priority: !!task.priority,
+                difficulty: (task.difficulty as any) ?? 'none',
+                goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+                bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+                notes: typeof task.notes === 'string' ? task.notes : '',
+                subtasks: Array.isArray(task.subtasks)
+                  ? task.subtasks.map((s, idx) => ({ id: s.id, text: s.text, completed: s.completed, sortIndex: typeof s.sortIndex === 'number' ? s.sortIndex : (idx + 1) * NOTEBOOK_SUBTASK_SORT_STEP }))
+                  : [],
+              }
+              break outer2
+            }
+          }
+        }
+      }
+      const fallbackGoalSurface = ensureSurfaceStyle(entry.goalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE)
+      const fallbackBucketSurface = entry.bucketSurface !== null && entry.bucketSurface !== undefined
+        ? ensureSurfaceStyle(entry.bucketSurface, DEFAULT_SURFACE_STYLE)
+        : DEFAULT_SURFACE_STYLE
+      const suggestion: ScheduledSuggestion = {
+        goalId: match?.goalId ?? (entry.goalId ?? ''),
+        goalName: match?.goalName ?? (entry.goalName ?? ''),
+        bucketId: match?.bucketId ?? (entry.bucketId ?? ''),
+        bucketName: match?.bucketName ?? (entry.bucketName ?? ''),
+        taskId: match?.taskId ?? (entry.taskId ?? ''),
+        taskName: match?.taskName ?? (entry.taskName?.trim() || 'Session'),
+        completed: match?.completed ?? false,
+        priority: match?.priority ?? false,
+        difficulty: match?.difficulty ?? 'none',
+        goalSurface: match?.goalSurface ?? fallbackGoalSurface,
+        bucketSurface: match?.bucketSurface ?? fallbackBucketSurface,
+        notes: match?.notes ?? '',
+        subtasks: match?.subtasks ?? [],
+        startedAt: entry.startedAt,
+        endedAt: entry.endedAt,
+      }
+      suggestions.push(suggestion)
+    })
+    // Sort by start then end
+    suggestions.sort((a, b) => (a.startedAt === b.startedAt ? a.endedAt - b.endedAt : a.startedAt - b.startedAt))
+    // Deduplicate by taskId if present, else by names composite
+    const seen = new Set<string>()
+    const unique: ScheduledSuggestion[] = []
+    suggestions.forEach((s) => {
+      const key = s.taskId ? `id:${s.taskId}` : `name:${s.goalName}::${s.bucketName}::${s.taskName}`
+      if (seen.has(key)) return
+      seen.add(key)
+      unique.push(s)
+    })
+    return unique
+  }, [history, activeGoalSnapshots])
+
   const activeFocusCandidate = useMemo(() => {
     if (!focusSource) {
       return null
@@ -3105,6 +3213,74 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             aria-label="Select focus task"
             ref={selectorPopoverRef}
           >
+            {scheduledNowSuggestions.length > 0 ? (
+              <div className="task-selector__section">
+                <h2 className="task-selector__section-title">Scheduled now</h2>
+                <ul className="task-selector__list">
+                  {scheduledNowSuggestions.map((task) => {
+                    const candidateLower = task.taskName.trim().toLocaleLowerCase()
+                    const matches = focusSource
+                      ? focusSource.goalId === task.goalId &&
+                        focusSource.bucketId === task.bucketId &&
+                        candidateLower === currentTaskLower
+                      : !isDefaultTask && candidateLower === currentTaskLower
+                    const diffClass =
+                      task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : ''
+                    const rowClassName = [
+                      'task-selector__task',
+                      'goal-task-row',
+                      diffClass,
+                      'goal-task-row--priority',
+                      matches ? 'task-selector__task--active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                    const diffBadgeClass =
+                      task.difficulty && task.difficulty !== 'none'
+                        ? ['goal-task-diff', `goal-task-diff--${task.difficulty}`, 'task-selector__diff', 'task-selector__diff-chip']
+                            .filter(Boolean)
+                            .join(' ')
+                        : ['goal-task-diff', 'goal-task-diff--none', 'task-selector__diff', 'task-selector__diff-chip']
+                            .join(' ')
+                    return (
+                      <li key={`sched-${task.taskId || task.taskName}`} className="task-selector__item">
+                        <button
+                          type="button"
+                          className={rowClassName}
+                          onClick={() =>
+                            handleSelectTask(task.taskName, {
+                              goalId: task.goalId,
+                              bucketId: task.bucketId,
+                              goalName: task.goalName,
+                              bucketName: task.bucketName,
+                              taskId: task.taskId,
+                              taskDifficulty: task.difficulty,
+                              priority: true,
+                              goalSurface: task.goalSurface,
+                              bucketSurface: task.bucketSurface,
+                              notes: task.notes,
+                              subtasks: task.subtasks,
+                            })
+                          }
+                        >
+                          <div className="task-selector__task-main">
+                            <div className="task-selector__task-content">
+                              <span className="goal-task-text">
+                                <span className="goal-task-text__inner">{task.taskName}</span>
+                              </span>
+                              <span className="task-selector__origin task-selector__origin--dropdown">
+                                {`${task.goalName} → ${task.bucketName}`}
+                              </span>
+                            </div>
+                            <span className={diffBadgeClass} aria-hidden="true" />
+                          </div>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ) : null}
             <div className="task-selector__section">
               <h2 className="task-selector__section-title">Custom focus</h2>
               <form className="task-selector__custom-form" onSubmit={handleCustomSubmit}>

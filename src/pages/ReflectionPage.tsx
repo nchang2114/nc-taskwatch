@@ -3284,6 +3284,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     const defaultDuration = 30 * 60 * 1000
     const endedAt = Math.max(startedAt + defaultDuration, startedAt + MINUTE_MS)
     const elapsed = Math.max(endedAt - startedAt, 1)
+    const isFuture = startedAt > Date.now()
     const entry: HistoryEntry = {
       id: makeHistoryId(),
       taskName: 'New session',
@@ -3299,6 +3300,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       bucketSurface: null,
       notes: '',
       subtasks: [],
+      futureSession: isFuture,
     }
     updateHistory((current) => {
       const next = [...current, entry]
@@ -3585,6 +3587,8 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
         bucketSurface: resolvedBucketSurface,
         notes: nextNotes,
         subtasks: nextSubtasks,
+        // Keep the flag in sync with time edits: anything in the future is planned
+        futureSession: nextStartedAt > Date.now(),
       }
       didUpdateHistory = true
       return next
@@ -5241,6 +5245,8 @@ useEffect(() => {
         // Guide (repeating) sessions support
         baseColor?: string
         isGuide?: boolean
+        // Planned future sessions (real entries scheduled in the future)
+        isPlanned?: boolean
       }
 
       const computeDayEvents = (startMs: number): DayEvent[] => {
@@ -5588,6 +5594,7 @@ useEffect(() => {
           })
         }
 
+        const nowMs = Date.now()
         return combined.map((info, index) => {
           const metadata = resolveGoalMetadata(info.entry, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup)
           const gradientCss = metadata.colorInfo?.gradient?.css
@@ -5612,6 +5619,7 @@ useEffect(() => {
           const showLabel = durationMinutes >= 8
           const showTime = durationMinutes >= 20
           const isGuide = info.entry.id.startsWith('repeat:')
+          const isPlanned = !!(info.entry as any).futureSession || info.previewStart > nowMs
 
           return {
             entry: info.entry,
@@ -5627,6 +5635,7 @@ useEffect(() => {
             showTime,
             baseColor,
             isGuide,
+            isPlanned,
           }
         })
       }
@@ -6283,23 +6292,26 @@ useEffect(() => {
                     {events.map((ev, idx) => {
                       const isDragging = dragPreview?.entryId === ev.entry.id
                       const dragTime = isDragging ? ev.rangeLabel : undefined
+                      const isOutline = !!ev.isGuide || !!ev.isPlanned
                       const backgroundStyle: CSSProperties = ev.isGuide
                         ? { background: 'transparent' }
-                        : { background: ev.gradientCss ?? ev.color }
+                        : ev.isPlanned
+                          ? { background: `color-mix(in srgb, ${ev.baseColor ?? ev.color} 12%, transparent)` }
+                          : { background: ev.gradientCss ?? ev.color }
                       if (ev.clipPath) {
                         backgroundStyle.clipPath = ev.clipPath
                       }
                       return (
                       <div
                         key={`ev-${di}-${idx}-${ev.entry.id}`}
-                        className={`calendar-event${isDragging ? ' calendar-event--dragging' : ''}${ev.isGuide ? ' calendar-event--guide' : ''}`}
+                        className={`calendar-event${isDragging ? ' calendar-event--dragging' : ''}${ev.isGuide ? ' calendar-event--guide' : ''}${ev.isPlanned ? ' calendar-event--planned' : ''}`}
                         style={{
                           top: `${ev.topPct}%`,
                           height: `${ev.heightPct}%`,
                           left: '2px',
                           width: 'calc(100% - 4px)',
                           zIndex: ev.zIndex,
-                          ...(ev.isGuide ? { color: ev.baseColor ?? ev.color, boxShadow: 'none' } : {}),
+                          ...(isOutline ? { color: ev.baseColor ?? ev.color, boxShadow: 'none' } : {}),
                         }}
                         data-drag-time={dragTime}
                         data-entry-id={ev.entry.id}
@@ -8541,6 +8553,8 @@ useEffect(() => {
                 isSelected ? 'history-timeline__block--selected' : '',
                 isDragging ? 'history-timeline__block--dragging' : '',
                 isDragHover ? 'history-timeline__block--drag-hover' : '',
+                // Treat anything scheduled in the future as a planned session, regardless of stored flag
+                (segment.entry.futureSession || resolvedStartedAt > nowTick) ? 'history-timeline__block--future' : '',
               ]
                 .filter(Boolean)
                 .join(' ')

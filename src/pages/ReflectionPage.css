@@ -2081,6 +2081,19 @@ html[data-theme='light'] .calendar-now-line::before {
   opacity: 0.9;
 }
 
+/* Planned (future) real sessions: match guide appearance (outline + transparent fill) */
+.calendar-event--planned {
+  box-shadow: none;
+  pointer-events: auto;
+}
+.calendar-event--planned .calendar-event__background {
+  /* Keep transparent by default; inline style will apply a very subtle fill */
+  border: 1.5px dashed currentColor;
+}
+.calendar-event--planned .calendar-event__time {
+  opacity: 0.9;
+}
+
 .calendar-event__content {
   position: relative;
   z-index: 1;
@@ -2449,6 +2462,18 @@ html[data-theme='light'] .calendar-multi-day-chooser__option:focus-visible {
 html[data-theme='light'] .calendar-multi-day-chooser__option.is-active {
   background: rgba(152, 168, 252, 0.9);
   color: rgba(22, 28, 70, 0.92);
+}
+
+/* Planned future session styling: subtle fill and dashed edge */
+.history-timeline__block--future {
+  opacity: 0.68;
+  border: 1px dashed rgba(172, 184, 250, 0.55);
+  box-shadow: 0 4px 12px rgba(8, 12, 36, 0.24);
+}
+html[data-theme='light'] .history-timeline__block--future {
+  opacity: 0.75;
+  border-color: rgba(136, 148, 218, 0.6);
+  box-shadow: 0 4px 12px rgba(118, 130, 206, 0.18);
 }
 
 /* Compact toolbar adjustments for narrow viewports */

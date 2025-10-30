@@ -42,6 +42,8 @@ export type HistoryEntry = {
   bucketSurface: SurfaceStyle | null
   notes: string
   subtasks: HistorySubtask[]
+  // When true, this entry represents a planned future session rather than logged work
+  futureSession?: boolean
   // Optional tags to link a real entry back to a repeating rule occurrence
   // routineId: id of repeating_sessions rule; occurrenceDate: local YYYY-MM-DD for the occurrence day
   routineId?: string | null
@@ -69,6 +71,7 @@ type HistoryCandidate = {
   bucketSurface?: unknown
   notes?: unknown
   subtasks?: unknown
+  futureSession?: unknown
   routineId?: unknown
   occurrenceDate?: unknown
 }
@@ -190,6 +193,7 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
       const bucketSurfaceRaw = sanitizeSurfaceStyle(candidate.bucketSurface)
       const notesRaw = typeof candidate.notes === 'string' ? candidate.notes : ''
       const subtasksRaw = sanitizeHistorySubtasks(candidate.subtasks)
+      const futureSessionRaw = Boolean((candidate as any).futureSession)
       const routineIdRaw: string | null =
         typeof (candidate as any).routineId === 'string' ? ((candidate as any).routineId as string) : null
       const occurrenceDateRaw: string | null =
@@ -229,6 +233,7 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
         bucketSurface: bucketSurface ? ensureSurfaceStyle(bucketSurface, DEFAULT_SURFACE_STYLE) : null,
         notes: notesRaw,
         subtasks: subtasksRaw,
+        futureSession: futureSessionRaw,
         routineId: routineIdRaw,
         occurrenceDate: occurrenceDateRaw,
       }
@@ -280,7 +285,23 @@ const readHistoryRecords = (): HistoryRecord[] => {
     if (!raw) {
       return []
     }
-    return sanitizeHistoryRecords(JSON.parse(raw))
+    const records = sanitizeHistoryRecords(JSON.parse(raw))
+    // Local normalization: ensure future entries are flagged even before remote sync
+    const now = Date.now()
+    let changed = false
+    for (let i = 0; i < records.length; i += 1) {
+      const r = records[i]
+      if (r.startedAt > now && !r.futureSession) {
+        records[i] = { ...r, futureSession: true, updatedAt: now, pendingAction: 'upsert' }
+        changed = true
+      }
+    }
+    if (changed) {
+      writeHistoryRecords(sortRecordsForStorage(records))
+      // Schedule a background push; broadcast will occur on next persist
+      schedulePendingPush()
+    }
+    return records
   } catch {
     return []
   }
@@ -333,6 +354,7 @@ const recordEqualsEntry = (record: HistoryRecord, entry: HistoryEntry): boolean 
   record.taskId === entry.taskId &&
   record.goalSurface === entry.goalSurface &&
   record.bucketSurface === entry.bucketSurface &&
+  Boolean(record.futureSession) === Boolean(entry.futureSession) &&
   record.notes === entry.notes &&
   areHistorySubtasksEqual(record.subtasks, entry.subtasks)
 
@@ -425,6 +447,7 @@ const payloadFromRecord = (
     bucket_surface: record.bucketSurface,
     created_at: new Date(record.createdAt).toISOString(),
     updated_at: new Date(updatedAt).toISOString(),
+    ...(typeof record.futureSession === 'boolean' ? { future_session: record.futureSession } : {}),
     // Only include routine tags if the DB has these columns; gate with env flag to avoid PostgREST errors
     ...(ENABLE_ROUTINE_TAGS && record.routineId ? { routine_id: record.routineId } : {}),
     ...(ENABLE_ROUTINE_TAGS && record.occurrenceDate ? { occurrence_date: record.occurrenceDate } : {}),
@@ -457,6 +480,7 @@ const mapDbRowToRecord = (row: Record<string, unknown>): HistoryRecord | null =>
     bucketSurface: typeof row.bucket_surface === 'string' ? row.bucket_surface : null,
     notes: typeof row.notes === 'string' ? row.notes : null,
     subtasks: row.subtasks ?? null,
+    futureSession: typeof (row as any).future_session === 'boolean' ? ((row as any).future_session as boolean) : null,
     routineId: typeof (row as any).routine_id === 'string' ? (row as any).routine_id : null,
     occurrenceDate: typeof (row as any).occurrence_date === 'string' ? (row as any).occurrence_date : null,
   }
@@ -520,13 +544,13 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     })
 
     const selectColumns =
-      'id, task_name, elapsed_ms, started_at, ended_at, goal_name, bucket_name, goal_id, bucket_id, task_id, goal_surface, bucket_surface, created_at, updated_at'
+      'id, task_name, elapsed_ms, started_at, ended_at, goal_name, bucket_name, goal_id, bucket_id, task_id, goal_surface, bucket_surface, created_at, updated_at, future_session'
 
     // Limit remote fetch to a recent window to reduce egress
     const sinceIso = new Date(now - HISTORY_REMOTE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
     const { data: remoteRows, error: fetchError } = await supabase
       .from('session_history')
-      .select(selectColumns)
+      .select((selectColumns as unknown) as any)
       .eq('user_id', userId)
       .gte('updated_at', sinceIso)
       .order('updated_at', { ascending: false })
@@ -536,8 +560,8 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     }
 
     const remoteMap = new Map<string, HistoryRecord>()
-    ;(remoteRows ?? []).forEach((row) => {
-      const record = mapDbRowToRecord(row as Record<string, unknown>)
+    ;((remoteRows as any[]) ?? []).forEach((row) => {
+      const record = mapDbRowToRecord((row as unknown) as Record<string, unknown>)
       if (!record) {
         return
       }
@@ -562,6 +586,14 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
         if (record.updatedAt >= sinceMs) {
           recordsById.delete(id)
         }
+      }
+    })
+
+    // Normalize: any record that starts in the future must be marked as a future session
+    const normalizeNow = Date.now()
+    recordsById.forEach((record, id) => {
+      if (record.startedAt > normalizeNow && !record.futureSession) {
+        recordsById.set(id, { ...record, futureSession: true, pendingAction: 'upsert', updatedAt: normalizeNow })
       }
     })
 
