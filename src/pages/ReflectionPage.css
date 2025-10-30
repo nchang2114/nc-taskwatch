@@ -1199,11 +1199,11 @@ html[data-theme='light'] .reflection-pie__center {
 }
 
 .reflection-legend {
-  display: flex;
-  flex-direction: column;
+  /* Make legend compact: allow wrapping into multiple columns on wider viewports */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.75rem;
   width: 100%;
-  max-width: clamp(220px, 42vw, 300px);
 }
 
 .reflection-legend__item {

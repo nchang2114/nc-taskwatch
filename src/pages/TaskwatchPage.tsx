@@ -1901,10 +1901,10 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   )
   const notebookSection = useMemo(
     () => (
-      <section className="taskwatch-notes" aria-label="Subtasks and notes">
+      <section className="taskwatch-notes" aria-label="Subtasks & notes">
         <div className="taskwatch-notes__header">
           <div className="taskwatch-notes__heading">
-            <h2 className="taskwatch-notes__title">Subtasks and notes</h2>
+            <h2 className="taskwatch-notes__title">Subtasks & notes</h2>
             <p className="taskwatch-notes__subtitle">
               <span className="taskwatch-notes__task">{safeTaskName}</span>
               <span className="taskwatch-notes__context">{focusContextLabel}</span>
