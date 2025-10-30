@@ -5,6 +5,7 @@ import GoalsPage from './pages/GoalsPage'
 import ReflectionPage from './pages/ReflectionPage'
 import TaskwatchPage from './pages/TaskwatchPage'
 import { FOCUS_EVENT_TYPE } from './lib/focusChannel'
+import { SCHEDULE_EVENT_TYPE } from './lib/scheduleChannel'
 
 type Theme = 'light' | 'dark'
 type TabKey = 'goals' | 'taskwatch' | 'reflection'
@@ -232,9 +233,15 @@ function App() {
       setActiveTab('taskwatch')
       setIsNavOpen(false)
     }
+    const handleScheduleSwitch = () => {
+      setActiveTab('reflection')
+      setIsNavOpen(false)
+    }
     window.addEventListener(FOCUS_EVENT_TYPE, handleFocusSwitch)
+    window.addEventListener(SCHEDULE_EVENT_TYPE, handleScheduleSwitch)
     return () => {
       window.removeEventListener(FOCUS_EVENT_TYPE, handleFocusSwitch)
+      window.removeEventListener(SCHEDULE_EVENT_TYPE, handleScheduleSwitch)
     }
   }, [])
 

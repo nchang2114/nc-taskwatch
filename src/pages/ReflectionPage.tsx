@@ -20,6 +20,7 @@ import {
 import { createPortal, flushSync } from 'react-dom'
 import './ReflectionPage.css'
 import { readStoredGoalsSnapshot, subscribeToGoalsSnapshot, publishGoalsSnapshot, createGoalsSnapshot, type GoalSnapshot } from '../lib/goalsSync'
+import { SCHEDULE_EVENT_TYPE, type ScheduleBroadcastEvent } from '../lib/scheduleChannel'
 import { createTask as apiCreateTask, fetchGoalsHierarchy, moveTaskToBucket } from '../lib/goalsApi'
 import {
   DEFAULT_SURFACE_STYLE,
@@ -2791,6 +2792,8 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     latestHistoryRef.current = history
   }, [history])
 
+  
+
   // Subscribe to repeating exceptions updates
   useEffect(() => {
     setRepeatingExceptions(readRepeatingExceptions())
@@ -2855,6 +2858,67 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     })
     return { byGoal, byName }
   }, [goalsSnapshot])
+  
+  // Respond to schedule requests from Goals page: switch to week view and create a future session 1 hour from now for 1 hour.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = (event: Event) => {
+      const detail = (event as ScheduleBroadcastEvent).detail
+      if (!detail) return
+      // Ensure week view
+      setActiveRange('7d')
+      // Compute a start time one hour from now, snapped to minute
+      const now = Date.now()
+      const start = Math.max(now + 60 * 60 * 1000, now + 60 * 1000)
+      const end = start + 60 * 60 * 1000
+      const elapsed = Math.max(1, end - start)
+      const goalName = detail.goalName?.trim() ?? ''
+      const bucketName = detail.bucketName?.trim() ?? ''
+      const goalKey = goalName.toLowerCase()
+      const bucketKey = bucketName.toLowerCase()
+      const goalSurface = goalKey.length > 0 ? (goalSurfaceLookup.get(goalKey) ?? DEFAULT_SURFACE_STYLE) : DEFAULT_SURFACE_STYLE
+      let bucketSurface: SurfaceStyle | null = null
+      const scopedBucketKey = `${goalKey}::${bucketKey}`
+      if (bucketKey.length > 0) {
+        bucketSurface = bucketSurfaceLookup.byGoal.get(scopedBucketKey) ?? bucketSurfaceLookup.byName.get(bucketKey) ?? null
+      }
+      const entry: HistoryEntry = {
+        id: makeHistoryId(),
+        taskName: detail.taskName,
+        goalName: goalName || null,
+        bucketName: bucketName || null,
+        goalId: detail.goalId || null,
+        bucketId: detail.bucketId || null,
+        taskId: detail.taskId || null,
+        elapsed,
+        startedAt: start,
+        endedAt: end,
+        goalSurface,
+        bucketSurface: bucketSurface,
+        notes: '',
+        subtasks: [],
+        futureSession: true,
+      }
+      // Close any open editors; do not open an edit panel for scheduled items.
+      setInspectorFallbackMessage(null)
+      setHoveredHistoryId(null)
+      setSelectedHistoryId(null)
+      setEditingHistoryId(null)
+      setPendingNewHistoryId(null)
+      setCalendarEditorEntryId(null)
+      setCalendarInspectorEntryId(null)
+      updateHistory((current) => {
+        const next = [...current, entry]
+        next.sort((a, b) => a.startedAt - b.startedAt)
+        return next
+      })
+      // No edit panel: allow the calendar to render the new planned session inline.
+    }
+    window.addEventListener(SCHEDULE_EVENT_TYPE, handler as EventListener)
+    return () => {
+      window.removeEventListener(SCHEDULE_EVENT_TYPE, handler as EventListener)
+    }
+  }, [ENABLE_HISTORY_INSPECTOR_PANEL, goalSurfaceLookup, bucketSurfaceLookup, updateHistory])
   const enhancedGoalLookup = useMemo(() => {
     if (!activeSession || !activeSession.goalName) {
       return goalLookup

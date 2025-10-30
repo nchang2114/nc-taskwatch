@@ -54,6 +54,7 @@ import {
   type GoalSnapshot,
 } from '../lib/goalsSync'
 import { broadcastFocusTask } from '../lib/focusChannel'
+import { broadcastScheduleTask } from '../lib/scheduleChannel'
 
 // Helper function for class names
 function classNames(...xs: (string | boolean | undefined)[]): string {
@@ -3395,6 +3396,24 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         className="goal-task-focus__button"
                                         onClick={(event) => {
                                           event.stopPropagation()
+                                          broadcastScheduleTask({
+                                            goalId: goal.id,
+                                            goalName: goal.name,
+                                            bucketId: b.id,
+                                            bucketName: b.name,
+                                            taskId: task.id,
+                                            taskName: task.text,
+                                          })
+                                          onDismissFocusPrompt()
+                                        }}
+                                      >
+                                        Schedule Task
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="goal-task-focus__button"
+                                        onClick={(event) => {
+                                          event.stopPropagation()
                                           onStartFocusTask(goal, b, task)
                                           onDismissFocusPrompt()
                                         }}
@@ -3960,6 +3979,24 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         data-focus-prompt-key={focusPromptKey}
                                       >
                                         <div className="goal-task-focus">
+                                          <button
+                                            type="button"
+                                            className="goal-task-focus__button"
+                                            onClick={(event) => {
+                                              event.stopPropagation()
+                                              broadcastScheduleTask({
+                                                goalId: goal.id,
+                                                goalName: goal.name,
+                                                bucketId: b.id,
+                                                bucketName: b.name,
+                                                taskId: task.id,
+                                                taskName: task.text,
+                                              })
+                                              onDismissFocusPrompt()
+                                            }}
+                                          >
+                                            Schedule Task
+                                          </button>
                                           <button
                                             type="button"
                                             className="goal-task-focus__button"
@@ -7718,6 +7755,24 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                             data-focus-prompt-key={focusKey}
                           >
                             <div className="goal-task-focus">
+                              <button
+                                type="button"
+                                className="goal-task-focus__button"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  broadcastScheduleTask({
+                                    goalId: LIFE_ROUTINES_GOAL_ID,
+                                    goalName: LIFE_ROUTINES_NAME,
+                                    bucketId: task.bucketId,
+                                    bucketName: task.title,
+                                    taskId: task.id,
+                                    taskName: task.title,
+                                  })
+                                  dismissFocusPrompt()
+                                }}
+                              >
+                                Schedule Task
+                              </button>
                               <button
                                 type="button"
                                 className="goal-task-focus__button"
