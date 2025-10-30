@@ -35,7 +35,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: clamp(1rem, 2.4vw, 1.4rem);
+  gap: 0.25rem; /* tighten space between toolbar and calendar for full fit */
 }
 
 @media (min-width: 1024px) {
@@ -1961,7 +1961,7 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
   position: relative;
   display: grid;
   grid-template-columns: 56px 1fr;
-  height: 540px; /* initial viewport height */
+  height: 720px; /* increased viewport height for more vertical space per hour */
 }
 
 .calendar-time-axis {
