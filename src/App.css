@@ -2166,8 +2166,8 @@ html[data-theme='light'] .nav-links--drawer {
   width: min(520px, 100%);
   display: flex;
   flex-direction: column;
-  gap: clamp(0.9rem, 2.4vw, 1.4rem);
-  padding: clamp(1.2rem, 3.4vw, 1.9rem);
+  gap: clamp(0.6rem, 2vw, 1rem); /* tighter overall spacing for a more compact feel */
+  padding: clamp(1rem, 3vw, 1.6rem); /* slightly reduced padding */
   border-radius: clamp(16px, 3.6vw, 22px);
   border: 1px solid rgba(138, 156, 255, 0.32);
   background:
@@ -2269,26 +2269,27 @@ html[data-theme='light'] .nav-links--drawer {
 .snapback-panel__content {
   display: flex;
   flex-direction: column;
-  gap: clamp(0.85rem, 2.2vw, 1.25rem);
+  gap: clamp(0.75rem, 2vw, 1rem);
 }
 
 .snapback-panel__grid {
   display: grid;
-  gap: clamp(0.8rem, 2vw, 1.1rem);
+  gap: clamp(0.65rem, 1.6vw, 0.9rem); /* slightly tighter section spacing */
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Always stack sections vertically to let each take full width */
 @media (min-width: 720px) {
   .snapback-panel__grid {
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 .snapback-panel__section {
   display: flex;
   flex-direction: column;
-  gap: clamp(0.55rem, 1.8vw, 0.85rem);
-  padding: clamp(0.75rem, 2vw, 1.05rem);
+  gap: clamp(0.5rem, 1.6vw, 0.8rem);
+  padding: clamp(0.65rem, 1.8vw, 0.9rem);
   border-radius: clamp(12px, 2.4vw, 16px);
   border: 1px solid rgba(128, 148, 240, 0.28);
   background: rgba(32, 40, 96, 0.46);
@@ -2368,7 +2369,7 @@ html[data-theme='light'] .nav-links--drawer {
 
 .snapback-panel__textarea {
   width: 100%;
-  min-height: clamp(90px, 18vw, 120px);
+  min-height: clamp(84px, 16vw, 110px);
   resize: vertical;
   border-radius: clamp(12px, 2vw, 16px);
   border: 1px solid rgba(138, 158, 255, 0.32);

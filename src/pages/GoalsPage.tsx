@@ -2462,15 +2462,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
               ) : null}
             </div>
 
-            {isArchived ? (
-              <p className="mt-2 text-xs text-white/60">
-                Restore this goal to continue editing. Buckets and tasks stay as you left them.
-              </p>
-            ) : (
-              <p className="mt-2 text-xs text-white/60">
-                Buckets surface in Stopwatch when <span className="text-white">Favourited</span>.
-              </p>
-            )}
+            {isArchived ? null : null}
 
             <ul
               className="goal-bucket-list mt-3 md:mt-4 space-y-2"

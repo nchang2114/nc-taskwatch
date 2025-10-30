@@ -2858,7 +2858,8 @@ html[data-theme='light'] .goal-insert-line {
 /* Ensure bucket list can host absolute insert line */
 .goal-bucket-list {
   position: relative;
-  padding-top: 8px;
+  /* Remove top padding to bring task bank line closer to buckets */
+  padding-top: 0;
   padding-bottom: 8px;
 }
 
@@ -2942,6 +2943,9 @@ html[data-theme='light'] .goal-insert-line {
   z-index: 3;
   /* Mask out the middle so only the outline is visible */
   -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;

@@ -2173,7 +2173,7 @@ const computeRangeOverview = (
 
 export default function ReflectionPage() {
   type CalendarViewMode = 'day' | '3d' | 'week' | 'month' | 'year'
-  const [calendarView, setCalendarView] = useState<CalendarViewMode>('month')
+  const [calendarView, setCalendarView] = useState<CalendarViewMode>('week')
   const [multiDayCount, setMultiDayCount] = useState<number>(4)
   const [showMultiDayChooser, setShowMultiDayChooser] = useState(false)
   const [historyDayOffset, setHistoryDayOffset] = useState(0)
@@ -8410,14 +8410,14 @@ useEffect(() => {
     <section className="site-main__inner reflection-page" aria-label="Reflection">
       <div className="reflection-intro">
         <h1 className="reflection-title">Reflection</h1>
-        <p className="reflection-subtitle">Review your progress and capture insights to guide tomorrow.</p>
+        <p className="reflection-subtitle">Review your progress and capture insights to guide your future.</p>
       </div>
 
       <div className="history-block">
         <div className="history-section__heading">
-          <h2 className="reflection-section__title">Session History</h2>
+          <h2 className="reflection-section__title">Session History Calendar</h2>
           <p className="history-section__desc">
-            Review today’s focus sessions, fine-tune their timing, and capture what made each block productive.
+            Review focus sessions over time. Click on a session to view or edit details.
           </p>
         </div>
         <div className="history-layout">

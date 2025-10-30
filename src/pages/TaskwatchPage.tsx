@@ -3759,7 +3759,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         </div>
       ) : null}
 
-      <p className="meta meta-note">Built with React + Vite for seamless desktop and mobile use.</p>
+      <p className="meta meta-note">BUILT WITH REACT + VITE :D</p>
     </div>
   )
 }
