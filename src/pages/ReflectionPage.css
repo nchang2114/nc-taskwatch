@@ -1993,7 +1993,7 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
   left: 0;
   right: 0;
   height: 1px;
-  background: rgba(124, 138, 220, 0.22);
+  background: rgba(124, 138, 220, 0.2);
 }
 
 /* Current time indicator line */
@@ -2366,7 +2366,7 @@ html[data-theme='light'] .calendar-year-cell {
 }
 
 html[data-theme='light'] .calendar-gridline {
-  background: rgba(160, 172, 236, 0.35);
+  background: rgba(160, 172, 236, 0.2);
 }
 
 /* Cursor affordances: show resize near edges on hover */
