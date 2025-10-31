@@ -1344,7 +1344,7 @@ type Milestone = {
   name: string
   date: string // ISO string (midnight local)
   completed: boolean
-  role?: 'start' | 'end' | 'normal'
+  role: 'start' | 'end' | 'normal'
 }
 
 const MILESTONE_VIS_KEY = 'nc-taskwatch-milestones-visible-v1'
