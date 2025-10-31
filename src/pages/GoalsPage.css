@@ -1264,6 +1264,9 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   /* Milestone connector geometry */
   --ms-connector: 44px;
   --ms-gap: 6px;
+  --ms-node-clearance: 10px; /* space between node ring and vertical stem */
+  --ms-node-bg: #0f1a48; /* inner fill used to mask lines for hollow node */
+  --ms-node-inner: var(--ms-node-bg); /* inner disk color (changes on complete) */
 }
 .milestones__header {
   display: flex;
@@ -1312,7 +1315,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   height: 14px;
   border-radius: 50%;
   border: 2px solid rgba(173, 186, 255, 0.8);
-  background: #0f1a48;
+  background: var(--ms-node-bg); /* mask the center so lines don't show through */
   box-shadow: 0 2px 8px rgba(2,6,28,0.5);
   cursor: pointer;
   touch-action: none;
@@ -1322,13 +1325,31 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   padding: 0; /* avoid UA padding */
   line-height: 0; /* avoid extra inline height */
   box-sizing: content-box; /* 14px content + 2*2px border = 18px total */
+  z-index: 2; /* ensure node sits above stems */
 }
-.milestones__node--done {
-  background: linear-gradient(135deg, #22c55e, #4ade80);
-  border-color: rgba(34, 197, 94, 0.9);
+
+/* Outer soft ring/halo to mimic layered ring look */
+.milestones__node::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 163, 255, 0.28);
+  background: transparent;
 }
-.milestones__node--start { border-color: rgba(250, 204, 21, 0.9); background: linear-gradient(135deg, #fde047, #f59e0b); }
-.milestones__node--end { border-color: rgba(99, 102, 241, 0.9); background: linear-gradient(135deg, #60a5fa, #8b5cf6); }
+
+/* Inner disk (filled on completion) */
+.milestones__node::after {
+  content: '';
+  position: absolute;
+  inset: 3px; /* leaves a visible ring */
+  border-radius: 50%;
+  background: var(--ms-node-inner);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 255, 0.18);
+}
+.milestones__node--done { --ms-node-inner: linear-gradient(135deg, #b6c7ff, #8fb0ff); }
+.milestones__node--start { border-color: rgba(250, 204, 21, 0.9); }
+.milestones__node--end { border-color: rgba(99, 102, 241, 0.9); }
 .milestones__label {
   position: absolute;
   left: 50%;
@@ -1340,7 +1361,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   text-align: center;
   white-space: normal;
   width: min(16rem, 44vw);
-  z-index: 2; /* ensure label sits above connector */
+  z-index: 3; /* ensure label sits above connector and node */
 }
 /* Position is controlled below using connector + gap to ensure symmetry */
 .milestones__name {
@@ -1359,6 +1380,21 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   cursor: pointer;
   user-select: text;
   pointer-events: auto;
+}
+/* In card display mode, render plain text (no pill boxes) */
+.milestones__card .milestones__name--text,
+.milestones__card .milestones__date--text {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.milestones__card .milestones__name--text {
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.milestones__card .milestones__date--text {
+  font-size: 0.72rem;
+  color: rgba(214, 226, 255, 0.82);
 }
 .milestones__text--locked {
   cursor: default;
@@ -1393,23 +1429,51 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   top: -4px;
   bottom: -4px;
 }
-.milestones__stem--down { top: 0; height: var(--ms-connector); }
-.milestones__stem--up { top: calc(-1 * var(--ms-connector)); height: var(--ms-connector); }
+.milestones__stem--down { top: var(--ms-node-clearance); height: calc(var(--ms-connector) - var(--ms-node-clearance)); }
+.milestones__stem--up { top: calc(-1 * var(--ms-connector) - var(--ms-node-clearance)); height: calc(var(--ms-connector) - var(--ms-node-clearance)); }
 
 /* Position labels relative to the node center (wrap top), just beyond connector end */
 .milestones__label--bottom { top: calc(var(--ms-connector) + var(--ms-gap)); }
 .milestones__label--top { bottom: calc(var(--ms-connector) + var(--ms-gap)); top: auto; }
+/* Compact milestone details card */
+.milestones__card {
+  position: relative;
+  /* Add headroom to avoid overlap with the close button */
+  padding: 1.7rem 0.6rem 0.6rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(148, 163, 255, 0.35);
+  background: rgba(12, 18, 56, 0.55);
+  box-shadow: 0 8px 24px -18px rgba(2, 6, 28, 0.6);
+  display: grid;
+  gap: 0.25rem;
+  justify-items: center;
+}
+
 .milestones__remove {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
   border: 1px solid rgba(255, 100, 120, 0.5);
   background: rgba(255, 100, 120, 0.15);
   color: rgba(255, 180, 188, 0.96);
-  width: 1.4rem; height: 1.4rem;
+  width: 1.2rem; height: 1.2rem;
   border-radius: 0.35rem;
+  line-height: 1;
 }
 
 html[data-theme='light'] .milestones {
   background: rgba(244, 247, 255, 0.86);
   border-color: rgba(128, 146, 238, 0.34);
+  --ms-node-bg: #ffffff;
+}
+html[data-theme='light'] .milestones__card {
+  background: rgba(250, 252, 255, 0.96);
+  border-color: rgba(128, 146, 238, 0.38);
+  box-shadow: 0 14px 28px -22px rgba(82, 96, 150, 0.28);
+}
+html[data-theme='light'] .milestones__remove {
+  background: rgba(248, 113, 113, 0.12);
+  color: rgba(200, 40, 40, 0.92);
 }
 html[data-theme='light'] .milestones__add { background: rgba(92, 91, 255, 0.12); color: rgba(28, 36, 94, 0.94); }
 html[data-theme='light'] .milestones__add:hover, html[data-theme='light'] .milestones__add:focus-visible { background: rgba(92, 91, 255, 0.2); }

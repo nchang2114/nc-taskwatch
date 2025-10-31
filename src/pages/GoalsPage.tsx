@@ -1706,63 +1706,66 @@ const MilestoneLayer: React.FC<{
                   aria-hidden={true}
                 />
                 <div className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom')}>
-                  {!isStart && editing?.id === m.id && editing.field === 'name' ? (
-                    <input
-                      ref={editInputRef}
-                      className="milestones__name"
-                      defaultValue={m.name}
-                      onBlur={(ev) => { updateName(m.id, ev.target.value); setEditing(null) }}
-                      onKeyDown={(ev) => {
-                        if (ev.key === 'Enter') { updateName(m.id, (ev.target as HTMLInputElement).value); setEditing(null) }
-                        if (ev.key === 'Escape') { setEditing(null) }
-                      }}
-                      aria-label="Edit milestone name"
-                    />
-                  ) : (
-                    <div
-                      className={classNames('milestones__name', 'milestones__name--text', isStart && 'milestones__text--locked')}
-                      onDoubleClick={!isStart ? ((ev) => { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) }) : undefined}
-                      onClick={!isStart ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) } }) : undefined}
-                      onPointerDown={!isStart ? handleMaybeDoubleTap(() => setEditing({ id: m.id, field: 'name' })) : undefined}
-                      role={!isStart ? 'button' : undefined}
-                      tabIndex={!isStart ? 0 : -1}
-                      onKeyDown={!isStart ? ((ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) } }) : undefined}
-                      aria-label={isStart ? `Milestone name ${m.name}.` : `Milestone name ${m.name}. Double tap to edit.`}
-                    >
-                      {m.name}
-                    </div>
-                  )}
+                  <div className="milestones__card">
+                    {m.role !== 'start' && onlyNonStartId !== m.id ? (
+                      <button className="milestones__remove" type="button" onClick={() => removeMilestone(m.id)} aria-label="Remove milestone">×</button>
+                    ) : null}
 
-                  {!isStart && !(onlyNonStartId === m.id) && editing?.id === m.id && editing.field === 'date' ? (
-                    <input
-                      ref={editInputRef}
-                      className="milestones__date"
-                      type="date"
-                      defaultValue={new Date(m.date).toISOString().slice(0,10)}
-                      onBlur={(ev) => { const d = new Date(ev.target.value); updateDate(m.id, toStartOfDayIso(d)); setEditing(null) }}
-                      onKeyDown={(ev) => {
-                        if (ev.key === 'Enter') { const d = new Date((ev.target as HTMLInputElement).value); updateDate(m.id, toStartOfDayIso(d)); setEditing(null) }
-                        if (ev.key === 'Escape') { setEditing(null) }
-                      }}
-                      aria-label="Edit milestone date"
-                    />
-                  ) : (
-                    <div
-                      className={classNames('milestones__date', 'milestones__date--text', (isStart || onlyNonStartId === m.id) && 'milestones__text--locked')}
-                      onDoubleClick={!isStart && !(onlyNonStartId === m.id) ? ((ev) => { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) }) : undefined}
-                      onClick={!isStart && !(onlyNonStartId === m.id) ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) } }) : undefined}
-                      onPointerDown={!isStart && !(onlyNonStartId === m.id) ? handleMaybeDoubleTap(() => setEditing({ id: m.id, field: 'date' })) : undefined}
-                      role={!isStart && !(onlyNonStartId === m.id) ? 'button' : undefined}
-                      tabIndex={!isStart && !(onlyNonStartId === m.id) ? 0 : -1}
-                      onKeyDown={!isStart && !(onlyNonStartId === m.id) ? ((ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) } }) : undefined}
-                      aria-label={isStart || onlyNonStartId === m.id ? `Milestone date ${formatShort(m.date)}.` : `Milestone date ${formatShort(m.date)}. Double tap to edit.`}
-                    >
-                      {formatShort(m.date)}
-                    </div>
-                  )}
-                  {m.role !== 'start' && onlyNonStartId !== m.id ? (
-                    <button className="milestones__remove" type="button" onClick={() => removeMilestone(m.id)} aria-label="Remove milestone">×</button>
-                  ) : null}
+                    {!isStart && editing?.id === m.id && editing.field === 'name' ? (
+                      <input
+                        ref={editInputRef}
+                        className="milestones__name"
+                        defaultValue={m.name}
+                        onBlur={(ev) => { updateName(m.id, ev.target.value); setEditing(null) }}
+                        onKeyDown={(ev) => {
+                          if (ev.key === 'Enter') { updateName(m.id, (ev.target as HTMLInputElement).value); setEditing(null) }
+                          if (ev.key === 'Escape') { setEditing(null) }
+                        }}
+                        aria-label="Edit milestone name"
+                      />
+                    ) : (
+                      <div
+                        className={classNames('milestones__name', 'milestones__name--text', isStart && 'milestones__text--locked')}
+                        onDoubleClick={!isStart ? ((ev) => { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) }) : undefined}
+                        onClick={!isStart ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) } }) : undefined}
+                        onPointerDown={!isStart ? handleMaybeDoubleTap(() => setEditing({ id: m.id, field: 'name' })) : undefined}
+                        role={!isStart ? 'button' : undefined}
+                        tabIndex={!isStart ? 0 : -1}
+                        onKeyDown={!isStart ? ((ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) } }) : undefined}
+                        aria-label={isStart ? `Milestone name ${m.name}.` : `Milestone name ${m.name}. Double tap to edit.`}
+                      >
+                        {m.name}
+                      </div>
+                    )}
+
+                    {!isStart && !(onlyNonStartId === m.id) && editing?.id === m.id && editing.field === 'date' ? (
+                      <input
+                        ref={editInputRef}
+                        className="milestones__date"
+                        type="date"
+                        defaultValue={new Date(m.date).toISOString().slice(0,10)}
+                        onBlur={(ev) => { const d = new Date(ev.target.value); updateDate(m.id, toStartOfDayIso(d)); setEditing(null) }}
+                        onKeyDown={(ev) => {
+                          if (ev.key === 'Enter') { const d = new Date((ev.target as HTMLInputElement).value); updateDate(m.id, toStartOfDayIso(d)); setEditing(null) }
+                          if (ev.key === 'Escape') { setEditing(null) }
+                        }}
+                        aria-label="Edit milestone date"
+                      />
+                    ) : (
+                      <div
+                        className={classNames('milestones__date', 'milestones__date--text', (isStart || onlyNonStartId === m.id) && 'milestones__text--locked')}
+                        onDoubleClick={!isStart && !(onlyNonStartId === m.id) ? ((ev) => { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) }) : undefined}
+                        onClick={!isStart && !(onlyNonStartId === m.id) ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) } }) : undefined}
+                        onPointerDown={!isStart && !(onlyNonStartId === m.id) ? handleMaybeDoubleTap(() => setEditing({ id: m.id, field: 'date' })) : undefined}
+                        role={!isStart && !(onlyNonStartId === m.id) ? 'button' : undefined}
+                        tabIndex={!isStart && !(onlyNonStartId === m.id) ? 0 : -1}
+                        onKeyDown={!isStart && !(onlyNonStartId === m.id) ? ((ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) } }) : undefined}
+                        aria-label={isStart || onlyNonStartId === m.id ? `Milestone date ${formatShort(m.date)}.` : `Milestone date ${formatShort(m.date)}. Double tap to edit.`}
+                      >
+                        {formatShort(m.date)}
+                      </div>
+                    )}
+                  </div>
                 </div>
             </div>
           )
