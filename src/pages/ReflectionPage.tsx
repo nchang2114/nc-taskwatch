@@ -5495,10 +5495,14 @@ useEffect(() => {
             const task = (rule.taskName?.trim() || 'Session')
             const goal = rule.goalName?.trim() || null
             const bucket = rule.bucketName?.trim() || null
-            const duplicateReal = effectiveHistory.some(
-              (h) => h.startedAt === startedAt && h.endedAt === endedAt && (h.taskName?.trim() || 'Session') === task && (h.goalName ?? null) === goal && (h.bucketName ?? null) === bucket,
-            )
-            if (duplicateReal) return null
+          const TOL = 60 * 1000 // 1 minute tolerance for DST/rounding
+          const duplicateReal = effectiveHistory.some((h) => {
+            const sameLabel = (h.taskName?.trim() || 'Session') === task && (h.goalName ?? null) === goal && (h.bucketName ?? null) === bucket
+            const startMatch = Math.abs(h.startedAt - startedAt) <= TOL
+            const endMatch = Math.abs(h.endedAt - endedAt) <= TOL
+            return sameLabel && startMatch && endMatch
+          })
+          if (duplicateReal) return null
             const entryId = `repeat:${rule.id}:${baseDayStart}`
             const entry: HistoryEntry = {
               id: entryId,
@@ -5898,6 +5902,17 @@ useEffect(() => {
                 next.sort((a, b) => a.startedAt - b.startedAt)
                 return next
               })
+              // Persist an exception so future guide synthesis for this occurrence is suppressed even if tags get dropped remotely
+              try {
+                void upsertRepeatingException({
+                  routineId: ruleId,
+                  occurrenceDate: ymd,
+                  action: 'rescheduled',
+                  newStartedAt: realEntry.startedAt,
+                  newEndedAt: realEntry.endedAt,
+                  notes: null,
+                })
+              } catch {}
               // Update the drag state to reference the new real entry id and baseline times
               s.entryId = realEntry.id
               s.initialStart = realEntry.startedAt
@@ -6519,6 +6534,16 @@ useEffect(() => {
                               next.sort((a, b) => a.startedAt - b.startedAt)
                               return next
                             })
+                            try {
+                              void upsertRepeatingException({
+                                routineId: ruleId,
+                                occurrenceDate: ymd,
+                                action: 'rescheduled',
+                                newStartedAt: newEntry.startedAt,
+                                newEndedAt: newEntry.endedAt,
+                                notes: null,
+                              })
+                            } catch {}
                             setSelectedHistoryId(newEntry.id)
                             setHoveredHistoryId(newEntry.id)
                             setEditingHistoryId(newEntry.id)
@@ -7090,6 +7115,16 @@ useEffect(() => {
                       next.sort((a, b) => a.startedAt - b.startedAt)
                       return next
                     })
+                    try {
+                      void upsertRepeatingException({
+                        routineId: parsedGuide.ruleId,
+                        occurrenceDate: parsedGuide.ymd,
+                        action: 'rescheduled',
+                        newStartedAt: newEntry.startedAt,
+                        newEndedAt: newEntry.endedAt,
+                        notes: null,
+                      })
+                    } catch {}
                     handleCloseCalendarPreview()
                   }}
                 >

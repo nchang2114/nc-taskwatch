@@ -574,7 +574,10 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       const remoteTimestamp = record.updatedAt
       const localTimestamp = local.updatedAt
       if (remoteTimestamp > localTimestamp || (!local.pendingAction && remoteTimestamp === localTimestamp)) {
-        recordsById.set(record.id, { ...record, pendingAction: null })
+        // Preserve routine tags from local if remote mapping lacks them (schema may not include these columns)
+        const routineId = (record as any).routineId ?? (local as any).routineId ?? null
+        const occurrenceDate = (record as any).occurrenceDate ?? (local as any).occurrenceDate ?? null
+        recordsById.set(record.id, { ...record, routineId, occurrenceDate, pendingAction: null })
       }
     })
 
