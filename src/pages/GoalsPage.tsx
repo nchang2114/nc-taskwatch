@@ -1545,6 +1545,9 @@ const MilestoneLayer: React.FC<{
   const updateDate = (id: string, iso: string) => {
     const found = milestonesRef.current.find((m) => m.id === id)
     if (found?.role === 'start') return
+    const nonStartNow = milestonesRef.current.filter((m) => m.role !== 'start')
+    const isOnlyNonStart = nonStartNow.length === 1 && nonStartNow[0]?.id === id
+    if (isOnlyNonStart) return
     setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, date: iso } : m)))
     if (found) {
       const updated = { ...found, date: iso }
@@ -1553,19 +1556,13 @@ const MilestoneLayer: React.FC<{
   }
 
   const removeMilestone = (id: string) => {
-    setMilestones((cur) => {
-      const next = cur.filter((m) => m.id !== id)
-      const hasStartOnly = next.length === 1 && next[0]?.role === 'start'
-      if (hasStartOnly) {
-        const start = next[0]
-        const d = new Date(start.date)
-        d.setDate(d.getDate() + 7)
-        const ms: Milestone = { id: uid(), name: 'Milestone 1', date: toStartOfDayIso(d), completed: false, role: 'normal' }
-        apiUpsertGoalMilestone(goal.id, ms).catch((err) => console.warn('[Milestones] Failed to re-add milestone after delete', err))
-        return [...next, ms]
-      }
-      return next
-    })
+    const nonStartNow = milestonesRef.current.filter((m) => m.role !== 'start')
+    const isOnlyNonStart = nonStartNow.length === 1 && nonStartNow[0]?.id === id
+    if (isOnlyNonStart) {
+      // Disallow deleting the last non-start milestone
+      return
+    }
+    setMilestones((cur) => cur.filter((m) => m.id !== id))
     apiDeleteGoalMilestone(goal.id, id).catch((err) => console.warn('[Milestones] Failed to delete', err))
   }
 
@@ -1609,12 +1606,19 @@ const MilestoneLayer: React.FC<{
 
   const latestId = sorted[sorted.length - 1]?.id
 
+  // Determine if exactly one non-start milestone exists
+  const nonStartIds = useMemo(() => milestones.filter((m) => m.role !== 'start').map((m) => m.id), [milestones])
+  const onlyNonStartId = useMemo(() => (nonStartIds.length === 1 ? nonStartIds[0] : null), [nonStartIds])
+
   const beginDrag = (id: string, e: React.PointerEvent<HTMLElement>) => {
     e.preventDefault()
     e.stopPropagation()
     // Prevent dragging the Start node to keep it aligned with goal.createdAt
     const dragged = milestonesRef.current.find((m) => m.id === id)
-    if (dragged?.role === 'start') {
+    // Also prevent dragging if this is the only non-start milestone remaining
+    const nonStartNow = milestonesRef.current.filter((m) => m.role !== 'start')
+    const isOnlyNonStart = nonStartNow.length === 1 && nonStartNow[0]?.id === id
+    if (dragged?.role === 'start' || isOnlyNonStart) {
       return
     }
     draggingIdRef.current = id
@@ -1681,6 +1685,7 @@ const MilestoneLayer: React.FC<{
           const pct = posPct(m.date)
           const isStart = m.role === 'start'
           const isLatest = m.id === latestId
+          const isOnlyNonStart = !isStart && onlyNonStartId === m.id
           const isTop = idx % 2 === 0
           return (
             <div key={m.id} className="milestones__node-wrap" style={{ left: `${pct}%` }}>
@@ -1692,12 +1697,12 @@ const MilestoneLayer: React.FC<{
                   if (isStart) { ev.preventDefault(); ev.stopPropagation(); return }
                   toggleComplete(m.id)
                 }}
-                onPointerDown={(ev) => { if (!isStart) beginDrag(m.id, ev) }}
+                onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart) beginDrag(m.id, ev) }}
                 aria-label={`${m.name} ${formatShort(m.date)}${m.completed ? ' (completed)' : ''}`}
               />
                 <span
                   className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down')}
-                  onPointerDown={(ev) => { if (!isStart) beginDrag(m.id, ev) }}
+                  onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart) beginDrag(m.id, ev) }}
                   aria-hidden={true}
                 />
                 <div className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom')}>
@@ -1728,7 +1733,7 @@ const MilestoneLayer: React.FC<{
                     </div>
                   )}
 
-                  {!isStart && editing?.id === m.id && editing.field === 'date' ? (
+                  {!isStart && !(onlyNonStartId === m.id) && editing?.id === m.id && editing.field === 'date' ? (
                     <input
                       ref={editInputRef}
                       className="milestones__date"
@@ -1743,19 +1748,19 @@ const MilestoneLayer: React.FC<{
                     />
                   ) : (
                     <div
-                      className={classNames('milestones__date', 'milestones__date--text', isStart && 'milestones__text--locked')}
-                      onDoubleClick={!isStart ? ((ev) => { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) }) : undefined}
-                      onClick={!isStart ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) } }) : undefined}
-                      onPointerDown={!isStart ? handleMaybeDoubleTap(() => setEditing({ id: m.id, field: 'date' })) : undefined}
-                      role={!isStart ? 'button' : undefined}
-                      tabIndex={!isStart ? 0 : -1}
-                      onKeyDown={!isStart ? ((ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) } }) : undefined}
-                      aria-label={isStart ? `Milestone date ${formatShort(m.date)}.` : `Milestone date ${formatShort(m.date)}. Double tap to edit.`}
+                      className={classNames('milestones__date', 'milestones__date--text', (isStart || onlyNonStartId === m.id) && 'milestones__text--locked')}
+                      onDoubleClick={!isStart && !(onlyNonStartId === m.id) ? ((ev) => { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) }) : undefined}
+                      onClick={!isStart && !(onlyNonStartId === m.id) ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) } }) : undefined}
+                      onPointerDown={!isStart && !(onlyNonStartId === m.id) ? handleMaybeDoubleTap(() => setEditing({ id: m.id, field: 'date' })) : undefined}
+                      role={!isStart && !(onlyNonStartId === m.id) ? 'button' : undefined}
+                      tabIndex={!isStart && !(onlyNonStartId === m.id) ? 0 : -1}
+                      onKeyDown={!isStart && !(onlyNonStartId === m.id) ? ((ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) } }) : undefined}
+                      aria-label={isStart || onlyNonStartId === m.id ? `Milestone date ${formatShort(m.date)}.` : `Milestone date ${formatShort(m.date)}. Double tap to edit.`}
                     >
                       {formatShort(m.date)}
                     </div>
                   )}
-                  {m.role !== 'start' ? (
+                  {m.role !== 'start' && onlyNonStartId !== m.id ? (
                     <button className="milestones__remove" type="button" onClick={() => removeMilestone(m.id)} aria-label="Remove milestone">×</button>
                   ) : null}
                 </div>
