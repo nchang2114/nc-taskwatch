@@ -1252,6 +1252,161 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   background: rgba(132, 148, 255, 0.24);
   border-color: rgba(132, 148, 255, 0.52);
 }
+/* --- Milestones Layer --- */
+.milestones {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 255, 0.28);
+  background: rgba(18, 26, 72, 0.42);
+  /* Extra horizontal padding so labels never overflow container horizontally */
+  padding: 1.2rem 3rem 1.8rem;
+  overflow: hidden; /* enforce labels stay within box */
+  min-height: 360px; /* more vertical room for alternating labels */
+  /* Milestone connector geometry */
+  --ms-connector: 44px;
+  --ms-gap: 6px;
+}
+.milestones__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.milestones__add {
+  font-size: 0.72rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(148, 163, 255, 0.42);
+  background: rgba(132, 156, 255, 0.18);
+  color: rgba(230, 238, 255, 0.95);
+}
+.milestones__add:hover,
+.milestones__add:focus-visible {
+  background: rgba(132, 156, 255, 0.28);
+  border-color: rgba(168, 188, 255, 0.56);
+}
+.milestones__track {
+  position: relative;
+  margin-top: 0.1rem;
+  /* Provide both top and bottom clearance for labels */
+  padding: 3.2rem 0 2.6rem;
+  min-height: 280px; /* center line against this height */
+}
+.milestones__line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 3px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(118,142,255,0.28), rgba(59,130,246,0.32));
+}
+.milestones__node-wrap {
+  position: absolute;
+  top: 50%; /* anchor at the vertical center line */
+  transform: translateX(-50%);
+}
+.milestones__node {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(173, 186, 255, 0.8);
+  background: #0f1a48;
+  box-shadow: 0 2px 8px rgba(2,6,28,0.5);
+  cursor: pointer;
+  touch-action: none;
+  position: relative;
+  top: -9px; /* center the circle exactly on the 3px line (18px dia => -9px) */
+  display: block; /* neutralize UA button inline baselines */
+  padding: 0; /* avoid UA padding */
+  line-height: 0; /* avoid extra inline height */
+  box-sizing: content-box; /* 14px content + 2*2px border = 18px total */
+}
+.milestones__node--done {
+  background: linear-gradient(135deg, #22c55e, #4ade80);
+  border-color: rgba(34, 197, 94, 0.9);
+}
+.milestones__node--start { border-color: rgba(250, 204, 21, 0.9); background: linear-gradient(135deg, #fde047, #f59e0b); }
+.milestones__node--end { border-color: rgba(99, 102, 241, 0.9); background: linear-gradient(135deg, #60a5fa, #8b5cf6); }
+.milestones__label {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  text-align: center;
+  white-space: normal;
+  width: min(16rem, 44vw);
+  z-index: 2; /* ensure label sits above connector */
+}
+.milestones__label--bottom { top: 26px; }
+.milestones__label--top { bottom: 26px; }
+.milestones__name {
+  min-width: 6ch;
+  max-width: 22ch;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(148, 163, 255, 0.35);
+  background: rgba(12, 18, 56, 0.5);
+  color: rgba(235, 242, 255, 0.96);
+  font-size: 0.78rem;
+  padding: 0.2rem 0.4rem;
+  text-align: center;
+}
+.milestones__name--text,
+.milestones__date--text {
+  cursor: pointer;
+  user-select: text;
+  pointer-events: auto;
+}
+.milestones__text--locked {
+  cursor: default;
+}
+.milestones__date {
+  border-radius: 0.4rem;
+  border: 1px solid rgba(148, 163, 255, 0.35);
+  background: rgba(12, 18, 56, 0.5);
+  color: rgba(235, 242, 255, 0.96);
+  font-size: 0.75rem;
+  padding: 0.18rem 0.35rem;
+  text-align: center;
+  /* pill feel for contrast */
+  background-image: linear-gradient(135deg, rgba(59,130,246,0.35), rgba(99,102,241,0.35));
+  border-color: rgba(99,102,241,0.5);
+}
+.milestones__stem {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: 2px;
+  background: rgba(148, 163, 255, 0.45);
+  z-index: 1;
+}
+.milestones__stem--down { top: 0; height: var(--ms-connector); }
+.milestones__stem--up { top: calc(-1 * var(--ms-connector)); height: var(--ms-connector); }
+
+/* Position labels relative to the node center (wrap top), just beyond connector end */
+.milestones__label--bottom { top: calc(var(--ms-connector) + var(--ms-gap)); }
+.milestones__label--top { bottom: calc(var(--ms-connector) + var(--ms-gap)); top: auto; }
+.milestones__remove {
+  border: 1px solid rgba(255, 100, 120, 0.5);
+  background: rgba(255, 100, 120, 0.15);
+  color: rgba(255, 180, 188, 0.96);
+  width: 1.4rem; height: 1.4rem;
+  border-radius: 0.35rem;
+}
+
+html[data-theme='light'] .milestones {
+  background: rgba(244, 247, 255, 0.86);
+  border-color: rgba(128, 146, 238, 0.34);
+}
+html[data-theme='light'] .milestones__add { background: rgba(92, 91, 255, 0.12); color: rgba(28, 36, 94, 0.94); }
+html[data-theme='light'] .milestones__add:hover, html[data-theme='light'] .milestones__add:focus-visible { background: rgba(92, 91, 255, 0.2); }
+html[data-theme='light'] .milestones__line { background: linear-gradient(90deg, rgba(128,146,238,0.45), rgba(59,130,246,0.38)); }
+html[data-theme='light'] .milestones__node { background: #fff; border-color: rgba(128,146,238,0.7); }
+html[data-theme='light'] .milestones__name, html[data-theme='light'] .milestones__date { background: rgba(250, 252, 255, 0.96); color: rgba(26, 34, 92, 0.96); border-color: rgba(128, 146, 238, 0.38); }
 /* Light theme adjustments */
 html[data-theme='light'] .goals-layer {
   color: rgba(26, 34, 90, 0.96);

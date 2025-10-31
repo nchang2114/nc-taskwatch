@@ -74,6 +74,7 @@ export async function fetchGoalsHierarchy(): Promise<
         id: string
         name: string
         color: string
+        createdAt?: string
         surfaceStyle?: string | null
         starred?: boolean
         archived?: boolean
@@ -108,7 +109,7 @@ export async function fetchGoalsHierarchy(): Promise<
   // Goals
   const { data: goals, error: gErr } = await supabase
     .from('goals')
-    .select('id, name, color, sort_index, card_surface, starred, goal_archive')
+    .select('id, name, color, sort_index, card_surface, starred, goal_archive, created_at')
     .order('sort_index', { ascending: true })
   if (gErr) return null
   if (!goals || goals.length === 0) return { goals: [] }
@@ -215,6 +216,7 @@ export async function fetchGoalsHierarchy(): Promise<
       id: g.id,
       name: g.name,
       color: g.color,
+      createdAt: typeof (g as any).created_at === 'string' ? ((g as any).created_at as string) : undefined,
       starred: Boolean((g as any).starred),
       surfaceStyle,
       archived: Boolean((g as any).goal_archive),

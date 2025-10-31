@@ -149,6 +149,7 @@ const normalizeSupabaseGoalsPayload = (payload: any[]): Goal[] =>
     id: goal.id,
     name: goal.name,
     color: typeof goal.color === 'string' ? goal.color : FALLBACK_GOAL_COLOR,
+    createdAt: typeof goal.createdAt === 'string' ? goal.createdAt : typeof goal.created_at === 'string' ? goal.created_at : undefined,
     surfaceStyle: normalizeSurfaceStyle(goal.surfaceStyle as string | null | undefined),
     starred: Boolean(goal.starred),
     archived: Boolean(goal.archived),
@@ -579,6 +580,7 @@ export interface Goal {
   id: string
   name: string
   color: string
+  createdAt?: string
   surfaceStyle?: GoalSurfaceStyle
   starred: boolean
   archived: boolean
@@ -824,6 +826,7 @@ function reconcileGoalsWithSnapshot(snapshot: GoalSnapshot[], current: Goal[]): 
       id: goal.id,
       name: goal.name,
       color: goal.color ?? existingGoal?.color ?? FALLBACK_GOAL_COLOR,
+      createdAt: existingGoal?.createdAt,
       surfaceStyle: goal.surfaceStyle,
       starred: goal.starred ?? existingGoal?.starred ?? false,
       archived: goal.archived ?? existingGoal?.archived ?? false,
@@ -1330,6 +1333,283 @@ const LifeRoutineCustomizer = React.forwardRef<HTMLDivElement, LifeRoutineCustom
 )
 
 LifeRoutineCustomizer.displayName = 'LifeRoutineCustomizer'
+
+// --- Milestones ---
+type Milestone = {
+  id: string
+  name: string
+  date: string // ISO string (midnight local)
+  completed: boolean
+  role?: 'start' | 'end' | 'normal'
+}
+
+const MILESTONE_VIS_KEY = 'nc-taskwatch-milestones-visible-v1'
+const MILESTONE_DATA_KEY = 'nc-taskwatch-milestones-state-v1'
+
+const readMilestoneVisibility = (): Record<string, boolean> => {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(MILESTONE_VIS_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
+  } catch {
+    return {}
+  }
+}
+const writeMilestoneVisibility = (map: Record<string, boolean>) => {
+  if (typeof window === 'undefined') return
+  try { window.localStorage.setItem(MILESTONE_VIS_KEY, JSON.stringify(map)) } catch {}
+}
+
+const readMilestonesFor = (goalId: string): Milestone[] => {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(MILESTONE_DATA_KEY)
+    const map = raw ? (JSON.parse(raw) as Record<string, Milestone[]>) : {}
+    const list = Array.isArray(map[goalId]) ? map[goalId] : []
+    return list
+  } catch {
+    return []
+  }
+}
+const writeMilestonesFor = (goalId: string, list: Milestone[]) => {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = window.localStorage.getItem(MILESTONE_DATA_KEY)
+    const map = raw ? (JSON.parse(raw) as Record<string, Milestone[]>) : {}
+    map[goalId] = list
+    window.localStorage.setItem(MILESTONE_DATA_KEY, JSON.stringify(map))
+  } catch {}
+}
+
+const toStartOfDayIso = (d: Date) => {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x.toISOString()
+}
+
+const formatShort = (dateIso: string) => {
+  try {
+    const d = new Date(dateIso)
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  } catch { return dateIso.slice(0, 10) }
+}
+
+const uid = () => (typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `ms-${Date.now()}-${Math.random().toString(36).slice(2,8)}`)
+
+const ensureDefaultMilestones = (goal: Goal, current: Milestone[]): Milestone[] => {
+  if (current && current.length > 0) return current
+  const startIso = goal.createdAt ? goal.createdAt : toStartOfDayIso(new Date())
+  const end = new Date()
+  end.setDate(end.getDate() + 7)
+  const endIso = toStartOfDayIso(end)
+  return [
+    { id: uid(), name: 'Start', date: startIso, completed: true, role: 'start' },
+    { id: uid(), name: 'End', date: endIso, completed: false, role: 'end' },
+  ]
+}
+
+const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n))
+
+const MilestoneLayer: React.FC<{
+  goal: Goal
+}> = ({ goal }) => {
+  const [milestones, setMilestones] = useState<Milestone[]>(() => ensureDefaultMilestones(goal, readMilestonesFor(goal.id)))
+  const trackRef = useRef<HTMLDivElement | null>(null)
+  const [editing, setEditing] = useState<null | { id: string; field: 'name' | 'date' }>(null)
+  const editInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    writeMilestonesFor(goal.id, milestones)
+  }, [goal.id, milestones])
+
+  useEffect(() => {
+    // If this goal has no milestones saved (newly toggled), ensure defaults that use createdAt
+    setMilestones((cur) => (cur && cur.length > 0 ? cur : ensureDefaultMilestones(goal, cur)))
+  }, [goal.id, goal.createdAt])
+
+  const addMilestone = () => {
+    const baseName = 'Milestone'
+    const count = milestones.filter((m) => m.role !== 'start' && m.role !== 'end').length + 1
+    const nowIso = toStartOfDayIso(new Date())
+    setMilestones((cur) => {
+      const idxEnd = cur.findIndex((m) => m.role === 'end')
+      const next: Milestone = { id: uid(), name: `${baseName} ${count}`, date: nowIso, completed: false, role: 'normal' }
+      const arr = [...cur]
+      if (idxEnd >= 0) arr.splice(idxEnd, 0, next)
+      else arr.push(next)
+      return arr
+    })
+  }
+
+  const toggleComplete = (id: string) => {
+    setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, completed: !m.completed } : m)))
+  }
+
+  const updateName = (id: string, name: string) => {
+    setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, name } : m)))
+  }
+
+  const updateDate = (id: string, iso: string) => {
+    setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, date: iso } : m)))
+  }
+
+  const removeMilestone = (id: string) => {
+    setMilestones((cur) => cur.filter((m) => m.id !== id))
+  }
+
+  // Focus the ephemeral editor when entering edit mode
+  useEffect(() => {
+    if (!editing) return
+    const t = setTimeout(() => {
+      try { editInputRef.current?.focus() } catch {}
+    }, 0)
+    return () => clearTimeout(t)
+  }, [editing])
+
+  // Simple double-tap (mobile) + double-click (desktop) helper
+  const lastTapRef = useRef<number>(0)
+  const handleMaybeDoubleTap = (cb: () => void) => () => {
+    const now = Date.now()
+    if (now - lastTapRef.current < 300) {
+      cb()
+    }
+    lastTapRef.current = now
+  }
+
+  const sorted = useMemo(() => {
+    return [...milestones].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  }, [milestones])
+
+  const minMs = useMemo(() => new Date(sorted[0]?.date ?? toStartOfDayIso(new Date())).getTime(), [sorted])
+  const maxMs = useMemo(() => new Date(sorted[sorted.length - 1]?.date ?? toStartOfDayIso(new Date())).getTime(), [sorted])
+  const rangeMs = Math.max(1, maxMs - minMs)
+
+  const posPct = (iso: string) => {
+    const ms = new Date(iso).getTime()
+    return clamp(((ms - minMs) / rangeMs) * 100, 0, 100)
+  }
+
+  const endId = sorted.find((m) => m.role === 'end')?.id
+
+  const onDragNode = (id: string, e: React.PointerEvent<HTMLButtonElement>) => {
+    const el = trackRef.current
+    if (!el) return
+    const isEnd = id === endId
+    const rect = el.getBoundingClientRect()
+    ;(e.currentTarget as any).setPointerCapture?.(e.pointerId)
+    const move = (ev: PointerEvent) => {
+      const x = clamp(ev.clientX - rect.left, 0, rect.width)
+      const pct = rect.width > 0 ? x / rect.width : 0
+      let ms = minMs + pct * (isEnd ? Math.max(rangeMs, 24 * 3600 * 1000) : rangeMs)
+      if (ms < minMs) ms = minMs
+      // snap to day
+      const d = new Date(ms)
+      d.setHours(0, 0, 0, 0)
+      const iso = d.toISOString()
+      setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, date: iso } : m)))
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
+  return (
+    <>
+      <div className="milestones__header">
+        <h4 className="goal-subheading">Milestone Layer</h4>
+        <button className="milestones__add" type="button" onClick={addMilestone}>+ Add Milestone</button>
+      </div>
+      <div className="milestones" aria-label="Milestone timeline">
+        <div className="milestones__track" ref={trackRef}>
+        <div className="milestones__line" />
+          {sorted.map((m, idx) => {
+          const pct = posPct(m.date)
+          const isStart = m.role === 'start'
+          const isEnd = m.role === 'end'
+          const isTop = idx % 2 === 0
+          return (
+            <div key={m.id} className="milestones__node-wrap" style={{ left: `${pct}%` }}>
+              <button
+                type="button"
+                className={classNames('milestones__node', m.completed && 'milestones__node--done', isStart && 'milestones__node--start', isEnd && 'milestones__node--end')}
+                onClick={() => toggleComplete(m.id)}
+                onPointerDown={(ev) => {
+                  if (isStart) return // Start is fixed
+                  onDragNode(m.id, ev)
+                }}
+                aria-label={`${m.name} ${formatShort(m.date)}${m.completed ? ' (completed)' : ''}`}
+              />
+                <span className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down')} aria-hidden />
+                <div className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom')}>
+                  {!isStart && editing?.id === m.id && editing.field === 'name' ? (
+                    <input
+                      ref={editInputRef}
+                      className="milestones__name"
+                      defaultValue={m.name}
+                      onBlur={(ev) => { updateName(m.id, ev.target.value); setEditing(null) }}
+                      onKeyDown={(ev) => {
+                        if (ev.key === 'Enter') { updateName(m.id, (ev.target as HTMLInputElement).value); setEditing(null) }
+                        if (ev.key === 'Escape') { setEditing(null) }
+                      }}
+                      aria-label="Edit milestone name"
+                    />
+                  ) : (
+                    <div
+                      className={classNames('milestones__name', 'milestones__name--text', isStart && 'milestones__text--locked')}
+                      onDoubleClick={!isStart ? (() => setEditing({ id: m.id, field: 'name' })) : undefined}
+                      onClick={!isStart ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) setEditing({ id: m.id, field: 'name' }) }) : undefined}
+                      onPointerDown={!isStart ? handleMaybeDoubleTap(() => setEditing({ id: m.id, field: 'name' })) : undefined}
+                      role={!isStart ? 'button' : undefined}
+                      tabIndex={!isStart ? 0 : -1}
+                      onKeyDown={!isStart ? ((ev) => { if (ev.key === 'Enter') setEditing({ id: m.id, field: 'name' }) }) : undefined}
+                      aria-label={isStart ? `Milestone name ${m.name}.` : `Milestone name ${m.name}. Double tap to edit.`}
+                    >
+                      {m.name}
+                    </div>
+                  )}
+
+                  {!isStart && editing?.id === m.id && editing.field === 'date' ? (
+                    <input
+                      ref={editInputRef}
+                      className="milestones__date"
+                      type="date"
+                      defaultValue={new Date(m.date).toISOString().slice(0,10)}
+                      onBlur={(ev) => { const d = new Date(ev.target.value); updateDate(m.id, toStartOfDayIso(d)); setEditing(null) }}
+                      onKeyDown={(ev) => {
+                        if (ev.key === 'Enter') { const d = new Date((ev.target as HTMLInputElement).value); updateDate(m.id, toStartOfDayIso(d)); setEditing(null) }
+                        if (ev.key === 'Escape') { setEditing(null) }
+                      }}
+                      aria-label="Edit milestone date"
+                    />
+                  ) : (
+                    <div
+                      className={classNames('milestones__date', 'milestones__date--text', isStart && 'milestones__text--locked')}
+                      onDoubleClick={!isStart ? (() => setEditing({ id: m.id, field: 'date' })) : undefined}
+                      onClick={!isStart ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) setEditing({ id: m.id, field: 'date' }) }) : undefined}
+                      onPointerDown={!isStart ? handleMaybeDoubleTap(() => setEditing({ id: m.id, field: 'date' })) : undefined}
+                      role={!isStart ? 'button' : undefined}
+                      tabIndex={!isStart ? 0 : -1}
+                      onKeyDown={!isStart ? ((ev) => { if (ev.key === 'Enter') setEditing({ id: m.id, field: 'date' }) }) : undefined}
+                      aria-label={isStart ? `Milestone date ${formatShort(m.date)}.` : `Milestone date ${formatShort(m.date)}. Double tap to edit.`}
+                    >
+                      {formatShort(m.date)}
+                    </div>
+                  )}
+                  {m.role === 'normal' ? (
+                    <button className="milestones__remove" type="button" onClick={() => removeMilestone(m.id)} aria-label="Remove milestone">×</button>
+                  ) : null}
+                </div>
+            </div>
+          )
+        })}
+        </div>
+      </div>
+    </>
+  )
+}
 
 interface GoalRowProps {
   goal: Goal
@@ -2056,6 +2336,21 @@ const GoalRow: React.FC<GoalRowProps> = ({
   const surfaceStyle = goal.surfaceStyle ?? 'glass'
   const surfaceClass = GOAL_SURFACE_CLASS_MAP[surfaceStyle] || GOAL_SURFACE_CLASS_MAP.glass
   const isCustomizerOpen = activeCustomizerGoalId === goal.id
+  const [milestonesVisible, setMilestonesVisible] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      const map = readMilestoneVisibility()
+      return Boolean(map[goal.id])
+    } catch { return false }
+  })
+  useEffect(() => {
+    const map = readMilestoneVisibility()
+    const curr = Boolean(map[goal.id])
+    if (curr !== milestonesVisible) {
+      map[goal.id] = milestonesVisible
+      writeMilestoneVisibility(map)
+    }
+  }, [goal.id, milestonesVisible])
 
   const menuPortal =
     menuOpen && typeof document !== 'undefined'
@@ -2072,6 +2367,18 @@ const GoalRow: React.FC<GoalRowProps> = ({
               role="menu"
               onClick={(event) => event.stopPropagation()}
             >
+              <button
+                type="button"
+                className="goal-menu__item"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMenuOpen(false)
+                  setMilestonesVisible((v) => !v)
+                }}
+              >
+                {milestonesVisible ? 'Remove Milestones Layer' : 'Add Milestones Layer'}
+              </button>
+              <div className="goal-menu__divider" />
               <button
                 type="button"
                 className="goal-menu__item"
@@ -2459,6 +2766,11 @@ const GoalRow: React.FC<GoalRowProps> = ({
 
       {isOpen && (
         <div className="px-4 md:px-5 pb-4 md:pb-5">
+          {milestonesVisible && !isArchived ? (
+            <div className="mt-3 md:mt-4">
+              <MilestoneLayer goal={goal} />
+            </div>
+          ) : null}
           <div className="mt-3 md:mt-4">
             <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
               <h4 className="goal-subheading">Task Bank</h4>
