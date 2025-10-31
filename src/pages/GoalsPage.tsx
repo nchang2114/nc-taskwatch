@@ -31,6 +31,10 @@ import {
   deleteTaskSubtask as apiDeleteTaskSubtask,
   seedGoalsIfEmpty,
   fetchTaskNotes as apiFetchTaskNotes,
+  fetchGoalMilestones as apiFetchGoalMilestones,
+  upsertGoalMilestone as apiUpsertGoalMilestone,
+  deleteGoalMilestone as apiDeleteGoalMilestone,
+  fetchGoalCreatedAt as apiFetchGoalCreatedAt,
 } from '../lib/goalsApi'
 import {
   DEFAULT_SURFACE_STYLE,
@@ -1398,13 +1402,13 @@ const uid = () => (typeof crypto?.randomUUID === 'function' ? crypto.randomUUID(
 
 const ensureDefaultMilestones = (goal: Goal, current: Milestone[]): Milestone[] => {
   if (current && current.length > 0) return current
-  const startIso = goal.createdAt ? goal.createdAt : toStartOfDayIso(new Date())
-  const end = new Date()
-  end.setDate(end.getDate() + 7)
-  const endIso = toStartOfDayIso(end)
+  const startIso = goal.createdAt ? toStartOfDayIso(new Date(goal.createdAt)) : toStartOfDayIso(new Date())
+  const m1 = new Date(startIso)
+  m1.setDate(m1.getDate() + 7)
+  const m1Iso = toStartOfDayIso(m1)
   return [
-    { id: uid(), name: 'Start', date: startIso, completed: true, role: 'start' },
-    { id: uid(), name: 'End', date: endIso, completed: false, role: 'end' },
+    { id: uid(), name: 'Goal Created', date: startIso, completed: true, role: 'start' },
+    { id: uid(), name: 'Milestone 1', date: m1Iso, completed: false, role: 'normal' },
   ]
 }
 
@@ -1417,10 +1421,86 @@ const MilestoneLayer: React.FC<{
   const trackRef = useRef<HTMLDivElement | null>(null)
   const [editing, setEditing] = useState<null | { id: string; field: 'name' | 'date' }>(null)
   const editInputRef = useRef<HTMLInputElement | null>(null)
+  // Track current milestones live for robust dragging math during reorders
+  const milestonesRef = useRef<Milestone[]>([])
+  useEffect(() => { milestonesRef.current = milestones }, [milestones])
+  const draggingIdRef = useRef<string | null>(null)
+  const suppressClickIdRef = useRef<string | null>(null)
+  const captureElRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     writeMilestonesFor(goal.id, milestones)
   }, [goal.id, milestones])
+
+  // Load from Supabase on mount/goal change and seed defaults if empty.
+  // Also reconcile the Start milestone date to the goal's created_at date.
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const rows = await apiFetchGoalMilestones(goal.id)
+        if (cancelled) return
+        const createdAtRaw = (await apiFetchGoalCreatedAt(goal.id)) ?? goal.createdAt ?? null
+        const startIso = createdAtRaw ? toStartOfDayIso(new Date(createdAtRaw)) : toStartOfDayIso(new Date())
+        if (rows && rows.length > 0) {
+          // Ensure there is a start milestone with the correct date
+          let hasStart = false
+          const reconciled = rows.map((r) => {
+            if (r.role === 'start') {
+              hasStart = true
+              const fixed = { ...r, date: startIso, completed: true, name: 'Goal Created' }
+              // Persist correction if needed
+              if (r.date !== startIso || !r.completed || r.name !== 'Goal Created') {
+                apiUpsertGoalMilestone(goal.id, fixed).catch((err) =>
+                  console.warn('[Milestones] Failed to persist start correction', err),
+                )
+              }
+              return fixed
+            }
+            return r
+          })
+          if (!hasStart) {
+            const start: Milestone = { id: uid(), name: 'Goal Created', date: startIso, completed: true, role: 'start' }
+            reconciled.unshift(start)
+            apiUpsertGoalMilestone(goal.id, start).catch((err) =>
+              console.warn('[Milestones] Failed to seed missing start', err),
+            )
+          }
+          // Ensure at least one non-start milestone exists
+          const hasNonStart = reconciled.some((r) => r.role !== 'start')
+          if (!hasNonStart) {
+            const d = new Date(startIso)
+            d.setDate(d.getDate() + 7)
+            const extra: Milestone = { id: uid(), name: 'Milestone 1', date: toStartOfDayIso(d), completed: false, role: 'normal' }
+            reconciled.push(extra)
+            apiUpsertGoalMilestone(goal.id, extra).catch((err) =>
+              console.warn('[Milestones] Failed to seed missing milestone', err),
+            )
+          }
+          setMilestones(
+            reconciled.map((r) => ({ id: r.id, name: r.name, date: r.date, completed: r.completed, role: r.role })) as Milestone[],
+          )
+          return
+        }
+        const seeded = ensureDefaultMilestones(goal, [])
+        setMilestones(seeded)
+        // Persist defaults so other devices see them
+        for (const m of seeded) {
+          try {
+            await apiUpsertGoalMilestone(goal.id, m)
+          } catch (err) {
+            console.warn('[Milestones] Failed to seed default milestone', m, err)
+          }
+        }
+      } catch (error) {
+        console.warn('[Milestones] Failed to load milestones from Supabase', error)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [goal.id, goal.createdAt])
 
   useEffect(() => {
     // If this goal has no milestones saved (newly toggled), ensure defaults that use createdAt
@@ -1429,32 +1509,64 @@ const MilestoneLayer: React.FC<{
 
   const addMilestone = () => {
     const baseName = 'Milestone'
-    const count = milestones.filter((m) => m.role !== 'start' && m.role !== 'end').length + 1
+    const count = milestonesRef.current.filter((m) => m.role !== 'start').length
+      // subtract start to name nicely starting from 1
+      ;
+    const nextIndex = count + 1
     const nowIso = toStartOfDayIso(new Date())
+    const created: Milestone = { id: uid(), name: `${baseName} ${nextIndex}`, date: nowIso, completed: false, role: 'normal' }
     setMilestones((cur) => {
-      const idxEnd = cur.findIndex((m) => m.role === 'end')
-      const next: Milestone = { id: uid(), name: `${baseName} ${count}`, date: nowIso, completed: false, role: 'normal' }
-      const arr = [...cur]
-      if (idxEnd >= 0) arr.splice(idxEnd, 0, next)
-      else arr.push(next)
+      const arr = [...cur, created]
       return arr
     })
+    apiUpsertGoalMilestone(goal.id, created).catch((err) => console.warn('[Milestones] Failed to persist add', err))
   }
 
   const toggleComplete = (id: string) => {
+    const found = milestonesRef.current.find((m) => m.id === id)
+    if (found?.role === 'start') return
     setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, completed: !m.completed } : m)))
+    if (found) {
+      const updated = { ...found, completed: !found.completed }
+      apiUpsertGoalMilestone(goal.id, updated).catch((err) => console.warn('[Milestones] Failed to persist toggle', err))
+    }
   }
 
   const updateName = (id: string, name: string) => {
+    const found = milestonesRef.current.find((m) => m.id === id)
+    if (found?.role === 'start') return
     setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, name } : m)))
+    if (found) {
+      const updated = { ...found, name }
+      apiUpsertGoalMilestone(goal.id, updated).catch((err) => console.warn('[Milestones] Failed to persist name', err))
+    }
   }
 
   const updateDate = (id: string, iso: string) => {
+    const found = milestonesRef.current.find((m) => m.id === id)
+    if (found?.role === 'start') return
     setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, date: iso } : m)))
+    if (found) {
+      const updated = { ...found, date: iso }
+      apiUpsertGoalMilestone(goal.id, updated).catch((err) => console.warn('[Milestones] Failed to persist date', err))
+    }
   }
 
   const removeMilestone = (id: string) => {
-    setMilestones((cur) => cur.filter((m) => m.id !== id))
+    setMilestones((cur) => {
+      const next = cur.filter((m) => m.id !== id)
+      const hasStartOnly = next.length === 1 && next[0]?.role === 'start'
+      if (hasStartOnly) {
+        const start = next[0]
+        const d = new Date(start.date)
+        d.setDate(d.getDate() + 7)
+        const ms: Milestone = { id: uid(), name: 'Milestone 1', date: toStartOfDayIso(d), completed: false, role: 'normal' }
+        apiUpsertGoalMilestone(goal.id, ms).catch((err) => console.warn('[Milestones] Failed to re-add milestone after delete', err))
+        return [...next, ms]
+      }
+      return next
+    })
+    apiDeleteGoalMilestone(goal.id, id).catch((err) => console.warn('[Milestones] Failed to delete', err))
   }
 
   // Focus the ephemeral editor when entering edit mode
@@ -1480,7 +1592,13 @@ const MilestoneLayer: React.FC<{
     return [...milestones].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   }, [milestones])
 
-  const minMs = useMemo(() => new Date(sorted[0]?.date ?? toStartOfDayIso(new Date())).getTime(), [sorted])
+  const startIsoForRange = useMemo(() => {
+    const start = milestones.find((m) => m.role === 'start')
+    if (start) return start.date
+    return goal.createdAt ? toStartOfDayIso(new Date(goal.createdAt)) : toStartOfDayIso(new Date())
+  }, [milestones, goal.createdAt])
+
+  const minMs = useMemo(() => new Date(startIsoForRange).getTime(), [startIsoForRange])
   const maxMs = useMemo(() => new Date(sorted[sorted.length - 1]?.date ?? toStartOfDayIso(new Date())).getTime(), [sorted])
   const rangeMs = Math.max(1, maxMs - minMs)
 
@@ -1489,28 +1607,62 @@ const MilestoneLayer: React.FC<{
     return clamp(((ms - minMs) / rangeMs) * 100, 0, 100)
   }
 
-  const endId = sorted.find((m) => m.role === 'end')?.id
+  const latestId = sorted[sorted.length - 1]?.id
 
-  const onDragNode = (id: string, e: React.PointerEvent<HTMLButtonElement>) => {
-    const el = trackRef.current
-    if (!el) return
-    const isEnd = id === endId
-    const rect = el.getBoundingClientRect()
-    ;(e.currentTarget as any).setPointerCapture?.(e.pointerId)
+  const beginDrag = (id: string, e: React.PointerEvent<HTMLElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Prevent dragging the Start node to keep it aligned with goal.createdAt
+    const dragged = milestonesRef.current.find((m) => m.id === id)
+    if (dragged?.role === 'start') {
+      return
+    }
+    draggingIdRef.current = id
+    captureElRef.current = e.currentTarget as HTMLElement
+    ;(captureElRef.current as any)?.setPointerCapture?.(e.pointerId)
     const move = (ev: PointerEvent) => {
+      if (!trackRef.current || !draggingIdRef.current) return
+      const rect = trackRef.current.getBoundingClientRect()
       const x = clamp(ev.clientX - rect.left, 0, rect.width)
       const pct = rect.width > 0 ? x / rect.width : 0
-      let ms = minMs + pct * (isEnd ? Math.max(rangeMs, 24 * 3600 * 1000) : rangeMs)
-      if (ms < minMs) ms = minMs
-      // snap to day
+      const list = milestonesRef.current
+      if (!list || list.length === 0) return
+      const sortedNow = [...list].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      const startNow = list.find((m) => m.role === 'start')
+      const minNow = startNow ? new Date(startNow.date).getTime() : new Date(sortedNow[0].date).getTime()
+      const maxNow = new Date(sortedNow[sortedNow.length - 1].date).getTime()
+      const rangeNow = Math.max(1, maxNow - minNow)
+      const dragged = list.find((m) => m.id === draggingIdRef.current)
+      if (!dragged) return
+      const day = 24 * 60 * 60 * 1000
+      // Lock left boundary to the Start node's date
+      const leftAnchor = minNow
+      // Allow extending to the right beyond current max by at least one day
+      const totalRange = Math.max(rangeNow, day)
+      let ms = leftAnchor + pct * totalRange
+      // Snap to day
       const d = new Date(ms)
       d.setHours(0, 0, 0, 0)
       const iso = d.toISOString()
-      setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, date: iso } : m)))
+      suppressClickIdRef.current = draggingIdRef.current
+      setMilestones((cur) => cur.map((m) => (m.id === draggingIdRef.current ? { ...m, date: iso } : m)))
     }
-    const up = () => {
+    const up = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      try { (captureElRef.current as any)?.releasePointerCapture?.((e as any).pointerId) } catch {}
+      // Persist the final position of the dragged milestone
+      const idNow = suppressClickIdRef.current
+      if (idNow) {
+        const found = milestonesRef.current.find((m) => m.id === idNow)
+        if (found) {
+          apiUpsertGoalMilestone(goal.id, found).catch((err) => console.warn('[Milestones] Failed to persist drag', err))
+        }
+      }
+      draggingIdRef.current = null
+      captureElRef.current = null
+      // Clear suppressed click on next tick to swallow the click immediately following drag
+      setTimeout(() => { if (suppressClickIdRef.current === idNow) suppressClickIdRef.current = null }, 0)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -1528,21 +1680,26 @@ const MilestoneLayer: React.FC<{
           {sorted.map((m, idx) => {
           const pct = posPct(m.date)
           const isStart = m.role === 'start'
-          const isEnd = m.role === 'end'
+          const isLatest = m.id === latestId
           const isTop = idx % 2 === 0
           return (
             <div key={m.id} className="milestones__node-wrap" style={{ left: `${pct}%` }}>
               <button
                 type="button"
-                className={classNames('milestones__node', m.completed && 'milestones__node--done', isStart && 'milestones__node--start', isEnd && 'milestones__node--end')}
-                onClick={() => toggleComplete(m.id)}
-                onPointerDown={(ev) => {
-                  if (isStart) return // Start is fixed
-                  onDragNode(m.id, ev)
+                className={classNames('milestones__node', m.completed && 'milestones__node--done', isStart && 'milestones__node--start', isLatest && 'milestones__node--end')}
+                onClick={(ev) => {
+                  if (suppressClickIdRef.current === m.id) { ev.preventDefault(); ev.stopPropagation(); suppressClickIdRef.current = null; return }
+                  if (isStart) { ev.preventDefault(); ev.stopPropagation(); return }
+                  toggleComplete(m.id)
                 }}
+                onPointerDown={(ev) => { if (!isStart) beginDrag(m.id, ev) }}
                 aria-label={`${m.name} ${formatShort(m.date)}${m.completed ? ' (completed)' : ''}`}
               />
-                <span className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down')} aria-hidden />
+                <span
+                  className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down')}
+                  onPointerDown={(ev) => { if (!isStart) beginDrag(m.id, ev) }}
+                  aria-hidden={true}
+                />
                 <div className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom')}>
                   {!isStart && editing?.id === m.id && editing.field === 'name' ? (
                     <input
@@ -1559,12 +1716,12 @@ const MilestoneLayer: React.FC<{
                   ) : (
                     <div
                       className={classNames('milestones__name', 'milestones__name--text', isStart && 'milestones__text--locked')}
-                      onDoubleClick={!isStart ? (() => setEditing({ id: m.id, field: 'name' })) : undefined}
-                      onClick={!isStart ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) setEditing({ id: m.id, field: 'name' }) }) : undefined}
+                      onDoubleClick={!isStart ? ((ev) => { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) }) : undefined}
+                      onClick={!isStart ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) } }) : undefined}
                       onPointerDown={!isStart ? handleMaybeDoubleTap(() => setEditing({ id: m.id, field: 'name' })) : undefined}
                       role={!isStart ? 'button' : undefined}
                       tabIndex={!isStart ? 0 : -1}
-                      onKeyDown={!isStart ? ((ev) => { if (ev.key === 'Enter') setEditing({ id: m.id, field: 'name' }) }) : undefined}
+                      onKeyDown={!isStart ? ((ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) } }) : undefined}
                       aria-label={isStart ? `Milestone name ${m.name}.` : `Milestone name ${m.name}. Double tap to edit.`}
                     >
                       {m.name}
@@ -1587,18 +1744,18 @@ const MilestoneLayer: React.FC<{
                   ) : (
                     <div
                       className={classNames('milestones__date', 'milestones__date--text', isStart && 'milestones__text--locked')}
-                      onDoubleClick={!isStart ? (() => setEditing({ id: m.id, field: 'date' })) : undefined}
-                      onClick={!isStart ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) setEditing({ id: m.id, field: 'date' }) }) : undefined}
+                      onDoubleClick={!isStart ? ((ev) => { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) }) : undefined}
+                      onClick={!isStart ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) } }) : undefined}
                       onPointerDown={!isStart ? handleMaybeDoubleTap(() => setEditing({ id: m.id, field: 'date' })) : undefined}
                       role={!isStart ? 'button' : undefined}
                       tabIndex={!isStart ? 0 : -1}
-                      onKeyDown={!isStart ? ((ev) => { if (ev.key === 'Enter') setEditing({ id: m.id, field: 'date' }) }) : undefined}
+                      onKeyDown={!isStart ? ((ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setEditing({ id: m.id, field: 'date' }) } }) : undefined}
                       aria-label={isStart ? `Milestone date ${formatShort(m.date)}.` : `Milestone date ${formatShort(m.date)}. Double tap to edit.`}
                     >
                       {formatShort(m.date)}
                     </div>
                   )}
-                  {m.role === 'normal' ? (
+                  {m.role !== 'start' ? (
                     <button className="milestones__remove" type="button" onClick={() => removeMilestone(m.id)} aria-label="Remove milestone">×</button>
                   ) : null}
                 </div>

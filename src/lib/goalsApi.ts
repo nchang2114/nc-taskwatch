@@ -41,6 +41,33 @@ export type DbTaskSubtask = {
   sort_index: number
 }
 
+// ---------- Milestones ----------
+export type DbGoalMilestone = {
+  id: string
+  user_id: string
+  goal_id: string
+  name: string
+  target_date: string // timestamptz ISO string
+  completed: boolean
+  role: 'start' | 'end' | 'normal'
+}
+
+export async function fetchGoalCreatedAt(goalId: string): Promise<string | null> {
+  if (!supabase) return null
+  await ensureSingleUserSession()
+  const { data, error } = await supabase
+    .from('goals')
+    .select('created_at')
+    .eq('id', goalId)
+    .maybeSingle()
+  if (error) {
+    console.warn('[goalsApi] fetchGoalCreatedAt error', error.message ?? error)
+    return null
+  }
+  const value = (data as any)?.created_at
+  return typeof value === 'string' ? value : null
+}
+
 type TaskSeed = {
   text: string
   completed?: boolean
@@ -248,6 +275,66 @@ export async function fetchTaskNotes(taskId: string): Promise<string> {
   }
   const raw = (data as any)?.notes
   return typeof raw === 'string' ? raw : ''
+}
+
+// ---------- Goal Milestones ----------
+export async function fetchGoalMilestones(goalId: string): Promise<
+  Array<{ id: string; name: string; date: string; completed: boolean; role: 'start' | 'end' | 'normal' }>
+> {
+  if (!supabase) return []
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) return []
+  const { data, error } = await supabase
+    .from('goal_milestones')
+    .select('id, name, target_date, completed, role')
+    .eq('goal_id', goalId)
+    .eq('user_id', session.user.id)
+    .order('target_date', { ascending: true })
+  if (error) {
+    console.warn('[goalsApi] fetchGoalMilestones error', error.message ?? error)
+    return []
+  }
+  const rows = Array.isArray(data) ? (data as any[]) : []
+  return rows.map((row) => ({
+    id: String(row.id),
+    name: typeof row.name === 'string' ? row.name : '',
+    date: typeof row.target_date === 'string' ? row.target_date : new Date().toISOString(),
+    completed: Boolean(row.completed),
+    role: row.role === 'start' || row.role === 'end' ? row.role : 'normal',
+  }))
+}
+
+export async function upsertGoalMilestone(
+  goalId: string,
+  milestone: { id: string; name: string; date: string; completed: boolean; role: 'start' | 'end' | 'normal' },
+) {
+  if (!supabase) return
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) throw new Error('[goalsApi] Missing Supabase session for milestone upsert')
+  const payload = {
+    id: milestone.id,
+    user_id: session.user.id,
+    goal_id: goalId,
+    name: milestone.name,
+    target_date: milestone.date,
+    completed: milestone.completed,
+    role: milestone.role,
+  }
+  const { error } = await supabase.from('goal_milestones').upsert(payload, { onConflict: 'id' })
+  if (error) throw error
+}
+
+export async function deleteGoalMilestone(goalId: string, milestoneId: string) {
+  if (!supabase) return
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) throw new Error('[goalsApi] Missing Supabase session for milestone delete')
+  const { error } = await supabase
+    .from('goal_milestones')
+    .delete()
+    .eq('id', milestoneId)
+    .eq('goal_id', goalId)
+    .eq('user_id', session.user.id)
+  if (error) throw error
 }
 
 // ---------- Helpers: sort index utilities ----------

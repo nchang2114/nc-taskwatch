@@ -1270,6 +1270,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  padding-bottom: 0.35rem;
 }
 .milestones__add {
   font-size: 0.72rem;
@@ -1341,8 +1342,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   width: min(16rem, 44vw);
   z-index: 2; /* ensure label sits above connector */
 }
-.milestones__label--bottom { top: 26px; }
-.milestones__label--top { bottom: 26px; }
+/* Position is controlled below using connector + gap to ensure symmetry */
 .milestones__name {
   min-width: 6ch;
   max-width: 22ch;
@@ -1383,6 +1383,15 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   width: 2px;
   background: rgba(148, 163, 255, 0.45);
   z-index: 1;
+}
+.milestones__stem::after {
+  /* Enlarge hit-target for easier dragging without changing visuals */
+  content: '';
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  top: -4px;
+  bottom: -4px;
 }
 .milestones__stem--down { top: 0; height: var(--ms-connector); }
 .milestones__stem--up { top: calc(-1 * var(--ms-connector)); height: var(--ms-connector); }
