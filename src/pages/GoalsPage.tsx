@@ -1651,7 +1651,7 @@ const MilestoneLayer: React.FC<{
       suppressClickIdRef.current = draggingIdRef.current
       setMilestones((cur) => cur.map((m) => (m.id === draggingIdRef.current ? { ...m, date: iso } : m)))
     }
-    const up = (ev: PointerEvent) => {
+    const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       try { (captureElRef.current as any)?.releasePointerCapture?.((e as any).pointerId) } catch {}
