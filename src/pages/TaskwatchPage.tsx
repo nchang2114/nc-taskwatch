@@ -119,7 +119,6 @@ const NOTEBOOK_STORAGE_KEY = 'nc-taskwatch-notebook'
 const MAX_TASK_STORAGE_LENGTH = 256
 const FOCUS_COMPLETION_RESET_DELAY_MS = 800
 const PRIORITY_HOLD_MS = 300
-const SNAPBACK_MARKER_DURATION_MS = 60000
 
 const SNAPBACK_REASONS = [
   { id: 'interrupted' as const, label: 'Interrupted' },
@@ -511,7 +510,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [snapbackDurationMin, setSnapbackDurationMin] = useState<number>(10)
   const [snapbackReason, setSnapbackReason] = useState<SnapbackReasonId>('interrupted')
   const [snapbackNextAction, setSnapbackNextAction] = useState<SnapbackActionId>('resume')
-  const [snapbackNote, setSnapbackNote] = useState('')
+  const [, setSnapbackNote] = useState('')
   const [snapbackCustomReason, setSnapbackCustomReason] = useState('')
   const [snapbackCustomDuration, setSnapbackCustomDuration] = useState<string>('')
   const [currentTaskName, setCurrentTaskName] = useState<string>(initialTaskName)
