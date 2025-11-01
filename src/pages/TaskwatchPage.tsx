@@ -121,15 +121,24 @@ const PRIORITY_HOLD_MS = 300
 const SNAPBACK_MARKER_DURATION_MS = 60000
 
 const SNAPBACK_REASONS = [
-  { id: 'tired' as const, label: 'Energy dip' },
-  { id: 'distracted' as const, label: 'Lost focus' },
   { id: 'interrupted' as const, label: 'Interrupted' },
-  { id: 'other' as const, label: 'Something else' },
+  { id: 'stuck' as const, label: 'Stuck' },
+  { id: 'lostfocus' as const, label: 'Lost Focus' },
+]
+
+const SNAPBACK_DURATIONS = [
+  { id: 5 as const, label: '5m' },
+  { id: 10 as const, label: '10m' },
+  { id: 15 as const, label: '15m' },
+  { id: 20 as const, label: '20m' },
+  { id: 30 as const, label: '30m' },
+  { id: 45 as const, label: '45m' },
+  { id: 60 as const, label: '1h' },
 ]
 
 const SNAPBACK_ACTIONS = [
+  { id: 'breather' as const, label: '15 min breather' },
   { id: 'resume' as const, label: 'Resume this focus' },
-  { id: 'break' as const, label: 'Take a short break' },
   { id: 'switch' as const, label: 'Switch tasks' },
 ]
 
@@ -498,9 +507,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   )
   const [lastSnapbackSummary, setLastSnapbackSummary] = useState<string | null>(null)
   const [isSnapbackOpen, setIsSnapbackOpen] = useState(false)
-  const [snapbackReason, setSnapbackReason] = useState<SnapbackReasonId>('tired')
+  const [snapbackDurationMin, setSnapbackDurationMin] = useState<number>(10)
+  const [snapbackReason, setSnapbackReason] = useState<SnapbackReasonId>('interrupted')
   const [snapbackNextAction, setSnapbackNextAction] = useState<SnapbackActionId>('resume')
   const [snapbackNote, setSnapbackNote] = useState('')
+  const [snapbackCustomReason, setSnapbackCustomReason] = useState('')
+  const [snapbackCustomDuration, setSnapbackCustomDuration] = useState<string>('')
   const [currentTaskName, setCurrentTaskName] = useState<string>(initialTaskName)
   const [sessionStart, setSessionStart] = useState<number | null>(null)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
@@ -530,6 +542,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const focusPriorityHoldTimerRef = useRef<number | null>(null)
   const focusPriorityHoldTriggeredRef = useRef(false)
   const snapbackDialogRef = useRef<HTMLDivElement | null>(null)
+  const customDurationInputRef = useRef<HTMLInputElement | null>(null)
   const focusContextRef = useRef<{
     goalId: string | null
     bucketId: string | null
@@ -2891,9 +2904,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   const handleOpenSnapback = useCallback(() => {
     setIsRunning(false)
-    setSnapbackReason('tired')
+    setSnapbackDurationMin(10)
+    setSnapbackReason('interrupted')
     setSnapbackNextAction('resume')
     setSnapbackNote('')
+    setSnapbackCustomReason('')
+    setSnapbackCustomDuration('')
     setIsSnapbackOpen(true)
   }, [])
 
@@ -2905,9 +2921,10 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const handleSubmitSnapback = useCallback(() => {
     const reasonMeta = SNAPBACK_REASONS.find((option) => option.id === snapbackReason)
     const actionMeta = SNAPBACK_ACTIONS.find((option) => option.id === snapbackNextAction)
-    const reasonLabel = reasonMeta?.label ?? 'Snapback'
+    const typed = snapbackCustomReason.trim()
+    const reasonLabel = typed.length > 0 ? typed : (reasonMeta?.label ?? 'Snapback')
     const actionLabel = actionMeta?.label ?? 'Decide next'
-    const note = snapbackNote.trim()
+    const durationLabel = `${Math.max(1, snapbackDurationMin)}m`
     const now = Date.now()
 
   if (elapsed > 0) {
@@ -2949,10 +2966,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   lastLoggedSessionKeyRef.current = null
   sessionMetadataRef.current = createEmptySessionMetadata(safeTaskName)
 
-    const labelParts = [reasonLabel]
-    if (note.length > 0) {
-      labelParts.push(note)
-    }
+    const labelParts = [durationLabel, reasonLabel]
     const markerTaskName = `Snapback • ${labelParts.join(' – ')}`.slice(0, MAX_TASK_STORAGE_LENGTH)
     const context = focusContextRef.current
     const markerGoalSurface = ensureSurfaceStyle(context.goalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE)
@@ -2963,9 +2977,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     const markerEntry: HistoryEntry = {
       id: makeHistoryId(),
       taskName: markerTaskName,
-      elapsed: SNAPBACK_MARKER_DURATION_MS,
+      elapsed: Math.max(60 * 1000, Math.round(Math.max(1, snapbackDurationMin) * 60 * 1000)),
       startedAt: now,
-      endedAt: now + SNAPBACK_MARKER_DURATION_MS,
+      endedAt: now + Math.max(60 * 1000, Math.round(Math.max(1, snapbackDurationMin) * 60 * 1000)),
       goalName: context.goalName,
       bucketName: actionLabel,
       goalId: context.goalId,
@@ -2982,9 +2996,10 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       return next.length > HISTORY_LIMIT ? next.slice(0, HISTORY_LIMIT) : next
     })
 
-    setLastSnapbackSummary(`${reasonLabel}${note.length > 0 ? ` • ${note}` : ''} → ${actionLabel}`)
+    setLastSnapbackSummary(`${durationLabel} • ${reasonLabel} → ${actionLabel}`)
     setIsSnapbackOpen(false)
     setSnapbackNote('')
+    setSnapbackCustomReason('')
 
     if (snapbackNextAction === 'resume') {
       const resumeStart = Date.now()
@@ -2999,15 +3014,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       if (snapbackNextAction === 'switch') {
         setIsSelectorOpen(true)
       }
-  }
+    }
   }, [
     applyLocalHistoryChange,
     deriveSessionMetadata,
     elapsed,
     normalizedCurrentTask,
     registerNewHistoryEntry,
+    snapbackDurationMin,
     snapbackNextAction,
-    snapbackNote,
+    snapbackCustomReason,
     snapbackReason,
   ])
 
@@ -3737,6 +3753,46 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
             <div className="snapback-panel__content">
               <div className="snapback-panel__grid">
+                <div className="snapback-panel__section snapback-panel__section--compact" aria-labelledby="snapback-duration-label">
+                  <h3 id="snapback-duration-label" className="snapback-panel__heading">How long were you off track for?</h3>
+                  <div className="snapback-panel__chips" role="group" aria-label="Select duration">
+                    {SNAPBACK_DURATIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={`snapback-option${snapbackDurationMin === opt.id ? ' snapback-option--active' : ''}`}
+                        aria-pressed={snapbackDurationMin === opt.id}
+                        onClick={() => setSnapbackDurationMin(opt.id)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                    <input
+                      ref={customDurationInputRef}
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={480}
+                      className={`snapback-option-input${snapbackCustomDuration.trim().length > 0 ? ' is-active' : ''}`}
+                      placeholder="mins"
+                      value={snapbackCustomDuration}
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        setSnapbackCustomDuration(raw)
+                        const n = Math.max(1, Math.floor(Number(raw)))
+                        if (Number.isFinite(n)) setSnapbackDurationMin(n)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const n = Math.max(1, Math.floor(Number(snapbackCustomDuration)))
+                          if (Number.isFinite(n)) setSnapbackDurationMin(n)
+                          ;(e.currentTarget as HTMLInputElement).blur()
+                        }
+                      }}
+                      aria-label="Enter minutes"
+                    />
+                  </div>
+                </div>
                 <div className="snapback-panel__section snapback-panel__section--stretch" aria-labelledby="snapback-reason-label">
                   <h3 id="snapback-reason-label" className="snapback-panel__heading">What pulled you off track?</h3>
                   <div className="snapback-panel__chips" role="group" aria-label="Select a reason">
@@ -3751,19 +3807,15 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                         {option.label}
                       </button>
                     ))}
-                  </div>
-                  <label className="snapback-panel__label">
-                    <span className="snapback-panel__label-text">
-                      Add a quick note <span className="snapback-panel__optional">(optional)</span>
-                    </span>
-                    <textarea
-                      className="snapback-panel__textarea"
-                      value={snapbackNote}
-                      onChange={(event) => setSnapbackNote(event.target.value.slice(0, MAX_TASK_STORAGE_LENGTH))}
-                      placeholder="Jot what happened or what you tried instead"
-                      rows={3}
+                    <input
+                      type="text"
+                      value={snapbackCustomReason}
+                      onChange={(e) => setSnapbackCustomReason(e.target.value.slice(0, MAX_TASK_STORAGE_LENGTH))}
+                      placeholder="Enter a reason"
+                      aria-label="Enter a reason"
+                      className="snapback-option-input"
                     />
-                  </label>
+                  </div>
                 </div>
 
                 <div className="snapback-panel__section snapback-panel__section--compact" aria-labelledby="snapback-action-label">

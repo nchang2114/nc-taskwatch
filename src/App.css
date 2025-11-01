@@ -2163,11 +2163,11 @@ html[data-theme='light'] .nav-links--drawer {
 }
 
 .snapback-panel {
-  width: min(520px, 100%);
+  width: min(480px, 100%);
   display: flex;
   flex-direction: column;
-  gap: clamp(0.6rem, 2vw, 1rem); /* tighter overall spacing for a more compact feel */
-  padding: clamp(1rem, 3vw, 1.6rem); /* slightly reduced padding */
+  gap: clamp(0.5rem, 1.6vw, 0.8rem);
+  padding: clamp(0.8rem, 2.4vw, 1.2rem);
   border-radius: clamp(16px, 3.6vw, 22px);
   border: 1px solid rgba(138, 156, 255, 0.32);
   background:
@@ -2225,7 +2225,7 @@ html[data-theme='light'] .nav-links--drawer {
 .snapback-panel__title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.2rem, 2.8vw, 1.55rem);
+  font-size: clamp(1.1rem, 2.4vw, 1.4rem);
   font-weight: 600;
   letter-spacing: 0.015em;
   color: rgba(236, 240, 255, 0.96);
@@ -2233,7 +2233,7 @@ html[data-theme='light'] .nav-links--drawer {
 
 .snapback-panel__lead {
   margin: 0;
-  font-size: clamp(0.82rem, 1.9vw, 0.98rem);
+  font-size: clamp(0.76rem, 1.6vw, 0.9rem);
   color: rgba(198, 208, 255, 0.76);
 }
 
@@ -2269,12 +2269,12 @@ html[data-theme='light'] .nav-links--drawer {
 .snapback-panel__content {
   display: flex;
   flex-direction: column;
-  gap: clamp(0.75rem, 2vw, 1rem);
+  gap: clamp(0.6rem, 1.6vw, 0.9rem);
 }
 
 .snapback-panel__grid {
   display: grid;
-  gap: clamp(0.65rem, 1.6vw, 0.9rem); /* slightly tighter section spacing */
+  gap: clamp(0.5rem, 1.4vw, 0.8rem);
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -2288,9 +2288,9 @@ html[data-theme='light'] .nav-links--drawer {
 .snapback-panel__section {
   display: flex;
   flex-direction: column;
-  gap: clamp(0.5rem, 1.6vw, 0.8rem);
-  padding: clamp(0.65rem, 1.8vw, 0.9rem);
-  border-radius: clamp(12px, 2.4vw, 16px);
+  gap: clamp(0.45rem, 1.4vw, 0.7rem);
+  padding: clamp(0.5rem, 1.4vw, 0.75rem);
+  border-radius: clamp(12px, 2.2vw, 14px);
   border: 1px solid rgba(128, 148, 240, 0.28);
   background: rgba(32, 40, 96, 0.46);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -2306,7 +2306,7 @@ html[data-theme='light'] .nav-links--drawer {
 
 .snapback-panel__heading {
   margin: 0;
-  font-size: clamp(0.92rem, 2.2vw, 1.05rem);
+  font-size: clamp(0.88rem, 2vw, 1rem);
   font-weight: 600;
   color: rgba(210, 220, 255, 0.9);
 }
@@ -2318,15 +2318,58 @@ html[data-theme='light'] .nav-links--drawer {
 }
 
 .snapback-option {
-  padding: 0.5rem 0.95rem;
+  padding: 0.4rem 0.8rem;
   border-radius: 999px;
   border: 1px solid rgba(150, 170, 255, 0.38);
   background: rgba(60, 72, 156, 0.38);
   color: rgba(220, 228, 255, 0.88);
-  font-size: clamp(0.8rem, 1.8vw, 0.92rem);
+  font-size: clamp(0.78rem, 1.6vw, 0.9rem);
   cursor: pointer;
   backdrop-filter: blur(12px);
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Inline input styled like a chip */
+.snapback-option-input {
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(150, 170, 255, 0.38);
+  background: rgba(60, 72, 156, 0.24);
+  color: rgba(220, 228, 255, 0.92);
+  font-size: clamp(0.78rem, 1.6vw, 0.9rem);
+  outline: none;
+  min-width: 12ch;
+}
+.snapback-option-input::placeholder {
+  color: rgba(176, 190, 255, 0.6);
+}
+.snapback-option-input:focus {
+  border-color: rgba(186, 202, 255, 0.55);
+  background: rgba(92, 108, 198, 0.4);
+  box-shadow: 0 0 0 2px rgba(132, 150, 255, 0.34);
+}
+.snapback-option-input.is-active {
+  border-color: rgba(198, 210, 255, 0.85);
+  background: linear-gradient(135deg, rgba(112, 130, 246, 0.25) 0%, rgba(86, 108, 230, 0.25) 100%);
+}
+
+/* Light theme adjustments for inline chip input */
+html[data-theme='light'] .snapback-option-input {
+  border-color: rgba(130, 146, 230, 0.42);
+  background: rgba(230, 236, 255, 0.86);
+  color: rgba(42, 56, 112, 0.9);
+}
+html[data-theme='light'] .snapback-option-input::placeholder {
+  color: rgba(92, 108, 168, 0.65);
+}
+html[data-theme='light'] .snapback-option-input:focus {
+  border-color: rgba(138, 154, 242, 0.7);
+  background: rgba(220, 232, 255, 0.9);
+  box-shadow: 0 0 0 2px rgba(138, 154, 242, 0.35);
+}
+html[data-theme='light'] .snapback-option-input.is-active {
+  background: linear-gradient(135deg, rgba(158, 172, 248, 0.3) 0%, rgba(130, 148, 238, 0.3) 100%);
+  border-color: rgba(150, 168, 246, 0.9);
 }
 
 .snapback-option:hover,
@@ -2369,14 +2412,14 @@ html[data-theme='light'] .nav-links--drawer {
 
 .snapback-panel__textarea {
   width: 100%;
-  min-height: clamp(84px, 16vw, 110px);
+  min-height: clamp(64px, 14vw, 90px);
   resize: vertical;
   border-radius: clamp(12px, 2vw, 16px);
   border: 1px solid rgba(138, 158, 255, 0.32);
   background: rgba(24, 30, 72, 0.6);
   color: rgba(236, 240, 255, 0.94);
-  padding: clamp(0.6rem, 2vw, 0.8rem);
-  font-size: clamp(0.85rem, 1.8vw, 0.95rem);
+  padding: clamp(0.5rem, 1.6vw, 0.7rem);
+  font-size: clamp(0.82rem, 1.6vw, 0.92rem);
   line-height: 1.5;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
@@ -2398,10 +2441,10 @@ html[data-theme='light'] .nav-links--drawer {
 }
 
 .snapback-panel__button {
-  padding: 0.6rem 1.4rem;
+  padding: 0.5rem 1.1rem;
   border-radius: 999px;
   border: 1px solid transparent;
-  font-size: clamp(0.85rem, 2vw, 0.95rem);
+  font-size: clamp(0.82rem, 1.8vw, 0.92rem);
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
