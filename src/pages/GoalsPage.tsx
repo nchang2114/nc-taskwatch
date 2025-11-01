@@ -1707,6 +1707,19 @@ const MilestoneLayer: React.FC<{
                 />
                 <div className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom')}>
                   <div className="milestones__card">
+                    {m.role !== 'start' && onlyNonStartId !== m.id ? (
+                      <button
+                        className="milestones__remove"
+                        type="button"
+                        onClick={() => removeMilestone(m.id)}
+                        aria-label="Remove milestone"
+                        title="Delete milestone"
+                      >
+                        <svg className="milestones__remove-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                          <path d="M9 3H15M4 7H20M18 7L17.2 19.2C17.09 20.8 15.76 22 14.15 22H9.85C8.24 22 6.91 20.8 6.8 19.2L6 7M10 11V18M14 11V18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                    ) : null}
 
                     {!isStart && editing?.id === m.id && editing.field === 'name' ? (
                       <input

@@ -1380,8 +1380,10 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   background: rgba(12, 18, 56, 0.5);
   color: rgba(235, 242, 255, 0.96);
   font-size: 0.78rem;
-  padding: 0.2rem 0.4rem;
-  text-align: center;
+  padding: 0.18rem 0.4rem;
+  line-height: 1.2;
+  margin: 0;
+  text-align: left; /* left-align name text */
 }
 .milestones__name--text,
 .milestones__date--text {
@@ -1398,7 +1400,15 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 }
 .milestones__card .milestones__name--text {
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 0.78rem; /* slightly smaller to compact card */
+  line-height: 1.18;
+  /* Hug content and wrap dynamically */
+  display: inline-block;
+  width: fit-content;
+  max-width: 16ch;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .milestones__card .milestones__date--text {
   font-size: 0.72rem;
@@ -1413,7 +1423,9 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   background: rgba(12, 18, 56, 0.5);
   color: rgba(235, 242, 255, 0.96);
   font-size: 0.75rem;
-  padding: 0.18rem 0.35rem;
+  padding: 0.16rem 0.35rem;
+  line-height: 1.15;
+  margin: 0;
   text-align: center;
   /* pill feel for contrast */
   background-image: linear-gradient(135deg, rgba(59,130,246,0.35), rgba(99,102,241,0.35));
@@ -1446,29 +1458,51 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 /* Compact milestone details card */
 .milestones__card {
   position: relative;
-  /* Compact padding now that delete button is removed */
-  padding: 0.6rem;
+  /* More compact padding, keep space for delete icon */
+  padding: 0.42rem 1.1rem 0.42rem 0.5rem;
   border-radius: 0.55rem;
   border: 1px solid rgba(148, 163, 255, 0.35);
   background: rgba(12, 18, 56, 0.55);
   box-shadow: 0 8px 24px -18px rgba(2, 6, 28, 0.6);
-  display: grid;
-  gap: 0.25rem;
-  justify-items: center;
-  max-width: 18ch; /* keep card compact to match shorter name */
+  display: inline-grid; /* shrink-to-fit instead of stretching full width */
+  grid-auto-flow: row;
+  align-items: start;
+  justify-items: start; /* left-align contents inside card */
+  row-gap: 0.1rem; /* tighter vertical rhythm */
+  width: fit-content;
+  max-width: 16ch; /* wrap long titles to ~2 lines */
+  box-sizing: border-box;
 }
 
 .milestones__remove {
   position: absolute;
-  top: 0.25rem;
-  right: 0.25rem;
-  border: 1px solid rgba(255, 100, 120, 0.5);
-  background: rgba(255, 100, 120, 0.15);
-  color: rgba(255, 180, 188, 0.96);
-  width: 1.2rem; height: 1.2rem;
+  top: 0.22rem;
+  right: 0.28rem;
+  width: 1rem;
+  height: 1rem;
+  border: none;
+  background: transparent;
+  color: rgba(235, 242, 255, 0.88);
   border-radius: 0.35rem;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease, transform 80ms ease;
 }
+
+.milestones__remove:hover,
+.milestones__remove:focus-visible {
+  color: rgba(255, 255, 255, 0.98);
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.milestones__remove:active { transform: scale(0.96); }
+
+.milestones__remove-icon { width: 0.8rem; height: 0.8rem; display: block; }
 
 html[data-theme='light'] .milestones {
   background: rgba(244, 247, 255, 0.86);
@@ -1480,9 +1514,11 @@ html[data-theme='light'] .milestones__card {
   border-color: rgba(128, 146, 238, 0.38);
   box-shadow: 0 14px 28px -22px rgba(82, 96, 150, 0.28);
 }
-html[data-theme='light'] .milestones__remove {
-  background: rgba(248, 113, 113, 0.12);
-  color: rgba(200, 40, 40, 0.92);
+html[data-theme='light'] .milestones__remove { color: rgba(26, 34, 92, 0.86); }
+html[data-theme='light'] .milestones__remove:hover,
+html[data-theme='light'] .milestones__remove:focus-visible {
+  background: rgba(28, 36, 94, 0.08);
+  color: rgba(20, 28, 80, 0.98);
 }
 html[data-theme='light'] .milestones__add { background: rgba(92, 91, 255, 0.12); color: rgba(28, 36, 94, 0.94); }
 html[data-theme='light'] .milestones__add:hover, html[data-theme='light'] .milestones__add:focus-visible { background: rgba(92, 91, 255, 0.2); }
