@@ -1707,9 +1707,6 @@ const MilestoneLayer: React.FC<{
                 />
                 <div className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom')}>
                   <div className="milestones__card">
-                    {m.role !== 'start' && onlyNonStartId !== m.id ? (
-                      <button className="milestones__remove" type="button" onClick={() => removeMilestone(m.id)} aria-label="Remove milestone">×</button>
-                    ) : null}
 
                     {!isStart && editing?.id === m.id && editing.field === 'name' ? (
                       <input

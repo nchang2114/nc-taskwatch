@@ -1258,15 +1258,19 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   border: 1px solid rgba(148, 163, 255, 0.28);
   background: rgba(18, 26, 72, 0.42);
   /* Extra horizontal padding so labels never overflow container horizontally */
-  padding: 1.2rem 3rem 1.8rem;
+  padding: 1.5rem 3rem 1.5rem; /* symmetric padding to help visually center the track */
   overflow: hidden; /* enforce labels stay within box */
   min-height: 360px; /* more vertical room for alternating labels */
   /* Milestone connector geometry */
-  --ms-connector: 44px;
+  --ms-connector: 34px; /* shorter connector length for a more compact timeline */
   --ms-gap: 6px;
-  --ms-node-clearance: 10px; /* space between node ring and vertical stem */
+  --ms-node-clearance: 8px; /* space between node ring and vertical stem (smaller nodes) */
   --ms-node-bg: #0f1a48; /* inner fill used to mask lines for hollow node */
   --ms-node-inner: var(--ms-node-bg); /* inner disk color (changes on complete) */
+  /* Center the track both directions */
+  display: flex;
+  align-items: center; /* vertical center */
+  justify-content: center; /* horizontal center */
 }
 .milestones__header {
   display: flex;
@@ -1290,10 +1294,14 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 }
 .milestones__track {
   position: relative;
-  margin-top: 0.1rem;
+  margin: 0 auto; /* center fallback */
   /* Provide both top and bottom clearance for labels */
-  padding: 3.2rem 0 2.6rem;
-  min-height: 280px; /* center line against this height */
+  padding: 2.4rem 0; /* symmetric padding so center line is true center */
+  min-height: 240px; /* center line against this height */
+  /* Make the horizontal timeline shorter and centered */
+  width: 87.5%;
+  margin-left: auto;
+  margin-right: auto;
 }
 .milestones__line {
   position: absolute;
@@ -1301,8 +1309,8 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  height: 3px;
-  border-radius: 4px;
+  height: 2px; /* thinner center line */
+  border-radius: 3px;
   background: linear-gradient(90deg, rgba(118,142,255,0.28), rgba(59,130,246,0.32));
 }
 .milestones__node-wrap {
@@ -1311,8 +1319,8 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   transform: translateX(-50%);
 }
 .milestones__node {
-  width: 14px;
-  height: 14px;
+  width: 10px;   /* smaller node */
+  height: 10px;  /* smaller node */
   border-radius: 50%;
   border: 2px solid rgba(173, 186, 255, 0.8);
   background: var(--ms-node-bg); /* mask the center so lines don't show through */
@@ -1320,11 +1328,11 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   cursor: pointer;
   touch-action: none;
   position: relative;
-  top: -9px; /* center the circle exactly on the 3px line (18px dia => -9px) */
+  top: -7px; /* center the circle on the 2px line (14px total => -7px) */
   display: block; /* neutralize UA button inline baselines */
   padding: 0; /* avoid UA padding */
   line-height: 0; /* avoid extra inline height */
-  box-sizing: content-box; /* 14px content + 2*2px border = 18px total */
+  box-sizing: content-box; /* 10px content + 2*2px border = 14px total */
   z-index: 2; /* ensure node sits above stems */
 }
 
@@ -1332,7 +1340,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 .milestones__node::before {
   content: '';
   position: absolute;
-  inset: -4px;
+  inset: -3px; /* smaller halo for smaller node */
   border-radius: 50%;
   border: 1px solid rgba(148, 163, 255, 0.28);
   background: transparent;
@@ -1342,7 +1350,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 .milestones__node::after {
   content: '';
   position: absolute;
-  inset: 3px; /* leaves a visible ring */
+  inset: 2px; /* leaves a visible ring on smaller node */
   border-radius: 50%;
   background: var(--ms-node-inner);
   box-shadow: inset 0 0 0 1px rgba(148, 163, 255, 0.18);
@@ -1360,13 +1368,13 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   gap: 0.3rem;
   text-align: center;
   white-space: normal;
-  width: min(16rem, 44vw);
+  width: min(14rem, 40vw); /* slightly smaller max card width */
   z-index: 3; /* ensure label sits above connector and node */
 }
 /* Position is controlled below using connector + gap to ensure symmetry */
 .milestones__name {
   min-width: 6ch;
-  max-width: 22ch;
+  max-width: 16ch; /* encourage wrap to two lines */
   border-radius: 0.4rem;
   border: 1px solid rgba(148, 163, 255, 0.35);
   background: rgba(12, 18, 56, 0.5);
@@ -1416,7 +1424,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   left: 0;
   right: 0;
   margin: 0 auto;
-  width: 2px;
+  width: 1px; /* thinner connector stem */
   background: rgba(148, 163, 255, 0.45);
   z-index: 1;
 }
@@ -1438,8 +1446,8 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 /* Compact milestone details card */
 .milestones__card {
   position: relative;
-  /* Add headroom to avoid overlap with the close button */
-  padding: 1.7rem 0.6rem 0.6rem;
+  /* Compact padding now that delete button is removed */
+  padding: 0.6rem;
   border-radius: 0.55rem;
   border: 1px solid rgba(148, 163, 255, 0.35);
   background: rgba(12, 18, 56, 0.55);
@@ -1447,6 +1455,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   display: grid;
   gap: 0.25rem;
   justify-items: center;
+  max-width: 18ch; /* keep card compact to match shorter name */
 }
 
 .milestones__remove {
