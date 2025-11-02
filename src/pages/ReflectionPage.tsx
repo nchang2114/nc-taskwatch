@@ -4229,6 +4229,60 @@ useEffect(() => {
     }
     return base
   }, [loggedSegments, windowMs, loggedMs, unloggedFraction])
+
+  // Snap Back Overview data (counts by reason within active range)
+  const snapbackOverview = useMemo(() => {
+    const now = Date.now()
+    const windowMs = RANGE_DEFS[activeRange].durationMs
+    const windowStart = now - windowMs
+    const totals = new Map<string, { count: number; label: string }>()
+
+    const parseReason = (taskName: string): string | null => {
+      const prefix = 'Snapback • '
+      if (!taskName || !taskName.startsWith(prefix)) return null
+      const rest = taskName.slice(prefix.length)
+      const enDash = ' – '
+      let reason: string | null = null
+      if (rest.includes(enDash)) {
+        reason = rest.split(enDash).slice(1).join(enDash).trim()
+      } else if (rest.includes(' - ')) {
+        reason = rest.split(' - ').slice(1).join(' - ').trim()
+      }
+      if (reason && reason.length > 0) return reason.slice(0, 120)
+      return 'Snapback'
+    }
+
+    effectiveHistory.forEach((entry) => {
+      const start = Math.min(entry.startedAt, entry.endedAt)
+      const end = Math.max(entry.startedAt, entry.endedAt)
+      if (end <= windowStart || start >= now) return
+      const clampedStart = Math.max(start, windowStart)
+      const clampedEnd = Math.min(end, now)
+      const overlapMs = Math.max(0, clampedEnd - clampedStart)
+      if (overlapMs <= 0) return
+      const reason = parseReason(entry.taskName)
+      if (!reason) return
+      const key = reason.trim().toLowerCase()
+      const existing = totals.get(key)
+      if (existing) {
+        existing.count += 1
+      } else {
+        totals.set(key, { count: 1, label: reason })
+      }
+    })
+
+    const items = Array.from(totals.entries())
+      .map(([key, info]) => ({ key, count: info.count, label: info.label }))
+      .sort((a, b) => b.count - a.count)
+
+    const legend = items.map((item) => {
+      const color = getPaletteColorForLabel(item.label)
+      return { id: `snap-${item.key}`, label: item.label, count: item.count, swatch: color }
+    })
+
+    const total = items.reduce((sum, it) => sum + it.count, 0)
+    return { legend, total, windowMs }
+  }, [effectiveHistory, activeRange])
   const pieArcs = useMemo(() => createPieArcs(segments, windowMs), [segments, windowMs])
   useLayoutEffect(() => {
     if (!supportsConicGradient) {
@@ -4369,6 +4423,7 @@ useEffect(() => {
   }, [pieArcs, supportsConicGradient, themeToken])
   const unloggedMs = useMemo(() => Math.max(windowMs - loggedMs, 0), [windowMs, loggedMs])
   const tabPanelId = 'reflection-range-panel'
+  const snapbackPanelId = 'snapback-range-panel'
   const dayStart = useMemo(() => {
     const date = new Date(nowTick)
     date.setHours(0, 0, 0, 0)
@@ -9400,6 +9455,55 @@ useEffect(() => {
             <span className="reflection-stats__label">Window</span>
             <span className="reflection-stats__value">{formatDuration(windowMs)}</span>
           </div>
+        </div>
+      </section>
+
+      {/* Snap Back Overview */}
+      <section className="reflection-section reflection-section--overview">
+        <h2 className="reflection-section__title">Snap Back Overview</h2>
+        <div className="reflection-tabs" role="tablist" aria-label="Snap back time ranges">
+          {RANGE_KEYS.map((key) => {
+            const config = RANGE_DEFS[key]
+            const isActive = key === activeRange
+            return (
+              <button
+                key={`snap-${key}`}
+                type="button"
+                role="tab"
+                tabIndex={isActive ? 0 : -1}
+                aria-selected={isActive}
+                aria-controls={snapbackPanelId}
+                className={`reflection-tab${isActive ? ' reflection-tab--active' : ''}`}
+                onClick={() => setActiveRange(key)}
+              >
+                <span className="reflection-tab__label">{config.label}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div
+          className="reflection-overview"
+          role="tabpanel"
+          id={snapbackPanelId}
+          aria-live="polite"
+          aria-label={`${activeRangeConfig.label} snap backs`}
+        >
+          {snapbackOverview.legend.length === 0 ? (
+            <p className="reflection-section__desc">No snap backs in this window.</p>
+          ) : (
+            <div className="reflection-legend" aria-label={`${activeRangeConfig.label} snap back reasons`}>
+              {snapbackOverview.legend.map((item) => (
+                <div key={item.id} className="reflection-legend__item">
+                  <span className="reflection-legend__swatch" style={{ background: item.swatch }} aria-hidden="true" />
+                  <div className="reflection-legend__meta">
+                    <span className="reflection-legend__label">{item.label}</span>
+                    <span className="reflection-legend__value">{item.count}x</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

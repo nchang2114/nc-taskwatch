@@ -266,15 +266,18 @@
   font-size: clamp(0.78rem, 1.6vw, 0.9rem);
   outline: none;
   min-width: 12ch;
+  pointer-events: auto;
 }
 .snapback-option-input::placeholder { color: rgba(176, 190, 255, 0.6); }
-.snapback-option-input:focus { border-color: rgba(186, 202, 255, 0.55); background: rgba(92, 108, 198, 0.4); box-shadow: 0 0 0 2px rgba(132, 150, 255, 0.34); }
+.snapback-option-input:focus,
+.snapback-option-input:focus-visible { border-color: rgba(186, 202, 255, 0.65); background: rgba(92, 108, 198, 0.42); box-shadow: 0 0 0 2px rgba(132, 150, 255, 0.42); }
 .snapback-option-input.is-active { border-color: rgba(198, 210, 255, 0.85); background: linear-gradient(135deg, rgba(112, 130, 246, 0.25) 0%, rgba(86, 108, 230, 0.25) 100%); }
 
-./* Light theme for inline chip input */
+/* Light theme for inline chip input */
 html[data-theme='light'] .snapback-option-input { border-color: rgba(130, 146, 230, 0.42); background: rgba(230, 236, 255, 0.86); color: rgba(42, 56, 112, 0.9); }
 html[data-theme='light'] .snapback-option-input::placeholder { color: rgba(92, 108, 168, 0.65); }
-html[data-theme='light'] .snapback-option-input:focus { border-color: rgba(138, 154, 242, 0.7); background: rgba(220, 232, 255, 0.9); box-shadow: 0 0 0 2px rgba(138, 154, 242, 0.35); }
+html[data-theme='light'] .snapback-option-input:focus,
+html[data-theme='light'] .snapback-option-input:focus-visible { border-color: rgba(138, 154, 242, 0.7); background: rgba(220, 232, 255, 0.9); box-shadow: 0 0 0 2px rgba(138, 154, 242, 0.35); }
 html[data-theme='light'] .snapback-option-input.is-active { background: linear-gradient(135deg, rgba(158, 172, 248, 0.3) 0%, rgba(130, 148, 238, 0.3) 100%); border-color: rgba(150, 168, 246, 0.9); }
 
 .snapback-panel__label { display: flex; flex-direction: column; gap: clamp(0.4rem, 1.2vw, 0.55rem); }
