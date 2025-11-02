@@ -121,18 +121,15 @@ const FOCUS_COMPLETION_RESET_DELAY_MS = 800
 const PRIORITY_HOLD_MS = 300
 
 const SNAPBACK_REASONS = [
-  { id: 'interrupted' as const, label: 'Interrupted' },
-  { id: 'stuck' as const, label: 'Stuck' },
-  { id: 'lostfocus' as const, label: 'Lost Focus' },
+  { id: 'insta' as const, label: 'Scrolling Insta' },
+  { id: 'youtube-scroll' as const, label: 'Scrolling Youtube' },
+  { id: 'youtube-random' as const, label: 'Watching Random Youtube videos' },
+  { id: 'tv' as const, label: 'Watching TV' },
 ]
 
 const SNAPBACK_DURATIONS = [
   { id: 5 as const, label: '5m' },
-  { id: 10 as const, label: '10m' },
-  { id: 15 as const, label: '15m' },
-  { id: 20 as const, label: '20m' },
   { id: 30 as const, label: '30m' },
-  { id: 45 as const, label: '45m' },
   { id: 60 as const, label: '1h' },
 ]
 
@@ -507,8 +504,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   )
   const [lastSnapbackSummary, setLastSnapbackSummary] = useState<string | null>(null)
   const [isSnapbackOpen, setIsSnapbackOpen] = useState(false)
-  const [snapbackDurationMin, setSnapbackDurationMin] = useState<number>(10)
-  const [snapbackReason, setSnapbackReason] = useState<SnapbackReasonId>('interrupted')
+  const [snapbackDurationMin, setSnapbackDurationMin] = useState<number>(5)
+  const [snapbackReason, setSnapbackReason] = useState<SnapbackReasonId>('insta')
   const [snapbackNextAction, setSnapbackNextAction] = useState<SnapbackActionId>('resume')
   const [, setSnapbackNote] = useState('')
   const [snapbackCustomReason, setSnapbackCustomReason] = useState('')
@@ -2904,8 +2901,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   const handleOpenSnapback = useCallback(() => {
     setIsRunning(false)
-    setSnapbackDurationMin(10)
-    setSnapbackReason('interrupted')
+    setSnapbackDurationMin(5)
+    setSnapbackReason('insta')
     setSnapbackNextAction('resume')
     setSnapbackNote('')
     setSnapbackCustomReason('')
@@ -3794,7 +3791,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                   </div>
                 </div>
                 <div className="snapback-panel__section snapback-panel__section--stretch" aria-labelledby="snapback-reason-label">
-                  <h3 id="snapback-reason-label" className="snapback-panel__heading">What pulled you off track?</h3>
+                  <h3 id="snapback-reason-label" className="snapback-panel__heading">What were you doing instead (be specific)?</h3>
                   <div className="snapback-panel__chips" role="group" aria-label="Select a reason">
                     {SNAPBACK_REASONS.map((option) => (
                       <button
