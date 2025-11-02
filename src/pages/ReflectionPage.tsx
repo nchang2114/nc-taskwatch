@@ -4230,12 +4230,12 @@ useEffect(() => {
     return base
   }, [loggedSegments, windowMs, loggedMs, unloggedFraction])
 
-  // Snap Back Overview data (counts by reason within active range)
+  // Snap Back Overview data (counts + duration by reason within active range)
   const snapbackOverview = useMemo(() => {
     const now = Date.now()
     const windowMs = RANGE_DEFS[activeRange].durationMs
     const windowStart = now - windowMs
-    const totals = new Map<string, { count: number; label: string }>()
+    const totals = new Map<string, { count: number; label: string; durationMs: number }>()
 
     const parseReason = (taskName: string): string | null => {
       const prefix = 'Snapback • '
@@ -4266,22 +4266,24 @@ useEffect(() => {
       const existing = totals.get(key)
       if (existing) {
         existing.count += 1
+        existing.durationMs += overlapMs
       } else {
-        totals.set(key, { count: 1, label: reason })
+        totals.set(key, { count: 1, label: reason, durationMs: overlapMs })
       }
     })
 
     const items = Array.from(totals.entries())
-      .map(([key, info]) => ({ key, count: info.count, label: info.label }))
-      .sort((a, b) => b.count - a.count)
+      .map(([key, info]) => ({ key, count: info.count, label: info.label, durationMs: info.durationMs }))
+      .sort((a, b) => (b.count === a.count ? b.durationMs - a.durationMs : b.count - a.count))
 
     const legend = items.map((item) => {
       const color = getPaletteColorForLabel(item.label)
-      return { id: `snap-${item.key}`, label: item.label, count: item.count, swatch: color }
+      return { id: `snap-${item.key}`, label: item.label, count: item.count, durationMs: item.durationMs, swatch: color }
     })
 
     const total = items.reduce((sum, it) => sum + it.count, 0)
-    return { legend, total, windowMs }
+    const maxDurationMs = legend.reduce((max, it) => Math.max(max, it.durationMs), 0)
+    return { legend, total, windowMs, maxDurationMs }
   }, [effectiveHistory, activeRange])
   const pieArcs = useMemo(() => createPieArcs(segments, windowMs), [segments, windowMs])
   useLayoutEffect(() => {
@@ -4424,6 +4426,47 @@ useEffect(() => {
   const unloggedMs = useMemo(() => Math.max(windowMs - loggedMs, 0), [windowMs, loggedMs])
   const tabPanelId = 'reflection-range-panel'
   const snapbackPanelId = 'snapback-range-panel'
+
+  // Snapback selection + plans (local storage)
+  type SnapbackPlan = { cue: string; deconstruction: string; plan: string }
+  type SnapbackPlanState = Record<string, SnapbackPlan>
+  const SNAPBACK_PLAN_STORAGE_KEY = 'nc-taskwatch-snapback-plans'
+  const readPlans = (): SnapbackPlanState => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const raw = window.localStorage.getItem(SNAPBACK_PLAN_STORAGE_KEY)
+      if (!raw) return {}
+      const parsed = JSON.parse(raw)
+      if (typeof parsed !== 'object' || parsed === null) return {}
+      return parsed as SnapbackPlanState
+    } catch {
+      return {}
+    }
+  }
+  const writePlans = (value: SnapbackPlanState) => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(SNAPBACK_PLAN_STORAGE_KEY, JSON.stringify(value))
+    } catch {}
+  }
+
+  const [snapPlans, setSnapPlans] = useState<SnapbackPlanState>(() => readPlans())
+  useEffect(() => {
+    writePlans(snapPlans)
+  }, [snapPlans])
+
+  const [selectedTriggerKey, setSelectedTriggerKey] = useState<string | null>(null)
+  useEffect(() => {
+    const first = snapbackOverview.legend[0]?.id ?? null
+    setSelectedTriggerKey(first)
+  }, [activeRange, snapbackOverview.legend.map((i) => i.id).join('|')])
+
+  const selectedItem = useMemo(() => snapbackOverview.legend.find((i) => i.id === selectedTriggerKey) ?? snapbackOverview.legend[0] ?? null, [selectedTriggerKey, snapbackOverview.legend])
+  const selectedPlan = useMemo(() => {
+    if (!selectedItem) return { cue: '', deconstruction: '', plan: '' }
+    const key = selectedItem.id
+    return snapPlans[key] ?? { cue: '', deconstruction: '', plan: '' }
+  }, [selectedItem, snapPlans])
   const dayStart = useMemo(() => {
     const date = new Date(nowTick)
     date.setHours(0, 0, 0, 0)
@@ -9482,27 +9525,91 @@ useEffect(() => {
           })}
         </div>
 
-        <div
-          className="reflection-overview"
-          role="tabpanel"
-          id={snapbackPanelId}
-          aria-live="polite"
-          aria-label={`${activeRangeConfig.label} snap backs`}
-        >
+        <div className="snapback-overview" role="tabpanel" id={snapbackPanelId} aria-live="polite" aria-label={`${activeRangeConfig.label} snap backs`}>
           {snapbackOverview.legend.length === 0 ? (
             <p className="reflection-section__desc">No snap backs in this window.</p>
           ) : (
-            <div className="reflection-legend" aria-label={`${activeRangeConfig.label} snap back reasons`}>
-              {snapbackOverview.legend.map((item) => (
-                <div key={item.id} className="reflection-legend__item">
-                  <span className="reflection-legend__swatch" style={{ background: item.swatch }} aria-hidden="true" />
-                  <div className="reflection-legend__meta">
-                    <span className="reflection-legend__label">{item.label}</span>
-                    <span className="reflection-legend__value">{item.count}x</span>
+            <>
+              <div className="snapback-list__head">
+                <h3 className="snapback-list__title">Top Triggers</h3>
+                <span className="snapback-list__chip">auto-tagged from SnapBack</span>
+              </div>
+              <div className="snapback-list">
+                {snapbackOverview.legend.map((item) => {
+                  const isActive = item.id === selectedTriggerKey
+                  return (
+                    <div
+                      key={item.id}
+                      className={`snapback-item${isActive ? ' snapback-item--active' : ''}`}
+                      onClick={() => setSelectedTriggerKey(item.id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setSelectedTriggerKey(item.id)
+                        }
+                      }}
+                    >
+                      <div className="snapback-item__row">
+                        <div className="snapback-item__left">
+                          <span className="snapback-item__dot" style={{ background: item.swatch }} aria-hidden="true" />
+                          <span className="snapback-item__title">{item.label}</span>
+                        </div>
+                        <div className="snapback-item__meta">{item.count}x • {formatDuration(item.durationMs)}</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="snapback-drawer">
+                <div className="snapback-drawer__header">
+                  <div className="snapback-drawer__titles">
+                    <h3 className="snapback-drawer__title">Pattern: {selectedItem?.label ?? '—'}</h3>
+                    {selectedItem ? (
+                      <p className="snapback-drawer__subtitle">This pattern occurred {selectedItem.count}× ({formatDuration(selectedItem.durationMs)}) in this range.</p>
+                    ) : null}
                   </div>
+                  <span className="snapback-drawer__phase">Awareness → Rebuild</span>
                 </div>
-              ))}
-            </div>
+
+                <div className="snapback-drawer__group">
+                  <label className="snapback-drawer__label">Why is this happening?</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., boredom after long coding block"
+                    className="snapback-drawer__input"
+                    value={selectedPlan.cue}
+                    onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, cue: e.target.value } }))}
+                  />
+                </div>
+
+                <div className="snapback-drawer__group">
+                  <label className="snapback-drawer__label">Is it aligned with who you want to be? What's the reward, is it sustainable?</label>
+                  <textarea
+                    placeholder="What do you get out of it?"
+                    className="snapback-drawer__textarea"
+                    value={selectedPlan.deconstruction}
+                    onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, deconstruction: e.target.value } }))}
+                  />
+                </div>
+
+                <div className="snapback-drawer__group">
+                  <label className="snapback-drawer__label">How do you change for the next time</label>
+                  <textarea
+                    placeholder="10‑min walk → then reward video; phone to other room"
+                    className="snapback-drawer__textarea"
+                    value={selectedPlan.plan}
+                    onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, plan: e.target.value } }))}
+                  />
+                </div>
+
+                <div className="snapback-drawer__actions">
+                  <button type="button" className="snapback-drawer__button snapback-drawer__button--primary" onClick={() => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...selectedPlan } }))}>Save</button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </section>

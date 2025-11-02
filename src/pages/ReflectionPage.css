@@ -1027,6 +1027,115 @@ html[data-theme='light'] {
   overflow-x: hidden;
 }
 
+/* SnapBack Overview */
+.snapback-overview {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.9rem, 2.2vw, 1.2rem);
+  width: 100%;
+}
+.snapback-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.snapback-list__title {
+  margin: 0;
+  font-size: clamp(0.95rem, 2vw, 1.05rem);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.snapback-list__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 156, 236, 0.35);
+  background: rgba(28, 34, 72, 0.5);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+.snapback-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 280px));
+  gap: 0.7rem;
+}
+.snapback-item {
+  border: 1px solid rgba(132, 148, 228, 0.28);
+  background: rgba(18, 24, 56, 0.42);
+  border-radius: 0.85rem;
+  padding: 1rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+.snapback-item--active {
+  background: rgba(26, 34, 78, 0.6);
+  border-color: rgba(156, 172, 246, 0.55);
+}
+.snapback-item:hover { border-color: rgba(156, 172, 246, 0.5); background: rgba(22, 30, 68, 0.5); }
+.snapback-item__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.45rem;
+  align-items: center;
+}
+.snapback-item__left {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.snapback-item__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+.snapback-item__title {
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.snapback-item__meta {
+  color: var(--text-secondary);
+  font-family: var(--font-numeric);
+  font-size: 0.86rem;
+}
+.snapback-item__view { display: none; }
+/* progress bar removed for a sleeker look */
+
+.snapback-drawer {
+  border: 1px solid rgba(132, 148, 228, 0.32);
+  background: rgba(18, 24, 56, 0.46);
+  border-radius: 0.9rem;
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.snapback-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.snapback-drawer__title { margin: 0; font-weight: 600; font-size: 1rem; }
+.snapback-drawer__subtitle { margin: 0; color: var(--text-secondary); font-size: 0.9rem; }
+.snapback-drawer__phase { align-self: flex-start; border: 1px solid rgba(132, 148, 228, 0.35); background: rgba(26, 34, 78, 0.5); color: var(--text-secondary); padding: 0.25rem 0.55rem; border-radius: 999px; font-size: 0.78rem; }
+.snapback-drawer__group { display: flex; flex-direction: column; gap: 0.4rem; }
+.snapback-drawer__label { font-weight: 600; color: var(--text-primary); font-size: 0.9rem; }
+.snapback-drawer__input, .snapback-drawer__textarea { width: 100%; border-radius: 0.6rem; border: 1px solid rgba(128, 144, 228, 0.38); background: rgba(18, 24, 56, 0.6); color: var(--text-primary); padding: 0.55rem 0.65rem; }
+.snapback-drawer__textarea { min-height: 88px; resize: vertical; }
+.snapback-drawer__active { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); }
+.snapback-drawer__actions { display: flex; gap: 0.6rem; justify-content: flex-end; }
+.snapback-drawer__button { border: 1px solid rgba(128, 144, 228, 0.4); background: rgba(28, 36, 78, 0.6); color: var(--text-primary); border-radius: 0.6rem; padding: 0.5rem 0.9rem; font-weight: 600; cursor: pointer; }
+.snapback-drawer__button--primary { background: linear-gradient(135deg, rgba(120, 134, 230, 0.98) 0%, rgba(86, 106, 224, 0.95) 90%); color: #fff; border-color: rgba(134, 150, 230, 0.82); }
+
+html[data-theme='light'] .snapback-item { background: rgba(244, 246, 255, 0.92); border-color: rgba(160, 172, 236, 0.45); }
+html[data-theme='light'] .snapback-item--active { background: rgba(234, 238, 255, 0.96); border-color: rgba(150, 162, 236, 0.6); }
+html[data-theme='light'] .snapback-item__bar { background: rgba(188, 196, 244, 0.4); }
+html[data-theme='light'] .snapback-drawer { background: rgba(248, 250, 255, 0.96); border-color: rgba(160, 172, 236, 0.45); }
+html[data-theme='light'] .snapback-list__chip { background: rgba(240, 244, 255, 0.94); border-color: rgba(160, 172, 236, 0.45); }
 .reflection-section__title {
   margin: 0;
   font-family: var(--font-display);
