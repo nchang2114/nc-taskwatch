@@ -1045,21 +1045,24 @@ html[data-theme='light'] {
   font-weight: 600;
   color: var(--text-primary);
 }
-.snapback-list__chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid rgba(140, 156, 236, 0.35);
-  background: rgba(28, 34, 72, 0.5);
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-}
+/* snapback-list__chip removed */
 .snapback-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 280px));
   gap: 0.7rem;
+}
+
+/* Force two-up layout on small viewports */
+@media (max-width: 560px) {
+  .snapback-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .snapback-item {
+    padding: 0.9rem 0.8rem;
+  }
+  .snapback-item__row {
+    gap: 0.4rem;
+  }
 }
 .snapback-item {
   border: 1px solid rgba(132, 148, 228, 0.28);
@@ -1121,7 +1124,7 @@ html[data-theme='light'] {
 .snapback-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
 .snapback-drawer__title { margin: 0; font-weight: 600; font-size: 1rem; }
 .snapback-drawer__subtitle { margin: 0; color: var(--text-secondary); font-size: 0.9rem; }
-.snapback-drawer__phase { align-self: flex-start; border: 1px solid rgba(132, 148, 228, 0.35); background: rgba(26, 34, 78, 0.5); color: var(--text-secondary); padding: 0.25rem 0.55rem; border-radius: 999px; font-size: 0.78rem; }
+/* snapback-drawer__phase removed */
 .snapback-drawer__group { display: flex; flex-direction: column; gap: 0.4rem; }
 .snapback-drawer__label { font-weight: 600; color: var(--text-primary); font-size: 0.9rem; }
 .snapback-drawer__input, .snapback-drawer__textarea { width: 100%; border-radius: 0.6rem; border: 1px solid rgba(128, 144, 228, 0.38); background: rgba(18, 24, 56, 0.6); color: var(--text-primary); padding: 0.55rem 0.65rem; }
@@ -1135,7 +1138,7 @@ html[data-theme='light'] .snapback-item { background: rgba(244, 246, 255, 0.92);
 html[data-theme='light'] .snapback-item--active { background: rgba(234, 238, 255, 0.96); border-color: rgba(150, 162, 236, 0.6); }
 html[data-theme='light'] .snapback-item__bar { background: rgba(188, 196, 244, 0.4); }
 html[data-theme='light'] .snapback-drawer { background: rgba(248, 250, 255, 0.96); border-color: rgba(160, 172, 236, 0.45); }
-html[data-theme='light'] .snapback-list__chip { background: rgba(240, 244, 255, 0.94); border-color: rgba(160, 172, 236, 0.45); }
+/* light theme chip removed */
 .reflection-section__title {
   margin: 0;
   font-family: var(--font-display);

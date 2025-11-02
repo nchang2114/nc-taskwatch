@@ -9532,7 +9532,6 @@ useEffect(() => {
             <>
               <div className="snapback-list__head">
                 <h3 className="snapback-list__title">Top Triggers</h3>
-                <span className="snapback-list__chip">auto-tagged from SnapBack</span>
               </div>
               <div className="snapback-list">
                 {snapbackOverview.legend.map((item) => {
@@ -9571,7 +9570,6 @@ useEffect(() => {
                       <p className="snapback-drawer__subtitle">This pattern occurred {selectedItem.count}× ({formatDuration(selectedItem.durationMs)}) in this range.</p>
                     ) : null}
                   </div>
-                  <span className="snapback-drawer__phase">Awareness → Rebuild</span>
                 </div>
 
                 <div className="snapback-drawer__group">
