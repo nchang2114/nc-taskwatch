@@ -1374,7 +1374,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 /* Position is controlled below using connector + gap to ensure symmetry */
 .milestones__name {
   min-width: 6ch;
-  max-width: 16ch; /* encourage wrap to two lines */
+  max-width: 10ch; /* slightly narrower wrap */
   border-radius: 0.4rem;
   border: 1px solid rgba(148, 163, 255, 0.35);
   background: rgba(12, 18, 56, 0.5);
@@ -1405,7 +1405,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   /* Hug content and wrap dynamically */
   display: inline-block;
   width: fit-content;
-  max-width: 16ch;
+  max-width: 10ch;
   min-width: 0;
   white-space: normal;
   overflow-wrap: anywhere;
