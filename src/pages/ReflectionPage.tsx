@@ -6007,6 +6007,9 @@ useEffect(() => {
                 id: makeHistoryId(),
                 routineId: ruleId,
                 occurrenceDate: ymd,
+                // Server metadata to link transformed guide back to its rule
+                repeatingSessionId: ruleId,
+                originalTime: entry.startedAt,
               }
               updateHistory((current) => {
                 const next = [...current, realEntry]
@@ -6641,6 +6644,9 @@ useEffect(() => {
                               id: makeHistoryId(),
                               routineId: ruleId,
                               occurrenceDate: ymd,
+                              // Server metadata to link transformed guide back to its rule
+                              repeatingSessionId: ruleId,
+                              originalTime: ev.entry.startedAt,
                             }
                             updateHistory((current) => {
                               const next = [...current, newEntry]
@@ -7029,7 +7035,7 @@ useEffect(() => {
     const hasNotes = entry.notes.trim().length > 0
     const subtasksSummary = subtaskCount > 0 ? `${completedSubtasks}/${subtaskCount} subtasks` : 'No subtasks'
     const notesSummary = hasNotes ? 'Notes added' : 'No notes'
-  const isGuide = entry.id.startsWith('repeat:')
+          const isGuide = entry.id.startsWith('repeat:')
   const nowTs = Date.now()
   const isPlanned = Boolean((entry as any).futureSession)
   const isPastPlanned = isPlanned && entry.startedAt <= nowTs
@@ -7264,6 +7270,9 @@ useEffect(() => {
                       id: makeHistoryId(),
                       routineId: parsedGuide.ruleId,
                       occurrenceDate: parsedGuide.ymd,
+                      // Server metadata for rule retirement
+                      repeatingSessionId: parsedGuide.ruleId,
+                      originalTime: entry.startedAt,
                     }
                     updateHistory((current) => {
                       const next = [...current, newEntry]
@@ -7291,14 +7300,33 @@ useEffect(() => {
                   className="history-timeline__action-button"
                   onClick={async () => {
                     if (!parsedGuide) return
-                    await upsertRepeatingException({
+                    // Create a zero-duration entry to mark this occurrence as resolved without rendering
+                    const zeroEntry: HistoryEntry = {
+                      ...entry,
+                      id: makeHistoryId(),
+                      endedAt: entry.startedAt,
+                      elapsed: 0,
                       routineId: parsedGuide.ruleId,
                       occurrenceDate: parsedGuide.ymd,
-                      action: 'skipped',
-                      newStartedAt: null,
-                      newEndedAt: null,
-                      notes: null,
+                      repeatingSessionId: parsedGuide.ruleId,
+                      originalTime: entry.startedAt,
+                    }
+                    updateHistory((current) => {
+                      const next = [...current, zeroEntry]
+                      next.sort((a, b) => a.startedAt - b.startedAt)
+                      return next
                     })
+                    try {
+                      // Keep exception for backward compatibility
+                      await upsertRepeatingException({
+                        routineId: parsedGuide.ruleId,
+                        occurrenceDate: parsedGuide.ymd,
+                        action: 'skipped',
+                        newStartedAt: null,
+                        newEndedAt: null,
+                        notes: null,
+                      })
+                    } catch {}
                     void evaluateAndMaybeRetireRule(parsedGuide.ruleId)
                     handleCloseCalendarPreview()
                   }}

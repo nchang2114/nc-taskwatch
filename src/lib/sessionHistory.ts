@@ -14,6 +14,41 @@ export const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 export const HISTORY_LIMIT = 250
 // Reduce remote fetch window to limit egress; adjust as needed
 export const HISTORY_REMOTE_WINDOW_DAYS = 30
+// Feature flags persisted locally to enable/disable optional server columns dynamically
+const FEATURE_FLAGS_STORAGE_KEY = 'nc-taskwatch-flags'
+type FeatureFlags = { repeatOriginal?: boolean }
+const readFeatureFlags = (): FeatureFlags => {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(FEATURE_FLAGS_STORAGE_KEY)
+    if (!raw) return {}
+    const obj = JSON.parse(raw)
+    return obj && typeof obj === 'object' ? (obj as FeatureFlags) : {}
+  } catch {
+    return {}
+  }
+}
+const writeFeatureFlags = (flags: FeatureFlags) => {
+  if (typeof window === 'undefined') return
+  try { window.localStorage.setItem(FEATURE_FLAGS_STORAGE_KEY, JSON.stringify(flags)) } catch {}
+}
+const isRepeatOriginalEnabled = (): boolean => {
+  const flags = readFeatureFlags()
+  // Default optimistic: true unless explicitly disabled
+  return flags.repeatOriginal !== false
+}
+const disableRepeatOriginal = () => {
+  const flags = readFeatureFlags()
+  if (flags.repeatOriginal === false) return
+  flags.repeatOriginal = false
+  writeFeatureFlags(flags)
+}
+const isColumnMissingError = (err: any): boolean => {
+  const msg = (err && (err.message || err.msg || err.error_description)) || ''
+  const details = (err && (err.details || err.hint)) || ''
+  const combined = `${msg} ${details}`.toLowerCase()
+  return combined.includes('column') && combined.includes('does not exist')
+}
 
 const LIFE_ROUTINES_NAME = 'Life Routines'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
@@ -48,6 +83,11 @@ export type HistoryEntry = {
   // routineId: id of repeating_sessions rule; occurrenceDate: local YYYY-MM-DD for the occurrence day
   routineId?: string | null
   occurrenceDate?: string | null
+  // Server-side deletion support:
+  // repeatingSessionId: FK to repeating_sessions.id when a guide transforms (confirm/skip/reschedule)
+  // originalTime: the scheduled timestamptz (in ms) of the guide occurrence that transformed
+  repeatingSessionId?: string | null
+  originalTime?: number | null
 }
 
 export type HistoryRecord = HistoryEntry & {
@@ -74,6 +114,8 @@ type HistoryCandidate = {
   futureSession?: unknown
   routineId?: unknown
   occurrenceDate?: unknown
+  repeatingSessionId?: unknown
+  originalTime?: unknown
 }
 
 type HistoryRecordCandidate = HistoryCandidate & {
@@ -216,6 +258,12 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
         typeof (candidate as any).routineId === 'string' ? ((candidate as any).routineId as string) : null
       const occurrenceDateRaw: string | null =
         typeof (candidate as any).occurrenceDate === 'string' ? ((candidate as any).occurrenceDate as string) : null
+      const repeatingSessionIdRaw: string | null =
+        typeof (candidate as any).repeatingSessionId === 'string' ? ((candidate as any).repeatingSessionId as string) : null
+      const originalTimeRaw: number | null =
+        typeof (candidate as any).originalTime === 'number' && Number.isFinite((candidate as any).originalTime as number)
+          ? ((candidate as any).originalTime as number)
+          : null
 
       const normalizedGoalName = goalNameRaw.trim()
       const normalizedBucketName = bucketNameRaw.trim()
@@ -254,6 +302,8 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
         futureSession: futureSessionRaw,
         routineId: routineIdRaw,
         occurrenceDate: occurrenceDateRaw,
+        repeatingSessionId: repeatingSessionIdRaw,
+        originalTime: originalTimeRaw,
       }
       return normalized
     })
@@ -449,6 +499,24 @@ const payloadFromRecord = (
 ): Record<string, unknown> => {
   const updatedAt = overrideUpdatedAt ?? record.updatedAt
   const ENABLE_ROUTINE_TAGS = Boolean((import.meta as any)?.env?.VITE_ENABLE_ROUTINE_TAGS)
+  const ENABLE_REPEAT_ORIGINAL = isRepeatOriginalEnabled()
+  const DEBUG_REPEAT = Boolean((import.meta as any)?.env?.VITE_DEBUG_REPEAT)
+  const includeRepeat = ENABLE_REPEAT_ORIGINAL && !!record.repeatingSessionId
+  const includeOriginal = ENABLE_REPEAT_ORIGINAL && Number.isFinite(record.originalTime as number)
+  if (DEBUG_REPEAT) {
+    try {
+      // Minimal debug to verify what we are sending to the server for this record
+      // Avoid logging large payload; only the linkage fields
+      // eslint-disable-next-line no-console
+      console.info('[history] payload linkage', {
+        id: record.id,
+        enableRepeatOriginal: ENABLE_REPEAT_ORIGINAL,
+        repeatingSessionId: record.repeatingSessionId ?? null,
+        originalTimeMs: Number.isFinite(record.originalTime as number) ? (record.originalTime as number) : null,
+        willInclude: { repeating_session_id: includeRepeat, original_time: includeOriginal },
+      })
+    } catch {}
+  }
   return {
     id: record.id,
     user_id: userId,
@@ -469,6 +537,9 @@ const payloadFromRecord = (
     // Only include routine tags if the DB has these columns; gate with env flag to avoid PostgREST errors
     ...(ENABLE_ROUTINE_TAGS && record.routineId ? { routine_id: record.routineId } : {}),
     ...(ENABLE_ROUTINE_TAGS && record.occurrenceDate ? { occurrence_date: record.occurrenceDate } : {}),
+    // Include server-side resolution metadata if enabled
+    ...(includeRepeat ? { repeating_session_id: record.repeatingSessionId } : {}),
+    ...(includeOriginal ? { original_time: new Date(record.originalTime as number).toISOString() } : {}),
   }
 }
 
@@ -504,6 +575,8 @@ const mapDbRowToRecord = (row: Record<string, unknown>): HistoryRecord | null =>
     futureSession: typeof (row as any).future_session === 'boolean' ? ((row as any).future_session as boolean) : null,
     routineId: typeof (row as any).routine_id === 'string' ? (row as any).routine_id : null,
     occurrenceDate: typeof (row as any).occurrence_date === 'string' ? (row as any).occurrence_date : null,
+    repeatingSessionId: typeof (row as any).repeating_session_id === 'string' ? (row as any).repeating_session_id : null,
+    originalTime: parseTimestamp((row as any).original_time, NaN),
   }
 
   const entry = sanitizeHistoryEntries([candidate])[0]
@@ -564,17 +637,37 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       recordsById.set(record.id, record)
     })
 
-    const selectColumns =
+    const ENABLE_REPEAT_ORIGINAL = isRepeatOriginalEnabled()
+    let selectColumns =
       'id, task_name, elapsed_ms, started_at, ended_at, goal_name, bucket_name, goal_id, bucket_id, task_id, goal_surface, bucket_surface, created_at, updated_at, future_session'
+    // If server has repeat-orig columns, request them to avoid losing local metadata on merge
+    if (ENABLE_REPEAT_ORIGINAL) {
+      selectColumns += ', repeating_session_id, original_time'
+    }
 
     // Limit remote fetch to a recent window to reduce egress
     const sinceIso = new Date(now - HISTORY_REMOTE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
-    const { data: remoteRows, error: fetchError } = await supabase
+    let { data: remoteRows, error: fetchError } = await supabase
       .from('session_history')
       .select((selectColumns as unknown) as any)
       .eq('user_id', userId)
       .gte('updated_at', sinceIso)
       .order('updated_at', { ascending: false })
+    if (fetchError) {
+      if (ENABLE_REPEAT_ORIGINAL && isColumnMissingError(fetchError)) {
+        // Server likely doesn't have the optional columns; disable dynamically and retry once
+        disableRepeatOriginal()
+        const baseColumns = 'id, task_name, elapsed_ms, started_at, ended_at, goal_name, bucket_name, goal_id, bucket_id, task_id, goal_surface, bucket_surface, created_at, updated_at, future_session'
+        const retry = await supabase
+          .from('session_history')
+          .select((baseColumns as unknown) as any)
+          .eq('user_id', userId)
+          .gte('updated_at', sinceIso)
+          .order('updated_at', { ascending: false })
+        remoteRows = retry.data as any
+        fetchError = retry.error as any
+      }
+    }
     if (fetchError) {
       console.warn('Failed to fetch session history delta from Supabase', fetchError)
       return null
@@ -598,7 +691,12 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
         // Preserve routine tags from local if remote mapping lacks them (schema may not include these columns)
         const routineId = (record as any).routineId ?? (local as any).routineId ?? null
         const occurrenceDate = (record as any).occurrenceDate ?? (local as any).occurrenceDate ?? null
-        recordsById.set(record.id, { ...record, routineId, occurrenceDate, pendingAction: null })
+        // Also preserve repeat-orig linkage if remote rows don't include these columns
+        const repeatingSessionId = (record as any).repeatingSessionId ?? (local as any).repeatingSessionId ?? null
+        const originalTime = Number.isFinite((record as any).originalTime)
+          ? (record as any).originalTime
+          : ((local as any).originalTime ?? null)
+        recordsById.set(record.id, { ...record, routineId, occurrenceDate, repeatingSessionId, originalTime, pendingAction: null })
       }
     })
 
@@ -626,10 +724,16 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     const pendingDeletes = pending.filter((record) => record.pendingAction === 'delete')
 
     if (pendingUpserts.length > 0) {
-      const payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
-      const { error: upsertError } = await supabase.from('session_history').upsert(payloads, { onConflict: 'id' })
-      if (upsertError) {
-        console.warn('Failed to push pending history updates to Supabase', upsertError)
+      let payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
+      let upsertResp = await supabase.from('session_history').upsert(payloads, { onConflict: 'id' })
+      if (upsertResp.error && isRepeatOriginalEnabled() && isColumnMissingError(upsertResp.error)) {
+        // Disable optional columns and retry without them
+        disableRepeatOriginal()
+        payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
+        upsertResp = await supabase.from('session_history').upsert(payloads, { onConflict: 'id' })
+      }
+      if (upsertResp.error) {
+        console.warn('Failed to push pending history updates to Supabase', upsertResp.error)
       } else {
         pendingUpserts.forEach((record, index) => {
           const payload = payloads[index]
@@ -679,10 +783,15 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
   const pendingDeletes = records.filter((record) => record.pendingAction === 'delete')
 
   if (pendingUpserts.length > 0) {
-    const payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
-    const { error: upsertError } = await supabase.from('session_history').upsert(payloads, { onConflict: 'id' })
-    if (upsertError) {
-      console.warn('Failed to push pending history updates to Supabase', upsertError)
+    let payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
+    let upsertResp = await supabase.from('session_history').upsert(payloads, { onConflict: 'id' })
+    if (upsertResp.error && isRepeatOriginalEnabled() && isColumnMissingError(upsertResp.error)) {
+      disableRepeatOriginal()
+      payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
+      upsertResp = await supabase.from('session_history').upsert(payloads, { onConflict: 'id' })
+    }
+    if (upsertResp.error) {
+      console.warn('Failed to push pending history updates to Supabase', upsertResp.error)
     } else {
       pendingUpserts.forEach((record, index) => {
         const payload = payloads[index]
