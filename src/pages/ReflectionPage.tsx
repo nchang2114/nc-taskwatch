@@ -5554,6 +5554,20 @@ useEffect(() => {
           repeatingExceptions.forEach((r) => set.add(`${r.routineId}:${r.occurrenceDate}`))
           return set
         })()
+        // Also suppress guides that have already transformed (confirmed/skipped/rescheduled)
+        // by checking session_history linkage repeatingSessionId + originalTime
+        // Key format: `${ruleId}:${originalTimeMs}`
+        const coveredOriginalSet = (() => {
+          const set = new Set<string>()
+          effectiveHistory.forEach((h) => {
+            const rid = (h as any).repeatingSessionId as string | undefined | null
+            const ot = (h as any).originalTime as number | undefined | null
+            if (rid && Number.isFinite(ot as number)) {
+              set.add(`${rid}:${ot as number}`)
+            }
+          })
+          return set
+        })()
 
         // Synthesize guide events from repeating session rules for this day
         const guideRaw: RawEvent[] = (() => {
@@ -5600,6 +5614,8 @@ useEffect(() => {
             if (confirmedKeySet.has(occKey) || excKeySet.has(occKey)) return null
             // Fallback suppression if an identical real session exists for this occurrence's full timing
             const startedAt = baseDayStart + Math.max(0, Math.min(1439, rule.timeOfDayMinutes)) * MINUTE_MS
+            // Suppress if this occurrence has been linked already in session_history
+            if (coveredOriginalSet.has(`${rule.id}:${startedAt}`)) return null
             const durationMs = Math.max(1, (rule.durationMinutes ?? 60) * MINUTE_MS)
             // Allow crossing midnight: DO NOT clamp to end of day here
             const endedAt = startedAt + durationMs
