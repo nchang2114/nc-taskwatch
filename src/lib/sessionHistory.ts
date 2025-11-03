@@ -150,6 +150,24 @@ const clampNumber = (value: unknown, fallback: number): number => {
   const num = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(num) ? num : fallback
 }
+// Snap a timestamp to the nearest minute. If exactly halfway (30s), round up.
+const snapToNearestMinute = (ms: number): number => {
+  if (!Number.isFinite(ms)) return ms
+  const MIN = 60_000
+  const rem = ms % MIN
+  if (rem === 0) return ms
+  const posRem = rem < 0 ? rem + MIN : rem
+  return posRem >= 30_000 ? ms + (MIN - posRem) : ms - posRem
+}
+
+const normalizeEntryTimes = (entry: HistoryEntry): HistoryEntry => {
+  const started = snapToNearestMinute(entry.startedAt)
+  const ended = snapToNearestMinute(entry.endedAt)
+  const elapsed = Math.max(0, ended - started)
+  if (started === entry.startedAt && ended === entry.endedAt && elapsed === entry.elapsed) return entry
+  return { ...entry, startedAt: started, endedAt: ended, elapsed }
+}
+
 
 const parseTimestamp = (value: unknown, fallback: number): number => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -392,7 +410,7 @@ const persistRecords = (records: HistoryRecord[]): HistoryEntry[] => {
 }
 
 export const persistHistorySnapshot = (nextEntries: HistoryEntry[]): HistoryEntry[] => {
-  const sanitized = sanitizeHistoryEntries(nextEntries)
+  const sanitized = sanitizeHistoryEntries(nextEntries).map(normalizeEntryTimes)
   const existingRecords = readHistoryRecords()
   const recordsById = new Map<string, HistoryRecord>()
   existingRecords.forEach((record) => {
@@ -461,8 +479,11 @@ const mapDbRowToRecord = (row: Record<string, unknown>): HistoryRecord | null =>
   }
   const taskName = typeof row.task_name === 'string' ? row.task_name : ''
 
-  const startedAt = parseTimestamp(row.started_at, Date.now())
-  const endedAt = parseTimestamp(row.ended_at, startedAt)
+  // Normalize remote timestamps to minute boundaries
+  const rawStart = parseTimestamp(row.started_at, Date.now())
+  const rawEnd = parseTimestamp(row.ended_at, rawStart)
+  const startedAt = snapToNearestMinute(rawStart)
+  const endedAt = snapToNearestMinute(rawEnd)
   const elapsed = clampNumber(row.elapsed_ms, Math.max(0, endedAt - startedAt))
 
   const candidate: HistoryCandidate = {
