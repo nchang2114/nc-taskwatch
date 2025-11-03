@@ -87,3 +87,22 @@ Recommendation
 ```sql
 SELECT public.sweep_repeating_sessions_for_retirement();
 ```
+
+---
+
+## Goals – Milestones Layer visibility (optional)
+
+If you want the Goals page to persist whether the Milestones Layer is shown for each goal, add a boolean column to `public.goals`:
+
+```sql
+ALTER TABLE public.goals
+ADD COLUMN IF NOT EXISTS milestones_shown boolean NOT NULL DEFAULT false;
+```
+
+Notes
+- The app auto-detects this column. If present, the toggle is saved to `goals.milestones_shown`; if missing, the app falls back to local-only storage.
+- You can seed or bulk update as needed, e.g. set it true for a specific goal:
+
+```sql
+UPDATE public.goals SET milestones_shown = true WHERE id = '<goal-id>';
+```
