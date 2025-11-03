@@ -35,6 +35,7 @@ import {
   upsertGoalMilestone as apiUpsertGoalMilestone,
   deleteGoalMilestone as apiDeleteGoalMilestone,
   fetchGoalCreatedAt as apiFetchGoalCreatedAt,
+  setGoalMilestonesShown as apiSetGoalMilestonesShown,
 } from '../lib/goalsApi'
 import {
   DEFAULT_SURFACE_STYLE,
@@ -157,6 +158,7 @@ const normalizeSupabaseGoalsPayload = (payload: any[]): Goal[] =>
     surfaceStyle: normalizeSurfaceStyle(goal.surfaceStyle as string | null | undefined),
     starred: Boolean(goal.starred),
     archived: Boolean(goal.archived),
+    milestonesShown: typeof goal.milestonesShown === 'boolean' ? goal.milestonesShown : undefined,
     buckets: Array.isArray(goal.buckets)
       ? goal.buckets.map((bucket: any) => ({
           id: bucket.id,
@@ -588,6 +590,7 @@ export interface Goal {
   surfaceStyle?: GoalSurfaceStyle
   starred: boolean
   archived: boolean
+  milestonesShown?: boolean
   customGradient?: {
     from: string
     to: string
@@ -834,6 +837,7 @@ function reconcileGoalsWithSnapshot(snapshot: GoalSnapshot[], current: Goal[]): 
       surfaceStyle: goal.surfaceStyle,
       starred: goal.starred ?? existingGoal?.starred ?? false,
       archived: goal.archived ?? existingGoal?.archived ?? false,
+      milestonesShown: existingGoal?.milestonesShown ?? false,
       customGradient: existingGoal?.customGradient,
       buckets: goal.buckets.map((bucket) => {
         const existingBucket = existingGoal?.buckets.find((item) => item.id === bucket.id)
@@ -2515,7 +2519,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
     if (typeof window === 'undefined') return false
     try {
       const map = readMilestoneVisibility()
-      return Boolean(map[goal.id])
+      // Prefer server-backed goal.milestonesShown when present
+      const server = typeof goal.milestonesShown === 'boolean' ? goal.milestonesShown : undefined
+      return typeof server === 'boolean' ? server : Boolean(map[goal.id])
     } catch { return false }
   })
   useEffect(() => {
@@ -2548,7 +2554,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
                 onClick={(e) => {
                   e.stopPropagation()
                   setMenuOpen(false)
-                  setMilestonesVisible((v) => !v)
+                  const next = !milestonesVisible
+                  setMilestonesVisible(next)
+                  try { apiSetGoalMilestonesShown(goal.id, next) } catch {}
                 }}
               >
                 {milestonesVisible ? 'Remove Milestones Layer' : 'Add Milestones Layer'}

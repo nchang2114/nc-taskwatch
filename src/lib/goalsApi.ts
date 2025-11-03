@@ -8,6 +8,7 @@ export type DbGoal = {
   card_surface: string | null
   starred: boolean
   goal_archive?: boolean
+  milestones_shown?: boolean
 }
 export type DbBucket = {
   id: string
@@ -105,6 +106,7 @@ export async function fetchGoalsHierarchy(): Promise<
         surfaceStyle?: string | null
         starred?: boolean
         archived?: boolean
+        milestonesShown?: boolean
         buckets: Array<{
           id: string
           name: string
@@ -134,10 +136,28 @@ export async function fetchGoalsHierarchy(): Promise<
   if (!session) return null
 
   // Goals
-  const { data: goals, error: gErr } = await supabase
-    .from('goals')
-    .select('id, name, color, sort_index, card_surface, starred, goal_archive, created_at')
-    .order('sort_index', { ascending: true })
+  // Try selecting optional milestones_shown; if unsupported, retry without
+  let goals: any[] | null = null
+  let gErr: any = null
+  let includeMilestones = true
+  {
+    const { data, error } = await supabase
+      .from('goals')
+      .select('id, name, color, sort_index, card_surface, starred, goal_archive, created_at, milestones_shown')
+      .order('sort_index', { ascending: true })
+    goals = data as any[] | null
+    gErr = error
+    const msg = String(error?.message || '').toLowerCase()
+    if (gErr && (msg.includes('column') && msg.includes('milestones_shown'))) {
+      includeMilestones = false
+      const retry = await supabase
+        .from('goals')
+        .select('id, name, color, sort_index, card_surface, starred, goal_archive, created_at')
+        .order('sort_index', { ascending: true })
+      goals = retry.data as any[] | null
+      gErr = retry.error
+    }
+  }
   if (gErr) return null
   if (!goals || goals.length === 0) return { goals: [] }
 
@@ -247,6 +267,7 @@ export async function fetchGoalsHierarchy(): Promise<
       starred: Boolean((g as any).starred),
       surfaceStyle,
       archived: Boolean((g as any).goal_archive),
+      milestonesShown: includeMilestones ? Boolean((g as any).milestones_shown) : undefined,
       buckets: (bucketsByGoal.get(g.id) ?? []).map((bucket) => ({
         ...bucket,
         surfaceStyle:
@@ -470,6 +491,26 @@ export async function renameGoal(goalId: string, name: string) {
   if (!supabase) return
   await ensureSingleUserSession()
   await supabase.from('goals').update({ name }).eq('id', goalId)
+}
+
+/** Toggle the visibility of the milestones layer for a goal (server-backed when supported) */
+export async function setGoalMilestonesShown(goalId: string, shown: boolean) {
+  if (!supabase) return
+  await ensureSingleUserSession()
+  try {
+    const { error } = await supabase.from('goals').update({ milestones_shown: shown }).eq('id', goalId)
+    if (error) {
+      const msg = String(error.message || '').toLowerCase()
+      if (msg.includes('column') && msg.includes('milestones_shown')) {
+        // Column not available; ignore gracefully
+        return
+      }
+      throw error
+    }
+  } catch (err) {
+    // Swallow errors to avoid blocking UI
+    console.warn('[goalsApi] setGoalMilestonesShown error', err)
+  }
 }
 
 export async function deleteGoalById(goalId: string) {
@@ -917,6 +958,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       card_surface: goal.surfaceStyle ?? 'glass',
       starred: Boolean(goal.starred),
       goal_archive: Boolean(goal.archived),
+      // milestones_shown intentionally omitted to avoid errors if column not present
     }))
 
     const { data: insertedGoals, error: goalsError } = await supabase
