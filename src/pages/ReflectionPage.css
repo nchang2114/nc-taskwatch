@@ -272,12 +272,20 @@
   opacity: 0.45;
 }
 .inspector-date-picker__cell--today {
-  border: 1px solid rgba(176, 192, 255, 0.7);
+  /* Match light/dark style (thickness/ring); only colors differ per theme */
+  border: 2px solid rgba(176, 192, 255, 0.7);
+  box-shadow: inset 0 0 0 2px rgba(116, 130, 255, 0.16);
 }
 .inspector-date-picker__cell--selected {
   background: linear-gradient(135deg, #646dff 0%, #3ecbff 100%);
   color: #0c1024;
   font-weight: 600;
+  border: 1px solid rgba(160, 174, 255, 0.45);
+  box-shadow: inset 0 0 0 2px rgba(116, 130, 255, 0.14);
+}
+.inspector-date-picker__cell--selected:hover,
+.inspector-date-picker__cell--selected:focus-visible {
+  background: linear-gradient(135deg, #7078ff 0%, #46d3ff 100%);
 }
 .inspector-date-picker__cell:hover,
 .inspector-date-picker__cell:focus-visible {
@@ -909,9 +917,29 @@ html[data-theme='light'] .inspector-picker__popover {
     0 4px 12px rgba(102, 118, 200, 0.18);
 }
 
+/* Light mode: align date picker styling with dark mode aesthetics, adjusted colors */
+html[data-theme='light'] .inspector-date-picker__header {
+  font-weight: 600;
+}
+html[data-theme='light'] .inspector-date-picker__label {
+  color: rgba(24, 30, 70, 0.9);
+}
+html[data-theme='light'] .inspector-date-picker__nav {
+  border: 1px solid rgba(140, 150, 230, 0.35);
+  color: rgba(32, 40, 82, 0.9);
+  background: transparent;
+}
+html[data-theme='light'] .inspector-date-picker__nav:hover,
+html[data-theme='light'] .inspector-date-picker__nav:focus-visible {
+  background: rgba(88, 104, 212, 0.15);
+  border-color: rgba(140, 150, 230, 0.6);
+}
+html[data-theme='light'] .inspector-date-picker__weekday {
+  color: rgba(56, 64, 110, 0.7);
+}
 html[data-theme='light'] .inspector-date-picker__cell {
-  background: rgba(200, 210, 255, 0.4);
-  color: rgba(32, 40, 72, 0.9);
+  background: rgba(128, 140, 240, 0.18);
+  color: rgba(24, 30, 70, 0.92);
 }
 
 html[data-theme='light'] .inspector-date-picker__cell--adjacent {
@@ -919,7 +947,25 @@ html[data-theme='light'] .inspector-date-picker__cell--adjacent {
 }
 
 html[data-theme='light'] .inspector-date-picker__cell--selected {
-  color: #101431;
+  /* Softer, more "light mode" selection with clear contrast */
+  background: linear-gradient(135deg, #DBE2FF 0%, #C9EFFF 100%);
+  color: #1b2553;
+  border: 1px solid rgba(74, 88, 214, 0.55);
+  box-shadow: inset 0 0 0 2px rgba(74, 88, 214, 0.12);
+  font-weight: 600;
+}
+html[data-theme='light'] .inspector-date-picker__cell--selected:hover,
+html[data-theme='light'] .inspector-date-picker__cell--selected:focus-visible {
+  background: linear-gradient(135deg, #D1D9FF 0%, #BFE9FF 100%);
+}
+html[data-theme='light'] .inspector-date-picker__cell:hover,
+html[data-theme='light'] .inspector-date-picker__cell:focus-visible {
+  background: rgba(116, 130, 255, 0.28);
+}
+/* Make today's date stand out more in light mode */
+html[data-theme='light'] .inspector-date-picker__cell--today {
+  border: 2px solid rgba(74, 88, 214, 0.9);
+  box-shadow: inset 0 0 0 2px rgba(74, 88, 214, 0.12);
 }
 
 html[data-theme='light'] .inspector-time-picker__option {

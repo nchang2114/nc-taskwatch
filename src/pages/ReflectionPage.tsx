@@ -1148,7 +1148,15 @@ const InspectorDateInput = ({ value, onChange, ariaLabel }: InspectorDateInputPr
         type="button"
         ref={triggerRef}
         className="inspector-picker__button history-timeline__field-input history-timeline__field-input--button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={(e) => {
+          const now = (typeof performance !== 'undefined' ? performance.now() : Date.now())
+          if (now < SUPPRESS_DATE_OPEN_UNTIL) {
+            try { e.preventDefault() } catch {}
+            try { e.stopPropagation() } catch {}
+            return
+          }
+          setOpen((prev) => !prev)
+        }}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={ariaLabel}
@@ -1197,7 +1205,21 @@ const InspectorDateInput = ({ value, onChange, ariaLabel }: InspectorDateInputPr
                     aria-selected={isSelected}
                     aria-current={isToday ? 'date' : undefined}
                     aria-label={formatDateDisplay(date.getTime())}
-                    onClick={() => handleSelect(date)}
+                    onMouseDown={(e) => {
+                      // Commit selection on mousedown and prevent bubbling so the trigger
+                      // doesn't receive a trailing click that could re-open/toggle unexpectedly
+                      try { e.preventDefault() } catch {}
+                      try { e.stopPropagation() } catch {}
+                      handleSelect(date)
+                      try { (triggerRef.current as HTMLButtonElement | null)?.focus() } catch {}
+                    }}
+                    onClick={(e) => {
+                      // Keyboard activation fallback
+                      try { e.preventDefault() } catch {}
+                      try { e.stopPropagation() } catch {}
+                      handleSelect(date)
+                      try { (triggerRef.current as HTMLButtonElement | null)?.focus() } catch {}
+                    }}
                   >
                     {cellDay}
                   </button>
@@ -1231,6 +1253,9 @@ const buildTimeOptions = () => {
 }
 
 const TIME_OPTIONS = buildTimeOptions()
+
+// Short-term suppression window to avoid accidental date-picker opens immediately after selecting a time
+let SUPPRESS_DATE_OPEN_UNTIL = 0
 
 const InspectorTimeInput = ({ value, onChange, ariaLabel }: InspectorTimeInputProps) => {
   const [open, setOpen] = useState(false)
@@ -1281,6 +1306,12 @@ const InspectorTimeInput = ({ value, onChange, ariaLabel }: InspectorTimeInputPr
     next.setHours(hoursPart, minutesPart, 0, 0)
     onChange(next.getTime())
     setOpen(false)
+    // Suppress the date picker opening for a brief moment after time selection
+    try {
+      SUPPRESS_DATE_OPEN_UNTIL = (typeof performance !== 'undefined' ? performance.now() : Date.now()) + 300
+    } catch {
+      SUPPRESS_DATE_OPEN_UNTIL = Date.now() + 300
+    }
   }
 
   return (
@@ -1289,7 +1320,15 @@ const InspectorTimeInput = ({ value, onChange, ariaLabel }: InspectorTimeInputPr
         type="button"
         ref={triggerRef}
         className="inspector-picker__button history-timeline__field-input history-timeline__field-input--button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={(e) => {
+          const now = (typeof performance !== 'undefined' ? performance.now() : Date.now())
+          if (now < SUPPRESS_DATE_OPEN_UNTIL) {
+            try { e.preventDefault() } catch {}
+            try { e.stopPropagation() } catch {}
+            return
+          }
+          setOpen((prev) => !prev)
+        }}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
@@ -1315,7 +1354,20 @@ const InspectorTimeInput = ({ value, onChange, ariaLabel }: InspectorTimeInputPr
                     role="option"
                     aria-selected={selected}
                     ref={selected ? selectedRef : undefined}
-                    onClick={() => handleSelect(option.minutes)}
+                    onMouseDown={(e) => {
+                      // Handle selection on mousedown and prevent the subsequent click from hitting underlying controls
+                      try { e.preventDefault() } catch {}
+                      try { e.stopPropagation() } catch {}
+                      handleSelect(option.minutes)
+                      try { triggerRef.current?.focus() } catch {}
+                    }}
+                    onClick={(e) => {
+                      // Keyboard or fallback click
+                      try { e.preventDefault() } catch {}
+                      try { e.stopPropagation() } catch {}
+                      handleSelect(option.minutes)
+                      try { triggerRef.current?.focus() } catch {}
+                    }}
                   >
                     {option.label}
                   </button>
