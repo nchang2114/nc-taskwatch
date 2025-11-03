@@ -62,6 +62,7 @@ import {
   upsertRepeatingException,
   type RepeatingException,
 } from '../lib/repeatingExceptions'
+import { evaluateAndMaybeRetireRule, setRepeatToNoneAfterTimestamp, deleteRepeatingRuleById } from '../lib/repeatingSessions'
 import { broadcastFocusTask } from '../lib/focusChannel'
 
 const JOURNAL_PROMPTS = [
@@ -5571,14 +5572,26 @@ useEffect(() => {
             return false
           }
 
-          const isAfterActivation = (rule: RepeatingSessionRule, dayStart: number) => {
-            const createdMs = (rule as any).createdAtMs as number | undefined
-            if (!Number.isFinite(createdMs as number)) return true
-            const t = new Date(createdMs as number)
-            t.setHours(0, 0, 0, 0)
-            const activationDayStart = t.getTime()
-            // Show next repeat only (skip the activation day itself)
-            return dayStart > activationDayStart
+          const isWithinBoundaries = (rule: RepeatingSessionRule, baseDayStart: number) => {
+            // Compute the scheduled startedAt for this occurrence
+            const timeOfDayMin = Math.max(0, Math.min(1439, rule.timeOfDayMinutes))
+            const scheduledStart = baseDayStart + timeOfDayMin * MINUTE_MS
+            // Start boundary: prefer explicit startAtMs (inclusive). If absent, fall back to createdAtMs (strictly after)
+            const startAtMs = (rule as any).startAtMs as number | undefined
+            if (Number.isFinite(startAtMs as number)) {
+              if (scheduledStart < (startAtMs as number)) return false
+            } else {
+              const createdMs = (rule as any).createdAtMs as number | undefined
+              if (Number.isFinite(createdMs as number)) {
+                if (scheduledStart <= (createdMs as number)) return false
+              }
+            }
+            // End boundary: inclusive (allow selected occurrence when end_date equals its start time)
+            const endAtMs = (rule as any).endAtMs as number | undefined
+            if (Number.isFinite(endAtMs as number)) {
+              if (scheduledStart > (endAtMs as number)) return false
+            }
+            return true
           }
 
           const buildGuideForDay = (rule: RepeatingSessionRule, baseDayStart: number): RawEvent | null => {
@@ -5632,7 +5645,7 @@ useEffect(() => {
           // Today’s scheduled occurrence
           for (const rule of repeatingRules) {
             if (!isRuleScheduledForDay(rule, startMs)) continue
-            if (!isAfterActivation(rule, startMs)) continue
+            if (!isWithinBoundaries(rule, startMs)) continue
             const ev = buildGuideForDay(rule, startMs)
             if (ev) guides.push(ev)
           }
@@ -5642,7 +5655,7 @@ useEffect(() => {
           for (const rule of repeatingRules) {
             // Only consider rules scheduled on the previous day
             if (!isRuleScheduledForDay(rule, prevStartMs)) continue
-            if (!isAfterActivation(rule, prevStartMs)) continue
+            if (!isWithinBoundaries(rule, prevStartMs)) continue
             const durationMin = Math.max(1, (rule.durationMinutes ?? 60))
             const timeOfDayMin = Math.max(0, Math.min(1439, rule.timeOfDayMinutes))
             if (timeOfDayMin + durationMin <= 24 * 60) continue // no cross-midnight, nothing to carry
@@ -6010,6 +6023,8 @@ useEffect(() => {
                   newEndedAt: realEntry.endedAt,
                   notes: null,
                 })
+                // Attempt to retire the rule if its window is complete
+                void evaluateAndMaybeRetireRule(ruleId)
               } catch {}
               // Update the drag state to reference the new real entry id and baseline times
               s.entryId = realEntry.id
@@ -7159,21 +7174,63 @@ useEffect(() => {
                   onChange={async (v) => {
                     const val = (v as 'none' | 'daily' | 'weekly')
                     if (val === 'none') {
-                      const ids = await deleteMatchingRulesForEntry(entry)
-                      if (Array.isArray(ids) && ids.length > 0) {
-                        setRepeatingRules((prev) => prev.filter((r) => !ids.includes(r.id)))
+                      // If this entry is a guide from a repeating rule, cut the series after this instance
+                      if (isGuide) {
+                        // parsedGuide contains ruleId and ymd for this guide
+                        if (parsedGuide) {
+                          await setRepeatToNoneAfterTimestamp(parsedGuide.ruleId, entry.startedAt)
+                          // If start and end timestamps have become equal, remove the rule locally; else set end boundary
+                          setRepeatingRules((prev) => {
+                            const found = prev.find((r) => r.id === parsedGuide.ruleId)
+                            if (!found) return prev
+                            const startMs = (found as any).startAtMs as number | undefined
+                            if (Number.isFinite(startMs as number) && (startMs as number) === entry.startedAt) {
+                              return prev.filter((r) => r.id !== parsedGuide.ruleId)
+                            }
+                            return prev.map((r) => (r.id === parsedGuide.ruleId ? { ...r, endAtMs: Math.max(0, entry.startedAt) } : r))
+                          })
+                        }
                       } else {
-                        // Fallback: remove locally
+                        // Non-guide: if this entry is the seed (rule start), delete by rule id; else fall back to shape deletion
                         const start = new Date(entry.startedAt)
                         const minutes = start.getHours() * 60 + start.getMinutes()
                         const durMin = Math.max(1, Math.round((entry.endedAt - entry.startedAt) / 60000))
                         const dow = start.getDay()
-                        setRepeatingRules((prev) => prev.filter((r) => {
-                          const labelMatch = (r.taskName?.trim() || '') === (entry.taskName?.trim() || '') && (r.goalName?.trim() || null) === (entry.goalName?.trim() || null) && (r.bucketName?.trim() || null) === (entry.bucketName?.trim() || null)
+                        const labelTask = (entry.taskName?.trim() || '')
+                        const labelGoal = (entry.goalName?.trim() || null)
+                        const labelBucket = (entry.bucketName?.trim() || null)
+                        // Compute scheduled start (truncate seconds/ms) to match how rules store startAtMs
+                        const dayStart = new Date(entry.startedAt)
+                        dayStart.setHours(0, 0, 0, 0)
+                        const scheduledStart = dayStart.getTime() + minutes * 60000
+                        const seedRules = repeatingRules.filter((r) => {
+                          const labelMatch = (r.taskName?.trim() || '') === labelTask && (r.goalName?.trim() || null) === labelGoal && (r.bucketName?.trim() || null) === labelBucket
                           const timeMatch = r.timeOfDayMinutes === minutes && r.durationMinutes === durMin
                           const freqMatch = r.frequency === 'daily' || (r.frequency === 'weekly' && r.dayOfWeek === dow)
-                          return !(labelMatch && timeMatch && freqMatch)
-                        }))
+                          const startAt = (r as any).startAtMs as number | undefined
+                          const startMatch = Number.isFinite(startAt as number) && (startAt as number) === scheduledStart
+                          return labelMatch && timeMatch && freqMatch && startMatch
+                        })
+                        if (seedRules.length > 0) {
+                          for (const r of seedRules) {
+                            await deleteRepeatingRuleById(r.id)
+                          }
+                          setRepeatingRules((prev) => prev.filter((r) => !seedRules.some((s) => s.id === r.id)))
+                          return
+                        }
+                        // Fallback: delete any matching rules via backend shape matcher
+                        const ids = await deleteMatchingRulesForEntry(entry)
+                        if (Array.isArray(ids) && ids.length > 0) {
+                          setRepeatingRules((prev) => prev.filter((r) => !ids.includes(r.id)))
+                        } else {
+                          // Fallback: remove locally by matching shape
+                          setRepeatingRules((prev) => prev.filter((r) => {
+                            const labelMatch = (r.taskName?.trim() || '') === (entry.taskName?.trim() || '') && (r.goalName?.trim() || null) === (entry.goalName?.trim() || null) && (r.bucketName?.trim() || null) === (entry.bucketName?.trim() || null)
+                            const timeMatch = r.timeOfDayMinutes === minutes && r.durationMinutes === durMin
+                            const freqMatch = r.frequency === 'daily' || (r.frequency === 'weekly' && r.dayOfWeek === dow)
+                            return !(labelMatch && timeMatch && freqMatch)
+                          }))
+                        }
                       }
                       return
                     }
@@ -7222,6 +7279,7 @@ useEffect(() => {
                         newEndedAt: newEntry.endedAt,
                         notes: null,
                       })
+                      void evaluateAndMaybeRetireRule(parsedGuide.ruleId)
                     } catch {}
                     handleCloseCalendarPreview()
                   }}
@@ -7241,6 +7299,7 @@ useEffect(() => {
                       newEndedAt: null,
                       notes: null,
                     })
+                    void evaluateAndMaybeRetireRule(parsedGuide.ruleId)
                     handleCloseCalendarPreview()
                   }}
                 >

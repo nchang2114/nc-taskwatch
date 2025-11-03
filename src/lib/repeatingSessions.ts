@@ -1,5 +1,7 @@
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 import type { HistoryEntry } from './sessionHistory'
+import { readStoredHistory, pruneFuturePlannedForRuleAfter } from './sessionHistory'
+import { readRepeatingExceptions } from './repeatingExceptions'
 
 export type RepeatingSessionRule = {
   id: string
@@ -16,13 +18,20 @@ export type RepeatingSessionRule = {
   goalName: string | null
   bucketName: string | null
   timezone: string | null
-  // Activation boundary: only render guides for days on/after this local day start
-  // If absent, we’ll fall back to DB created_at (if available) or assume active now
+  // Client activation boundary: only render guides for days strictly AFTER this local day start
+  // Used to suppress the creation day when creating from an existing entry.
   createdAtMs?: number
+  // Server-defined start/end boundaries (mapped from start_date/end_date). Used to bound
+  // guide synthesis window. These are interpreted in local time (best-effort) unless
+  // explicit timezone handling is added later.
+  startAtMs?: number
+  endAtMs?: number
 }
 
 const LOCAL_RULES_KEY = 'nc-taskwatch-repeating-rules'
 const LOCAL_ACTIVATION_MAP_KEY = 'nc-taskwatch-repeating-activation-map'
+// We also persist a local end-boundary override to ensure offline correctness.
+const LOCAL_END_MAP_KEY = 'nc-taskwatch-repeating-end-map'
 
 const readLocalRules = (): RepeatingSessionRule[] => {
   if (typeof window === 'undefined') return []
@@ -65,6 +74,25 @@ const writeActivationMap = (map: ActivationMap) => {
   } catch {}
 }
 
+type EndMap = Record<string, number>
+const readEndMap = (): EndMap => {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(LOCAL_END_MAP_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return (parsed && typeof parsed === 'object') ? (parsed as EndMap) : {}
+  } catch {
+    return {}
+  }
+}
+const writeEndMap = (map: EndMap) => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(LOCAL_END_MAP_KEY, JSON.stringify(map))
+  } catch {}
+}
+
 const mapRowToRule = (row: any): RepeatingSessionRule | null => {
   if (!row) return null
   const id = typeof row.id === 'string' ? row.id : null
@@ -93,6 +121,21 @@ const mapRowToRule = (row: any): RepeatingSessionRule | null => {
       createdAtMs = t
     }
   }
+  // Optional start_date / end_date from DB
+  let startAtMs: number | undefined
+  let endAtMs: number | undefined
+  if (typeof row.startAtMs === 'number' && Number.isFinite(row.startAtMs)) {
+    startAtMs = Math.max(0, row.startAtMs)
+  } else if (typeof row.start_date === 'string') {
+    const t = Date.parse(row.start_date)
+    if (Number.isFinite(t)) startAtMs = t
+  }
+  if (typeof row.endAtMs === 'number' && Number.isFinite(row.endAtMs)) {
+    endAtMs = Math.max(0, row.endAtMs)
+  } else if (typeof row.end_date === 'string') {
+    const t = Date.parse(row.end_date)
+    if (Number.isFinite(t)) endAtMs = t
+  }
   return {
     id,
     isActive,
@@ -105,6 +148,8 @@ const mapRowToRule = (row: any): RepeatingSessionRule | null => {
     bucketName,
     timezone,
     createdAtMs,
+    startAtMs,
+    endAtMs,
   }
 }
 
@@ -115,7 +160,7 @@ export async function fetchRepeatingSessionRules(): Promise<RepeatingSessionRule
   const { data, error } = await supabase
     .from('repeating_sessions')
     .select(
-      'id, is_active, frequency, day_of_week, time_of_day_minutes, duration_minutes, task_name, goal_name, bucket_name, timezone, created_at, updated_at',
+      'id, is_active, frequency, day_of_week, time_of_day_minutes, duration_minutes, task_name, goal_name, bucket_name, timezone, start_date, end_date, created_at, updated_at',
     )
     .eq('user_id', session.user.id)
     .order('created_at', { ascending: true })
@@ -128,6 +173,11 @@ export async function fetchRepeatingSessionRules(): Promise<RepeatingSessionRule
   const act = readActivationMap()
   if (act && typeof act === 'object') {
     remote = remote.map((r) => (act[r.id] ? { ...r, createdAtMs: Math.max(0, Number(act[r.id])) } : r))
+  }
+  // Merge locally persisted end boundaries
+  const endMap = readEndMap()
+  if (endMap && typeof endMap === 'object') {
+    remote = remote.map((r) => (endMap[r.id] ? { ...r, endAtMs: Math.max(0, Number(endMap[r.id])) } : r))
   }
   return remote
 }
@@ -144,6 +194,10 @@ export async function createRepeatingRuleForEntry(
   const durationMinutes = Math.max(1, Math.round(durationMs / 60000))
   const dayOfWeek = frequency === 'weekly' ? startLocal.getDay() : null
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null
+  // Canonicalize series start to the scheduled minute (truncate seconds/ms) so it matches
+  // guide occurrence timestamps exactly. This avoids start/end millisecond mismatches later.
+  const dayStart = (() => { const d = new Date(entry.startedAt); d.setHours(0,0,0,0); return d.getTime() })()
+  const ruleStartMs = dayStart + timeOfDayMinutes * 60000
 
   // Try Supabase; if not available, persist locally
   if (!supabase) {
@@ -159,6 +213,7 @@ export async function createRepeatingRuleForEntry(
       bucketName: entry.bucketName ?? null,
       timezone: tz,
   createdAtMs: Math.max(0, entry.startedAt),
+  startAtMs: Math.max(0, ruleStartMs),
     }
     const current = readLocalRules()
     const next = [...current, localRule]
@@ -179,6 +234,7 @@ export async function createRepeatingRuleForEntry(
       bucketName: entry.bucketName ?? null,
       timezone: tz,
   createdAtMs: Math.max(0, entry.startedAt),
+  startAtMs: Math.max(0, ruleStartMs),
     }
     const current = readLocalRules()
     const next = [...current, localRule]
@@ -196,11 +252,12 @@ export async function createRepeatingRuleForEntry(
     goal_name: entry.goalName,
     bucket_name: entry.bucketName,
     timezone: tz,
+    start_date: new Date(ruleStartMs).toISOString(),
   }
   const { data, error } = await supabase
     .from('repeating_sessions')
     .insert(payload)
-    .select('id, is_active, frequency, day_of_week, time_of_day_minutes, duration_minutes, task_name, goal_name, bucket_name, timezone, created_at')
+    .select('id, is_active, frequency, day_of_week, time_of_day_minutes, duration_minutes, task_name, goal_name, bucket_name, timezone, start_date, end_date, created_at')
     .single()
   if (error) {
     console.warn('[repeatingSessions] create error', error)
@@ -217,6 +274,7 @@ export async function createRepeatingRuleForEntry(
       bucketName: entry.bucketName ?? null,
       timezone: tz,
   createdAtMs: Math.max(0, entry.startedAt),
+  startAtMs: Math.max(0, entry.startedAt),
     }
     const current = readLocalRules()
     const next = [...current, localRule]
@@ -227,7 +285,7 @@ export async function createRepeatingRuleForEntry(
   const rule = mapRowToRule(data as any)
   if (rule) {
     const activationMs = Math.max(0, entry.startedAt)
-    const merged: RepeatingSessionRule = { ...rule, createdAtMs: activationMs }
+    const merged: RepeatingSessionRule = { ...rule, createdAtMs: activationMs, startAtMs: rule.startAtMs ?? activationMs }
     const act = readActivationMap()
     act[merged.id] = activationMs
     writeActivationMap(act)
@@ -406,3 +464,220 @@ export async function deleteMatchingRulesForEntry(entry: HistoryEntry): Promise<
 
   return ids
 }
+
+// --- Utilities for date math (local) ---
+const DAY_MS = 24 * 60 * 60 * 1000
+const toLocalDayStart = (ms: number): number => {
+  const d = new Date(ms)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+const parseLocalYmd = (ymd: string): number => {
+  const [y, m, d] = ymd.split('-').map((t) => Number(t))
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return NaN
+  const dt = new Date(y, (m - 1), d)
+  dt.setHours(0, 0, 0, 0)
+  return dt.getTime()
+}
+const formatLocalYmd = (ms: number): string => {
+  const d = new Date(ms)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// Update the end boundary for a rule by id. Persists locally and remotely when possible.
+export async function updateRepeatingRuleEndDate(ruleId: string, endAtMs: number): Promise<boolean> {
+  // Persist local end map for offline correctness
+  const endMap = readEndMap()
+  endMap[ruleId] = Math.max(0, endAtMs)
+  writeEndMap(endMap)
+  // Also update the cached local rules blob if present
+  const local = readLocalRules()
+  const idx = local.findIndex((r) => r.id === ruleId)
+  if (idx >= 0) {
+    local[idx] = { ...local[idx], endAtMs: Math.max(0, endAtMs) }
+    writeLocalRules(local)
+  }
+  if (!supabase) return true
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) return true // local-only fallback ok
+  const { error } = await supabase
+    .from('repeating_sessions')
+    .update({ end_date: new Date(endAtMs).toISOString() })
+    .eq('id', ruleId)
+    .eq('user_id', session.user.id)
+  if (error) {
+    console.warn('[repeatingSessions] update end_date error', error)
+    return false
+  }
+  // After updating, fetch start_date and end_date. If equal, delete the row since nothing repeats.
+  const { data: row, error: fetchErr } = await supabase
+    .from('repeating_sessions')
+    .select('id, start_date, end_date')
+    .eq('id', ruleId)
+    .eq('user_id', session.user.id)
+    .maybeSingle()
+  if (!fetchErr && row) {
+    const s = typeof (row as any).start_date === 'string' ? Date.parse((row as any).start_date) : NaN
+    const e = typeof (row as any).end_date === 'string' ? Date.parse((row as any).end_date) : NaN
+    if (Number.isFinite(s) && Number.isFinite(e) && s === e) {
+      // Clean up local caches first
+      const current = readLocalRules()
+      const filtered = current.filter((r) => r.id !== ruleId)
+      if (filtered.length !== current.length) writeLocalRules(filtered)
+      const act = readActivationMap()
+      if (ruleId in act) { delete act[ruleId]; writeActivationMap(act) }
+      const em = readEndMap()
+      if (ruleId in em) { delete em[ruleId]; writeEndMap(em) }
+      // Delete remotely
+      const { error: delErr } = await supabase
+        .from('repeating_sessions')
+        .delete()
+        .eq('id', ruleId)
+        .eq('user_id', session.user.id)
+      if (delErr) {
+        console.warn('[repeatingSessions] delete after equal start/end error', delErr)
+      }
+    }
+  }
+  return true
+}
+
+// Delete a single repeating rule by id on server; remove from local cache too.
+export async function deleteRepeatingRuleById(ruleId: string): Promise<boolean> {
+  // Local remove first
+  const local = readLocalRules()
+  const next = local.filter((r) => r.id !== ruleId)
+  if (next.length !== local.length) writeLocalRules(next)
+  const act = readActivationMap()
+  if (ruleId in act) {
+    delete act[ruleId]
+    writeActivationMap(act)
+  }
+  const endMap = readEndMap()
+  if (ruleId in endMap) {
+    delete endMap[ruleId]
+    writeEndMap(endMap)
+  }
+  if (!supabase) return true
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) return true
+  const { error } = await supabase
+    .from('repeating_sessions')
+    .delete()
+    .eq('id', ruleId)
+    .eq('user_id', session.user.id)
+  if (error) {
+    console.warn('[repeatingSessions] delete by id error', error)
+    return false
+  }
+  return true
+}
+
+// Determine whether all occurrences within a rule's bounded window are resolved (confirmed or excepted).
+export function isRuleWindowFullyResolved(
+  rule: RepeatingSessionRule,
+  options: { history: Array<{ routineId?: string | null; occurrenceDate?: string | null }>; exceptions: Array<{ routineId: string; occurrenceDate: string }> },
+): boolean {
+  // Require an end boundary to consider retirement
+  if (!Number.isFinite(rule.endAtMs as number)) return false
+  const endDay = toLocalDayStart(rule.endAtMs as number)
+  // Window start: prefer explicit startAtMs; else use createdAtMs but skip activation day
+  let startDay = Number.isFinite(rule.startAtMs as number) ? toLocalDayStart(rule.startAtMs as number) : undefined
+  if (startDay === undefined || !Number.isFinite(startDay)) {
+    if (Number.isFinite(rule.createdAtMs as number)) {
+      startDay = toLocalDayStart(rule.createdAtMs as number) + DAY_MS // skip activation day
+    }
+  }
+  if (!Number.isFinite(startDay as number)) return false
+  const start = startDay as number
+  const confirmed = new Set<string>()
+  options.history.forEach((h) => {
+    if (h.routineId && h.occurrenceDate) confirmed.add(`${h.routineId}:${h.occurrenceDate}`)
+  })
+  const excepted = new Set<string>()
+  options.exceptions.forEach((e) => excepted.add(`${e.routineId}:${e.occurrenceDate}`))
+
+  const makeKey = (ruleId: string, dayMs: number) => {
+    const d = new Date(dayMs)
+    const y = d.getFullYear()
+    const m = (d.getMonth() + 1).toString().padStart(2, '0')
+    const dd = d.getDate().toString().padStart(2, '0')
+    return `${ruleId}:${y}-${m}-${dd}`
+  }
+
+  if (rule.frequency === 'daily') {
+    for (let day = start; day <= endDay; day += DAY_MS) {
+      const key = makeKey(rule.id, day)
+      if (!confirmed.has(key) && !excepted.has(key)) return false
+    }
+    return true
+  }
+  // weekly
+  const firstDow = new Date(start).getDay()
+  const targetDow = Number.isFinite(rule.dayOfWeek as number) ? (rule.dayOfWeek as number) : firstDow
+  // advance from start to the first target dow
+  let day = start
+  while (new Date(day).getDay() !== targetDow && day <= endDay) {
+    day += DAY_MS
+  }
+  for (; day <= endDay; day += 7 * DAY_MS) {
+    const key = makeKey(rule.id, day)
+    if (!confirmed.has(key) && !excepted.has(key)) return false
+  }
+  return true
+}
+
+// Set repeat to none for all future occurrences after the selected occurrence date (YYYY-MM-DD, local).
+// This updates the rule's end boundary to the day BEFORE the selected occurrence and cleans up planned entries.
+export async function setRepeatToNoneAfterOccurrence(
+  ruleId: string,
+  occurrenceDateYmd: string,
+  prunePlanned: (ruleId: string, afterYmd: string) => Promise<void> | void,
+): Promise<boolean> {
+  const occStart = parseLocalYmd(occurrenceDateYmd)
+  if (!Number.isFinite(occStart)) return false
+  // Per requirement: set end_date to the SELECTED entry's start time (timestampz). Using local day start
+  // would be imprecise for DST; here we persist the exact start timestamp boundary expected by the UI.
+  const ok = await updateRepeatingRuleEndDate(ruleId, occStart)
+  try {
+    await prunePlanned(ruleId, occurrenceDateYmd)
+  } catch {}
+  return ok
+}
+
+// Convenience wrapper that uses the built-in planned-entry pruner
+export async function setRepeatToNoneAfterOccurrenceDefault(ruleId: string, occurrenceDateYmd: string): Promise<boolean> {
+  return await setRepeatToNoneAfterOccurrence(ruleId, occurrenceDateYmd, pruneFuturePlannedForRuleAfter)
+}
+
+// Variant that uses a precise selected startedAt timestamp (ms). end_date is set to this timestamp,
+// and planned entries after the selected LOCAL day are pruned.
+export async function setRepeatToNoneAfterTimestamp(ruleId: string, selectedStartMs: number): Promise<boolean> {
+  const ymd = formatLocalYmd(selectedStartMs)
+  const ok = await updateRepeatingRuleEndDate(ruleId, Math.max(0, selectedStartMs))
+  try {
+    await pruneFuturePlannedForRuleAfter(ruleId, ymd)
+  } catch {}
+  return ok
+}
+
+// Evaluate a single rule by id and delete it if it has an end boundary and all occurrences in the
+// bounded window are resolved (confirmed/skipped/rescheduled). Returns true if deleted.
+export async function evaluateAndMaybeRetireRule(ruleId: string): Promise<boolean> {
+  const rules = await fetchRepeatingSessionRules()
+  const rule = rules.find((r) => r.id === ruleId)
+  if (!rule) return false
+  if (!Number.isFinite(rule.endAtMs as number)) return false
+  const history = readStoredHistory()
+  const exceptions = readRepeatingExceptions()
+  const resolved = isRuleWindowFullyResolved(rule, {
+    history: history.map((h) => ({ routineId: (h as any).routineId ?? null, occurrenceDate: (h as any).occurrenceDate ?? null })),
+    exceptions: exceptions.map((e) => ({ routineId: e.routineId, occurrenceDate: e.occurrenceDate })),
+  })
+  if (!resolved) return false
+  return await deleteRepeatingRuleById(ruleId)
+}
+

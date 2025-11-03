@@ -689,3 +689,26 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
 
   persistRecords(records)
 }
+
+// Remove planned (futureSession) entries for a given rule that occur strictly AFTER the given local date (YYYY-MM-DD).
+// Used when setting a repeating rule to "none" after a selected occurrence to avoid lingering planned rows.
+export const pruneFuturePlannedForRuleAfter = async (ruleId: string, afterYmd: string): Promise<void> => {
+  const records = readHistoryRecords()
+  if (!Array.isArray(records) || records.length === 0) return
+  const now = Date.now()
+  let changed = false
+  for (let i = 0; i < records.length; i += 1) {
+    const r = records[i] as any
+    const isPlanned = Boolean(r.futureSession)
+    const rid = typeof r.routineId === 'string' ? (r.routineId as string) : null
+    const od = typeof r.occurrenceDate === 'string' ? (r.occurrenceDate as string) : null
+    if (isPlanned && rid === ruleId && od && od > afterYmd && (records[i] as any).pendingAction !== 'delete') {
+      records[i] = { ...records[i], pendingAction: 'delete', updatedAt: now }
+      changed = true
+    }
+  }
+  if (changed) {
+    persistRecords(records)
+    schedulePendingPush()
+  }
+}
