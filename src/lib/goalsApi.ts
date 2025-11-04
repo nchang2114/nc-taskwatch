@@ -147,7 +147,6 @@ export async function fetchGoalsHierarchy(): Promise<
       .order('sort_index', { ascending: true })
     goals = data as any[] | null
     gErr = error
-    const msg = String(error?.message || '').toLowerCase()
     const code = String((error as any)?.code || '')
     // Only fall back when the column truly does not exist (PG code 42703)
     if (gErr && (code === '42703')) {
