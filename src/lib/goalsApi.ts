@@ -148,7 +148,9 @@ export async function fetchGoalsHierarchy(): Promise<
     goals = data as any[] | null
     gErr = error
     const msg = String(error?.message || '').toLowerCase()
-    if (gErr && (msg.includes('column') && msg.includes('milestones_shown'))) {
+    const code = String((error as any)?.code || '')
+    // Only fall back when the column truly does not exist (PG code 42703)
+    if (gErr && (code === '42703')) {
       includeMilestones = false
       const retry = await supabase
         .from('goals')
@@ -158,7 +160,10 @@ export async function fetchGoalsHierarchy(): Promise<
       gErr = retry.error
     }
   }
-  if (gErr) return null
+  if (gErr) {
+    console.warn('[goalsApi] fetchGoalsHierarchy goals error', gErr?.message ?? gErr)
+    return null
+  }
   if (!goals || goals.length === 0) return { goals: [] }
 
   const goalIds = goals.map((g) => g.id)

@@ -837,7 +837,10 @@ function reconcileGoalsWithSnapshot(snapshot: GoalSnapshot[], current: Goal[]): 
       surfaceStyle: goal.surfaceStyle,
       starred: goal.starred ?? existingGoal?.starred ?? false,
       archived: goal.archived ?? existingGoal?.archived ?? false,
-      milestonesShown: existingGoal?.milestonesShown ?? false,
+      milestonesShown:
+        typeof (goal as any).milestonesShown === 'boolean'
+          ? ((goal as any).milestonesShown as boolean)
+          : existingGoal?.milestonesShown ?? false,
       customGradient: existingGoal?.customGradient,
       buckets: goal.buckets.map((bucket) => {
         const existingBucket = existingGoal?.buckets.find((item) => item.id === bucket.id)
@@ -1351,22 +1354,7 @@ type Milestone = {
   role: 'start' | 'end' | 'normal'
 }
 
-const MILESTONE_VIS_KEY = 'nc-taskwatch-milestones-visible-v1'
 const MILESTONE_DATA_KEY = 'nc-taskwatch-milestones-state-v1'
-
-const readMilestoneVisibility = (): Record<string, boolean> => {
-  if (typeof window === 'undefined') return {}
-  try {
-    const raw = window.localStorage.getItem(MILESTONE_VIS_KEY)
-    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
-  } catch {
-    return {}
-  }
-}
-const writeMilestoneVisibility = (map: Record<string, boolean>) => {
-  if (typeof window === 'undefined') return
-  try { window.localStorage.setItem(MILESTONE_VIS_KEY, JSON.stringify(map)) } catch {}
-}
 
 const readMilestonesFor = (goalId: string): Milestone[] => {
   if (typeof window === 'undefined') return []
@@ -1794,6 +1782,7 @@ interface GoalRowProps {
   goal: Goal
   isOpen: boolean
   onToggle: () => void
+  onSetGoalMilestonesShown: (goalId: string, shown: boolean) => void
   onDeleteGoal: (goalId: string) => void
   // Goal-level DnD helpers
   onCollapseOtherGoalsForDrag: (draggedGoalId: string) => string[]
@@ -2001,6 +1990,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   goal,
   isOpen,
   onToggle,
+  onSetGoalMilestonesShown,
   onDeleteGoal,
   onCollapseOtherGoalsForDrag,
   onRestoreGoalsOpenState,
@@ -2515,23 +2505,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   const surfaceStyle = goal.surfaceStyle ?? 'glass'
   const surfaceClass = GOAL_SURFACE_CLASS_MAP[surfaceStyle] || GOAL_SURFACE_CLASS_MAP.glass
   const isCustomizerOpen = activeCustomizerGoalId === goal.id
-  const [milestonesVisible, setMilestonesVisible] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false
-    try {
-      const map = readMilestoneVisibility()
-      // Prefer server-backed goal.milestonesShown when present
-      const server = typeof goal.milestonesShown === 'boolean' ? goal.milestonesShown : undefined
-      return typeof server === 'boolean' ? server : Boolean(map[goal.id])
-    } catch { return false }
-  })
-  useEffect(() => {
-    const map = readMilestoneVisibility()
-    const curr = Boolean(map[goal.id])
-    if (curr !== milestonesVisible) {
-      map[goal.id] = milestonesVisible
-      writeMilestoneVisibility(map)
-    }
-  }, [goal.id, milestonesVisible])
+  const milestonesVisible = Boolean(goal.milestonesShown)
 
   const menuPortal =
     menuOpen && typeof document !== 'undefined'
@@ -2555,8 +2529,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                   e.stopPropagation()
                   setMenuOpen(false)
                   const next = !milestonesVisible
-                  setMilestonesVisible(next)
-                  try { apiSetGoalMilestonesShown(goal.id, next) } catch {}
+                  try { onSetGoalMilestonesShown(goal.id, next) } catch {}
                 }}
               >
                 {milestonesVisible ? 'Remove Milestones Layer' : 'Add Milestones Layer'}
@@ -2949,7 +2922,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
 
       {isOpen && (
         <div className="px-4 md:px-5 pb-4 md:pb-5">
-          {milestonesVisible && !isArchived ? (
+          {milestonesVisible ? (
             <div className="mt-3 md:mt-4">
               <MilestoneLayer goal={goal} />
             </div>
@@ -4604,6 +4577,16 @@ export default function GoalsPage(): ReactElement {
       return current.map((goal) => (goal.id === goalId ? { ...goal, starred: nextStarred } : goal))
     })
   }, [setGoals])
+
+  const setGoalMilestonesShown = useCallback(
+    (goalId: string, shown: boolean) => {
+      setGoals((current) => current.map((g) => (g.id === goalId ? { ...g, milestonesShown: shown } : g)))
+      apiSetGoalMilestonesShown(goalId, shown).catch(() => {
+        setGoals((rollback) => rollback.map((g) => (g.id === goalId ? { ...g, milestonesShown: !shown } : g)))
+      })
+    },
+    [setGoals],
+  )
   const skipNextPublishRef = useRef(false)
   const lastSnapshotSignatureRef = useRef<string | null>(null)
   useEffect(() => {
@@ -8401,6 +8384,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     goal={g}
                     isOpen={expanded[g.id] ?? false}
                     onToggle={() => toggleExpand(g.id)}
+                    onSetGoalMilestonesShown={(goalId, shown) => setGoalMilestonesShown(goalId, shown)}
                     onDeleteGoal={(goalId) => deleteGoal(goalId)}
                     onCollapseOtherGoalsForDrag={collapseOtherGoalsForDrag}
                     onRestoreGoalsOpenState={restoreGoalsOpenState}
@@ -8530,6 +8514,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                         goal={g}
                         isOpen={expanded[g.id] ?? false}
                         onToggle={() => toggleExpand(g.id)}
+                        onSetGoalMilestonesShown={(goalId, shown) => setGoalMilestonesShown(goalId, shown)}
                         onDeleteGoal={(goalId) => deleteGoal(goalId)}
                         onCollapseOtherGoalsForDrag={collapseOtherGoalsForDrag}
                         onRestoreGoalsOpenState={restoreGoalsOpenState}

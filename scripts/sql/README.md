@@ -90,9 +90,9 @@ SELECT public.sweep_repeating_sessions_for_retirement();
 
 ---
 
-## Goals – Milestones Layer visibility (optional)
+## Goals – Milestones Layer visibility
 
-If you want the Goals page to persist whether the Milestones Layer is shown for each goal, add a boolean column to `public.goals`:
+The Goals page uses a single source of truth for showing the Milestones Layer per goal: `public.goals.milestones_shown` (boolean). Ensure this column exists:
 
 ```sql
 ALTER TABLE public.goals
@@ -100,7 +100,9 @@ ADD COLUMN IF NOT EXISTS milestones_shown boolean NOT NULL DEFAULT false;
 ```
 
 Notes
-- The app auto-detects this column. If present, the toggle is saved to `goals.milestones_shown`; if missing, the app falls back to local-only storage.
+- The app reads only this column to decide visibility. No other client state can hide the layer when this is `TRUE`.
+- Works for archived goals as well.
+- Ensure your Postgres role used by Supabase clients has SELECT/UPDATE privileges on this column (Supabase policies + grants). A column‑level permission error will prevent reads, which means the UI cannot reflect the stored value.
 - You can seed or bulk update as needed, e.g. set it true for a specific goal:
 
 ```sql

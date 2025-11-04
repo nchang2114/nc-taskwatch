@@ -37,6 +37,7 @@ export type GoalSnapshot = {
   surfaceStyle: SurfaceStyle
   starred: boolean
   archived: boolean
+  milestonesShown?: boolean
   buckets: GoalBucketSnapshot[]
 }
 
@@ -142,8 +143,9 @@ export const createGoalsSnapshot = (goals: Goal[] | unknown): GoalSnapshot[] => 
     const surfaceStyle = ensureSurfaceStyle(candidate.surfaceStyle, DEFAULT_SURFACE_STYLE)
     const starred = Boolean(candidate.starred)
     const archived = Boolean(candidate.archived)
+    const milestonesShown = typeof (candidate as any).milestonesShown === 'boolean' ? ((candidate as any).milestonesShown as boolean) : undefined
     const buckets = coerceBuckets(candidate.buckets)
-    snapshot.push({ id, name, color, surfaceStyle, starred, archived, buckets })
+    snapshot.push({ id, name, color, surfaceStyle, starred, archived, milestonesShown, buckets })
   })
   return snapshot
 }
