@@ -1678,9 +1678,21 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       if (options?.focus !== false) {
         pendingNotebookSubtaskFocusRef.current = { notebookKey, subtaskId: createdSubtask.id }
       }
+      // Keep Goals page in sync even when paused/idle by publishing the
+      // updated entry to the shared goals snapshot when a real task is linked.
+      if (activeTaskId) {
+        updateGoalSnapshotTask(activeTaskId, result.entry)
+      }
       updateFocusSourceFromEntry(result.entry)
     },
-    [blockNotebookHydration, notebookKey, updateFocusSourceFromEntry, updateNotebookForKey],
+    [
+      activeTaskId,
+      blockNotebookHydration,
+      notebookKey,
+      updateFocusSourceFromEntry,
+      updateGoalSnapshotTask,
+      updateNotebookForKey,
+    ],
   )
   useEffect(() => {
     const previousIds = previousNotebookSubtaskIdsRef.current
