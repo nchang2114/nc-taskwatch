@@ -234,7 +234,10 @@ const sanitizeSubtasks = (value: unknown): TaskSubtask[] => {
           : typeof (candidate as any).updated_at === 'string'
             ? ((candidate as any).updated_at as string)
             : undefined
-      return { id, text, completed, sortIndex, updatedAt }
+      const out: TaskSubtask = updatedAt
+        ? { id, text, completed, sortIndex, updatedAt }
+        : { id, text, completed, sortIndex }
+      return out
     })
     .filter((item): item is TaskSubtask => Boolean(item))
 }

@@ -159,15 +159,7 @@ const sanitizeDomIdSegment = (value: string): string => value.replace(/[^a-z0-9]
 const makeNotebookSubtaskInputId = (entryKey: string, subtaskId: string): string =>
   `taskwatch-subtask-${sanitizeDomIdSegment(entryKey)}-${sanitizeDomIdSegment(subtaskId)}`
 
-// Auto-size a textarea to fit its content without requiring focus
-const autosizeTextArea = (el: HTMLTextAreaElement | null) => {
-  if (!el) return
-  try {
-    el.style.height = 'auto'
-    const next = `${el.scrollHeight}px`
-    el.style.height = next
-  } catch {}
-}
+// (removed unused autosizeTextArea helper)
 
 const createEmptySessionMetadata = (taskLabel: string): SessionMetadata => ({
   goalId: null,
