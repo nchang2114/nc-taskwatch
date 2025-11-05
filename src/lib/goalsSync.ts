@@ -70,7 +70,12 @@ const coerceTaskSubtasks = (value: unknown): GoalTaskSubtaskSnapshot[] => {
           : typeof (candidate as any).sort_index === 'number'
             ? ((candidate as any).sort_index as number)
             : 0
-      return { id, text, completed, sortIndex }
+      const trimmed = text.trim()
+      if (trimmed.length === 0) {
+        // Drop empty subtasks to avoid publishing placeholders to the snapshot
+        return null
+      }
+      return { id, text: trimmed, completed, sortIndex }
     })
     .filter((subtask): subtask is GoalTaskSubtaskSnapshot => Boolean(subtask))
 }

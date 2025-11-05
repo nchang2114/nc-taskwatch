@@ -198,7 +198,7 @@ export async function fetchGoalsHierarchy(): Promise<
   const { data: taskSubtasks, error: sErr } = taskIds.length
     ? await supabase
         .from('task_subtasks')
-        .select('id, user_id, task_id, text, completed, sort_index')
+        .select('id, user_id, task_id, text, completed, sort_index, updated_at')
         .in('task_id', taskIds)
         .order('task_id', { ascending: true })
         .order('sort_index', { ascending: true })
@@ -255,6 +255,7 @@ export async function fetchGoalsHierarchy(): Promise<
           text: subtask.text ?? '',
           completed: !!subtask.completed,
           sort_index: subtask.sort_index ?? 0,
+          updated_at: (subtask as any).updated_at ?? null,
         })),
       })
     }
@@ -897,7 +898,7 @@ export async function moveTaskToBucket(taskId: string, fromBucketId: string, toB
 
 export async function upsertTaskSubtask(
   taskId: string,
-  subtask: { id: string; text: string; completed: boolean; sort_index: number },
+  subtask: { id: string; text: string; completed: boolean; sort_index: number; updated_at?: string },
 ) {
   if (!supabase) throw new Error('Supabase client unavailable')
   const session = await ensureSingleUserSession()
@@ -911,6 +912,8 @@ export async function upsertTaskSubtask(
     text: subtask.text,
     completed: subtask.completed,
     sort_index: subtask.sort_index,
+    // Prefer provided updated_at; else stamp here so merges can use recency.
+    updated_at: subtask.updated_at ?? new Date().toISOString(),
   }
   const { error } = await supabase.from('task_subtasks').upsert(payload, { onConflict: 'id' })
   if (error) {

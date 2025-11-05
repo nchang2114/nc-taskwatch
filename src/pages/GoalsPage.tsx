@@ -61,6 +61,9 @@ import {
 import { broadcastFocusTask } from '../lib/focusChannel'
 import { broadcastScheduleTask } from '../lib/scheduleChannel'
 
+// Minimal sync instrumentation (DEV only)
+const DEBUG_SYNC = import.meta.env?.DEV === true
+
 // Helper function for class names
 function classNames(...xs: (string | boolean | undefined)[]): string {
   return xs.filter(Boolean).join(' ')
@@ -108,6 +111,7 @@ type TaskSubtask = {
   text: string
   completed: boolean
   sortIndex: number
+  updatedAt?: string
 }
 
 type TaskDetails = {
@@ -140,11 +144,18 @@ const normalizeSupabaseTaskSubtasks = (value: unknown): TaskSubtask[] => {
         : typeof subtask?.sort_index === 'number'
           ? subtask.sort_index
           : (index + 1) * SUBTASK_SORT_STEP
+    const updatedAt =
+      typeof subtask?.updatedAt === 'string'
+        ? subtask.updatedAt
+        : typeof subtask?.updated_at === 'string'
+          ? subtask.updated_at
+          : undefined
     return {
       id,
       text,
       completed,
       sortIndex,
+      updatedAt,
     }
   })
 }
@@ -217,7 +228,13 @@ const sanitizeSubtasks = (value: unknown): TaskSubtask[] => {
           : typeof (candidate as any).sort_index === 'number'
             ? ((candidate as any).sort_index as number)
             : 0
-      return { id, text, completed, sortIndex }
+      const updatedAt =
+        typeof (candidate as any).updatedAt === 'string'
+          ? ((candidate as any).updatedAt as string)
+          : typeof (candidate as any).updated_at === 'string'
+            ? ((candidate as any).updated_at as string)
+            : undefined
+      return { id, text, completed, sortIndex, updatedAt }
     })
     .filter((item): item is TaskSubtask => Boolean(item))
 }
@@ -341,6 +358,7 @@ const createEmptySubtask = (sortIndex: number) => ({
   text: '',
   completed: false,
   sortIndex,
+  updatedAt: new Date().toISOString(),
 })
 
 const getNextSubtaskSortIndex = (subtasks: TaskSubtask[]): number => {
@@ -4558,7 +4576,24 @@ export default function GoalsPage(): ReactElement {
   const [goals, setGoals] = useState<Goal[]>(() => {
     const stored = readStoredGoalsSnapshot()
     if (stored.length > 0) {
-      return reconcileGoalsWithSnapshot(stored, DEFAULT_GOALS)
+      // Reconcile the stored snapshot to local Goal shape, then stamp a
+      // synthetic updatedAt onto subtasks so the first remote refresh cannot
+      // immediately clobber fresh snapshot entries during fast navigation.
+      const base = reconcileGoalsWithSnapshot(stored, DEFAULT_GOALS)
+      const nowIso = new Date().toISOString()
+      const stamped: Goal[] = base.map((g) => ({
+        ...g,
+        buckets: g.buckets.map((b) => ({
+          ...b,
+          tasks: b.tasks.map((t) => ({
+            ...t,
+            subtasks: Array.isArray(t.subtasks)
+              ? t.subtasks.map((s) => ({ ...(s as any), updatedAt: (s as any).updatedAt ?? nowIso }))
+              : [],
+          })),
+        })),
+      }))
+      return stamped
     }
     return DEFAULT_GOALS
   })
@@ -5040,53 +5075,91 @@ export default function GoalsPage(): ReactElement {
     (taskId: string, remote: TaskSubtask[], sources: TaskSubtask[][]): TaskSubtask[] => {
       const merged = new Map<string, TaskSubtask>()
 
-      remote.forEach((item) => {
-        if (!item) {
+      const parseStamp = (iso?: string): number => {
+        if (typeof iso !== 'string') return 0
+        const t = Date.parse(iso)
+        return Number.isFinite(t) ? t : 0
+      }
+
+      // Helper to upsert by last-writer-wins on updatedAt; ties favor pending/local edits.
+      const consider = (candidate: TaskSubtask, tieBias: number) => {
+        if (!candidate) return
+        const key = candidate.id
+        const existing = merged.get(key)
+        const candTs = parseStamp(candidate.updatedAt)
+        if (!existing) {
+          merged.set(key, {
+            id: candidate.id,
+            text: candidate.text,
+            completed: candidate.completed,
+            sortIndex: typeof candidate.sortIndex === 'number' ? candidate.sortIndex : SUBTASK_SORT_STEP,
+            updatedAt: candidate.updatedAt,
+          })
           return
         }
-        const pending = subtaskLatestRef.current.get(`${taskId}:${item.id}`)
-        const base = pending ?? item
-        merged.set(item.id, {
-          id: base.id,
-          text: base.text,
-          completed: base.completed,
-          sortIndex:
-            typeof base.sortIndex === 'number' ? base.sortIndex : SUBTASK_SORT_STEP,
-        })
+        const existTs = parseStamp(existing.updatedAt)
+        if (candTs > existTs) {
+          merged.set(key, {
+            id: candidate.id,
+            text: candidate.text,
+            completed: candidate.completed,
+            sortIndex: typeof candidate.sortIndex === 'number' ? candidate.sortIndex : existing.sortIndex,
+            updatedAt: candidate.updatedAt,
+          })
+          return
+        }
+        if (candTs === existTs) {
+          // Tie-break: prefer the candidate if it's textually different and has positive bias
+          if (tieBias > 0 && (candidate.text !== existing.text || candidate.completed !== existing.completed)) {
+            merged.set(key, {
+              id: candidate.id,
+              text: candidate.text,
+              completed: candidate.completed,
+              sortIndex: typeof candidate.sortIndex === 'number' ? candidate.sortIndex : existing.sortIndex,
+              updatedAt: candidate.updatedAt,
+            })
+          }
+        }
+      }
+
+      // Seed with remote
+      remote.forEach((item) => {
+        if (!item) return
+        // If there is a pending local edit, prefer its timestamp/content as candidate later.
+        consider(item, 0)
       })
 
+      // Merge in sources: existing state and details. Do NOT resurrect items
+      // that are absent from the base list unless there is a pending local
+      // edit for that id (prevents deleted subtasks from coming back).
       sources.forEach((collection) => {
         collection.forEach((item) => {
-          if (!item) {
-            return
-          }
-          const key = `${taskId}:${item.id}`
-          const pending = subtaskLatestRef.current.get(key)
-          const existing = merged.get(item.id)
-          if (!existing) {
-            const base = pending ?? item
-            merged.set(item.id, {
-              id: base.id,
-              text: base.text,
-              completed: base.completed,
-              sortIndex:
-                typeof base.sortIndex === 'number' ? base.sortIndex : SUBTASK_SORT_STEP,
-            })
-            return
-          }
+          if (!item) return
+          const id = item.id
+          const pending = subtaskLatestRef.current.get(`${taskId}:${id}`)
+          const baseHas = merged.has(id)
           if (pending) {
-            merged.set(item.id, {
-              id: pending.id,
-              text: pending.text,
-              completed: pending.completed,
-              sortIndex:
-                typeof pending.sortIndex === 'number' ? pending.sortIndex : SUBTASK_SORT_STEP,
-            })
+            consider(pending, 2)
+            return
+          }
+          if (baseHas) {
+            consider(item, 1)
           }
         })
       })
 
-      return Array.from(merged.values()).sort((a, b) => a.sortIndex - b.sortIndex)
+      const result = Array.from(merged.values()).sort((a, b) => a.sortIndex - b.sortIndex)
+      if (DEBUG_SYNC) {
+        try {
+          const sample = {
+            remoteCount: remote.length,
+            mergedCount: result.length,
+            remoteUpdatedAts: remote.slice(0, 3).map((r) => r.updatedAt),
+          }
+          console.debug('[Sync][Goals] merge subtasks', { taskId, sample })
+        } catch {}
+      }
+      return result
     },
     [subtaskLatestRef],
   )
@@ -5161,6 +5234,23 @@ export default function GoalsPage(): ReactElement {
     [mergeSubtasksWithSources, taskNotesLatestRef],
   )
 
+  // One-time: hydrate task details from the stored snapshot on mount so
+  // just-navigated subtasks from Taskwatch don't get overridden by stale
+  // details state when the Goals page first renders.
+  useEffect(() => {
+    try {
+      const stored = readStoredGoalsSnapshot()
+      if (Array.isArray(stored) && stored.length > 0) {
+        const reconciled = reconcileGoalsWithSnapshot(stored, DEFAULT_GOALS)
+        setTaskDetails((current) => mergeIncomingTaskDetails(current, reconciled))
+      }
+    } catch {
+      // ignore hydration errors, keep existing taskDetails
+    }
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     return () => {
       isMountedRef.current = false
@@ -5170,6 +5260,15 @@ export default function GoalsPage(): ReactElement {
   const applySupabaseGoalsPayload = useCallback(
     (payload: any[]) => {
       const normalized = normalizeSupabaseGoalsPayload(payload) as Goal[]
+      if (DEBUG_SYNC) {
+        try {
+          const first = normalized?.[0]?.buckets?.[0]?.tasks?.[0]?.subtasks?.[0]
+          console.debug('[Sync][Goals] remote payload', {
+            goals: normalized.length,
+            sampleUpdatedAt: (first as any)?.updatedAt,
+          })
+        } catch {}
+      }
       setGoals((current) => mergeIncomingGoals(current, normalized))
       setTaskDetails((current) => mergeIncomingTaskDetails(current, normalized))
     },
@@ -5209,6 +5308,23 @@ export default function GoalsPage(): ReactElement {
     [applySupabaseGoalsPayload],
   )
 
+  // Treat snapshot-pushed subtasks as fresh by stamping an updatedAt timestamp.
+  const stampSnapshotGoalsSubtasks = useCallback((goalsIn: Goal[]): Goal[] => {
+    const nowIso = new Date().toISOString()
+    return goalsIn.map((g) => ({
+      ...g,
+      buckets: g.buckets.map((b) => ({
+        ...b,
+        tasks: b.tasks.map((t) => ({
+          ...t,
+          subtasks: Array.isArray(t.subtasks)
+            ? t.subtasks.map((s) => ({ ...s, updatedAt: (s as any).updatedAt ?? nowIso }))
+            : [],
+        })),
+      })),
+    }))
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     const unsubscribe = subscribeToGoalsSnapshot((snapshot) => {
@@ -5218,6 +5334,15 @@ export default function GoalsPage(): ReactElement {
       }
       skipNextPublishRef.current = true
       lastSnapshotSignatureRef.current = signature
+      if (DEBUG_SYNC) {
+        try {
+          const first = snapshot?.[0]?.buckets?.[0]?.tasks?.[0]?.subtasks?.[0]
+          console.debug('[Sync][Goals] snapshot received', {
+            goals: snapshot.length,
+            sampleSubtask: first ? { id: (first as any).id, sortIndex: (first as any).sortIndex } : null,
+          })
+        } catch {}
+      }
       const run = () => {
         if (cancelled) {
           return
@@ -5225,8 +5350,9 @@ export default function GoalsPage(): ReactElement {
         let normalizedGoals: Goal[] | null = null
         setGoals((current) => {
           const reconciled = reconcileGoalsWithSnapshot(snapshot, current)
-          normalizedGoals = reconciled
-          return mergeIncomingGoals(current, reconciled)
+          const stamped = stampSnapshotGoalsSubtasks(reconciled)
+          normalizedGoals = stamped
+          return mergeIncomingGoals(current, stamped)
         })
         if (normalizedGoals) {
           const normalizedSnapshot = normalizedGoals
@@ -5414,14 +5540,16 @@ export default function GoalsPage(): ReactElement {
         return
       }
       const key = `${taskId}:${subtask.id}`
-      subtaskLatestRef.current.set(key, { ...subtask })
+      const stamped: TaskSubtask = { ...subtask, updatedAt: subtask.updatedAt ?? new Date().toISOString() }
+      subtaskLatestRef.current.set(key, stamped)
       if (typeof window === 'undefined') {
-        const payload = { ...subtask }
+        const payload = { ...stamped }
         void apiUpsertTaskSubtask(taskId, {
           id: payload.id,
           text: payload.text,
           completed: payload.completed,
           sort_index: payload.sortIndex,
+          updated_at: payload.updatedAt,
         })
           .then(() => {
             const currentLatest = subtaskLatestRef.current.get(key)
@@ -5455,6 +5583,7 @@ export default function GoalsPage(): ReactElement {
           text: payload.text,
           completed: payload.completed,
           sort_index: payload.sortIndex,
+          updated_at: payload.updatedAt,
         })
           .then(() => {
             const currentLatest = subtaskLatestRef.current.get(key)
@@ -5481,12 +5610,13 @@ export default function GoalsPage(): ReactElement {
       if (subtask.text.trim().length === 0) {
         return
       }
-      const payload = { ...subtask }
+      const payload = { ...subtask, updatedAt: subtask.updatedAt ?? new Date().toISOString() }
       void apiUpsertTaskSubtask(taskId, {
         id: payload.id,
         text: payload.text,
         completed: payload.completed,
         sort_index: payload.sortIndex,
+        updated_at: payload.updatedAt,
       })
         .then(() => {
           const key = `${taskId}:${payload.id}`
@@ -5610,7 +5740,7 @@ export default function GoalsPage(): ReactElement {
       if (!existing || existing.text === value) {
         return
       }
-      const updated: TaskSubtask = { ...existing, text: value }
+      const updated: TaskSubtask = { ...existing, text: value, updatedAt: new Date().toISOString() }
       updateTaskDetails(taskId, (current) => ({
         ...current,
         expanded: true,
@@ -5649,7 +5779,7 @@ export default function GoalsPage(): ReactElement {
         return
       }
       const normalized: TaskSubtask =
-        trimmed === existing.text ? existing : { ...existing, text: trimmed }
+        trimmed === existing.text ? existing : { ...existing, text: trimmed, updatedAt: new Date().toISOString() }
       updateTaskDetails(taskId, (current) => ({
         ...current,
         subtasks: current.subtasks.map((item) => (item.id === subtaskId ? normalized : item)),
@@ -5752,7 +5882,7 @@ export default function GoalsPage(): ReactElement {
       if (!existing) {
         return
       }
-      const toggled: TaskSubtask = { ...existing, completed: !existing.completed }
+      const toggled: TaskSubtask = { ...existing, completed: !existing.completed, updatedAt: new Date().toISOString() }
       updateTaskDetails(taskId, (current) => ({
         ...current,
         subtasks: current.subtasks.map((item) => (item.id === subtaskId ? toggled : item)),
@@ -5885,6 +6015,7 @@ export default function GoalsPage(): ReactElement {
           text: subtask.text,
           completed: subtask.completed,
           sort_index: subtask.sortIndex,
+          updated_at: subtask.updatedAt ?? new Date().toISOString(),
         }).catch((error) => console.warn('[GoalsPage] Failed to flush subtask on cleanup:', error))
       })
       taskNotesLatestRef.current.clear()
