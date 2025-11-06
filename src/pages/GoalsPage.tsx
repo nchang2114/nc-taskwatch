@@ -1439,7 +1439,7 @@ const MilestoneLayer: React.FC<{
   const stemRefs = useRef<Record<string, HTMLSpanElement | null>>({})
   const [labelWidths, setLabelWidths] = useState<Record<string, number>>({})
   const [editing, setEditing] = useState<null | { id: string; field: 'name' | 'date' }>(null)
-  const nameEditRef = useRef<HTMLElement | null>(null)
+  const nameEditRef = useRef<HTMLDivElement | null>(null)
   const dateEditRef = useRef<HTMLInputElement | null>(null)
   const editingNameSnapshotRef = useRef<string | null>(null)
   const editingLiveNameRef = useRef<string>('')
@@ -1915,7 +1915,7 @@ const MilestoneLayer: React.FC<{
 
                     {editing?.id === m.id && editing.field === 'name' ? (
                       <div
-                        ref={nameEditRef as React.MutableRefObject<HTMLElement | null>}
+                        ref={nameEditRef}
                         className={classNames('milestones__name', 'milestones__name--text', isStart && 'milestones__text--locked')}
                         contentEditable={!isStart ? true : undefined}
                         suppressContentEditableWarning={true}
