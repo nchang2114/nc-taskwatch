@@ -5194,7 +5194,8 @@ export default function GoalsPage(): ReactElement {
                     ? existing
                     : incoming
                 } else {
-                  mergedNotes = existingTask?.notes
+                  const prev = existingTask?.notes
+                  mergedNotes = typeof prev === 'string' ? prev : undefined
                 }
                 const remoteSubtasks = Array.isArray(task.subtasks) ? task.subtasks : []
                 const mergedSubtasks = mergeSubtasksWithSources(task.id, remoteSubtasks, [
@@ -5240,8 +5241,9 @@ export default function GoalsPage(): ReactElement {
             const mergedSubtasks = mergeSubtasksWithSources(task.id, remoteSubtasks, [
               existing?.subtasks ?? [],
             ])
+            const safeNotes = typeof notes === 'string' ? notes : existing?.notes ?? ''
             next[task.id] = {
-              notes,
+              notes: safeNotes,
               subtasks: mergedSubtasks,
               expanded: existing?.expanded ?? false,
               subtasksCollapsed: existing?.subtasksCollapsed ?? false,
