@@ -17,7 +17,8 @@ export type GoalTaskSnapshot = {
   completed: boolean
   priority: boolean
   difficulty: 'none' | 'green' | 'yellow' | 'red'
-  notes: string
+  // Notes are optional to distinguish "unknown/not loaded" from empty string
+  notes?: string
   subtasks: GoalTaskSubtaskSnapshot[]
 }
 
@@ -98,9 +99,20 @@ const coerceTasks = (value: unknown): GoalTaskSnapshot[] => {
       const completed = Boolean(candidate.completed)
       const priority = Boolean(candidate.priority)
       const difficulty = ensureDifficulty(candidate.difficulty)
-      const notes = typeof candidate.notes === 'string' ? candidate.notes : ''
+      const rawNotes = typeof candidate.notes === 'string' ? candidate.notes : undefined
       const subtasks = coerceTaskSubtasks(candidate.subtasks)
-      return { id, text, completed, priority, difficulty, notes, subtasks }
+      const out: GoalTaskSnapshot = {
+        id,
+        text,
+        completed,
+        priority,
+        difficulty,
+        subtasks,
+      }
+      if (typeof rawNotes === 'string') {
+        out.notes = rawNotes
+      }
+      return out
     })
     .filter((task): task is GoalTaskSnapshot => Boolean(task))
 }

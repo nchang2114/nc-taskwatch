@@ -1319,6 +1319,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const notebookSubtaskLatestRef = useRef<Map<string, NotebookSubtask>>(new Map())
   const lastPersistedNotebookRef = useRef<{ taskId: string; entry: NotebookEntry } | null>(null)
   const notebookHydrationBlockRef = useRef(0)
+  // Mark when notebook changes originate from snapshot hydration, so we don't persist them back
+  const notebookChangeFromSnapshotRef = useRef(false)
   const blockNotebookHydration = useCallback((durationMs = 4000) => {
     notebookHydrationBlockRef.current = Date.now() + durationMs
   }, [])
@@ -1479,7 +1481,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     [],
   )
   const updateGoalSnapshotTask = useCallback(
-    (taskId: string, entry: NotebookEntry, force: boolean = false) => {
+    (taskId: string, entry: NotebookEntry, force: boolean = false, options?: { includeNotes?: boolean }) => {
+      const includeNotes = options?.includeNotes !== false
       setGoalsSnapshot((current) => {
         let mutated = false
         const next = current.map((goal) => {
@@ -1490,18 +1493,23 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
               return bucket
             }
             const originalTask = bucket.tasks[index]
-            const sameNotes = originalTask.notes === entry.notes
+            const sameNotes = includeNotes ? originalTask.notes === entry.notes : true
             const sameSubtasks = areSnapshotSubtasksEqual(originalTask.subtasks ?? [], entry.subtasks)
             if (!force && sameNotes && sameSubtasks) {
               return bucket
             }
             goalMutated = true
             mutated = true
-            const updatedTask: GoalTaskSnapshot = {
-              ...originalTask,
-              notes: entry.notes,
-              subtasks: notebookSubtasksToSnapshot(entry.subtasks),
-            }
+            const updatedTask: GoalTaskSnapshot = includeNotes
+              ? {
+                  ...originalTask,
+                  notes: entry.notes,
+                  subtasks: notebookSubtasksToSnapshot(entry.subtasks),
+                }
+              : {
+                  ...originalTask,
+                  subtasks: notebookSubtasksToSnapshot(entry.subtasks),
+                }
             const nextTasks = [...bucket.tasks]
             nextTasks[index] = updatedTask
             return { ...bucket, tasks: nextTasks }
@@ -1547,8 +1555,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const publishTaskEntry = useCallback(
     (taskId: string, entry: NotebookEntry, reason?: string) => {
       if (!taskId) return
+      const includeNotes = Boolean(reason && reason.startsWith('notes'))
       if (taskExistsIn(goalsSnapshot, taskId)) {
-        updateGoalSnapshotTask(taskId, entry, true)
+        updateGoalSnapshotTask(taskId, entry, true, { includeNotes })
         if (DEBUG_SYNC) {
           try {
             console.debug('[Sync][Taskwatch] publish (in-memory snapshot)', { taskId, reason })
@@ -1569,11 +1578,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
               goalMutated = true
               changed = true
               const originalTask = bucket.tasks[index]
-              const updatedTask: GoalTaskSnapshot = {
-                ...originalTask,
-                notes: entry.notes,
-                subtasks: notebookSubtasksToSnapshot(entry.subtasks),
-              }
+              const updatedTask: GoalTaskSnapshot = includeNotes
+                ? {
+                    ...originalTask,
+                    notes: entry.notes,
+                    subtasks: notebookSubtasksToSnapshot(entry.subtasks),
+                  }
+                : {
+                    ...originalTask,
+                    subtasks: notebookSubtasksToSnapshot(entry.subtasks),
+                  }
               const tasks = [...bucket.tasks]
               tasks[index] = updatedTask
               return { ...bucket, tasks }
@@ -1770,10 +1784,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       const idsSet = new Set(ids)
       const nextEntry = buildNextEntryForTask(taskId, idsSet)
       if (nextEntry) {
+        // Publish subtask-only changes (notes are not included by publishTaskEntry for this reason)
         publishTaskEntry(taskId, nextEntry, 'subtask-delete-batch')
         updateFocusSourceFromEntry(nextEntry)
-        // Keep the keyed map in sync too
-        updateNotebookForKey(notebookKey, () => nextEntry)
+        // Keep the keyed map in sync, preserving current notes for this key
+        updateNotebookForKey(notebookKey, (entry) => ({ notes: entry.notes, subtasks: nextEntry.subtasks }))
         if (DEBUG_SYNC) {
           try {
             console.debug('[Sync][Taskwatch] subtask delete batch publish', { taskId, count: ids.length })
@@ -1859,6 +1874,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       return
     }
     if (areNotebookEntriesEqual(previous.entry, activeNotebookEntry)) {
+      return
+    }
+    // If this change was from snapshot hydration, skip persisting to DB/snapshot
+    if (notebookChangeFromSnapshotRef.current) {
+      lastPersistedNotebookRef.current = {
+        taskId: activeTaskId,
+        entry: cloneNotebookEntry(activeNotebookEntry),
+      }
       return
     }
     if (previous.entry.notes !== activeNotebookEntry.notes) {
@@ -1953,9 +1976,19 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       notes: typeof snapshotTask.notes === 'string' ? snapshotTask.notes : '',
       subtasks: snapshotSubtasksToNotebook(snapshotTask.subtasks ?? []),
     }
+    // Note the source of this change so downstream effects don't persist it to DB
+    notebookChangeFromSnapshotRef.current = true
     const result = updateNotebookForKey(notebookKey, (entry) =>
       areNotebookEntriesEqual(entry, entryFromSnapshot) ? entry : entryFromSnapshot,
     )
+    // Reset the flag on the next tick
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        notebookChangeFromSnapshotRef.current = false
+      }, 0)
+    } else {
+      notebookChangeFromSnapshotRef.current = false
+    }
     if (result && result.changed) {
       updateFocusSourceFromEntry(result.entry)
     }

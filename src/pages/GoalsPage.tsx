@@ -184,11 +184,12 @@ const normalizeSupabaseGoalsPayload = (payload: any[]): Goal[] =>
                 completed: Boolean(task.completed),
                 difficulty: ensureTaskDifficultyValue(task.difficulty),
                 priority: Boolean(task.priority),
-                notes: typeof task.notes === 'string' ? task.notes : '',
+                // Notes omitted from bulk fetch; leave undefined unless explicitly present
+                notes: typeof task.notes === 'string' ? task.notes : undefined,
                 subtasks: normalizeSupabaseTaskSubtasks(task.subtasks),
               }))
             : [],
-        }))
+      }))
       : [],
   }))
 
@@ -888,13 +889,21 @@ function reconcileGoalsWithSnapshot(snapshot: GoalSnapshot[], current: Goal[]): 
                   }
                 })
               : []
+            const incomingNotes = typeof task.notes === 'string' ? task.notes : undefined
+            const resolvedNotes =
+              incomingNotes !== undefined
+                ? incomingNotes.trim().length === 0
+                  ? existingTask?.notes
+                  : incomingNotes
+                : existingTask?.notes
             return {
               id: task.id,
               text: task.text,
               completed: task.completed,
               difficulty: task.difficulty,
               priority: task.priority ?? existingTask?.priority ?? false,
-              notes: typeof task.notes === 'string' ? task.notes : existingTask?.notes ?? '',
+              // Preserve non-empty existing notes when incoming is empty/unknown
+              notes: resolvedNotes,
               // Snapshot is authoritative: do not resurrect subtasks when it is empty
               subtasks: normalizedSubtasks,
             }
@@ -5047,6 +5056,8 @@ export default function GoalsPage(): ReactElement {
   const taskNotesSaveTimersRef = useRef<Map<string, number>>(new Map())
   const taskNotesLatestRef = useRef<Map<string, string>>(new Map())
   const requestedTaskNotesRef = useRef<Set<string>>(new Set())
+  // Tracks recent local edits to notes so merges from snapshots/remote won’t clobber UI shortly after typing
+  const taskNotesEditedAtRef = useRef<Map<string, number>>(new Map())
   const subtaskSaveTimersRef = useRef<Map<string, number>>(new Map())
   const subtaskLatestRef = useRef<Map<string, TaskSubtask>>(new Map())
   const isMountedRef = useRef(true)
@@ -5173,12 +5184,18 @@ export default function GoalsPage(): ReactElement {
               tasks: bucket.tasks.map((task) => {
                 const existingTask = existingBucket?.tasks.find((item) => item.id === task.id)
                 const pendingNotes = taskNotesLatestRef.current.get(task.id)
-                const mergedNotes =
-                  pendingNotes !== undefined
-                    ? pendingNotes
-                    : typeof task.notes === 'string'
-                      ? task.notes
-                      : existingTask?.notes ?? ''
+                let mergedNotes: string | undefined
+                if (pendingNotes !== undefined) {
+                  mergedNotes = pendingNotes
+                } else if (typeof task.notes === 'string') {
+                  const incoming = task.notes
+                  const existing = existingTask?.notes
+                  mergedNotes = incoming.trim().length === 0 && typeof existing === 'string' && existing.trim().length > 0
+                    ? existing
+                    : incoming
+                } else {
+                  mergedNotes = existingTask?.notes
+                }
                 const remoteSubtasks = Array.isArray(task.subtasks) ? task.subtasks : []
                 const mergedSubtasks = mergeSubtasksWithSources(task.id, remoteSubtasks, [
                   existingTask?.subtasks ?? [],
@@ -5205,12 +5222,20 @@ export default function GoalsPage(): ReactElement {
           bucket.tasks.forEach((task) => {
             const existing = currentDetails[task.id]
             const pendingNotes = taskNotesLatestRef.current.get(task.id)
-            const notes =
-              pendingNotes !== undefined
-                ? pendingNotes
-                : typeof task.notes === 'string'
-                  ? task.notes
-                  : existing?.notes ?? ''
+            const editedAt = taskNotesEditedAtRef.current.get(task.id) ?? 0
+            const recentlyEdited = typeof editedAt === 'number' && editedAt > 0 && Date.now() - editedAt < 4000
+            let notes: string | undefined
+            if (pendingNotes !== undefined || recentlyEdited) {
+              notes = pendingNotes
+            } else if (typeof task.notes === 'string') {
+              const incoming = task.notes
+              const prevNotes = existing?.notes
+              notes = incoming.trim().length === 0 && typeof prevNotes === 'string' && prevNotes.trim().length > 0
+                ? prevNotes
+                : incoming
+            } else {
+              notes = existing?.notes
+            }
             const remoteSubtasks = Array.isArray(task.subtasks) ? task.subtasks : []
             const mergedSubtasks = mergeSubtasksWithSources(task.id, remoteSubtasks, [
               existing?.subtasks ?? [],
@@ -5427,6 +5452,12 @@ export default function GoalsPage(): ReactElement {
             taskNotesSaveTimersRef.current.delete(taskId)
           }
           taskNotesLatestRef.current.delete(taskId)
+        }
+      })
+      // Prune edited-at entries for tasks no longer present
+      taskNotesEditedAtRef.current.forEach((_, taskId) => {
+        if (!validTaskIds.has(taskId)) {
+          taskNotesEditedAtRef.current.delete(taskId)
         }
       })
       subtaskLatestRef.current.forEach((_, compositeKey) => {
@@ -5681,6 +5712,10 @@ export default function GoalsPage(): ReactElement {
 
   const handleTaskNotesChange = useCallback(
     (taskId: string, value: string) => {
+      // Mark as recently edited to protect from incoming merges briefly after typing
+      try {
+        taskNotesEditedAtRef.current.set(taskId, Date.now())
+      } catch {}
       updateTaskDetails(taskId, (current) => {
         if (current.notes === value) {
           return current
