@@ -1439,7 +1439,10 @@ const MilestoneLayer: React.FC<{
   const stemRefs = useRef<Record<string, HTMLSpanElement | null>>({})
   const [labelWidths, setLabelWidths] = useState<Record<string, number>>({})
   const [editing, setEditing] = useState<null | { id: string; field: 'name' | 'date' }>(null)
-  const editInputRef = useRef<HTMLInputElement | null>(null)
+  const nameEditRef = useRef<HTMLElement | null>(null)
+  const dateEditRef = useRef<HTMLInputElement | null>(null)
+  const editingNameSnapshotRef = useRef<string | null>(null)
+  const editingLiveNameRef = useRef<string>('')
   // Track current milestones live for robust dragging math during reorders
   const milestonesRef = useRef<Milestone[]>([])
   useEffect(() => { milestonesRef.current = milestones }, [milestones])
@@ -1585,11 +1588,33 @@ const MilestoneLayer: React.FC<{
     apiDeleteGoalMilestone(goal.id, id).catch((err) => console.warn('[Milestones] Failed to delete', err))
   }
 
-  // Focus the ephemeral editor when entering edit mode
+  // Focus the editor when entering edit mode; for name, seed text and place caret at end
   useEffect(() => {
     if (!editing) return
     const t = setTimeout(() => {
-      try { editInputRef.current?.focus() } catch {}
+      try {
+        if (editing.field === 'name') {
+          const el = nameEditRef.current
+          if (!el) return
+          const current = milestonesRef.current.find((m) => m.id === editing.id)?.name ?? ''
+          el.textContent = current
+          editingLiveNameRef.current = current
+          ;(el as any).focus?.()
+          if (typeof window !== 'undefined') {
+            try {
+              const range = document.createRange()
+              range.selectNodeContents(el)
+              range.collapse(false)
+              const sel = window.getSelection()
+              sel?.removeAllRanges()
+              sel?.addRange(range)
+            } catch {}
+          }
+        } else if (editing.field === 'date') {
+          const el = dateEditRef.current
+          ;(el as any)?.focus?.()
+        }
+      } catch {}
     }, 0)
     return () => clearTimeout(t)
   }, [editing])
@@ -1602,6 +1627,13 @@ const MilestoneLayer: React.FC<{
       cb()
     }
     lastTapRef.current = now
+  }
+
+  const startEditName = (id: string) => {
+    const found = milestonesRef.current.find((m) => m.id === id)
+    if (!found || found.role === 'start') return
+    editingNameSnapshotRef.current = found.name
+    setEditing({ id, field: 'name' })
   }
 
   const sorted = useMemo(() => {
@@ -1855,7 +1887,18 @@ const MilestoneLayer: React.FC<{
                   ref={(el) => { labelRefs.current[m.id] = el }}
                   className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom', laneClass)}
                 >
-                  <div className="milestones__card">
+                  <div
+                    className="milestones__card"
+                    onClick={(ev) => {
+                      if (isStart) return
+                      if (editing?.id === m.id) return
+                      const nameEmpty = !(m.name && m.name.trim().length > 0)
+                      if (!nameEmpty) return
+                      const t = ev.target as HTMLElement
+                      if (t.closest('.milestones__date') || t.closest('.milestones__remove')) return
+                      startEditName(m.id)
+                    }}
+                  >
                     {m.role !== 'start' && onlyNonStartId !== m.id ? (
                       <button
                         className="milestones__remove"
@@ -1870,36 +1913,82 @@ const MilestoneLayer: React.FC<{
                       </button>
                     ) : null}
 
-                    {!isStart && editing?.id === m.id && editing.field === 'name' ? (
-                      <input
-                        ref={editInputRef}
-                        className="milestones__name"
-                        defaultValue={m.name}
-                        onBlur={(ev) => { updateName(m.id, ev.target.value); setEditing(null) }}
+                    {editing?.id === m.id && editing.field === 'name' ? (
+                      <div
+                        ref={nameEditRef as React.MutableRefObject<HTMLElement | null>}
+                        className={classNames('milestones__name', 'milestones__name--text', isStart && 'milestones__text--locked')}
+                        contentEditable={!isStart ? true : undefined}
+                        suppressContentEditableWarning={true}
+                        onInput={(ev) => {
+                          if (isStart) return
+                          const el = ev.currentTarget as HTMLElement
+                          const value = el.innerText
+                          editingLiveNameRef.current = value
+                        }}
+                        onPaste={(ev) => {
+                          if (isStart) return
+                          try {
+                            ev.preventDefault()
+                            const text = (ev.clipboardData?.getData('text/plain') ?? '').replace(/\r/g, '')
+                            const success = document.execCommand('insertText', false, text)
+                            if (!success) {
+                              const el = ev.currentTarget as HTMLElement
+                              const existing = el.innerText || ''
+                              el.textContent = existing + text
+                            }
+                          } catch {}
+                        }}
+                        onBlur={(ev) => {
+                          if (isStart) return
+                          const value = editingLiveNameRef.current ?? (ev.currentTarget as HTMLElement).innerText
+                          updateName(m.id, value)
+                          setEditing(null)
+                          editingNameSnapshotRef.current = null
+                        }}
                         onKeyDown={(ev) => {
-                          if (ev.key === 'Enter') { updateName(m.id, (ev.target as HTMLInputElement).value); setEditing(null) }
-                          if (ev.key === 'Escape') { setEditing(null) }
+                          if (isStart) return
+                          if (ev.key === 'Escape') {
+                            const original = editingNameSnapshotRef.current ?? m.name
+                            const el = nameEditRef.current
+                            if (el) el.textContent = original
+                            setEditing(null)
+                            editingNameSnapshotRef.current = null
+                            ev.preventDefault()
+                            ev.stopPropagation()
+                            return
+                          }
+                          if (ev.key === 'Enter' && !ev.shiftKey) {
+                            ev.preventDefault()
+                            ev.stopPropagation()
+                            const el = nameEditRef.current
+                            const value = editingLiveNameRef.current ?? el?.innerText ?? ''
+                            updateName(m.id, value)
+                            setEditing(null)
+                            editingNameSnapshotRef.current = null
+                          }
                         }}
                         aria-label="Edit milestone name"
                       />
                     ) : (
-                      <div
-                        className={classNames('milestones__name', 'milestones__name--text', isStart && 'milestones__text--locked')}
-                        onDoubleClick={!isStart ? ((ev) => { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) }) : undefined}
-                        onClick={!isStart ? ((ev) => { if ((ev as React.MouseEvent).detail >= 2) { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) } }) : undefined}
-                        onPointerDown={!isStart ? handleMaybeDoubleTap(() => setEditing({ id: m.id, field: 'name' })) : undefined}
-                        role={!isStart ? 'button' : undefined}
-                        tabIndex={!isStart ? 0 : -1}
-                        onKeyDown={!isStart ? ((ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setEditing({ id: m.id, field: 'name' }) } }) : undefined}
-                        aria-label={isStart ? `Milestone name ${m.name}.` : `Milestone name ${m.name}. Double tap to edit.`}
-                      >
-                        {m.name}
-                      </div>
+                      (m.name && m.name.trim().length > 0) ? (
+                        <div
+                          className={classNames('milestones__name', 'milestones__name--text', isStart && 'milestones__text--locked')}
+                          onDoubleClick={!isStart ? ((ev) => { ev.stopPropagation(); startEditName(m.id) }) : undefined}
+                          onClick={!isStart ? ((ev) => { ev.stopPropagation(); startEditName(m.id) }) : undefined}
+                          onPointerDown={!isStart ? handleMaybeDoubleTap(() => startEditName(m.id)) : undefined}
+                          onKeyDown={!isStart ? ((ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); startEditName(m.id) } }) : undefined}
+                          role={!isStart ? 'button' : undefined}
+                          tabIndex={!isStart ? 0 : -1}
+                          aria-label={isStart ? `Milestone name ${m.name}.` : `Milestone name ${m.name}. Double tap to edit.`}
+                        >
+                          {m.name}
+                        </div>
+                      ) : null
                     )}
 
                     {!isStart && !(onlyNonStartId === m.id) && editing?.id === m.id && editing.field === 'date' ? (
                       <input
-                        ref={editInputRef}
+                        ref={dateEditRef}
                         className="milestones__date"
                         type="date"
                         defaultValue={new Date(m.date).toISOString().slice(0,10)}

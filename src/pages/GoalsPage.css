@@ -1368,7 +1368,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   gap: 0.3rem;
   text-align: center;
   white-space: normal;
-  width: min(14rem, 40vw); /* slightly smaller max card width */
+  width: min(14rem, 55vw); /* smaller max label width */
   z-index: 3; /* ensure label sits above connector and node */
 }
 /* Position is controlled below using connector + gap to ensure symmetry */
@@ -1400,14 +1400,14 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 }
 .milestones__card .milestones__name--text {
   font-weight: 600;
-  font-size: 0.78rem; /* slightly smaller to compact card */
+  font-size: 0.86rem; /* slightly smaller per feedback */
   line-height: 1.18;
   /* Hug content and wrap dynamically */
   display: inline-block;
   width: fit-content;
-  max-width: 10ch;
+  max-width: 12ch; /* shorter name width to wrap earlier */
   min-width: 0;
-  white-space: normal;
+  white-space: pre-wrap; /* preserve newlines so multi-line remains after editing */
   overflow-wrap: anywhere;
 }
 .milestones__card .milestones__date--text {
@@ -1474,7 +1474,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 .milestones__card {
   position: relative;
   /* More compact padding, keep space for delete icon */
-  padding: 0.42rem 1.1rem 0.42rem 0.5rem;
+  padding: 0.5rem 1.5rem 0.5rem 0.6rem; /* extra right padding for delete icon */
   border-radius: 0.55rem;
   border: 1px solid rgba(148, 163, 255, 0.35);
   background: rgba(12, 18, 56, 0.55);
@@ -1485,16 +1485,16 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   justify-items: start; /* left-align contents inside card */
   row-gap: 0.1rem; /* tighter vertical rhythm */
   width: fit-content;
-  max-width: 16ch; /* wrap long titles to ~2 lines */
+  max-width: 14ch; /* smaller card width */
   box-sizing: border-box;
 }
 
 .milestones__remove {
   position: absolute;
-  top: 0.22rem;
-  right: 0.28rem;
-  width: 1rem;
-  height: 1rem;
+  top: 0.35rem; /* more padding from the top edge */
+  right: 0.35rem; /* more padding from the right edge */
+  width: 1.25rem; /* larger hit area */
+  height: 1.25rem;
   border: none;
   background: transparent;
   color: rgba(235, 242, 255, 0.88);
@@ -1503,7 +1503,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 0.125rem; /* add internal padding around icon */
   cursor: pointer;
   transition: color 120ms ease, background-color 120ms ease, transform 80ms ease;
 }
@@ -1517,7 +1517,13 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 
 .milestones__remove:active { transform: scale(0.96); }
 
-.milestones__remove-icon { width: 0.8rem; height: 0.8rem; display: block; }
+.milestones__remove-icon { width: 0.9rem; height: 0.9rem; display: block; }
+
+/* Editing affordances */
+.milestones__card [contenteditable='true'] {
+  cursor: text;
+  outline: none;
+}
 
 html[data-theme='light'] .milestones {
   background: rgba(244, 247, 255, 0.86);
