@@ -1319,8 +1319,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const notebookSubtaskLatestRef = useRef<Map<string, NotebookSubtask>>(new Map())
   const lastPersistedNotebookRef = useRef<{ taskId: string; entry: NotebookEntry } | null>(null)
   const notebookHydrationBlockRef = useRef(0)
-  // Mark when notebook changes originate from snapshot hydration, so we don't persist them back
-  const notebookChangeFromSnapshotRef = useRef(false)
   const blockNotebookHydration = useCallback((durationMs = 4000) => {
     notebookHydrationBlockRef.current = Date.now() + durationMs
   }, [])
@@ -1863,9 +1861,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     if (areNotebookEntriesEqual(previous.entry, activeNotebookEntry)) {
       return
     }
-    // If this change was from snapshot hydration, skip persisting NOTES, but continue subtask processing
-    const skipNotesPersist = notebookChangeFromSnapshotRef.current
-    if (!skipNotesPersist && previous.entry.notes !== activeNotebookEntry.notes) {
+    if (previous.entry.notes !== activeNotebookEntry.notes) {
       scheduleNotebookNotesPersist(activeTaskId, activeNotebookEntry.notes)
       const linkedTaskId = getStableLinkedTaskId()
       if (linkedTaskId) {
@@ -1957,19 +1953,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       notes: typeof snapshotTask.notes === 'string' ? snapshotTask.notes : '',
       subtasks: snapshotSubtasksToNotebook(snapshotTask.subtasks ?? []),
     }
-    // Note the source of this change so downstream effects don't persist it to DB
-    notebookChangeFromSnapshotRef.current = true
     const result = updateNotebookForKey(notebookKey, (entry) =>
       areNotebookEntriesEqual(entry, entryFromSnapshot) ? entry : entryFromSnapshot,
     )
-    // Reset the flag on the next tick
-    if (typeof window !== 'undefined') {
-      window.setTimeout(() => {
-        notebookChangeFromSnapshotRef.current = false
-      }, 0)
-    } else {
-      notebookChangeFromSnapshotRef.current = false
-    }
     if (result && result.changed) {
       updateFocusSourceFromEntry(result.entry)
     }
