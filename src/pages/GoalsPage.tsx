@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback, type ReactElement } from 'react'
+import React, { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import './GoalsPage.css'
 import {
@@ -1433,6 +1433,11 @@ const MilestoneLayer: React.FC<{
 }> = ({ goal }) => {
   const [milestones, setMilestones] = useState<Milestone[]>(() => ensureDefaultMilestones(goal, readMilestonesFor(goal.id)))
   const trackRef = useRef<HTMLDivElement | null>(null)
+  const trackWidthRef = useRef<number>(0)
+  const [trackWidth, setTrackWidth] = useState<number>(0)
+  const labelRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const stemRefs = useRef<Record<string, HTMLSpanElement | null>>({})
+  const [labelWidths, setLabelWidths] = useState<Record<string, number>>({})
   const [editing, setEditing] = useState<null | { id: string; field: 'name' | 'date' }>(null)
   const editInputRef = useRef<HTMLInputElement | null>(null)
   // Track current milestones live for robust dragging math during reorders
@@ -1686,6 +1691,130 @@ const MilestoneLayer: React.FC<{
     window.addEventListener('pointerup', up)
   }
 
+  // Measure track width and label widths to assign to 4 tracks (2 above, 2 below)
+  useLayoutEffect(() => {
+    const parsePx = (s: string | null | undefined): number => {
+      if (!s) return 0
+      const n = Number(String(s).trim().replace('px', ''))
+      return Number.isFinite(n) ? n : 0
+    }
+
+    const measure = () => {
+      const w = trackRef.current?.clientWidth ?? 0
+      trackWidthRef.current = w
+      setTrackWidth(w)
+      const widths: Record<string, number> = {}
+      for (const m of sorted) {
+        const el = labelRefs.current[m.id]
+        if (el) {
+          widths[m.id] = el.offsetWidth || 0
+        }
+      }
+      setLabelWidths(widths)
+
+      // Dynamically size stems to connect node to card edge
+      const trackEl = trackRef.current
+      if (!trackEl) return
+      const trackRect = trackEl.getBoundingClientRect()
+      const centerY = trackRect.top + trackRect.height / 2
+      const styles = getComputedStyle(trackEl)
+      const clearance = parsePx(styles.getPropertyValue('--ms-node-clearance')) || 0
+
+      for (const m of sorted) {
+        const labelEl = labelRefs.current[m.id]
+        const stemEl = stemRefs.current[m.id]
+        if (!labelEl || !stemEl) continue
+        const r = labelEl.getBoundingClientRect()
+        const isTop = r.bottom < centerY
+        if (isTop) {
+          const distance = Math.max(0, centerY - r.bottom)
+          const height = Math.max(0, distance - clearance)
+          // For up stems: top is negative distance; height excludes clearance so bottom ends at -clearance
+          stemEl.style.top = `${-distance}px`
+          stemEl.style.height = `${height}px`
+        } else {
+          const distance = Math.max(0, r.top - centerY)
+          const height = Math.max(0, distance - clearance)
+          stemEl.style.top = `${clearance}px`
+          stemEl.style.height = `${height}px`
+        }
+      }
+    }
+
+    measure()
+
+    const observers: ResizeObserver[] = []
+    if (typeof ResizeObserver !== 'undefined') {
+      // Observe track size
+      if (trackRef.current) {
+        const roTrack = new ResizeObserver(() => measure())
+        roTrack.observe(trackRef.current)
+        observers.push(roTrack)
+      }
+      // Observe each label for dynamic height changes
+      for (const m of sorted) {
+        const el = labelRefs.current[m.id]
+        if (el) {
+          const ro = new ResizeObserver(() => measure())
+          ro.observe(el)
+          observers.push(ro)
+        }
+      }
+    } else if (typeof window !== 'undefined') {
+      window.addEventListener('resize', measure)
+    }
+
+    return () => {
+      if (observers.length) observers.forEach((o) => o.disconnect())
+      else if (typeof window !== 'undefined') window.removeEventListener('resize', measure)
+    }
+  }, [sorted])
+
+  type Placement = { side: 'top' | 'bottom'; lane: 0 | 1 }
+  const placements = useMemo<Record<string, Placement>>(() => {
+    const result: Record<string, Placement> = {}
+    const tWidth = trackWidth || trackWidthRef.current || 0
+    if (tWidth <= 0) return result
+    // Rightmost occupied x for each lane
+    const gap = 8 // px minimum spacing between cards on the same lane
+    const topRight: number[] = [-Infinity, -Infinity]
+    const botRight: number[] = [-Infinity, -Infinity]
+    sorted.forEach((m, idx) => {
+      const preferTop = idx % 2 === 0
+      const pct = posPct(m.date)
+      const x = (pct / 100) * tWidth
+      const w = labelWidths[m.id] ?? 120
+      const left = x - w / 2
+      const right = x + w / 2
+      const tryPlace = (side: 'top' | 'bottom'): Placement | null => {
+        const lanes = side === 'top' ? topRight : botRight
+        for (let lane = 0 as 0 | 1; lane < 2; lane = (lane + 1) as 0 | 1) {
+          if (left >= lanes[lane] + gap) {
+            lanes[lane] = right
+            return { side, lane }
+          }
+        }
+        return null
+      }
+      let placed: Placement | null = null
+      if (preferTop) {
+        placed = tryPlace('top') ?? tryPlace('bottom')
+      } else {
+        placed = tryPlace('bottom') ?? tryPlace('top')
+      }
+      if (!placed) {
+        // Fall back to the lane with the smallest right edge to minimize overlap
+        const side = preferTop ? 'top' : 'bottom'
+        const lanes = side === 'top' ? topRight : botRight
+        const lane = (lanes[0] <= lanes[1] ? 0 : 1) as 0 | 1
+        lanes[lane] = right
+        placed = { side, lane }
+      }
+      result[m.id] = placed
+    })
+    return result
+  }, [sorted, labelWidths, trackWidth])
+
   return (
     <>
       <div className="milestones__header">
@@ -1700,7 +1829,9 @@ const MilestoneLayer: React.FC<{
           const isStart = m.role === 'start'
           const isLatest = m.id === latestId
           const isOnlyNonStart = !isStart && onlyNonStartId === m.id
-          const isTop = idx % 2 === 0
+          const placement = placements[m.id] ?? { side: (idx % 2 === 0 ? 'top' : 'bottom'), lane: 0 as 0 | 1 }
+          const isTop = placement.side === 'top'
+          const laneClass = placement.lane === 0 ? 'lane-0' : 'lane-1'
           return (
             <div key={m.id} className="milestones__node-wrap" style={{ left: `${pct}%` }}>
               <button
@@ -1715,11 +1846,15 @@ const MilestoneLayer: React.FC<{
                 aria-label={`${m.name} ${formatShort(m.date)}${m.completed ? ' (completed)' : ''}`}
               />
                 <span
-                  className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down')}
+                  ref={(el) => { stemRefs.current[m.id] = el }}
+                  className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down', laneClass)}
                   onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart) beginDrag(m.id, ev) }}
                   aria-hidden={true}
                 />
-                <div className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom')}>
+                <div
+                  ref={(el) => { labelRefs.current[m.id] = el }}
+                  className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom', laneClass)}
+                >
                   <div className="milestones__card">
                     {m.role !== 'start' && onlyNonStartId !== m.id ? (
                       <button

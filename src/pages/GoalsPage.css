@@ -1455,6 +1455,21 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 /* Position labels relative to the node center (wrap top), just beyond connector end */
 .milestones__label--bottom { top: calc(var(--ms-connector) + var(--ms-gap)); }
 .milestones__label--top { bottom: calc(var(--ms-connector) + var(--ms-gap)); top: auto; }
+
+/* Additional lanes: 2 tracks per side (lane-0 near the line, lane-1 further away)
+   Make stems connect from the node to the card edge (label container). */
+/* Bottom side: stem height reaches label top */
+.milestones__stem--down.lane-0 { top: var(--ms-node-clearance); height: calc((var(--ms-connector) + var(--ms-gap)) - var(--ms-node-clearance)); }
+.milestones__stem--down.lane-1 { top: var(--ms-node-clearance); height: calc(((var(--ms-connector) * 2) + var(--ms-gap)) - var(--ms-node-clearance)); }
+/* Top side: position stem so its bottom touches label bottom */
+/* For top lanes, position stem so its bottom ends just above the node (by clearance), and its top meets the label bottom */
+.milestones__stem--up.lane-0 { top: calc(-1 * (var(--ms-connector) + var(--ms-gap))); height: calc((var(--ms-connector) + var(--ms-gap)) - var(--ms-node-clearance)); }
+.milestones__stem--up.lane-1 { top: calc(-1 * ((var(--ms-connector) * 2) + var(--ms-gap))); height: calc(((var(--ms-connector) * 2) + var(--ms-gap)) - var(--ms-node-clearance)); }
+
+.milestones__label--top.lane-0 { bottom: calc(var(--ms-connector) + var(--ms-gap)); }
+.milestones__label--top.lane-1 { bottom: calc((var(--ms-connector) * 2) + var(--ms-gap)); }
+.milestones__label--bottom.lane-0 { top: calc(var(--ms-connector) + var(--ms-gap)); }
+.milestones__label--bottom.lane-1 { top: calc((var(--ms-connector) * 2) + var(--ms-gap)); }
 /* Compact milestone details card */
 .milestones__card {
   position: relative;
