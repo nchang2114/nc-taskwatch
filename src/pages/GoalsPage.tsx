@@ -5484,12 +5484,22 @@ export default function GoalsPage(): ReactElement {
   const scheduleTaskNotesPersist = useCallback(
     (taskId: string, notes: string) => {
       if (typeof window === 'undefined') {
+        if (DEBUG_SYNC) {
+          try {
+            console.debug('[Sync][Goals][Notes] flush (immediate, no-window)', { taskId, len: notes.length })
+          } catch {}
+        }
         void apiUpdateTaskNotes(taskId, notes)
           .then(() => {
             taskNotesLatestRef.current.delete(taskId)
           })
           .catch((error) => console.warn('[GoalsPage] Failed to persist task notes:', error))
         return
+      }
+      if (DEBUG_SYNC) {
+        try {
+          console.debug('[Sync][Goals][Notes] schedule persist', { taskId, len: notes.length })
+        } catch {}
       }
       taskNotesLatestRef.current.set(taskId, notes)
       const timers = taskNotesSaveTimersRef.current
@@ -5500,6 +5510,11 @@ export default function GoalsPage(): ReactElement {
       const handle = window.setTimeout(() => {
         timers.delete(taskId)
         const latest = taskNotesLatestRef.current.get(taskId) ?? ''
+        if (DEBUG_SYNC) {
+          try {
+            console.debug('[Sync][Goals][Notes] flush (timer)', { taskId, len: latest.length })
+          } catch {}
+        }
         void apiUpdateTaskNotes(taskId, latest)
           .then(() => {
             if (taskNotesLatestRef.current.get(taskId) === latest) {
@@ -5675,6 +5690,11 @@ export default function GoalsPage(): ReactElement {
           notes: value,
         }
       })
+      if (DEBUG_SYNC) {
+        try {
+          console.debug('[Sync][Goals][Notes] change', { taskId, len: value.length })
+        } catch {}
+      }
       syncGoalTaskNotes(taskId, value)
       scheduleTaskNotesPersist(taskId, value)
     },
