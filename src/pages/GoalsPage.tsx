@@ -895,16 +895,8 @@ function reconcileGoalsWithSnapshot(snapshot: GoalSnapshot[], current: Goal[]): 
               difficulty: task.difficulty,
               priority: task.priority ?? existingTask?.priority ?? false,
               notes: typeof task.notes === 'string' ? task.notes : existingTask?.notes ?? '',
-              subtasks:
-                normalizedSubtasks.length > 0
-                  ? normalizedSubtasks
-                  : existingTask?.subtasks
-                    ? existingTask.subtasks.map((item) => ({
-                        ...item,
-                        sortIndex:
-                          typeof item.sortIndex === 'number' ? item.sortIndex : SUBTASK_SORT_STEP,
-                      }))
-                    : [],
+              // Snapshot is authoritative: do not resurrect subtasks when it is empty
+              subtasks: normalizedSubtasks,
             }
           }),
         }
