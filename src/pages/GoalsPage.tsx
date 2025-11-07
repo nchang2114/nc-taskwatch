@@ -1825,15 +1825,40 @@ const MilestoneLayer: React.FC<{
   }, [sorted, collapsed, expandedMap])
 
   type Placement = { side: 'top' | 'bottom'; lane: 0 | 1 }
-  const placements = useMemo<Record<string, Placement>>(() => {
-    const result: Record<string, Placement> = {}
+  // Preserve prior lane placement so labels don't reshuffle when toggling visibility
+  const placementRef = useRef<Record<string, Placement>>({})
+  const [placements, setPlacements] = useState<Record<string, Placement>>({})
+
+  useEffect(() => {
     const tWidth = trackWidth || trackWidthRef.current || 0
-    if (tWidth <= 0) return result
-    // Rightmost occupied x for each lane
+    // If we can't measure yet, keep whatever we had (prevents jitter)
+    if (tWidth <= 0) {
+      setPlacements((cur) => cur)
+      return
+    }
+
     const gap = 8 // px minimum spacing between cards on the same lane
     const topRight: number[] = [-Infinity, -Infinity]
     const botRight: number[] = [-Infinity, -Infinity]
     const visible = sorted.filter((m) => expandedMap[m.id] !== false)
+    const result: Record<string, Placement> = { ...placementRef.current }
+
+    // Helpers
+    const tryPlaceIn = (
+      side: 'top' | 'bottom',
+      lane: 0 | 1,
+      left: number,
+      right: number,
+    ): boolean => {
+      const lanes = side === 'top' ? topRight : botRight
+      if (left >= lanes[lane] + gap) {
+        lanes[lane] = right
+        return true
+      }
+      return false
+    }
+
+    // Place visible labels in chronological order, preferring prior lane placement
     visible.forEach((m, idx) => {
       const preferTop = idx % 2 === 0
       const pct = posPct(m.date)
@@ -1841,33 +1866,50 @@ const MilestoneLayer: React.FC<{
       const w = labelWidths[m.id] ?? 120
       const left = x - w / 2
       const right = x + w / 2
-      const tryPlace = (side: 'top' | 'bottom'): Placement | null => {
-        const lanes = side === 'top' ? topRight : botRight
-        for (let lane = 0 as 0 | 1; lane < 2; lane = (lane + 1) as 0 | 1) {
-          if (left >= lanes[lane] + gap) {
-            lanes[lane] = right
-            return { side, lane }
-          }
+
+      const prev = placementRef.current[m.id]
+      // 1) Try to keep previous placement exactly
+      if (prev && tryPlaceIn(prev.side, prev.lane, left, right)) {
+        result[m.id] = prev
+        return
+      }
+      // 2) Try other lane on the same side as previous
+      if (prev) {
+        const altLane = (prev.lane === 0 ? 1 : 0) as 0 | 1
+        if (tryPlaceIn(prev.side, altLane, left, right)) {
+          result[m.id] = { side: prev.side, lane: altLane }
+          return
         }
-        return null
       }
-      let placed: Placement | null = null
-      if (preferTop) {
-        placed = tryPlace('top') ?? tryPlace('bottom')
-      } else {
-        placed = tryPlace('bottom') ?? tryPlace('top')
+      // 3) Try the preferred side (alternating default) both lanes
+      const preferSide: 'top' | 'bottom' = preferTop ? 'top' : 'bottom'
+      if (tryPlaceIn(preferSide, 0, left, right)) {
+        result[m.id] = { side: preferSide, lane: 0 }
+        return
       }
-      if (!placed) {
-        // Fall back to the lane with the smallest right edge to minimize overlap
-        const side = preferTop ? 'top' : 'bottom'
-        const lanes = side === 'top' ? topRight : botRight
-        const lane = (lanes[0] <= lanes[1] ? 0 : 1) as 0 | 1
-        lanes[lane] = right
-        placed = { side, lane }
+      if (tryPlaceIn(preferSide, 1, left, right)) {
+        result[m.id] = { side: preferSide, lane: 1 }
+        return
       }
-      result[m.id] = placed
+      // 4) Try the opposite side both lanes
+      const otherSide: 'top' | 'bottom' = preferTop ? 'bottom' : 'top'
+      if (tryPlaceIn(otherSide, 0, left, right)) {
+        result[m.id] = { side: otherSide, lane: 0 }
+        return
+      }
+      if (tryPlaceIn(otherSide, 1, left, right)) {
+        result[m.id] = { side: otherSide, lane: 1 }
+        return
+      }
+      // 5) Fall back to lane with the smallest right edge on preferred side
+      const lanes = preferSide === 'top' ? topRight : botRight
+      const lane = (lanes[0] <= lanes[1] ? 0 : 1) as 0 | 1
+      lanes[lane] = right
+      result[m.id] = { side: preferSide, lane }
     })
-    return result
+
+    placementRef.current = result
+    setPlacements(result)
   }, [sorted, labelWidths, trackWidth, expandedMap])
 
   return (
