@@ -1443,6 +1443,7 @@ const MilestoneLayer: React.FC<{
   const dateEditRef = useRef<HTMLInputElement | null>(null)
   const editingNameSnapshotRef = useRef<string | null>(null)
   const editingLiveNameRef = useRef<string>('')
+  const [collapsed, setCollapsed] = useState<boolean>(false)
   // Track current milestones live for robust dragging math during reorders
   const milestonesRef = useRef<Milestone[]>([])
   useEffect(() => { milestonesRef.current = milestones }, [milestones])
@@ -1725,6 +1726,7 @@ const MilestoneLayer: React.FC<{
 
   // Measure track width and label widths to assign to 4 tracks (2 above, 2 below)
   useLayoutEffect(() => {
+    if (collapsed) return
     const parsePx = (s: string | null | undefined): number => {
       if (!s) return 0
       const n = Number(String(s).trim().replace('px', ''))
@@ -1800,7 +1802,7 @@ const MilestoneLayer: React.FC<{
       if (observers.length) observers.forEach((o) => o.disconnect())
       else if (typeof window !== 'undefined') window.removeEventListener('resize', measure)
     }
-  }, [sorted])
+  }, [sorted, collapsed])
 
   type Placement = { side: 'top' | 'bottom'; lane: 0 | 1 }
   const placements = useMemo<Record<string, Placement>>(() => {
@@ -1850,9 +1852,25 @@ const MilestoneLayer: React.FC<{
   return (
     <>
       <div className="milestones__header">
-        <h4 className="goal-subheading">Milestone Layer</h4>
-        <button className="milestones__add" type="button" onClick={addMilestone}>+ Add Milestone</button>
+        <div className="flex items-center gap-1.5">
+          <h4 className="goal-subheading">Milestone Layer</h4>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center h-6 w-6 rounded-md hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
+            onClick={() => setCollapsed((v) => !v)}
+            aria-label={collapsed ? 'Expand Milestone Layer' : 'Collapse Milestone Layer'}
+            aria-expanded={!collapsed}
+          >
+            <svg className={classNames('w-4 h-4 goal-chevron-icon transition-transform', !collapsed && 'rotate-90')} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M8.47 4.97a.75.75 0 011.06 0l6 6a.75.75 0 010 1.06l-6 6a.75.75 0 11-1.06-1.06L13.94 12 8.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd"/>
+            </svg>
+          </button>
+        </div>
+        {!collapsed ? (
+          <button className="milestones__add" type="button" onClick={addMilestone}>+ Add Milestone</button>
+        ) : null}
       </div>
+      {!collapsed ? (
       <div className="milestones" aria-label="Milestone timeline">
         <div className="milestones__track" ref={trackRef}>
         <div className="milestones__line" />
@@ -2020,6 +2038,7 @@ const MilestoneLayer: React.FC<{
         })}
         </div>
       </div>
+      ) : null}
     </>
   )
 }
