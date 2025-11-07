@@ -1548,6 +1548,7 @@ html[data-theme='light'] .milestones__mini-date {
   justify-items: start; /* left-align contents inside card */
   row-gap: 0.1rem; /* tighter vertical rhythm */
   width: fit-content;
+  min-width: 11ch; /* keep text readable, avoid single-letter wrapping */
   max-width: 16ch; /* slightly longer card for icon spacing */
   box-sizing: border-box;
 }

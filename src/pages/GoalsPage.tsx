@@ -1427,6 +1427,8 @@ const ensureDefaultMilestones = (goal: Goal, current: Milestone[]): Milestone[] 
 }
 
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n))
+// Minimum readable width for milestone labels (px).
+const MIN_MILESTONE_LABEL_PX = 120
 
 const MilestoneLayer: React.FC<{
   goal: Goal
@@ -1438,6 +1440,16 @@ const MilestoneLayer: React.FC<{
   const labelRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const stemRefs = useRef<Record<string, HTMLSpanElement | null>>({})
   const [labelWidths, setLabelWidths] = useState<Record<string, number>>({})
+  const [labelHeights, setLabelHeights] = useState<Record<string, number>>({})
+  // Dynamic lane spacing to guarantee no vertical overlap across lanes
+  const laneStepPxRef = useRef<number>(0)
+  const baseOffsetPxRef = useRef<number>(0)
+  const [laneStepPxState, setLaneStepPxState] = useState<number>(0)
+  // Cap lanes per side based on available vertical space
+  const maxLanesPerSideRef = useRef<number>(2)
+  const [maxLanesPerSideState, setMaxLanesPerSideState] = useState<number>(2)
+  // Remember previous right edge per label for width clamping
+  const [prevRightPxById, setPrevRightPxById] = useState<Record<string, number>>({})
   const [editing, setEditing] = useState<null | { id: string; field: 'name' | 'date' }>(null)
   const nameEditRef = useRef<HTMLDivElement | null>(null)
   const dateEditRef = useRef<HTMLInputElement | null>(null)
@@ -1747,7 +1759,7 @@ const MilestoneLayer: React.FC<{
     window.addEventListener('pointerup', up)
   }
 
-  // Measure track width and label widths to assign to 4 tracks (2 above, 2 below)
+  // Measure track width and label sizes; compute lane spacing; size stems to labels
   useLayoutEffect(() => {
     if (collapsed) return
     const parsePx = (s: string | null | undefined): number => {
@@ -1761,14 +1773,17 @@ const MilestoneLayer: React.FC<{
       trackWidthRef.current = w
       setTrackWidth(w)
       const widths: Record<string, number> = {}
+      const heights: Record<string, number> = {}
       for (const m of sorted) {
         if (expandedMap[m.id] === false) continue
         const el = labelRefs.current[m.id]
         if (el) {
           widths[m.id] = el.offsetWidth || 0
+          heights[m.id] = el.offsetHeight || 0
         }
       }
       setLabelWidths(widths)
+      setLabelHeights(heights)
 
       // Dynamically size stems to connect node to card edge
       const trackEl = trackRef.current
@@ -1777,6 +1792,29 @@ const MilestoneLayer: React.FC<{
       const centerY = trackRect.top + trackRect.height / 2
       const styles = getComputedStyle(trackEl)
       const clearance = parsePx(styles.getPropertyValue('--ms-node-clearance')) || 0
+      const msConnector = parsePx(styles.getPropertyValue('--ms-connector')) || 34
+      const msGap = parsePx(styles.getPropertyValue('--ms-gap')) || 6
+      // Compute lane step: ensure vertical separation >= tallest visible card + 12px
+      let maxH = 0
+      for (const id of Object.keys(heights)) {
+        if (heights[id] > maxH) maxH = heights[id]
+      }
+      const computedLaneStep = Math.max(msConnector, maxH + 12)
+      laneStepPxRef.current = computedLaneStep
+      baseOffsetPxRef.current = msConnector + msGap
+      setLaneStepPxState(computedLaneStep)
+
+      // Compute the maximum number of non-overlapping lanes that can fit per side
+      const halfTrackH = (trackEl.clientHeight || 0) / 2
+      const maxOffsetAllowed = Math.max(0, halfTrackH - maxH - 2)
+      const base = baseOffsetPxRef.current
+      let cap = 1
+      if (base <= maxOffsetAllowed) {
+        cap = Math.floor((maxOffsetAllowed - base) / computedLaneStep) + 1
+        cap = Math.max(1, cap)
+      }
+      maxLanesPerSideRef.current = cap
+      setMaxLanesPerSideState(cap)
 
       for (const m of sorted) {
         const labelEl = labelRefs.current[m.id]
@@ -1858,7 +1896,7 @@ const MilestoneLayer: React.FC<{
     }
   }, [sorted, collapsed, expandedMap])
 
-  type Placement = { side: 'top' | 'bottom'; lane: 0 | 1 }
+  type Placement = { side: 'top' | 'bottom'; lane: number }
   // Preserve prior lane placement so labels don't reshuffle when toggling visibility
   const placementRef = useRef<Record<string, Placement>>({})
   const [placements, setPlacements] = useState<Record<string, Placement>>({})
@@ -1872,24 +1910,28 @@ const MilestoneLayer: React.FC<{
     }
 
     const gap = 8 // px minimum spacing between cards on the same lane
-    const topRight: number[] = [-Infinity, -Infinity]
-    const botRight: number[] = [-Infinity, -Infinity]
+    const topRight: number[] = []
+    const botRight: number[] = []
     const visible = sorted.filter((m) => expandedMap[m.id] !== false)
     const result: Record<string, Placement> = { ...placementRef.current }
+    const prevRightMap: Record<string, number> = {}
+    const cap = maxLanesPerSideRef.current || maxLanesPerSideState || 2
 
     // Helpers
-    const tryPlaceIn = (
+    const attemptPlace = (
       side: 'top' | 'bottom',
-      lane: 0 | 1,
+      lane: number,
       left: number,
       right: number,
-    ): boolean => {
+    ): { placed: boolean; prevRight: number } => {
       const lanes = side === 'top' ? topRight : botRight
-      if (left >= lanes[lane] + gap) {
+      if (lane < 0 || lane >= cap) return { placed: false, prevRight: -Infinity }
+      const prevRight = Number.isFinite(lanes[lane]) ? lanes[lane] : -Infinity
+      if (left >= prevRight + gap) {
         lanes[lane] = right
-        return true
+        return { placed: true, prevRight }
       }
-      return false
+      return { placed: false, prevRight }
     }
 
     // Place visible labels in chronological order, preferring prior lane placement
@@ -1903,48 +1945,80 @@ const MilestoneLayer: React.FC<{
 
       const prev = placementRef.current[m.id]
       // 1) Try to keep previous placement exactly
-      if (prev && tryPlaceIn(prev.side, prev.lane, left, right)) {
-        result[m.id] = prev
-        return
-      }
-      // 2) Try other lane on the same side as previous
       if (prev) {
-        const altLane = (prev.lane === 0 ? 1 : 0) as 0 | 1
-        if (tryPlaceIn(prev.side, altLane, left, right)) {
-          result[m.id] = { side: prev.side, lane: altLane }
+        const prevLane = Math.min(prev.lane, cap - 1)
+        const res = attemptPlace(prev.side, prevLane, left, right)
+        if (res.placed) {
+          result[m.id] = { side: prev.side, lane: prevLane }
+          prevRightMap[m.id] = res.prevRight
           return
         }
       }
-      // 3) Try the preferred side (alternating default) both lanes
+      // 2) Try other lane on the same side as previous
+      if (prev) {
+        for (let lane = 0; lane < cap; lane += 1) {
+          if (lane === prev.lane) continue
+          const res = attemptPlace(prev.side, lane, left, right)
+          if (res.placed) {
+            result[m.id] = { side: prev.side, lane }
+            prevRightMap[m.id] = res.prevRight
+            return
+          }
+        }
+      }
+      // 3) Try the preferred side (alternating default), existing lanes first
       const preferSide: 'top' | 'bottom' = preferTop ? 'top' : 'bottom'
-      if (tryPlaceIn(preferSide, 0, left, right)) {
-        result[m.id] = { side: preferSide, lane: 0 }
-        return
+      {
+        for (let lane = 0; lane < cap; lane += 1) {
+          const res = attemptPlace(preferSide, lane, left, right)
+          if (res.placed) {
+            result[m.id] = { side: preferSide, lane }
+            prevRightMap[m.id] = res.prevRight
+            return
+          }
+        }
       }
-      if (tryPlaceIn(preferSide, 1, left, right)) {
-        result[m.id] = { side: preferSide, lane: 1 }
-        return
-      }
-      // 4) Try the opposite side both lanes
+      // 4) Try the opposite side existing lanes
       const otherSide: 'top' | 'bottom' = preferTop ? 'bottom' : 'top'
-      if (tryPlaceIn(otherSide, 0, left, right)) {
-        result[m.id] = { side: otherSide, lane: 0 }
-        return
+      {
+        for (let lane = 0; lane < cap; lane += 1) {
+          const res = attemptPlace(otherSide, lane, left, right)
+          if (res.placed) {
+            result[m.id] = { side: otherSide, lane }
+            prevRightMap[m.id] = res.prevRight
+            return
+          }
+        }
       }
-      if (tryPlaceIn(otherSide, 1, left, right)) {
-        result[m.id] = { side: otherSide, lane: 1 }
-        return
+      // 5) No fit without overlap — choose lane (across both sides) with minimal overlap
+      let bestSide: 'top' | 'bottom' = preferSide
+      let bestLane = 0
+      let bestPenalty = Number.POSITIVE_INFINITY
+      const evalSide = (side: 'top' | 'bottom') => {
+        const lanesArr = side === 'top' ? topRight : botRight
+        for (let lane = 0; lane < cap; lane += 1) {
+          const lastRight = Number.isFinite(lanesArr[lane]) ? lanesArr[lane] : -Infinity
+          const penalty = Math.max(0, (lastRight + gap) - left)
+          if (penalty < bestPenalty) {
+            bestPenalty = penalty
+            bestSide = side
+            bestLane = lane
+          }
+        }
       }
-      // 5) Fall back to lane with the smallest right edge on preferred side
-      const lanes = preferSide === 'top' ? topRight : botRight
-      const lane = (lanes[0] <= lanes[1] ? 0 : 1) as 0 | 1
-      lanes[lane] = right
-      result[m.id] = { side: preferSide, lane }
+      evalSide(preferSide)
+      evalSide(otherSide)
+      const lanesTarget = bestSide === 'top' ? topRight : botRight
+      const prevR = Number.isFinite(lanesTarget[bestLane]) ? lanesTarget[bestLane] : -Infinity
+      prevRightMap[m.id] = prevR
+      lanesTarget[bestLane] = right
+      result[m.id] = { side: bestSide, lane: bestLane }
     })
 
     placementRef.current = result
     setPlacements(result)
-  }, [sorted, labelWidths, trackWidth, expandedMap])
+    setPrevRightPxById(prevRightMap)
+  }, [sorted, labelWidths, trackWidth, expandedMap, maxLanesPerSideState])
 
   return (
     <>
@@ -2007,10 +2081,42 @@ const MilestoneLayer: React.FC<{
           const isStart = m.role === 'start'
           const isLatest = m.id === latestId
           const isOnlyNonStart = !isStart && onlyNonStartId === m.id
-          const placement = placements[m.id] ?? { side: (idx % 2 === 0 ? 'top' : 'bottom'), lane: 0 as 0 | 1 }
+          const placement = placements[m.id] ?? { side: (idx % 2 === 0 ? 'top' : 'bottom'), lane: 0 }
           const isTop = placement.side === 'top'
-          const laneClass = placement.lane === 0 ? 'lane-0' : 'lane-1'
+          const laneIndex = placement.lane || 0
           const isExpanded = expandedMap[m.id] !== false
+          const laneStep = laneStepPxRef.current || laneStepPxState || 0
+          const baseOffset = baseOffsetPxRef.current || 0
+          const hasOffset = laneStep > 0 && baseOffset > 0
+          const offset = hasOffset ? baseOffset + laneIndex * laneStep : 0
+          // Clamp offset so labels never exceed the milestones track bounds.
+          const trackEl = trackRef.current
+          const labelHeight = labelHeights[m.id] || 0
+          const halfTrack = trackEl ? (trackEl.clientHeight || 0) / 2 : 0
+          const maxOffset = Math.max(0, halfTrack - labelHeight - 2)
+          const safeOffset = hasOffset ? Math.min(offset, maxOffset) : 0
+          // Constrain horizontal size so cards never extend beyond the track.
+          const tWidth = trackWidthRef.current || trackWidth || 0
+          const xPx = (pct / 100) * tWidth
+          const maxWFit = Math.max(0, Math.floor(2 * Math.min(xPx, tWidth - xPx) - 8))
+          // Keep labels readable: enforce a minimum width when possible
+          const minW = Math.min(MIN_MILESTONE_LABEL_PX, maxWFit)
+          // Reduce overlap with previous only if it doesn't violate min width
+          const prevRightPx = prevRightPxById[m.id]
+          const gapPx = 8
+          let maxW = maxWFit
+          if (Number.isFinite(prevRightPx)) {
+            const maxWPrev = Math.max(0, Math.floor(2 * Math.max(0, xPx - ((prevRightPx as number) + gapPx))))
+            if (maxWPrev >= minW) {
+              maxW = Math.min(maxWFit || Infinity, maxWPrev)
+            } else {
+              // Keep readability; allow overlap rather than squeezing too much
+              maxW = maxWFit
+            }
+          }
+          const labelStyle = hasOffset
+            ? (isTop ? { bottom: `${safeOffset}px` } : { top: `${safeOffset}px` })
+            : undefined
           return (
             <div key={m.id} className="milestones__node-wrap" style={{ left: `${pct}%` }}>
               <button
@@ -2028,13 +2134,18 @@ const MilestoneLayer: React.FC<{
                   <>
                     <span
                       ref={(el) => { stemRefs.current[m.id] = el }}
-                      className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down', laneClass)}
+                      className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down')}
                       onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart) beginDrag(m.id, ev) }}
                       aria-hidden={true}
                     />
                     <div
                       ref={(el) => { labelRefs.current[m.id] = el }}
-                      className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom', laneClass)}
+                      className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom')}
+                      style={{
+                        ...(labelStyle || {}),
+                        minWidth: minW > 0 ? `${minW}px` : undefined,
+                        maxWidth: Number.isFinite(maxW) && maxW > 0 ? `${maxW}px` : undefined,
+                      }}
                     >
                   <div
                     className="milestones__card"
