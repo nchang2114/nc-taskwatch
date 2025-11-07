@@ -1438,16 +1438,9 @@ const MilestoneLayer: React.FC<{
   const trackWidthRef = useRef<number>(0)
   const [trackWidth, setTrackWidth] = useState<number>(0)
   const labelRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const stemRefs = useRef<Record<string, HTMLSpanElement | null>>({})
   const [labelWidths, setLabelWidths] = useState<Record<string, number>>({})
-  const [labelHeights, setLabelHeights] = useState<Record<string, number>>({})
-  // Dynamic lane spacing to guarantee no vertical overlap across lanes
-  const laneStepPxRef = useRef<number>(0)
-  const baseOffsetPxRef = useRef<number>(0)
-  const [laneStepPxState, setLaneStepPxState] = useState<number>(0)
-  // Cap lanes per side based on available vertical space
-  const maxLanesPerSideRef = useRef<number>(2)
-  const [maxLanesPerSideState, setMaxLanesPerSideState] = useState<number>(2)
   // Remember previous right edge per label for width clamping
   const [prevRightPxById, setPrevRightPxById] = useState<Record<string, number>>({})
   const [editing, setEditing] = useState<null | { id: string; field: 'name' | 'date' }>(null)
@@ -1457,6 +1450,8 @@ const MilestoneLayer: React.FC<{
   const editingLiveNameRef = useRef<string>('')
   const [collapsed, setCollapsed] = useState<boolean>(false)
   const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({})
+  // Timeline view mode: scaled (time-based) vs unscaled (equidistant nodes)
+  const [timelineScaled, setTimelineScaled] = useState<boolean>(true)
   // Track current milestones live for robust dragging math during reorders
   const milestonesRef = useRef<Milestone[]>([])
   useEffect(() => { milestonesRef.current = milestones }, [milestones])
@@ -1694,7 +1689,28 @@ const MilestoneLayer: React.FC<{
 
   // Today indicator position along the track
   const todayIso = useMemo(() => toStartOfDayIso(new Date()), [])
-  const todayPct = posPct(todayIso)
+  const todayPct = useMemo(() => {
+    if (timelineScaled) return posPct(todayIso)
+    const n = sorted.length
+    if (n <= 1) return 0
+    const times = sorted.map((m) => new Date(m.date).getTime())
+    const t = new Date(todayIso).getTime()
+    if (t <= times[0]) return 0
+    if (t >= times[n - 1]) return 100
+    // find bracketing indices i < j such that times[i] <= t <= times[j]
+    let i = 0
+    for (let k = 0; k < n - 1; k += 1) {
+      if (t >= times[k] && t <= times[k + 1]) { i = k; break }
+    }
+    const j = Math.min(i + 1, n - 1)
+    const prev = times[i]
+    const next = times[j]
+    const span = Math.max(1, next - prev)
+    const frac = Math.max(0, Math.min(1, (t - prev) / span))
+    const pctPrev = (i / (n - 1)) * 100
+    const pctNext = (j / (n - 1)) * 100
+    return pctPrev + (pctNext - pctPrev) * frac
+  }, [timelineScaled, todayIso, sorted, posPct])
   const [todaySide, setTodaySide] = useState<'top' | 'bottom'>('top')
 
   // Determine if exactly one non-start milestone exists
@@ -1784,70 +1800,37 @@ const MilestoneLayer: React.FC<{
   // Measure track width and label sizes; compute lane spacing; size stems to labels
   useLayoutEffect(() => {
     if (collapsed) return
-    const parsePx = (s: string | null | undefined): number => {
-      if (!s) return 0
-      const n = Number(String(s).trim().replace('px', ''))
-      return Number.isFinite(n) ? n : 0
-    }
-
     const measure = () => {
       const w = trackRef.current?.clientWidth ?? 0
       trackWidthRef.current = w
       setTrackWidth(w)
       const widths: Record<string, number> = {}
-      const heights: Record<string, number> = {}
       for (const m of sorted) {
         if (expandedMap[m.id] === false) continue
         const el = labelRefs.current[m.id]
         if (el) {
           widths[m.id] = el.offsetWidth || 0
-          heights[m.id] = el.offsetHeight || 0
         }
       }
       setLabelWidths(widths)
-      setLabelHeights(heights)
 
-      // Dynamically size stems to connect node to card edge
+      // Use fixed 4-track CSS geometry; dynamically size stems to card edge
       const trackEl = trackRef.current
       if (!trackEl) return
       const trackRect = trackEl.getBoundingClientRect()
       const centerY = trackRect.top + trackRect.height / 2
       const styles = getComputedStyle(trackEl)
-      const clearance = parsePx(styles.getPropertyValue('--ms-node-clearance')) || 0
-      const msConnector = parsePx(styles.getPropertyValue('--ms-connector')) || 34
-      const msGap = parsePx(styles.getPropertyValue('--ms-gap')) || 6
-      // Compute lane step: ensure vertical separation >= tallest visible card + 12px
-      let maxH = 0
-      for (const id of Object.keys(heights)) {
-        if (heights[id] > maxH) maxH = heights[id]
-      }
-      const computedLaneStep = Math.max(msConnector, maxH + 12)
-      laneStepPxRef.current = computedLaneStep
-      baseOffsetPxRef.current = msConnector + msGap
-      setLaneStepPxState(computedLaneStep)
-
-      // Compute the maximum number of non-overlapping lanes that can fit per side
-      const halfTrackH = (trackEl.clientHeight || 0) / 2
-      const maxOffsetAllowed = Math.max(0, halfTrackH - maxH - 2)
-      const base = baseOffsetPxRef.current
-      let cap = 1
-      if (base <= maxOffsetAllowed) {
-        cap = Math.floor((maxOffsetAllowed - base) / computedLaneStep) + 1
-        cap = Math.max(1, cap)
-      }
-      maxLanesPerSideRef.current = cap
-      setMaxLanesPerSideState(cap)
+      const clearance = Number((styles.getPropertyValue('--ms-node-clearance') || '0').replace('px', '').trim()) || 0
 
       for (const m of sorted) {
-        const labelEl = labelRefs.current[m.id]
+        const cardEl = cardRefs.current[m.id]
         const stemEl = stemRefs.current[m.id]
-        if (!labelEl || !stemEl) continue
-        const r = labelEl.getBoundingClientRect()
+        if (!cardEl || !stemEl) continue
+        const r = cardEl.getBoundingClientRect()
         const isTop = r.bottom < centerY
         if (isTop) {
           const distance = Math.max(0, centerY - r.bottom)
           const height = Math.max(0, distance - clearance)
-          // For up stems: top is negative distance; height excludes clearance so bottom ends at -clearance
           stemEl.style.top = `${-distance}px`
           stemEl.style.height = `${height}px`
         } else {
@@ -1898,10 +1881,10 @@ const MilestoneLayer: React.FC<{
         roTrack.observe(trackRef.current)
         observers.push(roTrack)
       }
-      // Observe each label for dynamic height changes
+      // Observe each card for dynamic size changes
       for (const m of sorted) {
         if (expandedMap[m.id] === false) continue
-        const el = labelRefs.current[m.id]
+        const el = cardRefs.current[m.id]
         if (el) {
           const ro = new ResizeObserver(() => measure())
           ro.observe(el)
@@ -1916,7 +1899,7 @@ const MilestoneLayer: React.FC<{
       if (observers.length) observers.forEach((o) => o.disconnect())
       else if (typeof window !== 'undefined') window.removeEventListener('resize', measure)
     }
-  }, [sorted, collapsed, expandedMap])
+  }, [sorted, collapsed, expandedMap, todayPct])
 
   type Placement = { side: 'top' | 'bottom'; lane: number }
   // Preserve prior lane placement so labels don't reshuffle when toggling visibility
@@ -1937,7 +1920,12 @@ const MilestoneLayer: React.FC<{
     const visible = sorted.filter((m) => expandedMap[m.id] !== false)
     const result: Record<string, Placement> = { ...placementRef.current }
     const prevRightMap: Record<string, number> = {}
-    const cap = maxLanesPerSideRef.current || maxLanesPerSideState || 2
+    // Use 4-track logic: 2 lanes per side
+    const cap = 2
+
+    // Precompute index of each id in full sorted order for unscaled positioning
+    const indexMap: Record<string, number> = {}
+    for (let i = 0; i < sorted.length; i += 1) indexMap[sorted[i].id] = i
 
     // Helpers
     const attemptPlace = (
@@ -1959,7 +1947,10 @@ const MilestoneLayer: React.FC<{
     // Place visible labels in chronological order, preferring prior lane placement
     visible.forEach((m, idx) => {
       const preferTop = idx % 2 === 0
-      const pct = posPct(m.date)
+      const idxAll = indexMap[m.id] ?? idx
+      const pct = timelineScaled
+        ? posPct(m.date)
+        : (sorted.length <= 1 ? 0 : (idxAll / (sorted.length - 1)) * 100)
       const x = (pct / 100) * tWidth
       const w = labelWidths[m.id] ?? 120
       const left = x - w / 2
@@ -2040,37 +2031,9 @@ const MilestoneLayer: React.FC<{
     placementRef.current = result
     setPlacements(result)
     setPrevRightPxById(prevRightMap)
-  }, [sorted, labelWidths, trackWidth, expandedMap, maxLanesPerSideState])
+  }, [sorted, labelWidths, trackWidth, expandedMap, timelineScaled])
 
-  // Compute per-side lane spacing that fits within the milestones track
-  const laneSpread = (() => {
-    const tEl = trackRef.current
-    const halfTrackH = tEl ? (tEl.clientHeight || 0) / 2 : 0
-    const laneStepWanted = laneStepPxRef.current || laneStepPxState || 0
-    const base = baseOffsetPxRef.current || 0
-    // Tally visible lanes and tallest label per side
-    let topCount = 0
-    let botCount = 0
-    let maxTopH = 0
-    let maxBotH = 0
-    for (const [id, pl] of Object.entries(placements)) {
-      if (expandedMap[id] === false) continue
-      const h = labelHeights[id] || 0
-      if (pl.side === 'top') {
-        topCount = Math.max(topCount, (pl.lane || 0) + 1)
-        maxTopH = Math.max(maxTopH, h)
-      } else if (pl.side === 'bottom') {
-        botCount = Math.max(botCount, (pl.lane || 0) + 1)
-        maxBotH = Math.max(maxBotH, h)
-      }
-    }
-    const margin = 2
-    const maxTopOffset = Math.max(0, halfTrackH - maxTopH - margin)
-    const maxBotOffset = Math.max(0, halfTrackH - maxBotH - margin)
-    const topStep = topCount > 1 ? Math.max(12, Math.min(laneStepWanted, (maxTopOffset - base) / Math.max(1, (topCount - 1)))) : laneStepWanted
-    const botStep = botCount > 1 ? Math.max(12, Math.min(laneStepWanted, (maxBotOffset - base) / Math.max(1, (botCount - 1)))) : laneStepWanted
-    return { topStep, botStep, base }
-  })()
+  // Using 4-track layout (2 lanes per side) via CSS classes; no dynamic lane spacing needed
 
   return (
     <>
@@ -2095,6 +2058,18 @@ const MilestoneLayer: React.FC<{
       </div>
       {!collapsed ? (
       <div className="milestones" aria-label="Milestone timeline">
+        {/* Single toggle in top-right corner of milestones */}
+        <div className="milestones__view-toggle" role="group" aria-label="Timeline view">
+          <button
+            type="button"
+            className={classNames('milestones__view-btn', !timelineScaled && 'is-active')}
+            aria-pressed={!timelineScaled}
+            onClick={() => setTimelineScaled((v) => !v)}
+            title={timelineScaled ? 'Switch to Unscaled (even spacing)' : 'Switch to Scaled (time-based)'}
+          >
+            {timelineScaled ? 'Unscaled' : 'Scaled'}
+          </button>
+        </div>
         <div className="milestones__track" ref={trackRef}>
         <div className="milestones__line" />
         {(() => {
@@ -2129,24 +2104,15 @@ const MilestoneLayer: React.FC<{
           <span className="milestones__today-dot" aria-hidden="true" />
         </div>
           {sorted.map((m, idx) => {
-          const pct = posPct(m.date)
+          const pct = timelineScaled ? posPct(m.date) : (sorted.length <= 1 ? 0 : (idx / (sorted.length - 1)) * 100)
           const isStart = m.role === 'start'
           const isLatest = m.id === latestId
           const isOnlyNonStart = !isStart && onlyNonStartId === m.id
           const placement = placements[m.id] ?? { side: (idx % 2 === 0 ? 'top' : 'bottom'), lane: 0 }
           const isTop = placement.side === 'top'
-          const laneIndex = placement.lane || 0
+          const laneIndex = placement.lane === 1 ? 1 : 0
+          const laneClass = laneIndex === 0 ? 'lane-0' : 'lane-1'
           const isExpanded = expandedMap[m.id] !== false
-          const laneStep = isTop ? laneSpread.topStep : laneSpread.botStep
-          const baseOffset = laneSpread.base
-          const hasOffset = laneStep > 0 && baseOffset > 0
-          const offset = hasOffset ? baseOffset + laneIndex * laneStep : 0
-          // Clamp offset so labels never exceed the milestones track bounds.
-          const trackEl = trackRef.current
-          const labelHeight = labelHeights[m.id] || 0
-          const halfTrack = trackEl ? (trackEl.clientHeight || 0) / 2 : 0
-          const maxOffset = Math.max(0, halfTrack - labelHeight - 2)
-          const safeOffset = hasOffset ? Math.min(offset, maxOffset) : 0
           // Constrain horizontal size so cards never extend beyond the track.
           const tWidth = trackWidthRef.current || trackWidth || 0
           const xPx = (pct / 100) * tWidth
@@ -2166,9 +2132,6 @@ const MilestoneLayer: React.FC<{
               maxW = maxWFit
             }
           }
-          const labelStyle = hasOffset
-            ? (isTop ? { bottom: `${safeOffset}px` } : { top: `${safeOffset}px` })
-            : undefined
           return (
             <div key={m.id} className="milestones__node-wrap" style={{ left: `${pct}%` }}>
               <button
@@ -2179,27 +2142,27 @@ const MilestoneLayer: React.FC<{
                   ev.preventDefault(); ev.stopPropagation()
                   setExpandedMap((prev) => ({ ...prev, [m.id]: !(prev[m.id] ?? true) }))
                 }}
-                onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart) beginDrag(m.id, ev) }}
+                onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart && timelineScaled) beginDrag(m.id, ev) }}
                 aria-label={`${m.name} ${formatShort(m.date)}${m.completed ? ' (completed)' : ''}`}
               />
                 {isExpanded ? (
                   <>
                     <span
                       ref={(el) => { stemRefs.current[m.id] = el }}
-                      className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down')}
-                      onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart) beginDrag(m.id, ev) }}
+                      className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down', laneClass)}
+                      onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart && timelineScaled) beginDrag(m.id, ev) }}
                       aria-hidden={true}
                     />
                     <div
                       ref={(el) => { labelRefs.current[m.id] = el }}
-                      className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom')}
+                      className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom', laneClass)}
                       style={{
-                        ...(labelStyle || {}),
                         minWidth: minW > 0 ? `${minW}px` : undefined,
                         maxWidth: Number.isFinite(maxW) && maxW > 0 ? `${maxW}px` : undefined,
                       }}
                     >
                   <div
+                    ref={(el) => { cardRefs.current[m.id] = el }}
                     className="milestones__card"
                     onClick={(ev) => {
                       if (isStart) return

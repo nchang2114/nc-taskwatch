@@ -1254,6 +1254,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 }
 /* --- Milestones Layer --- */
 .milestones {
+  position: relative;
   border-radius: 0.9rem;
   border: 1px solid rgba(148, 163, 255, 0.28);
   background: rgba(18, 26, 72, 0.42);
@@ -1308,6 +1309,33 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   width: 87.5%;
   margin-left: auto;
   margin-right: auto;
+}
+.milestones__view-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  gap: 0;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 163, 255, 0.35);
+  background: rgba(12, 18, 56, 0.5);
+  box-shadow: 0 6px 14px -10px rgba(2, 6, 28, 0.6);
+  overflow: hidden;
+  z-index: 5;
+}
+.milestones__view-btn {
+  font-size: 0.7rem;
+  padding: 0.24rem 0.55rem;
+  color: rgba(235, 242, 255, 0.9);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.milestones__view-btn + .milestones__view-btn {
+  border-left: 1px solid rgba(148, 163, 255, 0.28);
+}
+.milestones__view-btn.is-active {
+  background: linear-gradient(135deg, rgba(59,130,246,0.35), rgba(99,102,241,0.35));
 }
 .milestones__line {
   position: absolute;
