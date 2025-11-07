@@ -1264,7 +1264,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   /* Milestone connector geometry */
   --ms-connector: 34px; /* shorter connector length for a more compact timeline */
   --ms-gap: 6px;
-  --ms-node-clearance: 8px; /* space between node ring and vertical stem (smaller nodes) */
+  --ms-node-clearance: 9px; /* space between node ring and vertical stem (slightly larger nodes) */
   --ms-node-bg: #0f1a48; /* inner fill used to mask lines for hollow node */
   --ms-node-inner: var(--ms-node-bg); /* inner disk color (changes on complete) */
   /* Today bubble theme tokens */
@@ -1335,7 +1335,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 .milestones__today-stem, .milestones__today-arrow { display: none; }
 
 /* solid node on the line */
-.milestones__today-dot { position: absolute; left: 50%; transform: translateX(-50%); top: -4px; width: 8px; height: 8px; border-radius: 999px; background: linear-gradient(135deg, #9fc2ff, #6ea1ff); box-shadow: 0 1px 3px rgba(2,6,28,0.35); }
+.milestones__today-dot { position: absolute; left: 50%; transform: translateX(-50%); top: -5px; width: 10px; height: 10px; border-radius: 999px; background: linear-gradient(135deg, #9fc2ff, #6ea1ff); box-shadow: 0 1px 3px rgba(2,6,28,0.35); }
 
 /* bubble label; placement controlled by side modifier */
 .milestones__today-label { position: absolute; left: 50%; display: inline-grid; grid-auto-rows: min-content; align-items: center; justify-items: center; gap: 0.12rem; padding: 0.28rem 0.5rem 0.34rem; border-radius: 0.55rem; border: 1.5px solid var(--today-border); background: var(--today-bg); color: var(--today-text); box-shadow: var(--today-shadow); min-width: 64px; transform: translateX(-50%); }
@@ -1382,8 +1382,8 @@ html[data-theme='light'] .milestones__mini-date {
   color: rgba(26, 34, 92, 0.96);
 }
 .milestones__node {
-  width: 10px;   /* smaller node */
-  height: 10px;  /* smaller node */
+  width: 12px;   /* slightly larger node */
+  height: 12px;  /* slightly larger node */
   border-radius: 50%;
   border: 2px solid rgba(173, 186, 255, 0.8);
   background: var(--ms-node-bg); /* mask the center so lines don't show through */
@@ -1391,11 +1391,11 @@ html[data-theme='light'] .milestones__mini-date {
   cursor: pointer;
   touch-action: none;
   position: relative;
-  top: -7px; /* center the circle on the 2px line (14px total => -7px) */
+  top: -8px; /* center on the 2px line (16px total => -8px) */
   display: block; /* neutralize UA button inline baselines */
   padding: 0; /* avoid UA padding */
   line-height: 0; /* avoid extra inline height */
-  box-sizing: content-box; /* 10px content + 2*2px border = 14px total */
+  box-sizing: content-box; /* 12px content + 2*2px border = 16px total */
   z-index: 2; /* ensure node sits above stems */
 }
 
