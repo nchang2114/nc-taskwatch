@@ -1676,6 +1676,11 @@ const MilestoneLayer: React.FC<{
 
   const latestId = sorted[sorted.length - 1]?.id
 
+  // Today indicator position along the track
+  const todayIso = useMemo(() => toStartOfDayIso(new Date()), [])
+  const todayPct = posPct(todayIso)
+  const [todaySide, setTodaySide] = useState<'top' | 'bottom'>('top')
+
   // Determine if exactly one non-start milestone exists
   const nonStartIds = useMemo(() => milestones.filter((m) => m.role !== 'start').map((m) => m.id), [milestones])
   const onlyNonStartId = useMemo(() => (nonStartIds.length === 1 ? nonStartIds[0] : null), [nonStartIds])
@@ -1792,6 +1797,35 @@ const MilestoneLayer: React.FC<{
           stemEl.style.height = `${height}px`
         }
       }
+
+      // Decide which side (top/bottom) has more space at today's x
+      try {
+        const x = trackRect.left + (trackRect.width * todayPct) / 100
+        let topClear = Number.POSITIVE_INFINITY
+        let bottomClear = Number.POSITIVE_INFINITY
+        const margin = 8 // px tolerance beyond label edges
+        for (const m of sorted) {
+          if (expandedMap[m.id] === false) continue
+          const el = labelRefs.current[m.id]
+          if (!el) continue
+          const r = el.getBoundingClientRect()
+          const overlapsX = x >= r.left - margin && x <= r.right + margin
+          if (!overlapsX) continue
+          if (r.bottom <= centerY) {
+            topClear = Math.min(topClear, centerY - r.bottom)
+          } else if (r.top >= centerY) {
+            bottomClear = Math.min(bottomClear, r.top - centerY)
+          } else {
+            // Label crosses the center; treat as zero clearance on both sides
+            topClear = 0
+            bottomClear = 0
+          }
+        }
+        // If none found on a side, assume generous space (half track height)
+        if (!Number.isFinite(topClear)) topClear = trackRect.height / 2 - 8
+        if (!Number.isFinite(bottomClear)) bottomClear = trackRect.height / 2 - 8
+        setTodaySide(topClear >= bottomClear ? 'top' : 'bottom')
+      } catch {}
     }
 
     measure()
@@ -1937,6 +1971,18 @@ const MilestoneLayer: React.FC<{
       <div className="milestones" aria-label="Milestone timeline">
         <div className="milestones__track" ref={trackRef}>
         <div className="milestones__line" />
+        <div
+          className={classNames('milestones__today', todaySide === 'top' ? 'milestones__today--top' : 'milestones__today--bottom')}
+          style={{ left: `${todayPct}%` }}
+          aria-label="Today"
+          title="Today"
+        >
+          <div className="milestones__today-label">
+            <span className="milestones__today-title">Today</span>
+          </div>
+          <span className="milestones__today-connector" aria-hidden="true" />
+          <span className="milestones__today-dot" aria-hidden="true" />
+        </div>
           {sorted.map((m, idx) => {
           const pct = posPct(m.date)
           const isStart = m.role === 'start'

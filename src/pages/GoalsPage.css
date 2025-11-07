@@ -1267,6 +1267,12 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   --ms-node-clearance: 8px; /* space between node ring and vertical stem (smaller nodes) */
   --ms-node-bg: #0f1a48; /* inner fill used to mask lines for hollow node */
   --ms-node-inner: var(--ms-node-bg); /* inner disk color (changes on complete) */
+  /* Today bubble theme tokens */
+  --today-border: rgba(124, 210, 255, 0.65);
+  --today-bg: rgba(12, 18, 56, 0.78);
+  --today-text: rgba(235, 242, 255, 0.98);
+  --today-shadow: 0 16px 28px -22px rgba(2, 6, 28, 0.7);
+  --today-gap: 24px; /* distance from center line to Today label */
   /* Center the track both directions */
   display: flex;
   align-items: center; /* vertical center */
@@ -1313,6 +1319,29 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   border-radius: 3px;
   background: linear-gradient(90deg, rgba(118,142,255,0.28), rgba(59,130,246,0.32));
 }
+.milestones__today { position: absolute; top: 50%; transform: translateX(-50%); pointer-events: none; z-index: 4; }
+/* hide previous variants */
+.milestones__today-stem, .milestones__today-arrow { display: none; }
+
+/* solid node on the line */
+.milestones__today-dot { position: absolute; left: 50%; transform: translateX(-50%); top: -4px; width: 8px; height: 8px; border-radius: 999px; background: linear-gradient(135deg, #9fc2ff, #6ea1ff); box-shadow: 0 1px 3px rgba(2,6,28,0.35); }
+
+/* bubble label; placement controlled by side modifier */
+.milestones__today-label { position: absolute; left: 50%; display: inline-grid; grid-auto-rows: min-content; align-items: center; justify-items: center; gap: 0.12rem; padding: 0.28rem 0.5rem 0.34rem; border-radius: 0.55rem; border: 1.5px solid var(--today-border); background: var(--today-bg); color: var(--today-text); box-shadow: var(--today-shadow); min-width: 64px; transform: translateX(-50%); }
+.milestones__today-label::after { content: none; }
+.milestones__today-title { font-weight: 700; letter-spacing: -0.01em; font-size: 0.74rem; line-height: 1.05; }
+.milestones__today-date { font-size: 0.7rem; opacity: 0.92; }
+
+/* connector to the bubble */
+.milestones__today-connector { position: absolute; left: 50%; transform: translateX(-50%); width: 1.5px; background: linear-gradient(180deg, rgba(148,163,255,0.6), rgba(148,163,255,0.2)); }
+.milestones__today--top .milestones__today-connector { top: calc(-1 * var(--today-gap)); height: var(--today-gap); }
+.milestones__today--bottom .milestones__today-connector { top: 0; height: var(--today-gap); }
+
+/* side-specific label placement */
+.milestones__today--top .milestones__today-label { top: calc(-1 * var(--today-gap)); transform: translate(-50%, -100%); }
+.milestones__today--bottom .milestones__today-label { top: var(--today-gap); transform: translateX(-50%); }
+.milestones__today-title { font-weight: 700; letter-spacing: -0.01em; font-size: 0.74rem; line-height: 1.05; }
+.milestones__today-date { font-size: 0.7rem; opacity: 0.92; }
 .milestones__node-wrap {
   position: absolute;
   top: 50%; /* anchor at the vertical center line */
@@ -1623,6 +1652,10 @@ html[data-theme='light'] .milestones {
   background: rgba(244, 247, 255, 0.86);
   border-color: rgba(128, 146, 238, 0.34);
   --ms-node-bg: #ffffff;
+  --today-border: rgba(103, 232, 249, 0.7);
+  --today-bg: #ffffff;
+  --today-text: rgba(26, 34, 92, 0.98);
+  --today-shadow: 0 14px 24px -18px rgba(66, 88, 160, 0.28);
 }
 html[data-theme='light'] .milestones__card {
   background: rgba(250, 252, 255, 0.96);
@@ -1640,6 +1673,10 @@ html[data-theme='light'] .milestones__add:hover, html[data-theme='light'] .miles
 html[data-theme='light'] .milestones__line { background: linear-gradient(90deg, rgba(128,146,238,0.45), rgba(59,130,246,0.38)); }
 html[data-theme='light'] .milestones__node { background: #fff; border-color: rgba(128,146,238,0.7); }
 html[data-theme='light'] .milestones__name, html[data-theme='light'] .milestones__date { background: rgba(250, 252, 255, 0.96); color: rgba(26, 34, 92, 0.96); border-color: rgba(128, 146, 238, 0.38); }
+html[data-theme='light'] .milestones__today-stem { background: linear-gradient(180deg, rgba(99, 102, 241, 0.5), rgba(99, 102, 241, 0.18)); }
+html[data-theme='light'] .milestones__today-arrow { border-bottom-color: rgba(99, 102, 241, 0.95); filter: drop-shadow(0 1px 2px rgba(60,72,140,0.25)); }
+html[data-theme='light'] .milestones__today-dot { background: linear-gradient(135deg, rgba(164, 177, 255, 0.95), rgba(99, 102, 241, 0.9)); box-shadow: 0 1px 3px rgba(60,72,140,0.18); }
+html[data-theme='light'] .milestones__today-label { background: rgba(250, 252, 255, 0.96); border-color: rgba(128, 146, 238, 0.38); color: rgba(26, 34, 92, 0.96); }
 /* Light theme adjustments */
 html[data-theme='light'] .goals-layer {
   color: rgba(26, 34, 90, 0.96);
