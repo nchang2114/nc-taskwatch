@@ -2170,7 +2170,9 @@ const MilestoneLayer: React.FC<{
                   </div>
                 </div>
                 </>
-              ) : null}
+              ) : (
+                <div className="milestones__mini-date" aria-hidden="true">{formatShort(m.date)}</div>
+              )}
             </div>
           )
         })}

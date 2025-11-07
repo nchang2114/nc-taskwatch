@@ -1347,6 +1347,27 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   top: 50%; /* anchor at the vertical center line */
   transform: translateX(-50%);
 }
+/* Mini date shown when a milestone card is collapsed */
+.milestones__mini-date {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 10px; /* just below the center line */
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(148, 163, 255, 0.35);
+  background: rgba(12, 18, 56, 0.5);
+  color: rgba(235, 242, 255, 0.96);
+  font-size: 0.68rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+html[data-theme='light'] .milestones__mini-date {
+  background: rgba(250, 252, 255, 0.96);
+  border-color: rgba(128, 146, 238, 0.38);
+  color: rgba(26, 34, 92, 0.96);
+}
 .milestones__node {
   width: 10px;   /* smaller node */
   height: 10px;  /* smaller node */
