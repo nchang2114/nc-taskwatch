@@ -1463,6 +1463,10 @@ const MilestoneLayer: React.FC<{
   const draggingIdRef = useRef<string | null>(null)
   const suppressClickIdRef = useRef<string | null>(null)
   const captureElRef = useRef<HTMLElement | null>(null)
+  // Throttle drag updates and avoid redundant setState loops
+  const dragLastIsoRef = useRef<string | null>(null)
+  const dragRafRef = useRef<number | null>(null)
+  const dragNextIsoRef = useRef<string | null>(null)
 
   useEffect(() => {
     writeMilestonesFor(goal.id, milestones)
@@ -1736,7 +1740,18 @@ const MilestoneLayer: React.FC<{
       d.setHours(0, 0, 0, 0)
       const iso = d.toISOString()
       suppressClickIdRef.current = draggingIdRef.current
-      setMilestones((cur) => cur.map((m) => (m.id === draggingIdRef.current ? { ...m, date: iso } : m)))
+      // Throttle to animation frames and avoid redundant state updates
+      dragNextIsoRef.current = iso
+      if (dragRafRef.current == null) {
+        dragRafRef.current = window.requestAnimationFrame(() => {
+          const nextIso = dragNextIsoRef.current
+          dragRafRef.current = null
+          if (!nextIso) return
+          if (dragLastIsoRef.current === nextIso) return
+          dragLastIsoRef.current = nextIso
+          setMilestones((cur) => cur.map((m) => (m.id === draggingIdRef.current ? { ...m, date: nextIso } : m)))
+        })
+      }
     }
     const up = () => {
       window.removeEventListener('pointermove', move)
@@ -1752,6 +1767,13 @@ const MilestoneLayer: React.FC<{
       }
       draggingIdRef.current = null
       captureElRef.current = null
+      // Cancel any pending frame and reset
+      if (dragRafRef.current != null) {
+        try { window.cancelAnimationFrame(dragRafRef.current) } catch {}
+        dragRafRef.current = null
+      }
+      dragNextIsoRef.current = null
+      dragLastIsoRef.current = null
       // Clear suppressed click on next tick to swallow the click immediately following drag
       setTimeout(() => { if (suppressClickIdRef.current === idNow) suppressClickIdRef.current = null }, 0)
     }
@@ -2020,6 +2042,36 @@ const MilestoneLayer: React.FC<{
     setPrevRightPxById(prevRightMap)
   }, [sorted, labelWidths, trackWidth, expandedMap, maxLanesPerSideState])
 
+  // Compute per-side lane spacing that fits within the milestones track
+  const laneSpread = (() => {
+    const tEl = trackRef.current
+    const halfTrackH = tEl ? (tEl.clientHeight || 0) / 2 : 0
+    const laneStepWanted = laneStepPxRef.current || laneStepPxState || 0
+    const base = baseOffsetPxRef.current || 0
+    // Tally visible lanes and tallest label per side
+    let topCount = 0
+    let botCount = 0
+    let maxTopH = 0
+    let maxBotH = 0
+    for (const [id, pl] of Object.entries(placements)) {
+      if (expandedMap[id] === false) continue
+      const h = labelHeights[id] || 0
+      if (pl.side === 'top') {
+        topCount = Math.max(topCount, (pl.lane || 0) + 1)
+        maxTopH = Math.max(maxTopH, h)
+      } else if (pl.side === 'bottom') {
+        botCount = Math.max(botCount, (pl.lane || 0) + 1)
+        maxBotH = Math.max(maxBotH, h)
+      }
+    }
+    const margin = 2
+    const maxTopOffset = Math.max(0, halfTrackH - maxTopH - margin)
+    const maxBotOffset = Math.max(0, halfTrackH - maxBotH - margin)
+    const topStep = topCount > 1 ? Math.max(12, Math.min(laneStepWanted, (maxTopOffset - base) / Math.max(1, (topCount - 1)))) : laneStepWanted
+    const botStep = botCount > 1 ? Math.max(12, Math.min(laneStepWanted, (maxBotOffset - base) / Math.max(1, (botCount - 1)))) : laneStepWanted
+    return { topStep, botStep, base }
+  })()
+
   return (
     <>
       <div className="milestones__header">
@@ -2085,8 +2137,8 @@ const MilestoneLayer: React.FC<{
           const isTop = placement.side === 'top'
           const laneIndex = placement.lane || 0
           const isExpanded = expandedMap[m.id] !== false
-          const laneStep = laneStepPxRef.current || laneStepPxState || 0
-          const baseOffset = baseOffsetPxRef.current || 0
+          const laneStep = isTop ? laneSpread.topStep : laneSpread.botStep
+          const baseOffset = laneSpread.base
           const hasOffset = laneStep > 0 && baseOffset > 0
           const offset = hasOffset ? baseOffset + laneIndex * laneStep : 0
           // Clamp offset so labels never exceed the milestones track bounds.
