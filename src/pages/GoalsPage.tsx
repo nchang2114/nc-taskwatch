@@ -1971,6 +1971,25 @@ const MilestoneLayer: React.FC<{
       <div className="milestones" aria-label="Milestone timeline">
         <div className="milestones__track" ref={trackRef}>
         <div className="milestones__line" />
+        {(() => {
+          // Resolve progress gradient from goal settings
+          let bg = ''
+          if (goal.customGradient?.from && goal.customGradient?.to) {
+            bg = createCustomGradientString(goal.customGradient.from, goal.customGradient.to, 90)
+          } else if (goal.color && BASE_GRADIENT_PREVIEW[goal.color]) {
+            // Use the base gradient preview mapping
+            bg = BASE_GRADIENT_PREVIEW[goal.color]
+          } else {
+            bg = 'linear-gradient(90deg, rgba(118,142,255,0.9), rgba(59,130,246,0.7))'
+          }
+          return (
+            <div
+              className="milestones__progress"
+              style={{ width: `${todayPct}%`, background: bg }}
+              aria-hidden
+            />
+          )
+        })()}
         <div
           className={classNames('milestones__today', todaySide === 'top' ? 'milestones__today--top' : 'milestones__today--bottom')}
           style={{ left: `${todayPct}%` }}

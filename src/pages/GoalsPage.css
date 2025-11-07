@@ -1319,6 +1319,17 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   border-radius: 3px;
   background: linear-gradient(90deg, rgba(118,142,255,0.28), rgba(59,130,246,0.32));
 }
+/* Progress fill from start to Today */
+.milestones__progress {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 2px;
+  border-radius: 3px;
+  box-shadow: 0 0 8px rgba(88, 168, 255, 0.35);
+  z-index: 1; /* above base line, below nodes */
+}
 .milestones__today { position: absolute; top: 50%; transform: translateX(-50%); pointer-events: none; z-index: 4; }
 /* hide previous variants */
 .milestones__today-stem, .milestones__today-arrow { display: none; }
@@ -1346,6 +1357,8 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   position: absolute;
   top: 50%; /* anchor at the vertical center line */
   transform: translateX(-50%);
+  /* Ensure nodes and mini-date render above progress fill */
+  z-index: 3;
 }
 /* Mini date shown when a milestone card is collapsed */
 .milestones__mini-date {
