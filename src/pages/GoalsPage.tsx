@@ -1444,6 +1444,7 @@ const MilestoneLayer: React.FC<{
   const editingNameSnapshotRef = useRef<string | null>(null)
   const editingLiveNameRef = useRef<string>('')
   const [collapsed, setCollapsed] = useState<boolean>(false)
+  const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({})
   // Track current milestones live for robust dragging math during reorders
   const milestonesRef = useRef<Milestone[]>([])
   useEffect(() => { milestonesRef.current = milestones }, [milestones])
@@ -1530,6 +1531,21 @@ const MilestoneLayer: React.FC<{
     setMilestones((cur) => (cur && cur.length > 0 ? cur : ensureDefaultMilestones(goal, cur)))
   }, [goal.id, goal.createdAt])
 
+  // Keep an expanded flag per milestone; default to true for newly seen ids
+  useEffect(() => {
+    setExpandedMap((prev) => {
+      const next: Record<string, boolean> = { ...prev }
+      for (const m of milestones) {
+        if (!(m.id in next)) next[m.id] = true
+      }
+      // prune removed ids
+      for (const id of Object.keys(next)) {
+        if (!milestones.some((m) => m.id === id)) delete next[id]
+      }
+      return next
+    })
+  }, [milestones])
+
   const addMilestone = () => {
     const baseName = 'Milestone'
     const count = milestonesRef.current.filter((m) => m.role !== 'start').length
@@ -1542,6 +1558,7 @@ const MilestoneLayer: React.FC<{
       const arr = [...cur, created]
       return arr
     })
+    setExpandedMap((cur) => ({ ...cur, [created.id]: true }))
     apiUpsertGoalMilestone(goal.id, created).catch((err) => console.warn('[Milestones] Failed to persist add', err))
   }
 
@@ -1586,6 +1603,7 @@ const MilestoneLayer: React.FC<{
       return
     }
     setMilestones((cur) => cur.filter((m) => m.id !== id))
+    setExpandedMap((cur) => { const copy = { ...cur }; delete copy[id]; return copy })
     apiDeleteGoalMilestone(goal.id, id).catch((err) => console.warn('[Milestones] Failed to delete', err))
   }
 
@@ -1739,6 +1757,7 @@ const MilestoneLayer: React.FC<{
       setTrackWidth(w)
       const widths: Record<string, number> = {}
       for (const m of sorted) {
+        if (expandedMap[m.id] === false) continue
         const el = labelRefs.current[m.id]
         if (el) {
           widths[m.id] = el.offsetWidth || 0
@@ -1787,6 +1806,7 @@ const MilestoneLayer: React.FC<{
       }
       // Observe each label for dynamic height changes
       for (const m of sorted) {
+        if (expandedMap[m.id] === false) continue
         const el = labelRefs.current[m.id]
         if (el) {
           const ro = new ResizeObserver(() => measure())
@@ -1802,7 +1822,7 @@ const MilestoneLayer: React.FC<{
       if (observers.length) observers.forEach((o) => o.disconnect())
       else if (typeof window !== 'undefined') window.removeEventListener('resize', measure)
     }
-  }, [sorted, collapsed])
+  }, [sorted, collapsed, expandedMap])
 
   type Placement = { side: 'top' | 'bottom'; lane: 0 | 1 }
   const placements = useMemo<Record<string, Placement>>(() => {
@@ -1813,7 +1833,8 @@ const MilestoneLayer: React.FC<{
     const gap = 8 // px minimum spacing between cards on the same lane
     const topRight: number[] = [-Infinity, -Infinity]
     const botRight: number[] = [-Infinity, -Infinity]
-    sorted.forEach((m, idx) => {
+    const visible = sorted.filter((m) => expandedMap[m.id] !== false)
+    visible.forEach((m, idx) => {
       const preferTop = idx % 2 === 0
       const pct = posPct(m.date)
       const x = (pct / 100) * tWidth
@@ -1847,7 +1868,7 @@ const MilestoneLayer: React.FC<{
       result[m.id] = placed
     })
     return result
-  }, [sorted, labelWidths, trackWidth])
+  }, [sorted, labelWidths, trackWidth, expandedMap])
 
   return (
     <>
@@ -1882,6 +1903,7 @@ const MilestoneLayer: React.FC<{
           const placement = placements[m.id] ?? { side: (idx % 2 === 0 ? 'top' : 'bottom'), lane: 0 as 0 | 1 }
           const isTop = placement.side === 'top'
           const laneClass = placement.lane === 0 ? 'lane-0' : 'lane-1'
+          const isExpanded = expandedMap[m.id] !== false
           return (
             <div key={m.id} className="milestones__node-wrap" style={{ left: `${pct}%` }}>
               <button
@@ -1889,22 +1911,24 @@ const MilestoneLayer: React.FC<{
                 className={classNames('milestones__node', m.completed && 'milestones__node--done', isStart && 'milestones__node--start', isLatest && 'milestones__node--end')}
                 onClick={(ev) => {
                   if (suppressClickIdRef.current === m.id) { ev.preventDefault(); ev.stopPropagation(); suppressClickIdRef.current = null; return }
-                  if (isStart) { ev.preventDefault(); ev.stopPropagation(); return }
-                  toggleComplete(m.id)
+                  ev.preventDefault(); ev.stopPropagation()
+                  setExpandedMap((prev) => ({ ...prev, [m.id]: !(prev[m.id] ?? true) }))
                 }}
                 onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart) beginDrag(m.id, ev) }}
                 aria-label={`${m.name} ${formatShort(m.date)}${m.completed ? ' (completed)' : ''}`}
               />
-                <span
-                  ref={(el) => { stemRefs.current[m.id] = el }}
-                  className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down', laneClass)}
-                  onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart) beginDrag(m.id, ev) }}
-                  aria-hidden={true}
-                />
-                <div
-                  ref={(el) => { labelRefs.current[m.id] = el }}
-                  className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom', laneClass)}
-                >
+                {isExpanded ? (
+                  <>
+                    <span
+                      ref={(el) => { stemRefs.current[m.id] = el }}
+                      className={classNames('milestones__stem', isTop ? 'milestones__stem--up' : 'milestones__stem--down', laneClass)}
+                      onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart) beginDrag(m.id, ev) }}
+                      aria-hidden={true}
+                    />
+                    <div
+                      ref={(el) => { labelRefs.current[m.id] = el }}
+                      className={classNames('milestones__label', isTop ? 'milestones__label--top' : 'milestones__label--bottom', laneClass)}
+                    >
                   <div
                     className="milestones__card"
                     onClick={(ev) => {
@@ -1913,7 +1937,7 @@ const MilestoneLayer: React.FC<{
                       const nameEmpty = !(m.name && m.name.trim().length > 0)
                       if (!nameEmpty) return
                       const t = ev.target as HTMLElement
-                      if (t.closest('.milestones__date') || t.closest('.milestones__remove')) return
+                      if (t.closest('.milestones__date') || t.closest('.milestones__remove') || t.closest('.milestones__done')) return
                       startEditName(m.id)
                     }}
                   >
@@ -2031,8 +2055,34 @@ const MilestoneLayer: React.FC<{
                         {formatShort(m.date)}
                       </div>
                     )}
+
+                    {/* Mark done chip bottom-right (visible on non-start milestones) */}
+                    {!isStart ? (
+                      <div className="milestones__done">
+                        <button
+                          type="button"
+                          className={classNames('milestones__done-btn', m.completed && 'is-checked')}
+                          onClick={(e) => { e.stopPropagation(); toggleComplete(m.id) }}
+                          aria-pressed={m.completed}
+                          aria-label={m.completed ? 'Mark as not completed' : 'Mark as completed'}
+                        >
+                          <span className="milestones__done-inner">
+                            {m.completed ? (
+                              <svg className="milestones__done-check" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            ) : (
+                              <span className="milestones__done-dot" aria-hidden="true" />
+                            )}
+                            <span className="milestones__done-label">{m.completed ? 'Done' : 'Mark'}</span>
+                          </span>
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
+                </>
+              ) : null}
             </div>
           )
         })}
