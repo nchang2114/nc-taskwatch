@@ -2132,6 +2132,30 @@ const MilestoneLayer: React.FC<{
               maxW = maxWFit
             }
           }
+          // Compute node ring colour, and use the goal gradient for fill when completed
+          const ringColor = (() => {
+            // Respect special start/end accents
+            if (isStart) return 'rgba(250, 204, 21, 0.9)'
+            if (isLatest) return 'rgba(99, 102, 241, 0.9)'
+            // Otherwise derive from goal gradient (use the "to" stop for a solid color)
+            if (goal.customGradient?.from && goal.customGradient?.to) {
+              return goal.customGradient.to
+            }
+            if (goal.color && BASE_GRADIENT_PREVIEW[goal.color]) {
+              const stops = extractStopsFromGradient(BASE_GRADIENT_PREVIEW[goal.color])
+              return stops?.to ?? '#8fb0ff'
+            }
+            return '#8fb0ff'
+          })()
+          const nodeGradient = (() => {
+            if (goal.customGradient?.from && goal.customGradient?.to) {
+              return createCustomGradientString(goal.customGradient.from, goal.customGradient.to, 135)
+            }
+            if (goal.color && BASE_GRADIENT_PREVIEW[goal.color]) {
+              return BASE_GRADIENT_PREVIEW[goal.color]
+            }
+            return 'linear-gradient(135deg, #9fc2ff, #6ea1ff)'
+          })()
           return (
             <div key={m.id} className="milestones__node-wrap" style={{ left: `${pct}%` }}>
               <button
@@ -2143,6 +2167,11 @@ const MilestoneLayer: React.FC<{
                   setExpandedMap((prev) => ({ ...prev, [m.id]: !(prev[m.id] ?? true) }))
                 }}
                 onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart && timelineScaled) beginDrag(m.id, ev) }}
+                style={{
+                  ['--ms-node-ring' as any]: ringColor,
+                  // Fill only when completed; otherwise keep hollow by masking with background
+                  ['--ms-node-inner' as any]: m.completed ? nodeGradient : 'var(--ms-node-bg)',
+                } as React.CSSProperties}
                 aria-label={`${m.name} ${formatShort(m.date)}${m.completed ? ' (completed)' : ''}`}
               />
                 {isExpanded ? (

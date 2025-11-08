@@ -1413,7 +1413,7 @@ html[data-theme='light'] .milestones__mini-date {
   width: 12px;   /* slightly larger node */
   height: 12px;  /* slightly larger node */
   border-radius: 50%;
-  border: 2px solid rgba(173, 186, 255, 0.8);
+  border: 2px solid var(--ms-node-ring, rgba(173, 186, 255, 0.8));
   background: var(--ms-node-bg); /* mask the center so lines don't show through */
   box-shadow: 0 2px 8px rgba(2,6,28,0.5);
   cursor: pointer;
@@ -1433,7 +1433,7 @@ html[data-theme='light'] .milestones__mini-date {
   position: absolute;
   inset: -3px; /* smaller halo for smaller node */
   border-radius: 50%;
-  border: 1px solid rgba(148, 163, 255, 0.28);
+  border: 1px solid var(--ms-node-halo, rgba(148, 163, 255, 0.28));
   background: transparent;
 }
 
@@ -1446,7 +1446,7 @@ html[data-theme='light'] .milestones__mini-date {
   background: var(--ms-node-inner);
   box-shadow: inset 0 0 0 1px rgba(148, 163, 255, 0.18);
 }
-.milestones__node--done { --ms-node-inner: linear-gradient(135deg, #b6c7ff, #8fb0ff); }
+.milestones__node--done { /* node fill handled inline to preserve goal colour */ }
 .milestones__node--start { border-color: rgba(250, 204, 21, 0.9); }
 .milestones__node--end { border-color: rgba(99, 102, 241, 0.9); }
 .milestones__label {
