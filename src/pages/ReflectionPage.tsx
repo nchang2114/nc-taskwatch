@@ -4657,15 +4657,24 @@ useEffect(() => {
     const plan = snapPlansRef.current[idKey] ?? { cue: '', deconstruction: '', plan: '' }
     if (!plan) return
     let baseKey = ''
+    let triggerName = ''
     if (idKey.startsWith('snap-')) {
       baseKey = idKey.slice(5)
+      const existing = snapDbRows.find((r) => r.base_key === baseKey)
+      triggerName = (existing?.trigger_name ?? '').trim()
+      if (!triggerName) {
+        const match = snapbackOverview.legend.find((it) => it.id === idKey)
+        triggerName = match?.label ?? baseKey
+      }
     } else {
       const row = snapDbRows.find((r) => r.id === idKey)
       if (!row) return
       baseKey = row.base_key
+      triggerName = row.trigger_name ?? ''
     }
     const row = await apiUpsertSnapbackByKey({
       base_key: baseKey,
+      trigger_name: triggerName,
       cue_text: plan.cue,
       deconstruction_text: plan.deconstruction,
       plan_text: plan.plan,
@@ -4677,7 +4686,7 @@ useEffect(() => {
         return [...cur, row]
       })
     }
-  }, [snapDbRows])
+  }, [snapDbRows, snapbackOverview.legend])
   const schedulePersistPlan = useCallback((idKey: string) => {
     if (typeof window === 'undefined') return
     const m = saveTimersRef.current
