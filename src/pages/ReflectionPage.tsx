@@ -4411,6 +4411,17 @@ useEffect(() => {
     const windowStart = now - windowMs
     const totals = new Map<string, { count: number; label: string; durationMs: number }>()
 
+    // Build alias -> base_key and base_key -> label maps from DB rows
+    const aliasToBase = new Map<string, string>()
+    const baseToLabel = new Map<string, string>()
+    snapDbRows.forEach((row) => {
+      const base = (row.base_key ?? '').trim().toLowerCase()
+      if (!base) return
+      const alias = (row.trigger_name ?? '').trim()
+      if (alias) aliasToBase.set(alias.toLowerCase(), base)
+      if (alias) baseToLabel.set(base, alias)
+    })
+
     const parseReason = (taskName: string): string | null => {
       const prefix = 'Snapback • '
       if (!taskName || !taskName.startsWith(prefix)) return null
@@ -4434,15 +4445,33 @@ useEffect(() => {
       const clampedEnd = Math.min(end, now)
       const overlapMs = Math.max(0, clampedEnd - clampedStart)
       if (overlapMs <= 0) return
-      const reason = parseReason(entry.taskName)
-      if (!reason) return
-      const key = reason.trim().toLowerCase()
-      const existing = totals.get(key)
+      const goalLower = (entry.goalName ?? '').trim().toLowerCase()
+      let baseKey: string | null = null
+      let label: string | null = null
+      // Case 1: explicit Snapback goal — use bucket name as trigger, map to base_key via DB alias if possible
+      if (goalLower === SNAPBACK_NAME.toLowerCase()) {
+        const bucket = (entry.bucketName ?? '').trim()
+        if (bucket) {
+          const aliasLower = bucket.toLowerCase()
+          baseKey = aliasToBase.get(aliasLower) ?? aliasLower
+          label = baseToLabel.get(baseKey) ?? bucket
+        }
+      }
+      // Case 2: marker task name
+      if (!baseKey) {
+        const reason = parseReason(entry.taskName)
+        if (!reason) return
+        const aliasLower = reason.trim().toLowerCase()
+        baseKey = aliasToBase.get(aliasLower) ?? aliasLower
+        label = baseToLabel.get(baseKey) ?? reason
+      }
+      if (!baseKey) return
+      const existing = totals.get(baseKey)
       if (existing) {
         existing.count += 1
         existing.durationMs += overlapMs
       } else {
-        totals.set(key, { count: 1, label: reason, durationMs: overlapMs })
+        totals.set(baseKey, { count: 1, label: label ?? baseKey, durationMs: overlapMs })
       }
     })
 
@@ -4458,7 +4487,7 @@ useEffect(() => {
     const total = items.reduce((sum, it) => sum + it.count, 0)
     const maxDurationMs = legend.reduce((max, it) => Math.max(max, it.durationMs), 0)
     return { legend, total, windowMs, maxDurationMs }
-  }, [effectiveHistory, snapActiveRange])
+  }, [effectiveHistory, snapActiveRange, snapDbRows])
   const pieArcs = useMemo(() => createPieArcs(segments, windowMs), [segments, windowMs])
   useLayoutEffect(() => {
     if (!supportsConicGradient) {
