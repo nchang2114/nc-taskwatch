@@ -361,6 +361,23 @@ const UNCATEGORISED_LABEL = 'Uncategorised'
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
 const LIFE_ROUTINES_NAME = 'Life Routines'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
+// Snapback virtual goal (crimson accent theme)
+const SNAPBACK_NAME = 'Snapback'
+const SNAPBACK_SURFACE: SurfaceStyle = 'ember'
+const SNAPBACK_COLOR_INFO: GoalColorInfo = {
+  gradient: {
+    css: 'linear-gradient(135deg, #fb923c 0%, #ef4444 50%, #991b1b 100%)',
+    start: '#fb923c',
+    end: '#991b1b',
+    angle: 135,
+    stops: [
+      { color: '#fb923c', position: 0 },
+      { color: '#ef4444', position: 0.5 },
+      { color: '#991b1b', position: 1 },
+    ],
+  },
+  solidColor: '#ef4444',
+}
 const LIFE_ROUTINE_DEFAULT_SURFACE_LOOKUP = new Map(
   LIFE_ROUTINE_DEFAULTS.map((routine) => [routine.title.toLowerCase(), routine.surfaceStyle]),
 )
@@ -2031,6 +2048,20 @@ const resolveGoalMetadata = (
   const bucketNameRaw = entry.bucketName?.trim()
   const normalizedGoalName = goalNameRaw?.toLowerCase() ?? ''
   const normalizedBucketName = bucketNameRaw?.toLowerCase() ?? ''
+  // Treat logged Snapback markers as a virtual goal with crimson/orange accent
+  const parseSnapbackReason = (taskName: string): string | null => {
+    const prefix = 'Snapback • '
+    if (!taskName || !taskName.startsWith(prefix)) return null
+    const rest = taskName.slice(prefix.length)
+    const enDash = ' – '
+    if (rest.includes(enDash)) return rest.split(enDash).slice(1).join(enDash).trim()
+    if (rest.includes(' - ')) return rest.split(' - ').slice(1).join(' - ').trim()
+    return null
+  }
+  const snapReason = parseSnapbackReason(entry.taskName)
+  if (snapReason) {
+    return { label: SNAPBACK_NAME, colorInfo: SNAPBACK_COLOR_INFO }
+  }
   const isLifeRoutineEntry =
     (goalNameRaw && normalizedGoalName === LIFE_ROUTINES_NAME.toLowerCase()) ||
     (bucketNameRaw && lifeRoutineSurfaceLookup.has(normalizedBucketName))
@@ -2835,6 +2866,44 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     return result.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
   }, [lifeRoutineTasks])
 
+  // Snapback trigger options (as bucket names under the Snapback goal)
+  const snapbackTriggerOptions = useMemo(() => {
+    const set = new Set<string>()
+    const prefix = 'Snapback • '
+    const enDash = ' – '
+    const parseReason = (taskName: string): string | null => {
+      if (!taskName || !taskName.startsWith(prefix)) return null
+      const rest = taskName.slice(prefix.length)
+      if (rest.includes(enDash)) {
+        return rest.split(enDash).slice(1).join(enDash).trim()
+      }
+      if (rest.includes(' - ')) {
+        return rest.split(' - ').slice(1).join(' - ').trim()
+      }
+      return null
+    }
+    history.forEach((entry) => {
+      const reason = parseReason(entry.taskName)
+      if (reason) set.add(reason.slice(0, 120))
+    })
+    // Include any user-defined triggers saved from Snap Back overview
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem('nc-taskwatch-snapback-custom-triggers')
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) {
+            parsed.forEach((it) => {
+              const label = typeof it?.label === 'string' ? it.label.trim() : ''
+              if (label) set.add(label)
+            })
+          }
+        }
+      } catch {}
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+  }, [history])
+
   const updateHistory = useCallback((updater: (current: HistoryEntry[]) => HistoryEntry[]) => {
     setHistory((current) => {
       const next = updater(current)
@@ -2997,6 +3066,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
 
   const goalOptions = useMemo(() => {
     const normalizedLifeRoutines = LIFE_ROUTINES_NAME.toLowerCase()
+    const normalizedSnapback = SNAPBACK_NAME.toLowerCase()
     const seen = new Set<string>()
     const ordered: string[] = []
     goalsSnapshot.forEach((goal) => {
@@ -3005,7 +3075,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
         return
       }
       const normalized = trimmed.toLowerCase()
-      if (normalized === normalizedLifeRoutines) {
+      if (normalized === normalizedLifeRoutines || normalized === normalizedSnapback) {
         return
       }
       if (seen.has(normalized)) {
@@ -3014,7 +3084,8 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       seen.add(normalized)
       ordered.push(trimmed)
     })
-    return [LIFE_ROUTINES_NAME, ...ordered]
+    // Insert Snapback option right after Life Routines
+    return [LIFE_ROUTINES_NAME, SNAPBACK_NAME, ...ordered]
   }, [goalsSnapshot])
 
   const bucketOptionsByGoal = useMemo(() => {
@@ -3036,8 +3107,11 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     if (lifeRoutineBucketOptions.length > 0) {
       map.set(LIFE_ROUTINES_NAME, lifeRoutineBucketOptions)
     }
+    if (snapbackTriggerOptions.length > 0) {
+      map.set(SNAPBACK_NAME, snapbackTriggerOptions)
+    }
     return map
-  }, [goalsSnapshot, lifeRoutineBucketOptions])
+  }, [goalsSnapshot, lifeRoutineBucketOptions, snapbackTriggerOptions])
 
   const allBucketOptions = useMemo(() => {
     const set = new Set<string>()
@@ -3052,8 +3126,9 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       })
     })
     lifeRoutineBucketOptions.forEach((title) => set.add(title))
+    snapbackTriggerOptions.forEach((title) => set.add(title))
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-  }, [goalsSnapshot, lifeRoutineBucketOptions])
+  }, [goalsSnapshot, lifeRoutineBucketOptions, snapbackTriggerOptions])
 
   // Reverse lookup: for a given bucket name (case-insensitive), which goal(s) contain it?
   const bucketToGoals = useMemo(() => {
@@ -3079,8 +3154,17 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       if (!arr.includes(LIFE_ROUTINES_NAME)) arr.push(LIFE_ROUTINES_NAME)
       map.set(key, arr)
     })
+    // Map Snapback triggers to Snapback pseudo-goal
+    snapbackTriggerOptions.forEach((title) => {
+      const trimmed = title.trim()
+      if (!trimmed) return
+      const key = trimmed.toLowerCase()
+      const arr = map.get(key) ?? []
+      if (!arr.includes(SNAPBACK_NAME)) arr.push(SNAPBACK_NAME)
+      map.set(key, arr)
+    })
     return map
-  }, [goalsSnapshot, lifeRoutineBucketOptions])
+  }, [goalsSnapshot, lifeRoutineBucketOptions, snapbackTriggerOptions])
 
   // Tasks by goal and bucket, and a reverse lookup from task text -> owners
   const tasksByGoalBucket = useMemo(() => {
@@ -3271,9 +3355,11 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
 
   const goalDropdownOptions = useMemo<HistoryDropdownOption[]>(() => {
     const normalizedLifeRoutines = LIFE_ROUTINES_NAME.toLowerCase()
-    const optionsWithoutLife = resolvedGoalOptions.filter(
-      (option) => option.trim().toLowerCase() !== normalizedLifeRoutines,
-    )
+    const normalizedSnapback = SNAPBACK_NAME.toLowerCase()
+    const optionsWithoutSpecial = resolvedGoalOptions.filter((option) => {
+      const lower = option.trim().toLowerCase()
+      return lower !== normalizedLifeRoutines && lower !== normalizedSnapback
+    })
     const hasLifeOption =
       resolvedGoalOptions.some((option) => option.trim().toLowerCase() === normalizedLifeRoutines) ||
       lifeRoutineBucketOptions.length > 0
@@ -3281,7 +3367,9 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     if (hasLifeOption) {
       next.push({ value: LIFE_ROUTINES_NAME, label: LIFE_ROUTINES_NAME })
     }
-    optionsWithoutLife.forEach((option) => {
+    // Include Snapback once, under Life Routines
+    next.push({ value: SNAPBACK_NAME, label: SNAPBACK_NAME })
+    optionsWithoutSpecial.forEach((option) => {
       next.push({ value: option, label: option })
     })
     return next
@@ -3739,6 +3827,10 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
         }
         if (goalKey === lifeRoutineKey) {
           return LIFE_ROUTINES_SURFACE
+        }
+        if (goalKey === SNAPBACK_NAME.toLowerCase()) {
+          // Snapback uses a crimson/ember accent
+          return SNAPBACK_SURFACE
         }
         return goalSurfaceLookup.get(goalKey) ?? DEFAULT_SURFACE_STYLE
       })(),
@@ -9777,6 +9869,9 @@ useEffect(() => {
                 + Add Trigger
               </button>
             </div>
+            {combinedLegend.length === 0 ? (
+              <div className="snapback-empty">No recorded triggers yet.</div>
+            ) : (
             <div className="snapback-list snapback-list--stack">
               {combinedLegend.map((item) => {
                 const isActive = item.id === selectedTriggerKey
@@ -9847,10 +9942,9 @@ useEffect(() => {
               )
             })}
             </div>
+            )}
           </div>
-          {combinedLegend.length === 0 ? (
-            <p className="reflection-section__desc">No Snap Back sessions logged yet.</p>
-          ) : null}
+          
 
           <div className="snapback-drawer">
             <div className="snapback-drawer__header">
