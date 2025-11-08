@@ -1343,7 +1343,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  height: 2px; /* thinner center line */
+  height: 3px; /* slightly thicker center line */
   border-radius: 3px;
   background: linear-gradient(90deg, rgba(118,142,255,0.28), rgba(59,130,246,0.32));
 }
@@ -1353,7 +1353,7 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
   left: 0;
   top: 50%;
   transform: translateY(-50%);
-  height: 2px;
+  height: 3px;
   border-radius: 3px;
   box-shadow: 0 0 8px rgba(88, 168, 255, 0.35);
   z-index: 1; /* above base line, below nodes */
