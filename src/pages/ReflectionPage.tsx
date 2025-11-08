@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  startTransition,
   type CSSProperties,
   type FormEvent,
   type HTMLAttributes,
@@ -4629,6 +4630,25 @@ useEffect(() => {
   const [customTriggers, setCustomTriggers] = useState<CustomTrigger[]>(() => readCustomTriggers())
   useEffect(() => { writeCustomTriggers(customTriggers) }, [customTriggers])
 
+  // Aliases: override labels for history-derived triggers without creating new entries
+  type SnapbackAliasMap = Record<string, string>
+  const SNAPBACK_ALIAS_STORAGE_KEY = 'nc-taskwatch-snapback-aliases'
+  const readAliases = (): SnapbackAliasMap => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const raw = window.localStorage.getItem(SNAPBACK_ALIAS_STORAGE_KEY)
+      if (!raw) return {}
+      const parsed = JSON.parse(raw)
+      return typeof parsed === 'object' && parsed !== null ? (parsed as SnapbackAliasMap) : {}
+    } catch { return {} }
+  }
+  const writeAliases = (value: SnapbackAliasMap) => {
+    if (typeof window === 'undefined') return
+    try { window.localStorage.setItem(SNAPBACK_ALIAS_STORAGE_KEY, JSON.stringify(value)) } catch {}
+  }
+  const [snapbackAliases, setSnapbackAliases] = useState<SnapbackAliasMap>(() => readAliases())
+  useEffect(() => { writeAliases(snapbackAliases) }, [snapbackAliases])
+
   // Inline edit within list for newly created trigger
   const [editingTriggerId, setEditingTriggerId] = useState<string | null>(null)
   const editTriggerInputRef = useRef<HTMLInputElement | null>(null)
@@ -4677,8 +4697,9 @@ useEffect(() => {
     const extras = customTriggers
       .filter((ct) => !existing.has(ct.label.toLowerCase().trim()))
       .map((ct) => ({ id: ct.id, label: ct.label, count: 0, durationMs: 0, swatch: getPaletteColorForLabel(ct.label) }))
-    return [...base, ...extras]
-  }, [snapbackOverview.legend, customTriggers])
+    const merged = [...base, ...extras]
+    return merged.map((it) => ({ ...it, label: snapbackAliases[it.id] ?? it.label }))
+  }, [snapbackOverview.legend, customTriggers, snapbackAliases])
 
   const [selectedTriggerKey, setSelectedTriggerKey] = useState<string | null>(null)
   useEffect(() => {
@@ -4692,6 +4713,74 @@ useEffect(() => {
     const key = selectedItem.id
     return snapPlans[key] ?? { cue: '', deconstruction: '', plan: '' }
   }, [selectedItem, snapPlans])
+  // Lightweight editable title to avoid re-rendering the whole page on each keystroke
+  const SnapbackEditableTitle = useMemo(() => {
+    function Component({
+      item,
+      isCustom,
+      onRename,
+      onAlias,
+    }: {
+      item: { id: string; label: string } | null
+      isCustom: boolean
+      onRename: (id: string, label: string) => void
+      onAlias: (id: string, label: string) => void
+    }) {
+      const [editing, setEditing] = useState(false)
+      const [draft, setDraft] = useState('')
+      const inputRef = useRef<HTMLInputElement | null>(null)
+      useEffect(() => {
+        setDraft(item?.label ?? '')
+        setEditing(false)
+      }, [item?.id])
+      useEffect(() => {
+        if (editing) {
+          const id = setTimeout(() => {
+            inputRef.current?.focus()
+            try { inputRef.current?.select() } catch {}
+          }, 0)
+          return () => clearTimeout(id)
+        }
+      }, [editing])
+      const commit = useCallback(() => {
+        if (!item) return
+        const next = draft.trim()
+        if (next.length === 0 || next === item.label) { setEditing(false); return }
+        if (isCustom) {
+          startTransition(() => onRename(item.id, next))
+        } else {
+          startTransition(() => onAlias(item.id, next))
+        }
+        setEditing(false)
+      }, [draft, isCustom, item, onAlias, onRename])
+      if (!item) return <h3 className="snapback-drawer__title">—</h3>
+      return editing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          className="snapback-drawer__title-input"
+          defaultValue={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            e.stopPropagation()
+            if (e.key === 'Enter') { e.preventDefault(); commit() }
+            if (e.key === 'Escape') { e.preventDefault(); setDraft(item.label); setEditing(false) }
+          }}
+          aria-label="Edit trigger title"
+        />
+      ) : (
+        <h3
+          className="snapback-drawer__title snapback-drawer__title--editable"
+          onDoubleClick={() => setEditing(true)}
+          title="Double-click to edit"
+        >
+          {item.label}
+        </h3>
+      )
+    }
+    return Component
+  }, [])
   const dayStart = useMemo(() => {
     const date = new Date(nowTick)
     date.setHours(0, 0, 0, 0)
@@ -9950,7 +10039,12 @@ useEffect(() => {
             <div className="snapback-drawer__header">
               <div className="snapback-drawer__titles">
                 <span className="snapback-drawer__eyebrow">Pattern</span>
-                <h3 className="snapback-drawer__title">{selectedItem?.label ?? '—'}</h3>
+                <SnapbackEditableTitle
+                  item={selectedItem ? { id: selectedItem.id, label: selectedItem.label } : null}
+                  isCustom={Boolean(selectedItem && customTriggers.some((ct) => ct.id === selectedItem.id))}
+                  onRename={(id, label) => setCustomTriggers((cur) => cur.map((ct) => (ct.id === id ? { ...ct, label } : ct)))}
+                  onAlias={(id, label) => setSnapbackAliases((cur) => ({ ...cur, [id]: label }))}
+                />
                 {selectedItem ? (
                   <p className="snapback-drawer__subtitle">Occurred {selectedItem.count}× ({formatDuration(selectedItem.durationMs)}) in this range.</p>
                 ) : null}

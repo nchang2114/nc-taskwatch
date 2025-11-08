@@ -475,6 +475,17 @@ const formatClockTime = (timestamp: number) => {
   return `${hours12.toString().padStart(2, '0')}:${minutes}:${seconds} ${period}`
 }
 
+// Parse a Snapback task name into a reason label, if present
+const parseSnapbackReason = (taskName: string): string | null => {
+  const prefix = 'Snapback • '
+  if (!taskName || !taskName.startsWith(prefix)) return null
+  const rest = taskName.slice(prefix.length)
+  const enDash = ' – '
+  if (rest.includes(enDash)) return rest.split(enDash).slice(1).join(enDash).trim()
+  if (rest.includes(' - ')) return rest.split(' - ').slice(1).join(' - ').trim()
+  return null
+}
+
 export type TaskwatchPageProps = {
   viewportWidth: number
 }
@@ -508,6 +519,8 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [, setSnapbackNote] = useState('')
   const [snapbackCustomReason, setSnapbackCustomReason] = useState('')
   const [snapbackCustomDuration, setSnapbackCustomDuration] = useState<string>('')
+  const [snapbackReasonSelect, setSnapbackReasonSelect] = useState('')
+  const SNAPBACK_CUSTOM_TRIGGERS_KEY = 'nc-taskwatch-snapback-custom-triggers'
   const [currentTaskName, setCurrentTaskName] = useState<string>(initialTaskName)
   const [sessionStart, setSessionStart] = useState<number | null>(null)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
@@ -655,6 +668,42 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       window.clearInterval(intervalId)
     }
   }, [])
+
+  // Compute most common Snapback reasons from history and include any saved custom triggers
+  const snapbackReasonStats = useMemo(() => {
+    const counts = new Map<string, number>()
+    history.forEach((h) => {
+      const reason = parseSnapbackReason(h.taskName)
+      if (!reason) return
+      const key = reason.trim().toLowerCase()
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    })
+    const custom: string[] = (() => {
+      if (typeof window === 'undefined') return []
+      try {
+        const raw = window.localStorage.getItem(SNAPBACK_CUSTOM_TRIGGERS_KEY)
+        if (!raw) return []
+        const parsed = JSON.parse(raw)
+        if (!Array.isArray(parsed)) return []
+        return parsed
+          .map((it) => (typeof it?.label === 'string' ? (it.label as string).trim() : ''))
+          .filter((s) => s.length > 0)
+      } catch {
+        return []
+      }
+    })()
+    // Merge custom triggers with zero counts if not present
+    custom.forEach((label) => {
+      const key = label.toLowerCase()
+      if (!counts.has(key)) counts.set(key, 0)
+    })
+    const items = Array.from(counts.entries()).map(([key, count]) => ({ key, label: key, count }))
+    items.sort((a, b) => (b.count === a.count ? a.label.localeCompare(b.label) : b.count - a.count))
+    const orderedLabels = items.map((i) => i.label)
+    const topTwo = orderedLabels.slice(0, 2)
+    const others = orderedLabels.slice(2)
+    return { topTwo, others, all: orderedLabels }
+  }, [history])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -3619,6 +3668,23 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       return next.length > HISTORY_LIMIT ? next.slice(0, HISTORY_LIMIT) : next
     })
 
+    // Persist new custom reason as a trigger for the overview
+    try {
+      if (snapbackReasonMode === 'custom') {
+        const label = reasonLabel.trim()
+        if (label.length > 0 && typeof window !== 'undefined') {
+          const raw = window.localStorage.getItem(SNAPBACK_CUSTOM_TRIGGERS_KEY)
+          const parsed = raw ? JSON.parse(raw) : []
+          const list = Array.isArray(parsed) ? parsed : []
+          const exists = list.some((it: any) => typeof it?.label === 'string' && it.label.trim().toLowerCase() === label.toLowerCase())
+          if (!exists) {
+            list.push({ id: `snap-custom-${Date.now()}`, label })
+            window.localStorage.setItem(SNAPBACK_CUSTOM_TRIGGERS_KEY, JSON.stringify(list))
+          }
+        }
+      }
+    } catch {}
+
     setLastSnapbackSummary(`${durationLabel} • ${reasonLabel} → ${actionLabel}`)
     setIsSnapbackOpen(false)
     setSnapbackNote('')
@@ -4430,26 +4496,52 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                 </div>
                 <div className="snapback-panel__section snapback-panel__section--stretch" aria-labelledby="snapback-reason-label">
                   <h3 id="snapback-reason-label" className="snapback-panel__heading">What were you doing instead (be specific)?</h3>
-                  <div className="snapback-panel__chips" role="group" aria-label="Select a reason">
-                    {SNAPBACK_REASONS.map((option) => (
+                  <div className="snapback-panel__chips" role="group" aria-label="Common triggers">
+                    {snapbackReasonStats.topTwo.map((label) => (
                       <button
-                        key={option.id}
+                        key={`top-${label}`}
                         type="button"
-                        className={`snapback-option${snapbackReasonMode === 'preset' && snapbackReason === option.id ? ' snapback-option--active' : ''}`}
-                        aria-pressed={snapbackReasonMode === 'preset' && snapbackReason === option.id}
+                        className={`snapback-option${snapbackReasonMode === 'custom' && snapbackCustomReason.toLowerCase() === label ? ' snapback-option--active' : ''}`}
+                        aria-pressed={snapbackReasonMode === 'custom' && snapbackCustomReason.toLowerCase() === label}
                         onClick={() => {
-                          setSnapbackReasonMode('preset')
-                          setSnapbackReason(option.id)
-                          setSnapbackCustomReason('')
+                          setSnapbackReasonMode('custom')
+                          setSnapbackCustomReason(label)
+                          setSnapbackReasonSelect(label)
                         }}
                       >
-                        {option.label}
+                        {label}
                       </button>
                     ))}
+                    {snapbackReasonStats.others.length > 0 ? (
+                      <select
+                        className="snapback-option-input snapback-option-select"
+                        aria-label="Other triggers"
+                        value={snapbackReasonSelect}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setSnapbackReasonSelect(v)
+                          setSnapbackReasonMode('custom')
+                          setSnapbackCustomReason(v)
+                        }}
+                        onFocus={() => setSnapbackReasonMode('custom')}
+                      >
+                        <option value="" disabled>
+                          Other triggers…
+                        </option>
+                        {snapbackReasonStats.others.map((label) => (
+                          <option key={`other-${label}`} value={label}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
                     <input
                       type="text"
                       value={snapbackCustomReason}
-                      onFocus={() => setSnapbackReasonMode('custom')}
+                      onFocus={() => {
+                        setSnapbackReasonMode('custom')
+                        setSnapbackReasonSelect('')
+                      }}
                       onChange={(e) => {
                         setSnapbackReasonMode('custom')
                         setSnapbackCustomReason(e.target.value.slice(0, MAX_TASK_STORAGE_LENGTH))
