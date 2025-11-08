@@ -3976,19 +3976,32 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
         }
       } else if (event.key === 'Escape') {
         event.preventDefault()
-        if (selectedHistoryEntry) {
-          setHistoryDraft(() => {
-            const base = createHistoryDraftFromEntry(selectedHistoryEntry)
-            base.taskName = deriveEntryTaskName(selectedHistoryEntry)
-            return base
-          })
+        // For a freshly created, pending entry: do not mutate the draft before cancel.
+        // This preserves the untouched state so the cancel handler can auto-delete it.
+        if (pendingNewHistoryId && selectedHistoryId === pendingNewHistoryId) {
+          // Defer to the centralized cancel logic which will delete if untouched
+          handleCancelHistoryEdit()
+          if (calendarEditorEntryId) {
+            setCalendarEditorEntryId(null)
+          }
         } else {
-          setHistoryDraft(createEmptyHistoryDraft())
+          if (selectedHistoryEntry) {
+            setHistoryDraft(() => createHistoryDraftFromEntry(selectedHistoryEntry))
+          } else {
+            setHistoryDraft(createEmptyHistoryDraft())
+          }
+          setEditingHistoryId(null)
         }
-        setEditingHistoryId(null)
       }
     },
-    [calendarEditorEntryId, commitHistoryDraft, pendingNewHistoryId, selectedHistoryEntry, selectedHistoryId],
+    [
+      calendarEditorEntryId,
+      commitHistoryDraft,
+      handleCancelHistoryEdit,
+      pendingNewHistoryId,
+      selectedHistoryEntry,
+      selectedHistoryId,
+    ],
   )
 
   useEffect(() => {
