@@ -4701,6 +4701,15 @@ useEffect(() => {
     return merged.map((it) => ({ ...it, label: snapbackAliases[it.id] ?? it.label }))
   }, [snapbackOverview.legend, customTriggers, snapbackAliases])
 
+  // Persist current overview trigger labels for the Snapback panel to mirror
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const labels = combinedLegend.map((i) => i.label)
+      window.localStorage.setItem('nc-taskwatch-overview-triggers', JSON.stringify(labels))
+    } catch {}
+  }, [combinedLegend.map((i) => i.label).join('|')])
+
   const [selectedTriggerKey, setSelectedTriggerKey] = useState<string | null>(null)
   useEffect(() => {
     const first = combinedLegend[0]?.id ?? null

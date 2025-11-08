@@ -521,6 +521,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [snapbackCustomDuration, setSnapbackCustomDuration] = useState<string>('')
   const [snapbackReasonSelect, setSnapbackReasonSelect] = useState('')
   const SNAPBACK_CUSTOM_TRIGGERS_KEY = 'nc-taskwatch-snapback-custom-triggers'
+  const SNAPBACK_ALIAS_STORAGE_KEY = 'nc-taskwatch-snapback-aliases'
+  const SNAPBACK_OVERVIEW_TRIGGERS_KEY = 'nc-taskwatch-overview-triggers'
+  const [overviewTriggersVersion, setOverviewTriggersVersion] = useState(0)
   const [currentTaskName, setCurrentTaskName] = useState<string>(initialTaskName)
   const [sessionStart, setSessionStart] = useState<number | null>(null)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
@@ -671,39 +674,31 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
 
   // Compute most common Snapback reasons from history and include any saved custom triggers
   const snapbackReasonStats = useMemo(() => {
-    const counts = new Map<string, number>()
-    history.forEach((h) => {
-      const reason = parseSnapbackReason(h.taskName)
-      if (!reason) return
-      const key = reason.trim().toLowerCase()
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    })
-    const custom: string[] = (() => {
+    const labels: string[] = (() => {
       if (typeof window === 'undefined') return []
       try {
-        const raw = window.localStorage.getItem(SNAPBACK_CUSTOM_TRIGGERS_KEY)
-        if (!raw) return []
-        const parsed = JSON.parse(raw)
-        if (!Array.isArray(parsed)) return []
-        return parsed
-          .map((it) => (typeof it?.label === 'string' ? (it.label as string).trim() : ''))
-          .filter((s) => s.length > 0)
-      } catch {
-        return []
-      }
+        const raw = window.localStorage.getItem(SNAPBACK_OVERVIEW_TRIGGERS_KEY)
+        const parsed = raw ? JSON.parse(raw) : []
+        return Array.isArray(parsed) ? (parsed as string[]).filter((s) => typeof s === 'string' && s.trim().length > 0) : []
+      } catch { return [] }
     })()
-    // Merge custom triggers with zero counts if not present
-    custom.forEach((label) => {
-      const key = label.toLowerCase()
-      if (!counts.has(key)) counts.set(key, 0)
-    })
-    const items = Array.from(counts.entries()).map(([key, count]) => ({ key, label: key, count }))
-    items.sort((a, b) => (b.count === a.count ? a.label.localeCompare(b.label) : b.count - a.count))
-    const orderedLabels = items.map((i) => i.label)
-    const topTwo = orderedLabels.slice(0, 2)
-    const others = orderedLabels.slice(2)
-    return { topTwo, others, all: orderedLabels }
-  }, [history])
+    const ordered = labels.map((s) => s.trim())
+    const topTwo = ordered.slice(0, 2)
+    const others = ordered.slice(2)
+    return { topTwo, others, all: ordered }
+  }, [overviewTriggersVersion])
+
+  // Keep panel in sync with overview changes via storage events
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = (e: StorageEvent) => {
+      if (e.key === SNAPBACK_OVERVIEW_TRIGGERS_KEY) {
+        setOverviewTriggersVersion((v) => v + 1)
+      }
+    }
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
