@@ -943,6 +943,56 @@ const extractStopsFromGradient = (value: string): { from: string; to: string } |
   return null
 }
 
+// --- Gradient sampling helpers for node ring/fill ---
+type ColorStop = { color: string; pct: number }
+
+const parseGradientStops = (gradient: string): ColorStop[] => {
+  const colorMatches = gradient.match(/#(?:[0-9a-fA-F]{3}){1,2}/g) || []
+  const pctMatches = Array.from(gradient.matchAll(/(\d+(?:\.\d+)?)%/g)).map((m) => Number(m[1]))
+  if (colorMatches.length === 0) return []
+  const n = colorMatches.length
+  const stops: ColorStop[] = []
+  if (pctMatches.length === n) {
+    for (let i = 0; i < n; i += 1) stops.push({ color: colorMatches[i], pct: pctMatches[i] })
+  } else {
+    for (let i = 0; i < n; i += 1) stops.push({ color: colorMatches[i], pct: (i / Math.max(1, n - 1)) * 100 })
+  }
+  stops.sort((a, b) => a.pct - b.pct)
+  return stops
+}
+
+const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
+  let h = hex.replace('#', '')
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('')
+  const num = parseInt(h, 16)
+  return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 }
+}
+
+const rgbToHex = ({ r, g, b }: { r: number; g: number; b: number }): string =>
+  `#${[r, g, b]
+    .map((v) => {
+      const clamped = Math.max(0, Math.min(255, Math.round(v)))
+      const s = clamped.toString(16)
+      return s.length === 1 ? '0' + s : s
+    })
+    .join('')}`
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+
+const sampleGradientColor = (stops: ColorStop[], pct: number): string => {
+  if (stops.length === 0) return '#8fb0ff'
+  const p = Math.max(0, Math.min(100, pct))
+  let i = 0
+  while (i < stops.length - 1 && p > stops[i + 1].pct) i += 1
+  const a = stops[i]
+  const b = stops[Math.min(i + 1, stops.length - 1)]
+  if (a.pct === b.pct) return a.color
+  const t = (p - a.pct) / (b.pct - a.pct)
+  const ra = hexToRgb(a.color)
+  const rb = hexToRgb(b.color)
+  return rgbToHex({ r: lerp(ra.r, rb.r, t), g: lerp(ra.g, rb.g, t), b: lerp(ra.b, rb.b, t) })
+}
+
 const GOAL_SURFACE_CLASS_MAP: Record<GoalSurfaceStyle, string> = {
   glass: 'goal-card--glass',
   midnight: 'goal-card--midnight',
@@ -2132,30 +2182,23 @@ const MilestoneLayer: React.FC<{
               maxW = maxWFit
             }
           }
-          // Compute node ring colour, and use the goal gradient for fill when completed
-          const ringColor = (() => {
-            // Respect special start/end accents
-            if (isStart) return 'rgba(250, 204, 21, 0.9)'
-            if (isLatest) return 'rgba(99, 102, 241, 0.9)'
-            // Otherwise derive from goal gradient (use the "to" stop for a solid color)
+          // Determine the solid node colour by sampling the goal gradient at this node's x-position
+          const goalStops: ColorStop[] = (() => {
             if (goal.customGradient?.from && goal.customGradient?.to) {
-              return goal.customGradient.to
+              return [
+                { color: goal.customGradient.from, pct: 0 },
+                { color: goal.customGradient.to, pct: 100 },
+              ]
             }
             if (goal.color && BASE_GRADIENT_PREVIEW[goal.color]) {
-              const stops = extractStopsFromGradient(BASE_GRADIENT_PREVIEW[goal.color])
-              return stops?.to ?? '#8fb0ff'
+              return parseGradientStops(BASE_GRADIENT_PREVIEW[goal.color])
             }
-            return '#8fb0ff'
+            return [
+              { color: '#9fc2ff', pct: 0 },
+              { color: '#6ea1ff', pct: 100 },
+            ]
           })()
-          const nodeGradient = (() => {
-            if (goal.customGradient?.from && goal.customGradient?.to) {
-              return createCustomGradientString(goal.customGradient.from, goal.customGradient.to, 135)
-            }
-            if (goal.color && BASE_GRADIENT_PREVIEW[goal.color]) {
-              return BASE_GRADIENT_PREVIEW[goal.color]
-            }
-            return 'linear-gradient(135deg, #9fc2ff, #6ea1ff)'
-          })()
+          const ringColor = sampleGradientColor(goalStops, pct)
           return (
             <div key={m.id} className="milestones__node-wrap" style={{ left: `${pct}%` }}>
               <button
@@ -2169,8 +2212,8 @@ const MilestoneLayer: React.FC<{
                 onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart && timelineScaled) beginDrag(m.id, ev) }}
                 style={{
                   ['--ms-node-ring' as any]: ringColor,
-                  // Fill only when completed; otherwise keep hollow by masking with background
-                  ['--ms-node-inner' as any]: m.completed ? nodeGradient : 'var(--ms-node-bg)',
+                  ['--ms-node-inner' as any]: m.completed ? ringColor : 'var(--ms-node-bg)',
+                  borderColor: ringColor,
                 } as React.CSSProperties}
                 aria-label={`${m.name} ${formatShort(m.date)}${m.completed ? ' (completed)' : ''}`}
               />
