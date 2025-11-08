@@ -4514,7 +4514,6 @@ useEffect(() => {
   // Custom Triggers (user-defined, supplement overview legend)
   type CustomTrigger = { id: string; label: string }
   const SNAPBACK_CUSTOM_TRIGGERS_KEY = 'nc-taskwatch-snapback-custom-triggers'
-  const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
   const readCustomTriggers = (): CustomTrigger[] => {
     if (typeof window === 'undefined') return []
     try {
