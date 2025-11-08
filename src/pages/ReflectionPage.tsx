@@ -2281,7 +2281,7 @@ const computeRangeOverview = (
 export default function ReflectionPage() {
   type CalendarViewMode = 'day' | '3d' | 'week' | 'month' | 'year'
   const [calendarView, setCalendarView] = useState<CalendarViewMode>('week')
-  const [calendarReady, setCalendarReady] = useState<boolean>(false)
+  // No explicit visibility gating; transforms are guarded until measured
   const [multiDayCount, setMultiDayCount] = useState<number>(4)
   const [showMultiDayChooser, setShowMultiDayChooser] = useState(false)
   const [historyDayOffset, setHistoryDayOffset] = useState(0)
@@ -7173,11 +7173,7 @@ useEffect(() => {
 
       const styleVars = { ['--calendar-day-count' as any]: String(dayStarts.length) } as CSSProperties
       return (
-        <div
-          className="calendar-vertical"
-          aria-label="Time grid"
-          style={{ ...styleVars, visibility: calendarReady ? 'visible' : 'hidden' }}
-        >
+        <div className="calendar-vertical" aria-label="Time grid" style={styleVars}>
           <div className="calendar-vertical__header">
             <div className="calendar-axis-header" />
             <div className="calendar-header-wrapper" onPointerDown={handleCalendarAreaPointerDown}>
@@ -8205,14 +8201,14 @@ useEffect(() => {
     const bufferDays = getCalendarBufferDays(visibleDayCount)
     const dayWidth = area.clientWidth / Math.max(1, visibleDayCount)
     if (!Number.isFinite(dayWidth) || dayWidth <= 0) {
-      // Defer until measured by ResizeObserver (tab may be hidden initially)
+      // Skip transform until measured via ResizeObserver
       return
     }
     const base = -bufferDays * dayWidth
     calendarBaseTranslateRef.current = base
     daysEl.style.transform = `translateX(${base}px)`
     hdrEl.style.transform = `translateX(${base}px)`
-    setCalendarReady(true)
+    // ready by default
   }, [anchorDate, calendarInspectorEntryId, calendarView, multiDayCount, calendarViewportVersion])
 
   useEffect(() => {
