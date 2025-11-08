@@ -3997,7 +3997,6 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     [
       calendarEditorEntryId,
       commitHistoryDraft,
-      handleCancelHistoryEdit,
       pendingNewHistoryId,
       selectedHistoryEntry,
       selectedHistoryId,
@@ -4030,34 +4029,11 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
   const handleCancelHistoryEdit = useCallback(() => {
     setInspectorFallbackMessage(null)
     setShowInspectorExtras(false)
-    // If we're cancelling a newly added (pending) entry, delete it only if untouched (no field edits)
+    // If we're cancelling a newly added (pending) entry, always delete it (discard creation)
     if (pendingNewHistoryId && selectedHistoryId === pendingNewHistoryId) {
       const entry = selectedHistoryEntry
-      const draft = historyDraft
-      const entryTask = (entry?.taskName ?? '').trim()
-      const draftTask = (draft.taskName ?? '').trim()
-      const entryGoal = (entry?.goalName ?? '').trim()
-      const draftGoal = (draft.goalName ?? '').trim()
-      const entryBucket = (entry?.bucketName ?? '').trim()
-      const draftBucket = (draft.bucketName ?? '').trim()
-      const entryStart = entry?.startedAt ?? null
-      const entryEnd = entry?.endedAt ?? null
-      const draftStart = draft.startedAt ?? entryStart
-      const draftEnd = draft.endedAt ?? entryEnd
-      const entryNotes = entry?.notes ?? ''
-      const draftNotes = draft.notes ?? ''
-      const subtasksEqual = areHistorySubtasksEqual(entry?.subtasks ?? [], draft.subtasks)
-      const untouched =
-        entryTask === draftTask &&
-        entryGoal === draftGoal &&
-        entryBucket === draftBucket &&
-        entryStart === draftStart &&
-        entryEnd === draftEnd &&
-        entryNotes === draftNotes &&
-        subtasksEqual
-
-      if (untouched && entry) {
-        // Remove the new entry since user dismissed without editing
+      if (entry) {
+        // Remove the new entry since user dismissed the editor
         updateHistory((current) => current.filter((e) => e.id !== entry.id))
       }
       setPendingNewHistoryId(null)
