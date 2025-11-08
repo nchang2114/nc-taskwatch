@@ -475,16 +475,7 @@ const formatClockTime = (timestamp: number) => {
   return `${hours12.toString().padStart(2, '0')}:${minutes}:${seconds} ${period}`
 }
 
-// Parse a Snapback task name into a reason label, if present
-const parseSnapbackReason = (taskName: string): string | null => {
-  const prefix = 'Snapback • '
-  if (!taskName || !taskName.startsWith(prefix)) return null
-  const rest = taskName.slice(prefix.length)
-  const enDash = ' – '
-  if (rest.includes(enDash)) return rest.split(enDash).slice(1).join(enDash).trim()
-  if (rest.includes(' - ')) return rest.split(' - ').slice(1).join(' - ').trim()
-  return null
-}
+// (removed: snapback reason parser; panel mirrors Overview triggers instead)
 
 export type TaskwatchPageProps = {
   viewportWidth: number
@@ -521,7 +512,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [snapbackCustomDuration, setSnapbackCustomDuration] = useState<string>('')
   const [snapbackReasonSelect, setSnapbackReasonSelect] = useState('')
   const SNAPBACK_CUSTOM_TRIGGERS_KEY = 'nc-taskwatch-snapback-custom-triggers'
-  const SNAPBACK_ALIAS_STORAGE_KEY = 'nc-taskwatch-snapback-aliases'
   const SNAPBACK_OVERVIEW_TRIGGERS_KEY = 'nc-taskwatch-overview-triggers'
   const [overviewTriggersVersion, setOverviewTriggersVersion] = useState(0)
   const [currentTaskName, setCurrentTaskName] = useState<string>(initialTaskName)
