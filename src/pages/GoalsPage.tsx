@@ -1424,6 +1424,7 @@ type Milestone = {
   date: string // ISO string (midnight local)
   completed: boolean
   role: 'start' | 'end' | 'normal'
+  hidden?: boolean
 }
 
 const MILESTONE_DATA_KEY = 'nc-taskwatch-milestones-state-v1'
@@ -1562,9 +1563,16 @@ const MilestoneLayer: React.FC<{
               console.warn('[Milestones] Failed to seed missing milestone', err),
             )
           }
-          setMilestones(
-            reconciled.map((r) => ({ id: r.id, name: r.name, date: r.date, completed: r.completed, role: r.role })) as Milestone[],
-          )
+          const withHidden = reconciled.map((r) => ({ id: r.id, name: r.name, date: r.date, completed: r.completed, role: r.role, hidden: (r as any).hidden })) as Milestone[]
+          setMilestones(withHidden)
+          // Sync expanded state with server 'hidden' on load
+          setExpandedMap(() => {
+            const next: Record<string, boolean> = {}
+            for (const m of withHidden) {
+              next[m.id] = m.hidden === true ? false : true
+            }
+            return next
+          })
           return
         }
         const seeded = ensureDefaultMilestones(goal, [])
@@ -1592,12 +1600,12 @@ const MilestoneLayer: React.FC<{
     setMilestones((cur) => (cur && cur.length > 0 ? cur : ensureDefaultMilestones(goal, cur)))
   }, [goal.id, goal.createdAt])
 
-  // Keep an expanded flag per milestone; default to true for newly seen ids
+  // Keep an expanded flag per milestone; default using server 'hidden' when available
   useEffect(() => {
     setExpandedMap((prev) => {
       const next: Record<string, boolean> = { ...prev }
       for (const m of milestones) {
-        if (!(m.id in next)) next[m.id] = true
+        if (!(m.id in next)) next[m.id] = m.hidden === true ? false : true
       }
       // prune removed ids
       for (const id of Object.keys(next)) {
@@ -2198,40 +2206,32 @@ const MilestoneLayer: React.FC<{
               { color: '#6ea1ff', pct: 100 },
             ]
           })()
-          let ringColor = sampleGradientColor(goalStops, pct)
-          // Preserve special colors for start and latest milestone to match prior styling
-          if (isStart) ringColor = 'rgba(250, 204, 21, 0.9)'
-          if (isLatest) ringColor = 'rgba(99, 102, 241, 0.9)'
+          const ringColor = sampleGradientColor(goalStops, pct)
           return (
             <div key={m.id} className="milestones__node-wrap" style={{ left: `${pct}%` }}>
               <button
                 type="button"
-                className={classNames('milestones__node', 'milestones__node--svg', m.completed && 'milestones__node--done', isStart && 'milestones__node--start', isLatest && 'milestones__node--end')}
+                className={classNames('milestones__node', m.completed && 'milestones__node--done', isStart && 'milestones__node--start', isLatest && 'milestones__node--end')}
                 onClick={(ev) => {
                   if (suppressClickIdRef.current === m.id) { ev.preventDefault(); ev.stopPropagation(); suppressClickIdRef.current = null; return }
                   ev.preventDefault(); ev.stopPropagation()
-                  setExpandedMap((prev) => ({ ...prev, [m.id]: !(prev[m.id] ?? true) }))
+                  setExpandedMap((prev) => {
+                    const willExpand = !(prev[m.id] ?? true)
+                    // Persist new hidden state (hidden = !expanded)
+                    try { apiUpsertGoalMilestone(goal.id, { ...m, hidden: !willExpand }) } catch {}
+                    // Reflect in local milestone copy too so future calls include hidden
+                    setMilestones((cur) => cur.map((x) => (x.id === m.id ? { ...x, hidden: !willExpand } : x)))
+                    return { ...prev, [m.id]: willExpand }
+                  })
                 }}
                 onPointerDown={(ev) => { if (!isStart && !isOnlyNonStart && timelineScaled) beginDrag(m.id, ev) }}
                 style={{
                   ['--ms-node-ring' as any]: ringColor,
                   ['--ms-node-inner' as any]: m.completed ? ringColor : 'var(--ms-node-bg)',
-                  // Keep box dimensions identical but render the ring via SVG to avoid zoom rounding issues
-                  borderColor: 'transparent',
+                  borderColor: ringColor,
                 } as React.CSSProperties}
                 aria-label={`${m.name} ${formatShort(m.date)}${m.completed ? ' (completed)' : ''}`}
               />
-              {/* Inline SVG ring to remain concentric at any zoom */}
-              <svg
-                width={14}
-                height={14}
-                viewBox="0 0 14 14"
-                aria-hidden="true"
-                style={{ position: 'absolute', top: '-9px', left: '50%', transform: 'translateX(-50%)', pointerEvents: 'none', zIndex: 2 }}
-              >
-                <circle cx={7} cy={7} r={6} fill="none" stroke={ringColor} strokeWidth={2} vectorEffect="non-scaling-stroke" />
-                <circle cx={7} cy={7} r={5} fill={m.completed ? ringColor : 'var(--ms-node-bg)'} />
-              </svg>
                 {isExpanded ? (
                   <>
                     <span

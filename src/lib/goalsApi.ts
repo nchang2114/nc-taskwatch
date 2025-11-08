@@ -51,6 +51,7 @@ export type DbGoalMilestone = {
   target_date: string // timestamptz ISO string
   completed: boolean
   role: 'start' | 'end' | 'normal'
+  hidden?: boolean
 }
 
 export async function fetchGoalCreatedAt(goalId: string): Promise<string | null> {
@@ -305,17 +306,35 @@ export async function fetchTaskNotes(taskId: string): Promise<string> {
 
 // ---------- Goal Milestones ----------
 export async function fetchGoalMilestones(goalId: string): Promise<
-  Array<{ id: string; name: string; date: string; completed: boolean; role: 'start' | 'end' | 'normal' }>
+  Array<{ id: string; name: string; date: string; completed: boolean; role: 'start' | 'end' | 'normal'; hidden?: boolean }>
 > {
   if (!supabase) return []
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) return []
-  const { data, error } = await supabase
-    .from('goal_milestones')
-    .select('id, name, target_date, completed, role')
-    .eq('goal_id', goalId)
-    .eq('user_id', session.user.id)
-    .order('target_date', { ascending: true })
+  let data: any[] | null = null
+  let error: any = null
+  {
+    const res = await supabase
+      .from('goal_milestones')
+      .select('id, name, target_date, completed, role, hidden')
+      .eq('goal_id', goalId)
+      .eq('user_id', session.user.id)
+      .order('target_date', { ascending: true })
+    data = (res.data as any[] | null) ?? null
+    error = res.error
+    const code = String((error as any)?.code || '')
+    if (error && code === '42703') {
+      // Column hidden missing — retry without it
+      const retry = await supabase
+        .from('goal_milestones')
+        .select('id, name, target_date, completed, role')
+        .eq('goal_id', goalId)
+        .eq('user_id', session.user.id)
+        .order('target_date', { ascending: true })
+      data = (retry.data as any[] | null) ?? null
+      error = retry.error
+    }
+  }
   if (error) {
     console.warn('[goalsApi] fetchGoalMilestones error', error.message ?? error)
     return []
@@ -327,17 +346,18 @@ export async function fetchGoalMilestones(goalId: string): Promise<
     date: typeof row.target_date === 'string' ? row.target_date : new Date().toISOString(),
     completed: Boolean(row.completed),
     role: row.role === 'start' || row.role === 'end' ? row.role : 'normal',
+    hidden: typeof (row as any).hidden === 'boolean' ? Boolean((row as any).hidden) : undefined,
   }))
 }
 
 export async function upsertGoalMilestone(
   goalId: string,
-  milestone: { id: string; name: string; date: string; completed: boolean; role: 'start' | 'end' | 'normal' },
+  milestone: { id: string; name: string; date: string; completed: boolean; role: 'start' | 'end' | 'normal'; hidden?: boolean },
 ) {
   if (!supabase) return
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) throw new Error('[goalsApi] Missing Supabase session for milestone upsert')
-  const payload = {
+  const payload: Record<string, any> = {
     id: milestone.id,
     user_id: session.user.id,
     goal_id: goalId,
@@ -346,8 +366,25 @@ export async function upsertGoalMilestone(
     completed: milestone.completed,
     role: milestone.role,
   }
-  const { error } = await supabase.from('goal_milestones').upsert(payload, { onConflict: 'id' })
-  if (error) throw error
+  if (typeof milestone.hidden === 'boolean') {
+    payload.hidden = milestone.hidden
+  }
+  try {
+    const { error } = await supabase.from('goal_milestones').upsert(payload, { onConflict: 'id' })
+    if (error) {
+      const msg = String(error.message || '')
+      if (msg.toLowerCase().includes('column') && msg.toLowerCase().includes('hidden')) {
+        // Retry without hidden
+        delete payload.hidden
+        const { error: retryErr } = await supabase.from('goal_milestones').upsert(payload, { onConflict: 'id' })
+        if (retryErr) throw retryErr
+        return
+      }
+      throw error
+    }
+  } catch (err) {
+    throw err
+  }
 }
 
 export async function deleteGoalMilestone(goalId: string, milestoneId: string) {

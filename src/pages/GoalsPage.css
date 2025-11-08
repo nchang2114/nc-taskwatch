@@ -1447,15 +1447,6 @@ html[data-theme='light'] .milestones__mini-date {
   z-index: 2; /* ensure node sits above stems */
 }
 
-/* SVG-rendered ring variant: disable CSS border/inner disk and let SVG handle visuals */
-.milestones__node--svg {
-  background: transparent;
-  border-color: transparent;
-}
-.milestones__node--svg::after {
-  content: none;
-}
-
 /* Outer soft ring/halo to mimic layered ring look */
 .milestones__node::before {
   content: none; /* remove outer halo ring */
