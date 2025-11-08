@@ -1337,6 +1337,26 @@ html[data-theme='light'] .goal-archive-restore:focus-visible {
 .milestones__view-btn.is-active {
   background: linear-gradient(135deg, rgba(59,130,246,0.35), rgba(99,102,241,0.35));
 }
+
+/* Light theme: view toggle styling */
+html[data-theme='light'] .milestones__view-toggle {
+  border-color: rgba(128, 146, 238, 0.36);
+  background: rgba(250, 252, 255, 0.96);
+  box-shadow: 0 12px 24px -18px rgba(82, 96, 150, 0.28);
+}
+html[data-theme='light'] .milestones__view-btn {
+  color: rgba(26, 34, 92, 0.92);
+}
+html[data-theme='light'] .milestones__view-btn + .milestones__view-btn {
+  border-left-color: rgba(128, 146, 238, 0.28);
+}
+html[data-theme='light'] .milestones__view-btn:hover,
+html[data-theme='light'] .milestones__view-btn:focus-visible {
+  background: rgba(28, 36, 94, 0.08);
+}
+html[data-theme='light'] .milestones__view-btn.is-active {
+  background: linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.18));
+}
 .milestones__line {
   position: absolute;
   left: 0;
@@ -1415,7 +1435,7 @@ html[data-theme='light'] .milestones__mini-date {
   border-radius: 50%;
   border: 2px solid var(--ms-node-ring, rgba(173, 186, 255, 0.8));
   background: var(--ms-node-bg); /* mask the center so lines don't show through */
-  box-shadow: 0 2px 8px rgba(2,6,28,0.5);
+  box-shadow: none;
   cursor: pointer;
   touch-action: none;
   position: relative;
