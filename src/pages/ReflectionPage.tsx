@@ -348,6 +348,7 @@ type PieSegment = {
 
 type PieArc = {
   id: string
+  label: string
   color: string
   path: string
   fill: string
@@ -362,7 +363,9 @@ const UNCATEGORISED_LABEL = 'Uncategorised'
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
 const LIFE_ROUTINES_NAME = 'Life Routines'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
-// Snapback virtual goal (crimson accent theme)
+// Snapback virtual goal
+// Session History: use orange→crimson gradient
+// Time Overview: we render Snapback arcs with reversed sampling (crimson→orange)
 const SNAPBACK_NAME = 'Snapback'
 const SNAPBACK_SURFACE: SurfaceStyle = 'ember'
 const SNAPBACK_COLOR_INFO: GoalColorInfo = {
@@ -1524,6 +1527,7 @@ const buildArcLoopSlices = (arc: PieArc): LoopSlice[] => {
       )
     : 1
   const slices: LoopSlice[] = []
+  const isSnapbackArc = (arc.label?.trim().toLowerCase() === SNAPBACK_NAME.toLowerCase())
   for (let index = 0; index < sliceCount; index += 1) {
     const sliceStart = arc.startAngle + (span * index) / sliceCount
     const sliceEnd = index === sliceCount - 1 ? arc.endAngle : arc.startAngle + (span * (index + 1)) / sliceCount
@@ -1531,7 +1535,11 @@ const buildArcLoopSlices = (arc: PieArc): LoopSlice[] => {
       continue
     }
     const midAngle = sliceStart + (sliceEnd - sliceStart) / 2
-    const localRatio = span <= 0 ? 0 : clamp01((midAngle - arc.startAngle) / span)
+    let localRatio = span <= 0 ? 0 : clamp01((midAngle - arc.startAngle) / span)
+    // Invert gradient sampling for Snapback arcs to achieve crimson→orange effect in the pie
+    if (isSnapbackArc) {
+      localRatio = 1 - localRatio
+    }
     const color = sampleGradientColor(arc.colorInfo, arc.baseColor, localRatio)
     slices.push({
       key: `${arc.id}-slice-${index}`,
@@ -1966,6 +1974,7 @@ const createPieArcs = (segments: PieSegment[], windowMs: number): PieArc[] => {
     const fillValue = isUnlogged ? 'var(--reflection-chart-unlogged-soft)' : fallbackFill
     arcs.push({
       id: segment.id,
+      label: segment.label,
       color: segment.swatch,
       path: describeDonutSlice(startAngle, endAngle),
       fill: fillValue,
@@ -2061,6 +2070,10 @@ const resolveGoalMetadata = (
   }
   const snapReason = parseSnapbackReason(entry.taskName)
   if (snapReason) {
+    return { label: SNAPBACK_NAME, colorInfo: SNAPBACK_COLOR_INFO }
+  }
+  // If a session is explicitly labeled with the Snapback goal, use the Snapback palette
+  if (goalNameRaw && normalizedGoalName === SNAPBACK_NAME.toLowerCase()) {
     return { label: SNAPBACK_NAME, colorInfo: SNAPBACK_COLOR_INFO }
   }
   const isLifeRoutineEntry =
