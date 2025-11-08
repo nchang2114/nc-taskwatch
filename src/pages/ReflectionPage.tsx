@@ -1397,7 +1397,7 @@ const makeHistoryId = () => {
       return globalThis.crypto.randomUUID()
     }
   } catch (error) {
-    console.warn('Failed to generate UUID for history entry, falling back to timestamp-based id', error)
+    // Silenced non-critical UUID generation warning
   }
   return `history-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
@@ -2278,7 +2278,7 @@ export default function ReflectionPage() {
         const rules = await fetchRepeatingSessionRules()
         if (!cancelled) setRepeatingRules(rules)
       } catch (err) {
-        console.warn('[calendar] Failed to load repeating sessions', err)
+        // Silenced repeating sessions load warning
       }
     }
     void load()
@@ -3587,7 +3587,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
           }
           updateHistoryDraftField('taskName', name)
         } catch (error) {
-          console.warn('[ReflectionPage] Failed to create task from session:', error)
+          // Silenced create task warning
         }
       })()
     },
@@ -3652,7 +3652,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
             publishGoalsSnapshot(snapshot)
           }
         } catch (error) {
-          console.warn('[ReflectionPage] Failed to move task to new bucket:', error)
+          // Silenced move task warning
         }
       })()
     },
@@ -4540,7 +4540,6 @@ useEffect(() => {
 
   // Inline edit within list for newly created trigger
   const [editingTriggerId, setEditingTriggerId] = useState<string | null>(null)
-  const [editTriggerValue, setEditTriggerValue] = useState<string>('')
   const editTriggerInputRef = useRef<HTMLInputElement | null>(null)
   useEffect(() => {
     if (editingTriggerId) {
@@ -4554,11 +4553,11 @@ useEffect(() => {
     setCustomTriggers((cur) => [...cur, { id, label }])
     setSelectedTriggerKey(id)
     setEditingTriggerId(id)
-    setEditTriggerValue(label)
   }, [])
   const commitEditTrigger = useCallback(() => {
     if (!editingTriggerId) return
-    const trimmed = editTriggerValue.trim()
+    const raw = editTriggerInputRef.current?.value ?? ''
+    const trimmed = raw.trim()
     if (trimmed.length === 0) {
       // keep placeholder label
       setCustomTriggers((cur) => cur.map((ct) => (ct.id === editingTriggerId ? { ...ct, label: 'New Trigger' } : ct)))
@@ -4578,7 +4577,7 @@ useEffect(() => {
     }
     setCustomTriggers((cur) => cur.map((ct) => (ct.id === editingTriggerId ? { ...ct, label: trimmed } : ct)))
     setEditingTriggerId(null)
-  }, [editingTriggerId, editTriggerValue, snapbackOverview.legend, customTriggers])
+  }, [editingTriggerId, snapbackOverview.legend, customTriggers])
 
   const combinedLegend = useMemo(() => {
     const base = snapbackOverview.legend
@@ -9740,52 +9739,60 @@ useEffect(() => {
 
       {/* Snap Back Overview */}
       <section className="reflection-section reflection-section--overview">
-        <h2 className="reflection-section__title">Snap Back Overview</h2>
-        <div className="reflection-tabs" role="tablist" aria-label="Snap back time ranges">
-          {SNAP_RANGE_KEYS.map((key) => {
-            const config = SNAP_RANGE_DEFS[key]
-            const isActive = key === snapActiveRange
-            return (
-              <button
-                key={`snap-${key}`}
-                type="button"
-                role="tab"
-                tabIndex={isActive ? 0 : -1}
-                aria-selected={isActive}
-                aria-controls={snapbackPanelId}
-                className={`reflection-tab${isActive ? ' reflection-tab--active' : ''}`}
-                onClick={() => setSnapActiveRange(key)}
-              >
-                <span className="reflection-tab__label">{config.label}</span>
-              </button>
-            )
-          })}
+        <div className="reflection-overview__header">
+          <div className="reflection-overview__titles">
+            <h2 className="reflection-section__title">Snap Back Overview</h2>
+            <p className="reflection-section__desc">Review your recurring snap-back patterns and plan your next move.</p>
+          </div>
+          <div className="snap-tabs" role="tablist" aria-label="Snap back time ranges">
+            {SNAP_RANGE_KEYS.map((key) => {
+              const config = SNAP_RANGE_DEFS[key]
+              const isActive = key === snapActiveRange
+              return (
+                <button
+                  key={`snap-${key}`}
+                  type="button"
+                  role="tab"
+                  tabIndex={isActive ? 0 : -1}
+                  aria-selected={isActive}
+                  aria-controls={snapbackPanelId}
+                  className={`snap-tab${isActive ? ' snap-tab--active' : ''}`}
+                  onClick={() => setSnapActiveRange(key)}
+                >
+                  <span className="snap-tab__label">{config.label}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         <div className="snapback-overview" role="tabpanel" id={snapbackPanelId} aria-live="polite" aria-label={`${snapActiveRangeConfig.label} snap backs`}>
-          <div className="snapback-list__head">
-            <h3 className="snapback-list__title">Triggers</h3>
-            <button
-              type="button"
-              className="snapback-list__add"
-              onClick={startAddTrigger}
-            >
-              + Add Trigger
-            </button>
-          </div>
-          <div className="snapback-list">
-            {combinedLegend.map((item) => {
-              const isActive = item.id === selectedTriggerKey
-              const isCustom = customTriggers.some((ct) => ct.id === item.id)
-              const isEditing = isCustom && editingTriggerId === item.id
+          <div className="snapback-triggers">
+            <div className="snapback-list__head">
+              <h3 className="snapback-list__title">Triggers</h3>
+              <button
+                type="button"
+                className="snapback-list__add"
+                onClick={startAddTrigger}
+              >
+                + Add Trigger
+              </button>
+            </div>
+            <div className="snapback-list snapback-list--stack">
+              {combinedLegend.map((item) => {
+                const isActive = item.id === selectedTriggerKey
+                const isCustom = customTriggers.some((ct) => ct.id === item.id)
+                const isEditing = isCustom && editingTriggerId === item.id
               return (
                 <div
                   key={item.id}
-                  className={`snapback-item${isActive ? ' snapback-item--active' : ''}`}
+                  className={`snapback-item snapback-item--row${isActive ? ' snapback-item--active' : ''}`}
                   onClick={() => setSelectedTriggerKey(item.id)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
+                    const t = e.target as HTMLElement
+                    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || (t as any).isContentEditable)) return
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
                       setSelectedTriggerKey(item.id)
@@ -9799,10 +9806,10 @@ useEffect(() => {
                         <input
                           ref={editTriggerInputRef}
                           type="text"
-                          value={editTriggerValue}
-                          onChange={(e) => setEditTriggerValue(e.target.value)}
+                          defaultValue={item.label}
                           onBlur={() => commitEditTrigger()}
                           onKeyDown={(e) => {
+                            e.stopPropagation()
                             if (e.key === 'Enter') { e.preventDefault(); commitEditTrigger() }
                             if (e.key === 'Escape') { e.preventDefault(); setEditingTriggerId(null) }
                           }}
@@ -9814,10 +9821,33 @@ useEffect(() => {
                       )}
                     </div>
                     <div className="snapback-item__meta">{item.count}x • {formatDuration(item.durationMs)}</div>
+                    {isCustom ? (
+                      <button
+                        type="button"
+                        className="snapback-item__delete"
+                        aria-label={`Delete trigger ${item.label}`}
+                        title="Delete trigger"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setCustomTriggers((cur) => cur.filter((ct) => ct.id !== item.id))
+                          if (editingTriggerId === item.id) setEditingTriggerId(null)
+                        }}
+                      >
+                        <svg className="snapback-item__delete-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M3 6h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M10 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                          <path d="M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                          <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               )
             })}
+            </div>
           </div>
           {combinedLegend.length === 0 ? (
             <p className="reflection-section__desc">No Snap Back sessions logged yet.</p>
@@ -9826,18 +9856,23 @@ useEffect(() => {
           <div className="snapback-drawer">
             <div className="snapback-drawer__header">
               <div className="snapback-drawer__titles">
-                <h3 className="snapback-drawer__title">Pattern: {selectedItem?.label ?? '—'}</h3>
+                <span className="snapback-drawer__eyebrow">Pattern</span>
+                <h3 className="snapback-drawer__title">{selectedItem?.label ?? '—'}</h3>
                 {selectedItem ? (
-                  <p className="snapback-drawer__subtitle">This pattern occurred {selectedItem.count}× ({formatDuration(selectedItem.durationMs)}) in this range.</p>
+                  <p className="snapback-drawer__subtitle">Occurred {selectedItem.count}× ({formatDuration(selectedItem.durationMs)}) in this range.</p>
                 ) : null}
+                {/* privacy note removed per request */}
               </div>
+              <div className="snapback-drawer__badge">Range: {snapActiveRangeConfig.label}</div>
             </div>
 
             <div className="snapback-drawer__group">
               <label className="snapback-drawer__label">Why is this happening?</label>
+              <p className="snapback-drawer__hint">Describe what tends to lead up to this pattern. What’s going on beforehand?</p>
               <input
                 type="text"
                 className="snapback-drawer__input"
+                placeholder="Describe the lead-up or trigger."
                 value={selectedPlan.cue}
                 onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, cue: e.target.value } }))}
               />
@@ -9845,17 +9880,21 @@ useEffect(() => {
 
             <div className="snapback-drawer__group">
               <label className="snapback-drawer__label">Is it aligned with who you want to be? What's the reward, is it sustainable?</label>
+              <p className="snapback-drawer__hint">What’s the reward you’re getting right now? Is it sustainable?</p>
               <textarea
                 className="snapback-drawer__textarea"
+                placeholder="Be honest about the short-term reward and the long-term cost."
                 value={selectedPlan.deconstruction}
                 onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, deconstruction: e.target.value } }))}
               />
             </div>
 
             <div className="snapback-drawer__group">
-              <label className="snapback-drawer__label">How do you change for the next time</label>
+              <label className="snapback-drawer__label">How do you change it next time?</label>
+              <p className="snapback-drawer__hint">Write one small, concrete thing you’ll try the next time this trigger appears.</p>
               <textarea
                 className="snapback-drawer__textarea"
+                placeholder="Write one small, concrete thing you’ll try."
                 value={selectedPlan.plan}
                 onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, plan: e.target.value } }))}
               />

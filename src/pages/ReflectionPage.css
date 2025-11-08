@@ -1080,6 +1080,22 @@ html[data-theme='light'] {
   gap: clamp(0.9rem, 2.2vw, 1.2rem);
   width: 100%;
 }
+
+/* Triggers container box */
+.snapback-triggers {
+  border: 1px solid rgba(132, 148, 228, 0.28);
+  background: rgba(18, 24, 56, 0.42);
+  border-radius: 0.9rem;
+  padding: 0.75rem 0.75rem 0.85rem;
+  box-shadow: 0 14px 28px -22px rgba(2, 6, 28, 0.5);
+  display: grid;
+  gap: 0.6rem;
+}
+html[data-theme='light'] .snapback-triggers {
+  background: rgba(244, 247, 255, 0.96);
+  border-color: rgba(160, 172, 236, 0.45);
+  box-shadow: 0 18px 36px -24px rgba(86, 110, 178, 0.22);
+}
 .snapback-list__head {
   display: flex;
   align-items: center;
@@ -1136,6 +1152,10 @@ html[data-theme='light'] .snapback-list__add-input {
   grid-template-columns: repeat(auto-fill, minmax(220px, 280px));
   gap: 0.7rem;
 }
+.snapback-list--stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 720px) {
+  .snapback-list--stack { grid-template-columns: 1fr; }
+}
 
 /* Force two-up layout on small viewports */
 @media (max-width: 560px) {
@@ -1160,6 +1180,7 @@ html[data-theme='light'] .snapback-list__add-input {
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
+.snapback-item--row { padding: 0.55rem 0.7rem; border-radius: 0.6rem; background: rgba(18, 24, 56, 0.32); }
 .snapback-item--active {
   background: rgba(26, 34, 78, 0.6);
   border-color: rgba(156, 172, 246, 0.55);
@@ -1168,9 +1189,10 @@ html[data-theme='light'] .snapback-list__add-input {
 .snapback-item:focus-visible { outline: 2px solid var(--accent, #7c8cff); outline-offset: 3px; }
 .snapback-item__row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 0.45rem;
   align-items: center;
+  min-height: 34px;
 }
 .snapback-item__left {
   display: inline-flex;
@@ -1179,8 +1201,8 @@ html[data-theme='light'] .snapback-list__add-input {
   min-width: 0;
 }
 .snapback-item__dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
 }
 .snapback-item__title {
@@ -1189,6 +1211,8 @@ html[data-theme='light'] .snapback-list__add-input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
 }
 .snapback-item__title-input {
   font: inherit;
@@ -1197,6 +1221,7 @@ html[data-theme='light'] .snapback-list__add-input {
   border: 1px solid rgba(132, 148, 228, 0.32);
   border-radius: 0.4rem;
   padding: 0.2rem 0.35rem;
+  min-height: 28px;
   min-width: 10ch;
 }
 html[data-theme='light'] .snapback-item__title-input {
@@ -1207,6 +1232,31 @@ html[data-theme='light'] .snapback-item__title-input {
   color: var(--text-secondary);
   font-family: var(--font-numeric);
   font-size: 0.86rem;
+  display: inline-flex;
+  align-items: center;
+}
+.snapback-item__delete {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  width: 28px;
+  height: 28px;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.snapback-item__delete:hover,
+.snapback-item__delete:focus-visible {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+.snapback-item__delete-icon { width: 16px; height: 16px; display: block; }
+html[data-theme='light'] .snapback-item__delete:hover,
+html[data-theme='light'] .snapback-item__delete:focus-visible {
+  background: rgba(240, 244, 255, 0.96);
 }
 .snapback-item__view { display: none; }
 /* progress bar removed for a sleeker look */
@@ -1221,8 +1271,13 @@ html[data-theme='light'] .snapback-item__title-input {
   gap: 0.8rem;
 }
 .snapback-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
-.snapback-drawer__title { margin: 0; font-weight: 600; font-size: 1rem; }
+.snapback-drawer__eyebrow { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.7rem; color: var(--text-secondary); }
+.snapback-drawer__title { margin: 0.1rem 0 0 0; font-weight: 700; font-size: 1.1rem; color: var(--text-primary); }
 .snapback-drawer__subtitle { margin: 0; color: var(--text-secondary); font-size: 0.9rem; }
+.snapback-drawer__hint { margin: -0.2rem 0 0.2rem; color: var(--text-secondary); font-size: 0.82rem; }
+.snapback-drawer__privacy { margin: 0.3rem 0 0; color: var(--text-secondary); font-size: 0.82rem; }
+.snapback-drawer__badge { padding: 0.28rem 0.5rem; border-radius: 0.5rem; border: 1px solid rgba(132, 148, 228, 0.4); background: rgba(255, 255, 255, 0.06); color: var(--text-primary); font-size: 0.78rem; white-space: nowrap; }
+html[data-theme='light'] .snapback-drawer__badge { background: rgba(246, 248, 255, 0.96); border-color: rgba(160, 172, 236, 0.45); }
 /* snapback-drawer__phase removed */
 .snapback-drawer__group { display: flex; flex-direction: column; gap: 0.4rem; }
 .snapback-drawer__label { font-weight: 600; color: var(--text-primary); font-size: 0.9rem; }
@@ -1283,6 +1338,17 @@ html[data-theme='light'] .snapback-drawer__button {
   align-self: flex-start;
 }
 
+/* Header row: title on left, tabs on right */
+.reflection-overview__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(0.8rem, 2.4vw, 1.2rem);
+  width: 100%;
+  flex-wrap: wrap;
+}
+.reflection-overview__titles { display: grid; gap: 0.25rem; }
+
 .reflection-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -1337,6 +1403,36 @@ html[data-theme='light'] .reflection-tab--active {
   background: rgba(202, 210, 255, 0.95);
   border-color: rgba(128, 140, 230, 0.65);
 }
+
+/* SnapBack-only pill tabs next to header */
+.snap-tabs {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(118, 134, 232, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 22px -18px rgba(0, 0, 0, 0.35);
+  max-width: 100%;
+}
+.snap-tab {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  font-family: var(--font-display);
+  font-size: clamp(0.76rem, 1.5vw, 0.9rem);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.snap-tab--active { background: rgba(104, 124, 255, 0.92); color: #fff; }
+html[data-theme='light'] .snap-tabs { background: #fff; border-color: rgba(200, 208, 255, 0.6); box-shadow: 0 12px 30px -20px rgba(60, 80, 160, 0.25); }
+html[data-theme='light'] .snap-tab { color: rgba(50, 58, 108, 0.78); }
+html[data-theme='light'] .snap-tab--active { color: #fff; background: rgba(104, 124, 255, 0.98); }
 
 .reflection-overview {
   display: grid;
