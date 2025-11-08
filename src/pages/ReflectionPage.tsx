@@ -65,6 +65,14 @@ import {
 } from '../lib/repeatingExceptions'
 import { evaluateAndMaybeRetireRule, setRepeatToNoneAfterTimestamp, deleteRepeatingRuleById } from '../lib/repeatingSessions'
 import { broadcastFocusTask } from '../lib/focusChannel'
+import {
+  fetchSnapbackOverviewRows as apiFetchSnapbackRows,
+  upsertSnapbackOverviewByBaseKey as apiUpsertSnapbackByKey,
+  createCustomSnapbackTrigger as apiCreateCustomSnapback,
+  deleteSnapbackRowById as apiDeleteSnapbackById,
+  updateSnapbackTriggerNameById as apiUpdateSnapbackNameById,
+  type DbSnapbackOverview,
+} from '../lib/snapbackApi'
 
 type ReflectionRangeKey = '24h' | '48h' | '7d'
 
@@ -2862,6 +2870,22 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     return map
   }, [lifeRoutineTasks])
 
+  // Snapback Overview rows (Supabase) — available early so we can feed the bucket dropdown
+  const [snapDbRows, setSnapDbRows] = useState<DbSnapbackOverview[]>([])
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const rows = await apiFetchSnapbackRows()
+        if (!cancelled && Array.isArray(rows)) setSnapDbRows(rows)
+      } catch (err) {
+        console.warn('[Snapback] Failed to load overview rows', err)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
   const lifeRoutineBucketOptions = useMemo(() => {
     const seen = new Set<string>()
     const result: string[] = []
@@ -2882,41 +2906,41 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
 
   // Snapback trigger options (as bucket names under the Snapback goal)
   const snapbackTriggerOptions = useMemo(() => {
-    const set = new Set<string>()
+    const titles = new Set<string>()
     const prefix = 'Snapback • '
     const enDash = ' – '
     const parseReason = (taskName: string): string | null => {
       if (!taskName || !taskName.startsWith(prefix)) return null
       const rest = taskName.slice(prefix.length)
-      if (rest.includes(enDash)) {
-        return rest.split(enDash).slice(1).join(enDash).trim()
-      }
-      if (rest.includes(' - ')) {
-        return rest.split(' - ').slice(1).join(' - ').trim()
-      }
+      if (rest.includes(enDash)) return rest.split(enDash).slice(1).join(enDash).trim()
+      if (rest.includes(' - ')) return rest.split(' - ').slice(1).join(' - ').trim()
       return null
     }
+    // Map base_key -> alias from DB
+    const aliasByBase = new Map<string, string>()
+    snapDbRows.forEach((row) => {
+      if (row.base_key && !row.base_key.startsWith('custom:')) {
+        const alias = (row.trigger_name ?? '').trim()
+        if (alias) aliasByBase.set(row.base_key, alias)
+      }
+    })
+    // Add history-derived reasons, applying alias from DB when present
     history.forEach((entry) => {
       const reason = parseReason(entry.taskName)
-      if (reason) set.add(reason.slice(0, 120))
+      if (!reason) return
+      const key = reason.trim().toLowerCase()
+      const label = aliasByBase.get(key) || reason.slice(0, 120)
+      if (label) titles.add(label)
     })
-    // Include any user-defined triggers saved from Snap Back overview
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = window.localStorage.getItem('nc-taskwatch-snapback-custom-triggers')
-        if (raw) {
-          const parsed = JSON.parse(raw)
-          if (Array.isArray(parsed)) {
-            parsed.forEach((it) => {
-              const label = typeof it?.label === 'string' ? it.label.trim() : ''
-              if (label) set.add(label)
-            })
-          }
-        }
-      } catch {}
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-  }, [history])
+    // Include user-defined triggers stored in DB (custom: rows)
+    snapDbRows.forEach((row) => {
+      if (row.base_key && row.base_key.startsWith('custom:')) {
+        const label = (row.trigger_name ?? '').trim()
+        if (label) titles.add(label)
+      }
+    })
+    return Array.from(titles).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+  }, [history, snapDbRows])
 
   const updateHistory = useCallback((updater: (current: HistoryEntry[]) => HistoryEntry[]) => {
     setHistory((current) => {
@@ -4594,62 +4618,91 @@ useEffect(() => {
       return {}
     }
   }
-  const writePlans = (value: SnapbackPlanState) => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(SNAPBACK_PLAN_STORAGE_KEY, JSON.stringify(value))
-    } catch {}
-  }
+  
 
   const [snapPlans, setSnapPlans] = useState<SnapbackPlanState>(() => readPlans())
-  useEffect(() => {
-    writePlans(snapPlans)
-  }, [snapPlans])
+  const snapPlansRef = useRef<SnapbackPlanState>({})
+  useEffect(() => { snapPlansRef.current = snapPlans }, [snapPlans])
+  const saveTimersRef = useRef<Map<string, number>>(new Map())
+  const persistPlanForId = useCallback(async (idKey: string) => {
+    const plan = snapPlansRef.current[idKey] ?? { cue: '', deconstruction: '', plan: '' }
+    if (!plan) return
+    let baseKey = ''
+    if (idKey.startsWith('snap-')) {
+      baseKey = idKey.slice(5)
+    } else {
+      const row = snapDbRows.find((r) => r.id === idKey)
+      if (!row) return
+      baseKey = row.base_key
+    }
+    const row = await apiUpsertSnapbackByKey({
+      base_key: baseKey,
+      cue_text: plan.cue,
+      deconstruction_text: plan.deconstruction,
+      plan_text: plan.plan,
+    })
+    if (row) {
+      setSnapDbRows((cur) => {
+        const idx = cur.findIndex((r) => r.base_key === row.base_key)
+        if (idx >= 0) { const copy = cur.slice(); copy[idx] = row; return copy }
+        return [...cur, row]
+      })
+    }
+  }, [snapDbRows])
+  const schedulePersistPlan = useCallback((idKey: string) => {
+    if (typeof window === 'undefined') return
+    const m = saveTimersRef.current
+    const prev = m.get(idKey)
+    if (prev) window.clearTimeout(prev)
+    const tid = window.setTimeout(() => {
+      m.delete(idKey)
+      void persistPlanForId(idKey)
+    }, 500)
+    m.set(idKey, tid as unknown as number)
+  }, [persistPlanForId])
 
   // Custom Triggers (user-defined, supplement overview legend)
   type CustomTrigger = { id: string; label: string }
-  const SNAPBACK_CUSTOM_TRIGGERS_KEY = 'nc-taskwatch-snapback-custom-triggers'
-  const readCustomTriggers = (): CustomTrigger[] => {
-    if (typeof window === 'undefined') return []
-    try {
-      const raw = window.localStorage.getItem(SNAPBACK_CUSTOM_TRIGGERS_KEY)
-      if (!raw) return []
-      const parsed = JSON.parse(raw)
-      if (!Array.isArray(parsed)) return []
-      return parsed
-        .map((it) => (typeof it === 'object' && it && typeof it.label === 'string' && typeof it.id === 'string' ? it : null))
-        .filter((it): it is CustomTrigger => Boolean(it))
-    } catch {
-      return []
-    }
-  }
-  const writeCustomTriggers = (items: CustomTrigger[]) => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(SNAPBACK_CUSTOM_TRIGGERS_KEY, JSON.stringify(items))
-    } catch {}
-  }
-  const [customTriggers, setCustomTriggers] = useState<CustomTrigger[]>(() => readCustomTriggers())
-  useEffect(() => { writeCustomTriggers(customTriggers) }, [customTriggers])
+  
+  const [customTriggers, setCustomTriggers] = useState<CustomTrigger[]>([])
 
   // Aliases: override labels for history-derived triggers without creating new entries
   type SnapbackAliasMap = Record<string, string>
-  const SNAPBACK_ALIAS_STORAGE_KEY = 'nc-taskwatch-snapback-aliases'
-  const readAliases = (): SnapbackAliasMap => {
-    if (typeof window === 'undefined') return {}
-    try {
-      const raw = window.localStorage.getItem(SNAPBACK_ALIAS_STORAGE_KEY)
-      if (!raw) return {}
-      const parsed = JSON.parse(raw)
-      return typeof parsed === 'object' && parsed !== null ? (parsed as SnapbackAliasMap) : {}
-    } catch { return {} }
-  }
-  const writeAliases = (value: SnapbackAliasMap) => {
-    if (typeof window === 'undefined') return
-    try { window.localStorage.setItem(SNAPBACK_ALIAS_STORAGE_KEY, JSON.stringify(value)) } catch {}
-  }
-  const [snapbackAliases, setSnapbackAliases] = useState<SnapbackAliasMap>(() => readAliases())
-  useEffect(() => { writeAliases(snapbackAliases) }, [snapbackAliases])
+  const [snapbackAliases, setSnapbackAliases] = useState<SnapbackAliasMap>({})
+
+  
+
+  // Derive aliases, custom extras, and initial plans from DB rows + computed legend
+  useEffect(() => {
+    const baseKeys = new Set(
+      snapbackOverview.legend
+        .map((it) => (typeof it.id === 'string' && it.id.startsWith('snap-') ? it.id.slice(5) : null))
+        .filter((k): k is string => Boolean(k)),
+    )
+    const aliasMap: SnapbackAliasMap = {}
+    const extras: CustomTrigger[] = []
+    const mergedPlans: SnapbackPlanState = {}
+    snapDbRows.forEach((row) => {
+      const isBase = baseKeys.has(row.base_key)
+      const idKey = isBase ? `snap-${row.base_key}` : row.id
+      if (isBase) aliasMap[idKey] = row.trigger_name
+      else extras.push({ id: row.id, label: row.trigger_name })
+      mergedPlans[idKey] = {
+        cue: row.cue_text ?? '',
+        deconstruction: row.deconstruction_text ?? '',
+        plan: row.plan_text ?? '',
+      }
+    })
+    setSnapbackAliases(aliasMap)
+    setCustomTriggers(extras)
+    setSnapPlans((cur) => {
+      const next: SnapbackPlanState = { ...cur }
+      for (const [k, v] of Object.entries(mergedPlans)) {
+        if (!(k in next)) next[k] = v
+      }
+      return next
+    })
+  }, [snapDbRows, snapbackOverview.legend.map((i) => i.id).join('|')])
 
   // Inline edit within list for newly created trigger
   const [editingTriggerId, setEditingTriggerId] = useState<string | null>(null)
@@ -4660,37 +4713,24 @@ useEffect(() => {
       return () => clearTimeout(id)
     }
   }, [editingTriggerId])
-  const startAddTrigger = useCallback(() => {
-    const id = `snap-custom-${Date.now()}`
-    const label = 'New Trigger'
-    setCustomTriggers((cur) => [...cur, { id, label }])
-    setSelectedTriggerKey(id)
-    setEditingTriggerId(id)
+  const startAddTrigger = useCallback(async () => {
+    const row = await apiCreateCustomSnapback('New Trigger')
+    if (!row) return
+    setSnapDbRows((cur) => [...cur, row])
+    setSelectedTriggerKey(row.id)
+    setEditingTriggerId(row.id)
   }, [])
-  const commitEditTrigger = useCallback(() => {
+  const commitEditTrigger = useCallback(async () => {
     if (!editingTriggerId) return
     const raw = editTriggerInputRef.current?.value ?? ''
     const trimmed = raw.trim()
-    if (trimmed.length === 0) {
-      // keep placeholder label
-      setCustomTriggers((cur) => cur.map((ct) => (ct.id === editingTriggerId ? { ...ct, label: 'New Trigger' } : ct)))
-      setEditingTriggerId(null)
-      return
+    const newLabel = trimmed.length === 0 ? 'New Trigger' : trimmed
+    const ok = await apiUpdateSnapbackNameById(editingTriggerId, newLabel)
+    if (ok) {
+      setSnapDbRows((cur) => cur.map((r) => (r.id === editingTriggerId ? { ...r, trigger_name: newLabel } as DbSnapbackOverview : r)))
     }
-    const lower = trimmed.toLowerCase()
-    const baseExisting = snapbackOverview.legend.find((it) => it.label.toLowerCase().trim() === lower)
-    const customExisting = customTriggers.find((it) => it.label.toLowerCase().trim() === lower)
-    const existingId = baseExisting?.id ?? (customExisting && customExisting.id !== editingTriggerId ? customExisting.id : null)
-    if (existingId) {
-      // select existing and remove the newly edited duplicate
-      setCustomTriggers((cur) => cur.filter((ct) => ct.id !== editingTriggerId))
-      setSelectedTriggerKey(existingId)
-      setEditingTriggerId(null)
-      return
-    }
-    setCustomTriggers((cur) => cur.map((ct) => (ct.id === editingTriggerId ? { ...ct, label: trimmed } : ct)))
     setEditingTriggerId(null)
-  }, [editingTriggerId, snapbackOverview.legend, customTriggers])
+  }, [editingTriggerId])
 
   const combinedLegend = useMemo(() => {
     const base = snapbackOverview.legend
@@ -10024,7 +10064,9 @@ useEffect(() => {
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
-                          setCustomTriggers((cur) => cur.filter((ct) => ct.id !== item.id))
+                          apiDeleteSnapbackById(item.id).then((ok) => {
+                            if (ok) setSnapDbRows((cur) => cur.filter((r) => r.id !== item.id))
+                          })
                           if (editingTriggerId === item.id) setEditingTriggerId(null)
                         }}
                       >
@@ -10053,8 +10095,26 @@ useEffect(() => {
                 <SnapbackEditableTitle
                   item={selectedItem ? { id: selectedItem.id, label: selectedItem.label } : null}
                   isCustom={Boolean(selectedItem && customTriggers.some((ct) => ct.id === selectedItem.id))}
-                  onRename={(id, label) => setCustomTriggers((cur) => cur.map((ct) => (ct.id === id ? { ...ct, label } : ct)))}
-                  onAlias={(id, label) => setSnapbackAliases((cur) => ({ ...cur, [id]: label }))}
+                  onRename={async (id, label) => {
+                    const trimmed = label.trim()
+                    if (!trimmed) return
+                    const ok = await apiUpdateSnapbackNameById(id, trimmed)
+                    if (ok) setSnapDbRows((cur) => cur.map((r) => (r.id === id ? { ...r, trigger_name: trimmed } as DbSnapbackOverview : r)))
+                  }}
+                  onAlias={async (id, label) => {
+                    const trimmed = label.trim()
+                    if (!trimmed) return
+                    if (!id.startsWith('snap-')) return
+                    const baseKey = id.slice(5)
+                    const row = await apiUpsertSnapbackByKey({ base_key: baseKey, trigger_name: trimmed })
+                    if (row) {
+                      setSnapDbRows((cur) => {
+                        const idx = cur.findIndex((r) => r.base_key === baseKey)
+                        if (idx >= 0) { const copy = cur.slice(); copy[idx] = row; return copy }
+                        return [...cur, row]
+                      })
+                    }
+                  }}
                 />
                 {selectedItem ? (
                   <p className="snapback-drawer__subtitle">Occurred {selectedItem.count}× ({formatDuration(selectedItem.durationMs)}) in this range.</p>
@@ -10072,7 +10132,12 @@ useEffect(() => {
                 className="snapback-drawer__input"
                 placeholder="Describe the lead-up or trigger."
                 value={selectedPlan.cue}
-                onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, cue: e.target.value } }))}
+                onChange={(e) => {
+                  if (!selectedItem) return
+                  const idKey = selectedItem.id!
+                  setSnapPlans((cur) => ({ ...cur, [idKey]: { ...cur[idKey] ?? { cue: '', deconstruction: '', plan: '' }, cue: e.target.value } }))
+                  schedulePersistPlan(idKey)
+                }}
               />
             </div>
 
@@ -10083,7 +10148,12 @@ useEffect(() => {
                 className="snapback-drawer__textarea"
                 placeholder="Be honest about the short-term reward and the long-term cost."
                 value={selectedPlan.deconstruction}
-                onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, deconstruction: e.target.value } }))}
+                onChange={(e) => {
+                  if (!selectedItem) return
+                  const idKey = selectedItem.id!
+                  setSnapPlans((cur) => ({ ...cur, [idKey]: { ...cur[idKey] ?? { cue: '', deconstruction: '', plan: '' }, deconstruction: e.target.value } }))
+                  schedulePersistPlan(idKey)
+                }}
               />
             </div>
 
@@ -10094,13 +10164,16 @@ useEffect(() => {
                 className="snapback-drawer__textarea"
                 placeholder="Write one small, concrete thing you’ll try."
                 value={selectedPlan.plan}
-                onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, plan: e.target.value } }))}
+                onChange={(e) => {
+                  if (!selectedItem) return
+                  const idKey = selectedItem.id!
+                  setSnapPlans((cur) => ({ ...cur, [idKey]: { ...cur[idKey] ?? { cue: '', deconstruction: '', plan: '' }, plan: e.target.value } }))
+                  schedulePersistPlan(idKey)
+                }}
               />
             </div>
 
-            <div className="snapback-drawer__actions">
-              <button type="button" className="snapback-drawer__button snapback-drawer__button--primary" onClick={() => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...selectedPlan } }))}>Save</button>
-            </div>
+            {/* Auto-saves on change; no explicit save button */}
           </div>
         </div>
       </section>
