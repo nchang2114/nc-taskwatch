@@ -2198,12 +2198,15 @@ const MilestoneLayer: React.FC<{
               { color: '#6ea1ff', pct: 100 },
             ]
           })()
-          const ringColor = sampleGradientColor(goalStops, pct)
+          let ringColor = sampleGradientColor(goalStops, pct)
+          // Preserve special colors for start and latest milestone to match prior styling
+          if (isStart) ringColor = 'rgba(250, 204, 21, 0.9)'
+          if (isLatest) ringColor = 'rgba(99, 102, 241, 0.9)'
           return (
             <div key={m.id} className="milestones__node-wrap" style={{ left: `${pct}%` }}>
               <button
                 type="button"
-                className={classNames('milestones__node', m.completed && 'milestones__node--done', isStart && 'milestones__node--start', isLatest && 'milestones__node--end')}
+                className={classNames('milestones__node', 'milestones__node--svg', m.completed && 'milestones__node--done', isStart && 'milestones__node--start', isLatest && 'milestones__node--end')}
                 onClick={(ev) => {
                   if (suppressClickIdRef.current === m.id) { ev.preventDefault(); ev.stopPropagation(); suppressClickIdRef.current = null; return }
                   ev.preventDefault(); ev.stopPropagation()
@@ -2213,10 +2216,22 @@ const MilestoneLayer: React.FC<{
                 style={{
                   ['--ms-node-ring' as any]: ringColor,
                   ['--ms-node-inner' as any]: m.completed ? ringColor : 'var(--ms-node-bg)',
-                  borderColor: ringColor,
+                  // Keep box dimensions identical but render the ring via SVG to avoid zoom rounding issues
+                  borderColor: 'transparent',
                 } as React.CSSProperties}
                 aria-label={`${m.name} ${formatShort(m.date)}${m.completed ? ' (completed)' : ''}`}
               />
+              {/* Inline SVG ring to remain concentric at any zoom */}
+              <svg
+                width={14}
+                height={14}
+                viewBox="0 0 14 14"
+                aria-hidden="true"
+                style={{ position: 'absolute', top: '-9px', left: '50%', transform: 'translateX(-50%)', pointerEvents: 'none', zIndex: 2 }}
+              >
+                <circle cx={7} cy={7} r={6} fill="none" stroke={ringColor} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+                <circle cx={7} cy={7} r={5} fill={m.completed ? ringColor : 'var(--ms-node-bg)'} />
+              </svg>
                 {isExpanded ? (
                   <>
                     <span
