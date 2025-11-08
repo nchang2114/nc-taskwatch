@@ -1430,8 +1430,8 @@ html[data-theme='light'] .milestones__mini-date {
   color: rgba(26, 34, 92, 0.96);
 }
 .milestones__node {
-  width: 12px;   /* slightly larger node */
-  height: 12px;  /* slightly larger node */
+  width: 14px;   /* slightly larger node */
+  height: 14px;  /* slightly larger node */
   border-radius: 50%;
   border: 2px solid var(--ms-node-ring, rgba(173, 186, 255, 0.8));
   background: var(--ms-node-bg); /* mask the center so lines don't show through */
@@ -1439,7 +1439,7 @@ html[data-theme='light'] .milestones__mini-date {
   cursor: pointer;
   touch-action: none;
   position: relative;
-  top: -8px; /* center on the 2px line (16px total => -8px) */
+  top: -9px; /* center on the line (18px total => -9px) */
   display: block; /* neutralize UA button inline baselines */
   padding: 0; /* avoid UA padding */
   line-height: 0; /* avoid extra inline height */
