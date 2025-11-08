@@ -1091,6 +1091,45 @@ html[data-theme='light'] {
   font-weight: 600;
   color: var(--text-primary);
 }
+.snapback-list__add {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.28rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(132, 148, 228, 0.35);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.snapback-list__add:hover,
+.snapback-list__add:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+html[data-theme='light'] .snapback-list__add {
+  border-color: rgba(160, 172, 236, 0.45);
+  background: rgba(248, 250, 255, 0.96);
+}
+html[data-theme='light'] .snapback-list__add:hover,
+html[data-theme='light'] .snapback-list__add:focus-visible {
+  background: rgba(240, 244, 255, 0.98);
+}
+
+/* Add Trigger inline form */
+.snapback-list__add-form { display: inline-flex; align-items: center; gap: 0.4rem; }
+.snapback-list__add-input {
+  font-size: 0.82rem;
+  padding: 0.32rem 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(132, 148, 228, 0.35);
+  background: rgba(18, 24, 56, 0.4);
+  color: var(--text-primary);
+  min-width: 14ch;
+}
+html[data-theme='light'] .snapback-list__add-input {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(160, 172, 236, 0.45);
+}
 /* snapback-list__chip removed */
 .snapback-list {
   display: grid;
@@ -1150,6 +1189,19 @@ html[data-theme='light'] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.snapback-item__title-input {
+  font: inherit;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid rgba(132, 148, 228, 0.32);
+  border-radius: 0.4rem;
+  padding: 0.2rem 0.35rem;
+  min-width: 10ch;
+}
+html[data-theme='light'] .snapback-item__title-input {
+  border-color: rgba(160, 172, 236, 0.45);
+  background: rgba(255, 255, 255, 0.98);
 }
 .snapback-item__meta {
   color: var(--text-secondary);

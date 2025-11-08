@@ -4511,13 +4511,92 @@ useEffect(() => {
     writePlans(snapPlans)
   }, [snapPlans])
 
+  // Custom Triggers (user-defined, supplement overview legend)
+  type CustomTrigger = { id: string; label: string }
+  const SNAPBACK_CUSTOM_TRIGGERS_KEY = 'nc-taskwatch-snapback-custom-triggers'
+  const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  const readCustomTriggers = (): CustomTrigger[] => {
+    if (typeof window === 'undefined') return []
+    try {
+      const raw = window.localStorage.getItem(SNAPBACK_CUSTOM_TRIGGERS_KEY)
+      if (!raw) return []
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return []
+      return parsed
+        .map((it) => (typeof it === 'object' && it && typeof it.label === 'string' && typeof it.id === 'string' ? it : null))
+        .filter((it): it is CustomTrigger => Boolean(it))
+    } catch {
+      return []
+    }
+  }
+  const writeCustomTriggers = (items: CustomTrigger[]) => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(SNAPBACK_CUSTOM_TRIGGERS_KEY, JSON.stringify(items))
+    } catch {}
+  }
+  const [customTriggers, setCustomTriggers] = useState<CustomTrigger[]>(() => readCustomTriggers())
+  useEffect(() => { writeCustomTriggers(customTriggers) }, [customTriggers])
+
+  // Inline edit within list for newly created trigger
+  const [editingTriggerId, setEditingTriggerId] = useState<string | null>(null)
+  const [editTriggerValue, setEditTriggerValue] = useState<string>('')
+  const editTriggerInputRef = useRef<HTMLInputElement | null>(null)
+  useEffect(() => {
+    if (editingTriggerId) {
+      const id = setTimeout(() => editTriggerInputRef.current?.focus(), 0)
+      return () => clearTimeout(id)
+    }
+  }, [editingTriggerId])
+  const startAddTrigger = useCallback(() => {
+    const id = `snap-custom-${Date.now()}`
+    const label = 'New Trigger'
+    setCustomTriggers((cur) => [...cur, { id, label }])
+    setSelectedTriggerKey(id)
+    setEditingTriggerId(id)
+    setEditTriggerValue(label)
+  }, [])
+  const commitEditTrigger = useCallback(() => {
+    if (!editingTriggerId) return
+    const trimmed = editTriggerValue.trim()
+    if (trimmed.length === 0) {
+      // keep placeholder label
+      setCustomTriggers((cur) => cur.map((ct) => (ct.id === editingTriggerId ? { ...ct, label: 'New Trigger' } : ct)))
+      setEditingTriggerId(null)
+      return
+    }
+    const lower = trimmed.toLowerCase()
+    const baseExisting = snapbackOverview.legend.find((it) => it.label.toLowerCase().trim() === lower)
+    const customExisting = customTriggers.find((it) => it.label.toLowerCase().trim() === lower)
+    const existingId = baseExisting?.id ?? (customExisting && customExisting.id !== editingTriggerId ? customExisting.id : null)
+    if (existingId) {
+      // select existing and remove the newly edited duplicate
+      setCustomTriggers((cur) => cur.filter((ct) => ct.id !== editingTriggerId))
+      setSelectedTriggerKey(existingId)
+      setEditingTriggerId(null)
+      return
+    }
+    setCustomTriggers((cur) => cur.map((ct) => (ct.id === editingTriggerId ? { ...ct, label: trimmed } : ct)))
+    setEditingTriggerId(null)
+  }, [editingTriggerId, editTriggerValue, snapbackOverview.legend, customTriggers])
+
+  const combinedLegend = useMemo(() => {
+    const base = snapbackOverview.legend
+    if (customTriggers.length === 0) return base
+    const existing = new Set(base.map((it) => it.label.toLowerCase().trim()))
+    const extras = customTriggers
+      .filter((ct) => !existing.has(ct.label.toLowerCase().trim()))
+      .map((ct) => ({ id: ct.id, label: ct.label, count: 0, durationMs: 0, swatch: getPaletteColorForLabel(ct.label) }))
+    return [...base, ...extras]
+  }, [snapbackOverview.legend, customTriggers])
+
   const [selectedTriggerKey, setSelectedTriggerKey] = useState<string | null>(null)
   useEffect(() => {
-    const first = snapbackOverview.legend[0]?.id ?? null
+    const first = combinedLegend[0]?.id ?? null
     setSelectedTriggerKey(first)
-  }, [snapActiveRange, snapbackOverview.legend.map((i) => i.id).join('|')])
+  }, [snapActiveRange, combinedLegend.map((i) => i.id).join('|')])
 
-  const selectedItem = useMemo(() => snapbackOverview.legend.find((i) => i.id === selectedTriggerKey) ?? snapbackOverview.legend[0] ?? null, [selectedTriggerKey, snapbackOverview.legend])
+  const selectedItem = useMemo(() => combinedLegend.find((i) => i.id === selectedTriggerKey) ?? combinedLegend[0] ?? null, [selectedTriggerKey, combinedLegend])
   const selectedPlan = useMemo(() => {
     if (!selectedItem) return { cue: '', deconstruction: '', plan: '' }
     const key = selectedItem.id
@@ -9685,11 +9764,20 @@ useEffect(() => {
 
         <div className="snapback-overview" role="tabpanel" id={snapbackPanelId} aria-live="polite" aria-label={`${snapActiveRangeConfig.label} snap backs`}>
           <div className="snapback-list__head">
-            <h3 className="snapback-list__title">Top Triggers</h3>
+            <h3 className="snapback-list__title">Triggers</h3>
+            <button
+              type="button"
+              className="snapback-list__add"
+              onClick={startAddTrigger}
+            >
+              + Add Trigger
+            </button>
           </div>
           <div className="snapback-list">
-            {snapbackOverview.legend.map((item) => {
+            {combinedLegend.map((item) => {
               const isActive = item.id === selectedTriggerKey
+              const isCustom = customTriggers.some((ct) => ct.id === item.id)
+              const isEditing = isCustom && editingTriggerId === item.id
               return (
                 <div
                   key={item.id}
@@ -9707,7 +9795,23 @@ useEffect(() => {
                   <div className="snapback-item__row">
                     <div className="snapback-item__left">
                       <span className="snapback-item__dot" style={{ background: item.swatch }} aria-hidden="true" />
-                      <span className="snapback-item__title">{item.label}</span>
+                      {isEditing ? (
+                        <input
+                          ref={editTriggerInputRef}
+                          type="text"
+                          value={editTriggerValue}
+                          onChange={(e) => setEditTriggerValue(e.target.value)}
+                          onBlur={() => commitEditTrigger()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') { e.preventDefault(); commitEditTrigger() }
+                            if (e.key === 'Escape') { e.preventDefault(); setEditingTriggerId(null) }
+                          }}
+                          className="snapback-item__title-input"
+                          aria-label="Edit trigger name"
+                        />
+                      ) : (
+                        <span className="snapback-item__title">{item.label}</span>
+                      )}
                     </div>
                     <div className="snapback-item__meta">{item.count}x • {formatDuration(item.durationMs)}</div>
                   </div>
@@ -9715,7 +9819,7 @@ useEffect(() => {
               )
             })}
           </div>
-          {snapbackOverview.legend.length === 0 ? (
+          {combinedLegend.length === 0 ? (
             <p className="reflection-section__desc">No Snap Back sessions logged yet.</p>
           ) : null}
 
@@ -9733,7 +9837,6 @@ useEffect(() => {
               <label className="snapback-drawer__label">Why is this happening?</label>
               <input
                 type="text"
-                placeholder="e.g., boredom after long coding block"
                 className="snapback-drawer__input"
                 value={selectedPlan.cue}
                 onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, cue: e.target.value } }))}
@@ -9743,7 +9846,6 @@ useEffect(() => {
             <div className="snapback-drawer__group">
               <label className="snapback-drawer__label">Is it aligned with who you want to be? What's the reward, is it sustainable?</label>
               <textarea
-                placeholder="What do you get out of it?"
                 className="snapback-drawer__textarea"
                 value={selectedPlan.deconstruction}
                 onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, deconstruction: e.target.value } }))}
@@ -9753,7 +9855,6 @@ useEffect(() => {
             <div className="snapback-drawer__group">
               <label className="snapback-drawer__label">How do you change for the next time</label>
               <textarea
-                placeholder="10‑min walk → then reward video; phone to other room"
                 className="snapback-drawer__textarea"
                 value={selectedPlan.plan}
                 onChange={(e) => selectedItem && setSnapPlans((cur) => ({ ...cur, [selectedItem.id!]: { ...cur[selectedItem.id!] ?? { cue: '', deconstruction: '', plan: '' }, plan: e.target.value } }))}
