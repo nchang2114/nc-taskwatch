@@ -1363,8 +1363,8 @@ html[data-theme='light'] .milestones__view-btn.is-active {
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  height: 3px; /* slightly thicker center line */
-  border-radius: 3px;
+  height: 4px; /* slightly thicker center line */
+  border-radius: 4px;
   background: linear-gradient(90deg, rgba(118,142,255,0.28), rgba(59,130,246,0.32));
 }
 /* Progress fill from start to Today */
@@ -1373,8 +1373,8 @@ html[data-theme='light'] .milestones__view-btn.is-active {
   left: 0;
   top: 50%;
   transform: translateY(-50%);
-  height: 3px;
-  border-radius: 3px;
+  height: 4px;
+  border-radius: 4px;
   box-shadow: 0 0 8px rgba(88, 168, 255, 0.35);
   z-index: 1; /* above base line, below nodes */
 }
