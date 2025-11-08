@@ -225,6 +225,40 @@ function App() {
     setIsNavOpen((current) => !current)
   }, [isNavCollapsed])
 
+  // Keyboard shortcuts: 1/2/3 or g/t/r → Goals/Taskwatch/Reflection
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const isEditableTarget = (el: EventTarget | null): boolean => {
+      const node = el as HTMLElement | null
+      if (!node) return false
+      const tag = node.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true
+      // contentEditable anywhere up the tree
+      let cur: HTMLElement | null = node
+      while (cur) {
+        if (cur.getAttribute?.('contenteditable') === 'true') return true
+        cur = cur.parentElement
+      }
+      return false
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return
+      if (isEditableTarget(e.target)) return
+      const k = e.key.toLowerCase()
+      let target: TabKey | null = null
+      if (k === '1' || k === 'g') target = 'goals'
+      else if (k === '2' || k === 't') target = 'taskwatch'
+      else if (k === '3' || k === 'r') target = 'reflection'
+      if (target) {
+        e.preventDefault()
+        setActiveTab(target)
+        setIsNavOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
