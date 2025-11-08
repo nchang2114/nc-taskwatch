@@ -7277,6 +7277,7 @@ useEffect(() => {
       }
       return formatDateRange(entry.startedAt, entry.endedAt)
     })()
+    const durationLabel = formatDuration(Math.max(entry.endedAt - entry.startedAt, 0))
     const title = deriveEntryTaskName(entry)
     const editingState = calendarPopoverEditing && calendarPopoverEditing.entryId === entry.id ? calendarPopoverEditing : null
     const startValue = entry.taskName ?? ''
@@ -7563,7 +7564,11 @@ useEffect(() => {
           </div>
         </div>
         <div className="calendar-popover__meta">
-          <div className="calendar-popover__time">{dateLabel}</div>
+          <div className="calendar-popover__time">
+            {dateLabel}
+            {' '}
+            <span className="duration-badge" aria-label="Elapsed time">{durationLabel}</span>
+          </div>
           <div className="calendar-popover__repeat" aria-label="Repeat">
             <span className="calendar-popover__repeat-label" aria-hidden>
               <span className="calendar-popover__repeat-icon calendar-popover__repeat-icon--loop">⟳</span>
@@ -8539,6 +8544,7 @@ useEffect(() => {
         }
         return formatDateRange(resolvedStart, resolvedEnd)
       })()
+      const inspectorDurationLabel = formatDuration(Math.max(resolvedEnd - resolvedStart, 0))
 
       const inspectorRepeatControl = (() => {
         const start = new Date(inspectorEntry.startedAt)
@@ -8611,7 +8617,11 @@ useEffect(() => {
                   <h3 className="calendar-inspector__title">
                     {deriveEntryTaskName(inspectorEntry) || 'Untitled session'}
                   </h3>
-                  <p className="calendar-inspector__subtitle">{inspectorDateLabel}</p>
+                <p className="calendar-inspector__subtitle">
+                  {inspectorDateLabel}
+                  {' '}
+                  <span className="duration-badge" aria-label="Elapsed time">{inspectorDurationLabel}</span>
+                </p>
                 </div>
                 <button
                   type="button"
@@ -8811,7 +8821,11 @@ useEffect(() => {
             <div className="legacy-editor-panel__header">
               <div className="legacy-editor-panel__heading">
                 <h3 className="legacy-editor-panel__title">{deriveEntryTaskName(inspectorEntry) || 'Untitled session'}</h3>
-                <p className="legacy-editor-panel__subtitle">{inspectorDateLabel}</p>
+                <p className="legacy-editor-panel__subtitle">
+                  {inspectorDateLabel}
+                  {' '}
+                  <span className="duration-badge" aria-label="Elapsed time">{inspectorDurationLabel}</span>
+                </p>
               </div>
               <button
                 type="button"
