@@ -10046,9 +10046,11 @@ useEffect(() => {
                   aria-selected={isActive}
                   aria-controls={snapbackPanelId}
                   className={`snap-tab${isActive ? ' snap-tab--active' : ''}`}
+                  aria-label={config.label}
                   onClick={() => setSnapActiveRange(key)}
                 >
-                  <span className="snap-tab__label">{config.label}</span>
+                  <span className="snap-tab__label snap-tab__label--full">{config.label}</span>
+                  <span className="snap-tab__label snap-tab__label--short">{key === 'all' ? config.shortLabel : `Last ${config.shortLabel}`}</span>
                 </button>
               )
             })}
