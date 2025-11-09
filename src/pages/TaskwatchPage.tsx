@@ -57,8 +57,8 @@ import {
   type HistoryEntry,
 } from '../lib/sessionHistory'
 
-// Minimal sync instrumentation (DEV only)
-const DEBUG_SYNC = import.meta.env?.DEV === true
+// Minimal sync instrumentation disabled by default
+const DEBUG_SYNC = false
 
 type FocusCandidate = {
   goalId: string

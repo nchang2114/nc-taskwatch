@@ -61,8 +61,8 @@ import {
 import { broadcastFocusTask } from '../lib/focusChannel'
 import { broadcastScheduleTask } from '../lib/scheduleChannel'
 
-// Minimal sync instrumentation (DEV only)
-const DEBUG_SYNC = import.meta.env?.DEV === true
+// Minimal sync instrumentation disabled by default
+const DEBUG_SYNC = false
 
 // Helper function for class names
 function classNames(...xs: (string | boolean | undefined)[]): string {

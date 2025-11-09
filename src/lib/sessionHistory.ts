@@ -500,7 +500,7 @@ const payloadFromRecord = (
   const updatedAt = overrideUpdatedAt ?? record.updatedAt
   const ENABLE_ROUTINE_TAGS = Boolean((import.meta as any)?.env?.VITE_ENABLE_ROUTINE_TAGS)
   const ENABLE_REPEAT_ORIGINAL = isRepeatOriginalEnabled()
-  const DEBUG_REPEAT = Boolean((import.meta as any)?.env?.VITE_DEBUG_REPEAT)
+  const DEBUG_REPEAT = false
   const includeRepeat = ENABLE_REPEAT_ORIGINAL && !!record.repeatingSessionId
   const includeOriginal = ENABLE_REPEAT_ORIGINAL && Number.isFinite(record.originalTime as number)
   if (DEBUG_REPEAT) {
