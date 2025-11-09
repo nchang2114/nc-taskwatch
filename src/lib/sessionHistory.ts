@@ -392,11 +392,20 @@ const broadcastHistoryRecords = (records: HistoryRecord[]): void => {
   if (typeof window === 'undefined') {
     return
   }
-  try {
-    const event = new CustomEvent<HistoryRecord[]>(HISTORY_EVENT_NAME, { detail: records })
-    window.dispatchEvent(event)
-  } catch (error) {
-    console.warn('Failed to broadcast history update', error)
+  const dispatch = () => {
+    try {
+      const event = new CustomEvent<HistoryRecord[]>(HISTORY_EVENT_NAME, { detail: records })
+      window.dispatchEvent(event)
+    } catch (error) {
+      console.warn('Failed to broadcast history update', error)
+    }
+  }
+  // Dispatch on a microtask to avoid triggering state updates in other components
+  // while React is rendering this component (prevents cross-component setState warnings).
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(dispatch)
+  } else {
+    setTimeout(dispatch, 0)
   }
 }
 
