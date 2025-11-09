@@ -396,6 +396,8 @@ const autosizeTextArea = (el: HTMLTextAreaElement | null) => {
   } catch {}
 }
 
+// (hook moved into GoalsPage component body)
+
 type FocusPromptTarget = {
   goalId: string
   bucketId: string
@@ -5216,6 +5218,23 @@ export default function GoalsPage(): ReactElement {
     }
     return DEFAULT_GOALS
   })
+  // Keep subtask inputs sized correctly on viewport changes (text wrap)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handle = () => {
+      try {
+        document
+          .querySelectorAll<HTMLTextAreaElement>('.goal-task-details__subtask-input')
+          .forEach((el) => {
+            el.style.height = 'auto'
+            el.style.height = `${el.scrollHeight}px`
+          })
+      } catch {}
+    }
+    handle()
+    window.addEventListener('resize', handle)
+    return () => window.removeEventListener('resize', handle)
+  }, [])
   const toggleGoalStarred = useCallback((goalId: string) => {
     setGoals((current) => {
       const target = current.find((goal) => goal.id === goalId)

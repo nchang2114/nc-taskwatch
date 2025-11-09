@@ -159,7 +159,17 @@ const sanitizeDomIdSegment = (value: string): string => value.replace(/[^a-z0-9]
 const makeNotebookSubtaskInputId = (entryKey: string, subtaskId: string): string =>
   `taskwatch-subtask-${sanitizeDomIdSegment(entryKey)}-${sanitizeDomIdSegment(subtaskId)}`
 
-// (removed unused autosizeTextArea helper)
+// Auto-size a textarea to fit its content without requiring focus
+const autosizeTextArea = (el: HTMLTextAreaElement | null) => {
+  if (!el) return
+  try {
+    el.style.height = 'auto'
+    const next = `${el.scrollHeight}px`
+    el.style.height = next
+  } catch {}
+}
+
+// (hook moved into TaskwatchPage component body)
 
 const createEmptySessionMetadata = (taskLabel: string): SessionMetadata => ({
   goalId: null,
@@ -482,6 +492,24 @@ export type TaskwatchPageProps = {
 }
 
 export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPageProps) {
+  // Re-autosize notebook subtask inputs on viewport resize so wrapping updates container height
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handle = () => {
+      try {
+        const host = document.querySelector('.taskwatch-notes') || document.body
+        host
+          .querySelectorAll<HTMLTextAreaElement>('.goal-task-details__subtask-input')
+          .forEach((el) => {
+            el.style.height = 'auto'
+            el.style.height = `${el.scrollHeight}px`
+          })
+      } catch {}
+    }
+    handle()
+    window.addEventListener('resize', handle)
+    return () => window.removeEventListener('resize', handle)
+  }, [])
   const initialTaskName = useMemo(() => getStoredTaskName(), [])
   const [elapsed, setElapsed] = useState(0)
   const [isRunning, setIsRunning] = useState(false)
@@ -2018,6 +2046,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   ])
   const notebookNotes = activeNotebookEntry.notes
   const notebookSubtasks = activeNotebookEntry.subtasks
+  // Ensure existing multi-line subtasks render at full height (without requiring focus)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const host = document.querySelector('.taskwatch-notes') || document.body
+      host
+        .querySelectorAll<HTMLTextAreaElement>('.goal-task-details__subtask-input')
+        .forEach((el) => autosizeTextArea(el))
+    } catch {}
+  }, [notebookSubtasks])
   const completedNotebookSubtasks = useMemo(
     () => notebookSubtasks.filter((subtask) => subtask.completed).length,
     [notebookSubtasks],
@@ -2626,6 +2664,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                         id={makeNotebookSubtaskInputId(notebookKey, subtask.id)}
                         className="goal-task-details__subtask-input"
                         rows={1}
+                        ref={(el) => autosizeTextArea(el)}
                         value={subtask.text}
                         onChange={(event) => {
                           const el = event.currentTarget
