@@ -1005,6 +1005,14 @@ const GOAL_SURFACE_CLASS_MAP: Record<GoalSurfaceStyle, string> = {
   grove: 'goal-card--grove',
   lagoon: 'goal-card--lagoon',
   ember: 'goal-card--ember',
+  'deep-indigo': 'goal-card--deep-indigo',
+  'warm-amber': 'goal-card--warm-amber',
+  'fresh-teal': 'goal-card--fresh-teal',
+  'sunset-orange': 'goal-card--sunset-orange',
+  'cool-blue': 'goal-card--cool-blue',
+  'soft-magenta': 'goal-card--soft-magenta',
+  'muted-lavender': 'goal-card--muted-lavender',
+  'neutral-grey-blue': 'goal-card--neutral-grey-blue',
 }
 
 const BUCKET_SURFACE_CLASS_MAP: Record<BucketSurfaceStyle, string> = {
@@ -1017,6 +1025,14 @@ const BUCKET_SURFACE_CLASS_MAP: Record<BucketSurfaceStyle, string> = {
   grove: 'goal-bucket-item--surface-grove',
   lagoon: 'goal-bucket-item--surface-lagoon',
   ember: 'goal-bucket-item--surface-ember',
+  'deep-indigo': 'goal-bucket-item--surface-deep-indigo',
+  'warm-amber': 'goal-bucket-item--surface-warm-amber',
+  'fresh-teal': 'goal-bucket-item--surface-fresh-teal',
+  'sunset-orange': 'goal-bucket-item--surface-sunset-orange',
+  'cool-blue': 'goal-bucket-item--surface-cool-blue',
+  'soft-magenta': 'goal-bucket-item--surface-soft-magenta',
+  'muted-lavender': 'goal-bucket-item--surface-muted-lavender',
+  'neutral-grey-blue': 'goal-bucket-item--surface-neutral-grey-blue',
 }
 
 const GOAL_SURFACE_PRESETS: Array<{
@@ -1085,6 +1101,14 @@ const BUCKET_SURFACE_PRESETS: Array<{
   { id: 'grove', label: 'Grove', description: 'Fresh green lift with botanical energy.' },
   { id: 'lagoon', label: 'Lagoon', description: 'Crystal blue blend for clean focus.' },
   { id: 'ember', label: 'Ember', description: 'Radiant amber spark with soft glow.' },
+  { id: 'deep-indigo', label: 'Indigo', description: 'Deep indigo-violet with focused depth.' },
+  { id: 'warm-amber', label: 'Amber', description: 'Soft amber warmth with a mellow glow.' },
+  { id: 'fresh-teal', label: 'Teal', description: 'Refreshing teal lift with calm energy.' },
+  { id: 'sunset-orange', label: 'Sunset', description: 'Dusky orange fade with evening vibe.' },
+  { id: 'cool-blue', label: 'Cool Blue', description: 'Balanced blue tone with crisp clarity.' },
+  { id: 'soft-magenta', label: 'Magenta', description: 'Gentle magenta bloom with subtle pop.' },
+  { id: 'muted-lavender', label: 'Lavender', description: 'Muted lavender haze for quiet focus.' },
+  { id: 'neutral-grey-blue', label: 'Grey Blue', description: 'Neutral grey-blue base for minimalism.' },
 ]
 
 const formatGradientLabel = (value: string) =>
@@ -1093,7 +1117,19 @@ const formatGradientLabel = (value: string) =>
     .replace(' to-', ' → ')
     .replace(/-/g, ' ')
 
-const LIFE_ROUTINE_THEME_OPTIONS: BucketSurfaceStyle[] = ['midnight', 'charcoal', 'ember', 'grove', 'linen', 'glass']
+// Life routine theme choices (ordered as requested)
+const LIFE_ROUTINE_THEME_OPTIONS: BucketSurfaceStyle[] = [
+  'midnight',          // 1
+  'grove',             // 4
+  'cool-blue',         // 11
+  'muted-lavender',    // 13
+  'neutral-grey-blue', // 14
+  'charcoal',          // 2
+  'ember',             // 3
+  'soft-magenta',      // 12
+  'fresh-teal',        // 9
+  'glass',             // 6
+]
 
 const getSurfaceLabel = (surface: BucketSurfaceStyle): string =>
   BUCKET_SURFACE_PRESETS.find((preset) => preset.id === surface)?.label ?? surface

@@ -23,19 +23,19 @@ const LIFE_ROUTINE_DEFAULT_DATA: LifeRoutineConfig[] = [
     sortIndex: 0,
   },
   {
-    id: 'life-eat',
-    bucketId: 'life-eat',
-    title: 'Eat',
-    blurb: 'Plan balanced meals and pause to truly refuel.',
+    id: 'life-cook-eat',
+    bucketId: 'life-cook-eat',
+    title: 'Cook/Eat',
+    blurb: 'Prep, cook, and enjoy a proper meal.',
     surfaceStyle: 'grove',
     sortIndex: 1,
   },
   {
-    id: 'life-cooking',
-    bucketId: 'life-cooking',
-    title: 'Cooking',
-    blurb: 'Prep ingredients, cook, and plate something nourishing.',
-    surfaceStyle: 'grove',
+    id: 'life-travel-drive',
+    bucketId: 'life-travel-drive',
+    title: 'Travel → Drive',
+    blurb: 'Transit time—commutes and driving focused.',
+    surfaceStyle: 'slate',
     sortIndex: 2,
   },
   {
@@ -47,19 +47,19 @@ const LIFE_ROUTINE_DEFAULT_DATA: LifeRoutineConfig[] = [
     sortIndex: 3,
   },
   {
-    id: 'life-screen-break',
-    bucketId: 'life-screen-break',
-    title: 'Screen Break',
-    blurb: 'Step away from devices—move, stretch, or rest your eyes.',
-    surfaceStyle: 'linen',
-    sortIndex: 4,
-  },
-  {
     id: 'life-meditate',
     bucketId: 'life-meditate',
     title: 'Meditate',
     blurb: 'Give your mind 10 minutes of quiet focus.',
     surfaceStyle: 'glass',
+    sortIndex: 4,
+  },
+  {
+    id: 'life-reflect',
+    bucketId: 'life-reflect',
+    title: 'Reflect',
+    blurb: 'Pause and review—journal or plan next steps.',
+    surfaceStyle: 'linen',
     sortIndex: 5,
   },
 ]
@@ -102,30 +102,22 @@ const sanitizeLifeRoutine = (value: unknown): LifeRoutineConfig | null => {
 }
 
 export const sanitizeLifeRoutineList = (value: unknown): LifeRoutineConfig[] => {
+  // If nothing stored or provided, seed with current defaults
   if (!Array.isArray(value)) {
     return LIFE_ROUTINE_DEFAULT_DATA.map(cloneRoutine)
   }
+  // Otherwise, respect the user’s customized list exactly (no auto-restore of removed defaults)
   const seen = new Set<string>()
   const result: LifeRoutineConfig[] = []
   for (const entry of value) {
     const routine = sanitizeLifeRoutine(entry)
-    if (!routine) {
-      continue
-    }
-    if (seen.has(routine.id)) {
-      continue
-    }
+    if (!routine) continue
+    if (seen.has(routine.id)) continue
     seen.add(routine.id)
     result.push(cloneRoutine(routine))
   }
-  LIFE_ROUTINE_DEFAULT_DATA.forEach((routine) => {
-    if (!seen.has(routine.id)) {
-      seen.add(routine.id)
-      result.push(cloneRoutine(routine))
-    }
-  })
-  const normalizedSource = result.length > 0 ? result : LIFE_ROUTINE_DEFAULT_DATA
-  return normalizedSource.map((routine, index) => {
+  const source = result.length > 0 ? result : LIFE_ROUTINE_DEFAULT_DATA
+  return source.map((routine, index) => {
     const normalized = cloneRoutine(routine)
     const bucketId =
       typeof normalized.bucketId === 'string' && normalized.bucketId.trim().length > 0
@@ -210,10 +202,41 @@ const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]): Promis
   }
 
   if (rows.length > 0) {
-    const { error: upsertError } = await supabase.from('life_routines').upsert(rows, { onConflict: 'id' })
+    const tryUpsert = async (payload: typeof rows) =>
+      supabase!.from('life_routines').upsert(payload, { onConflict: 'id' })
+
+    const { error: upsertError } = await tryUpsert(rows)
     if (upsertError) {
-      console.warn('Failed to upsert life routines to Supabase', upsertError)
-      return
+      const code = (upsertError as any).code || 'unknown'
+      const details = (upsertError as any).details || ''
+      const hint = (upsertError as any).hint || ''
+      const msg = `${upsertError.message} ${details}`.toLowerCase()
+      console.warn('[lifeRoutines] Upsert failed:', { code, message: upsertError.message, details, hint })
+
+      // If the backend uses a Postgres ENUM or CHECK constraint for surface_style
+      // and it hasn't been updated to include new themes, a 400 error will occur.
+      const looksLikeSurfaceStyleConstraint =
+        msg.includes('surface_style') || msg.includes('enum') || msg.includes('invalid input value')
+
+      if (looksLikeSurfaceStyleConstraint) {
+        // Retry once with a safe fallback so sync doesn’t block other fields.
+        const fallback = DEFAULT_SURFACE_STYLE
+        const fallbackRows = rows.map((r) => ({ ...r, surface_style: fallback }))
+        const { error: retryError } = await tryUpsert(fallbackRows)
+        if (retryError) {
+          console.warn(
+            'Failed to upsert life routines to Supabase even with fallback surface_style. Please apply the SQL migration to extend allowed surface styles.',
+            retryError,
+          )
+          return
+        }
+        console.warn(
+          '[lifeRoutines] Upsert succeeded using fallback surface_style because the backend is missing the new values. Apply the provided SQL migration to enable new themes server-side.',
+        )
+      } else {
+        console.warn('Failed to upsert life routines to Supabase', upsertError)
+        return
+      }
     }
   }
 

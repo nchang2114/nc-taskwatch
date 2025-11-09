@@ -467,6 +467,62 @@ const SURFACE_GRADIENT_INFO: Record<SurfaceStyle, SurfaceGradientInfo> = {
     end: '#c2410c',
     base: '#f97316',
   },
+  'deep-indigo': {
+    gradient: 'linear-gradient(135deg, #b4b8ff 0%, #6a6ee8 45%, #2c2f7a 100%)',
+    start: '#b4b8ff',
+    mid: '#6a6ee8',
+    end: '#2c2f7a',
+    base: '#4f46e5',
+  },
+  'warm-amber': {
+    gradient: 'linear-gradient(135deg, #ffe6b3 0%, #fbbf24 45%, #b45309 100%)',
+    start: '#ffe6b3',
+    mid: '#fbbf24',
+    end: '#b45309',
+    base: '#f59e0b',
+  },
+  'fresh-teal': {
+    gradient: 'linear-gradient(135deg, #99f6e4 0%, #2dd4bf 45%, #0f766e 100%)',
+    start: '#99f6e4',
+    mid: '#2dd4bf',
+    end: '#0f766e',
+    base: '#14b8a6',
+  },
+  'sunset-orange': {
+    gradient: 'linear-gradient(135deg, #ffc6b3 0%, #fb8a72 45%, #e1532e 100%)',
+    start: '#ffc6b3',
+    mid: '#fb8a72',
+    end: '#e1532e',
+    base: '#f97316',
+  },
+  'cool-blue': {
+    gradient: 'linear-gradient(135deg, #cfe8ff 0%, #60a5fa 45%, #1e40af 100%)',
+    start: '#cfe8ff',
+    mid: '#60a5fa',
+    end: '#1e40af',
+    base: '#3b82f6',
+  },
+  'soft-magenta': {
+    gradient: 'linear-gradient(135deg, #ffd1f4 0%, #f472b6 45%, #a21caf 100%)',
+    start: '#ffd1f4',
+    mid: '#f472b6',
+    end: '#a21caf',
+    base: '#e879f9',
+  },
+  'muted-lavender': {
+    gradient: 'linear-gradient(135deg, #e9e1ff 0%, #c4b5fd 45%, #6d28d9 100%)',
+    start: '#e9e1ff',
+    mid: '#c4b5fd',
+    end: '#6d28d9',
+    base: '#8b5cf6',
+  },
+  'neutral-grey-blue': {
+    gradient: 'linear-gradient(135deg, #e2e8f0 0%, #94a3b8 45%, #475569 100%)',
+    start: '#e2e8f0',
+    mid: '#94a3b8',
+    end: '#475569',
+    base: '#64748b',
+  },
 }
 
 const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGradientInfo>> = {
@@ -541,6 +597,70 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     mid: 'rgba(255, 192, 136, 0.3)',
     end: 'rgba(249, 160, 68, 0.24)',
     base: SURFACE_GRADIENT_INFO.ember.base,
+  },
+  'deep-indigo': {
+    gradient:
+      'linear-gradient(135deg, rgba(180, 184, 255, 0.34) 0%, rgba(144, 149, 255, 0.3) 50%, rgba(122, 127, 232, 0.26) 100%)',
+    start: 'rgba(180, 184, 255, 0.34)',
+    mid: 'rgba(144, 149, 255, 0.3)',
+    end: 'rgba(122, 127, 232, 0.26)',
+    base: SURFACE_GRADIENT_INFO['deep-indigo'].base,
+  },
+  'warm-amber': {
+    gradient:
+      'linear-gradient(135deg, rgba(255, 230, 179, 0.34) 0%, rgba(255, 214, 140, 0.3) 48%, rgba(251, 191, 36, 0.26) 100%)',
+    start: 'rgba(255, 230, 179, 0.34)',
+    mid: 'rgba(255, 214, 140, 0.3)',
+    end: 'rgba(251, 191, 36, 0.26)',
+    base: SURFACE_GRADIENT_INFO['warm-amber'].base,
+  },
+  'fresh-teal': {
+    gradient:
+      'linear-gradient(135deg, rgba(153, 246, 228, 0.3) 0%, rgba(125, 238, 214, 0.26) 48%, rgba(109, 230, 206, 0.22) 100%)',
+    start: 'rgba(153, 246, 228, 0.3)',
+    mid: 'rgba(125, 238, 214, 0.26)',
+    end: 'rgba(109, 230, 206, 0.22)',
+    base: SURFACE_GRADIENT_INFO['fresh-teal'].base,
+  },
+  'sunset-orange': {
+    gradient:
+      'linear-gradient(135deg, rgba(255, 198, 179, 0.34) 0%, rgba(255, 182, 156, 0.3) 48%, rgba(251, 138, 114, 0.24) 100%)',
+    start: 'rgba(255, 198, 179, 0.34)',
+    mid: 'rgba(255, 182, 156, 0.3)',
+    end: 'rgba(251, 138, 114, 0.24)',
+    base: SURFACE_GRADIENT_INFO['sunset-orange'].base,
+  },
+  'cool-blue': {
+    gradient:
+      'linear-gradient(135deg, rgba(207, 232, 255, 0.34) 0%, rgba(190, 225, 255, 0.3) 48%, rgba(153, 206, 255, 0.24) 100%)',
+    start: 'rgba(207, 232, 255, 0.34)',
+    mid: 'rgba(190, 225, 255, 0.3)',
+    end: 'rgba(153, 206, 255, 0.24)',
+    base: SURFACE_GRADIENT_INFO['cool-blue'].base,
+  },
+  'soft-magenta': {
+    gradient:
+      'linear-gradient(135deg, rgba(255, 209, 244, 0.34) 0%, rgba(245, 195, 234, 0.3) 50%, rgba(240, 180, 226, 0.26) 100%)',
+    start: 'rgba(255, 209, 244, 0.34)',
+    mid: 'rgba(245, 195, 234, 0.3)',
+    end: 'rgba(240, 180, 226, 0.26)',
+    base: SURFACE_GRADIENT_INFO['soft-magenta'].base,
+  },
+  'muted-lavender': {
+    gradient:
+      'linear-gradient(135deg, rgba(233, 225, 255, 0.34) 0%, rgba(221, 212, 255, 0.3) 48%, rgba(204, 196, 253, 0.24) 100%)',
+    start: 'rgba(233, 225, 255, 0.34)',
+    mid: 'rgba(221, 212, 255, 0.3)',
+    end: 'rgba(204, 196, 253, 0.24)',
+  base: SURFACE_GRADIENT_INFO['muted-lavender'].base,
+  },
+  'neutral-grey-blue': {
+    gradient:
+      'linear-gradient(135deg, rgba(226, 232, 240, 0.34) 0%, rgba(209, 216, 225, 0.3) 48%, rgba(195, 203, 213, 0.24) 100%)',
+    start: 'rgba(226, 232, 240, 0.34)',
+    mid: 'rgba(209, 216, 225, 0.3)',
+    end: 'rgba(195, 203, 213, 0.24)',
+    base: SURFACE_GRADIENT_INFO['neutral-grey-blue'].base,
   },
 }
 

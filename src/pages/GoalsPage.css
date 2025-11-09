@@ -689,6 +689,64 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   --lr-pill-marker: linear-gradient(135deg, rgba(255, 210, 170, 0.74), rgba(249, 150, 74, 0.6));
 }
 
+/* New life routine theme variables */
+.life-routines-card__task--surface-deep-indigo {
+  --lr-pill-bg: linear-gradient(135deg, rgba(180, 184, 255, 0.34), rgba(122, 127, 232, 0.26));
+  --lr-pill-border: rgba(122, 127, 232, 0.38);
+  --lr-pill-text: rgba(238, 240, 255, 0.92);
+  --lr-pill-muted: rgba(204, 208, 255, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(190, 194, 255, 0.74), rgba(122, 127, 232, 0.62));
+}
+.life-routines-card__task--surface-warm-amber {
+  --lr-pill-bg: linear-gradient(135deg, rgba(255, 230, 179, 0.34), rgba(251, 191, 36, 0.26));
+  --lr-pill-border: rgba(251, 191, 36, 0.36);
+  --lr-pill-text: rgba(255, 245, 228, 0.92);
+  --lr-pill-muted: rgba(255, 226, 180, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(255, 233, 190, 0.74), rgba(251, 191, 36, 0.58));
+}
+.life-routines-card__task--surface-fresh-teal {
+  --lr-pill-bg: linear-gradient(135deg, rgba(153, 246, 228, 0.3), rgba(109, 230, 206, 0.22));
+  --lr-pill-border: rgba(45, 212, 191, 0.36);
+  --lr-pill-text: rgba(224, 255, 248, 0.92);
+  --lr-pill-muted: rgba(186, 250, 236, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(153, 246, 228, 0.72), rgba(45, 212, 191, 0.58));
+}
+.life-routines-card__task--surface-sunset-orange {
+  --lr-pill-bg: linear-gradient(135deg, rgba(255, 198, 179, 0.34), rgba(249, 115, 22, 0.24));
+  --lr-pill-border: rgba(249, 115, 22, 0.36);
+  --lr-pill-text: rgba(255, 242, 234, 0.92);
+  --lr-pill-muted: rgba(255, 220, 200, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(255, 210, 190, 0.72), rgba(249, 128, 52, 0.56));
+}
+.life-routines-card__task--surface-cool-blue {
+  --lr-pill-bg: linear-gradient(135deg, rgba(207, 232, 255, 0.34), rgba(153, 206, 255, 0.24));
+  --lr-pill-border: rgba(96, 165, 250, 0.36);
+  --lr-pill-text: rgba(234, 245, 255, 0.92);
+  --lr-pill-muted: rgba(204, 230, 255, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(207, 232, 255, 0.72), rgba(153, 206, 255, 0.56));
+}
+.life-routines-card__task--surface-soft-magenta {
+  --lr-pill-bg: linear-gradient(135deg, rgba(255, 209, 244, 0.34), rgba(240, 180, 226, 0.26));
+  --lr-pill-border: rgba(232, 121, 249, 0.36);
+  --lr-pill-text: rgba(255, 240, 250, 0.92);
+  --lr-pill-muted: rgba(249, 224, 240, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(255, 209, 244, 0.72), rgba(232, 121, 249, 0.56));
+}
+.life-routines-card__task--surface-muted-lavender {
+  --lr-pill-bg: linear-gradient(135deg, rgba(233, 225, 255, 0.34), rgba(204, 196, 253, 0.24));
+  --lr-pill-border: rgba(139, 92, 246, 0.34);
+  --lr-pill-text: rgba(244, 240, 255, 0.92);
+  --lr-pill-muted: rgba(230, 224, 255, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(233, 225, 255, 0.72), rgba(200, 190, 253, 0.56));
+}
+.life-routines-card__task--surface-neutral-grey-blue {
+  --lr-pill-bg: linear-gradient(135deg, rgba(226, 232, 240, 0.34), rgba(195, 203, 213, 0.24));
+  --lr-pill-border: rgba(100, 116, 139, 0.34);
+  --lr-pill-text: rgba(241, 245, 249, 0.92);
+  --lr-pill-muted: rgba(224, 230, 238, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(226, 232, 240, 0.72), rgba(195, 203, 213, 0.56));
+}
+
 .life-routines-card__task-button:focus-visible {
   outline: 2px solid rgba(255, 205, 168, 0.4);
   outline-offset: 2px;
@@ -857,6 +915,63 @@ html[data-theme='light'] .life-routines-card__task--surface-ember {
   --lr-pill-text: rgba(110, 60, 24, 0.94);
   --lr-pill-muted: rgba(134, 76, 34, 0.7);
   --lr-pill-marker: linear-gradient(135deg, rgba(253, 186, 116, 0.95), rgba(234, 88, 12, 0.88));
+}
+/* Light theme variants for new life routine surfaces */
+html[data-theme='light'] .life-routines-card__task--surface-deep-indigo {
+  --lr-pill-bg: rgba(233, 235, 255, 0.94);
+  --lr-pill-border: rgba(99, 102, 241, 0.38);
+  --lr-pill-text: rgba(44, 48, 122, 0.92);
+  --lr-pill-muted: rgba(76, 82, 156, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(160, 166, 255, 0.95), rgba(99, 102, 241, 0.9));
+}
+html[data-theme='light'] .life-routines-card__task--surface-warm-amber {
+  --lr-pill-bg: rgba(255, 247, 224, 0.94);
+  --lr-pill-border: rgba(245, 158, 11, 0.36);
+  --lr-pill-text: rgba(120, 74, 6, 0.92);
+  --lr-pill-muted: rgba(152, 96, 18, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(255, 219, 124, 0.95), rgba(245, 158, 11, 0.9));
+}
+html[data-theme='light'] .life-routines-card__task--surface-fresh-teal {
+  --lr-pill-bg: rgba(224, 255, 248, 0.94);
+  --lr-pill-border: rgba(20, 184, 166, 0.36);
+  --lr-pill-text: rgba(16, 84, 76, 0.92);
+  --lr-pill-muted: rgba(32, 124, 112, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(99, 233, 214, 0.95), rgba(20, 184, 166, 0.9));
+}
+html[data-theme='light'] .life-routines-card__task--surface-sunset-orange {
+  --lr-pill-bg: rgba(255, 242, 236, 0.94);
+  --lr-pill-border: rgba(249, 115, 22, 0.36);
+  --lr-pill-text: rgba(128, 54, 14, 0.92);
+  --lr-pill-muted: rgba(160, 82, 32, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(255, 196, 160, 0.95), rgba(249, 115, 22, 0.9));
+}
+html[data-theme='light'] .life-routines-card__task--surface-cool-blue {
+  --lr-pill-bg: rgba(232, 244, 255, 0.94);
+  --lr-pill-border: rgba(59, 130, 246, 0.36);
+  --lr-pill-text: rgba(28, 70, 120, 0.92);
+  --lr-pill-muted: rgba(48, 102, 160, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(166, 206, 255, 0.95), rgba(59, 130, 246, 0.9));
+}
+html[data-theme='light'] .life-routines-card__task--surface-soft-magenta {
+  --lr-pill-bg: rgba(255, 239, 251, 0.94);
+  --lr-pill-border: rgba(232, 121, 249, 0.36);
+  --lr-pill-text: rgba(122, 40, 120, 0.92);
+  --lr-pill-muted: rgba(150, 72, 150, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(252, 204, 244, 0.95), rgba(232, 121, 249, 0.9));
+}
+html[data-theme='light'] .life-routines-card__task--surface-muted-lavender {
+  --lr-pill-bg: rgba(243, 240, 255, 0.94);
+  --lr-pill-border: rgba(139, 92, 246, 0.34);
+  --lr-pill-text: rgba(70, 48, 140, 0.92);
+  --lr-pill-muted: rgba(108, 80, 170, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(210, 200, 255, 0.95), rgba(139, 92, 246, 0.9));
+}
+html[data-theme='light'] .life-routines-card__task--surface-neutral-grey-blue {
+  --lr-pill-bg: rgba(237, 242, 248, 0.94);
+  --lr-pill-border: rgba(100, 116, 139, 0.34);
+  --lr-pill-text: rgba(56, 66, 84, 0.92);
+  --lr-pill-muted: rgba(86, 98, 118, 0.7);
+  --lr-pill-marker: linear-gradient(135deg, rgba(198, 210, 224, 0.95), rgba(100, 116, 139, 0.9));
 }
 
 
@@ -3059,6 +3174,48 @@ html[data-theme='light'] .goal-task-add:focus-visible {
   box-shadow: 0 16px 30px -22px rgba(146, 68, 16, 0.22);
 }
 
+/* New bucket surfaces */
+.goal-bucket-item--surface-deep-indigo {
+  background: linear-gradient(135deg, rgba(180, 184, 255, 0.3), rgba(122, 127, 232, 0.2));
+  border-color: rgba(122, 127, 232, 0.26);
+  box-shadow: 0 16px 30px -22px rgba(60, 64, 140, 0.22);
+}
+.goal-bucket-item--surface-warm-amber {
+  background: linear-gradient(135deg, rgba(255, 230, 179, 0.3), rgba(251, 191, 36, 0.18));
+  border-color: rgba(251, 191, 36, 0.28);
+  box-shadow: 0 16px 30px -22px rgba(166, 108, 24, 0.22);
+}
+.goal-bucket-item--surface-fresh-teal {
+  background: linear-gradient(135deg, rgba(153, 246, 228, 0.3), rgba(45, 212, 191, 0.18));
+  border-color: rgba(45, 212, 191, 0.28);
+  box-shadow: 0 16px 30px -22px rgba(20, 120, 108, 0.22);
+}
+.goal-bucket-item--surface-sunset-orange {
+  background: linear-gradient(135deg, rgba(255, 198, 179, 0.32), rgba(249, 115, 22, 0.18));
+  border-color: rgba(249, 115, 22, 0.28);
+  box-shadow: 0 16px 30px -22px rgba(150, 62, 18, 0.22);
+}
+.goal-bucket-item--surface-cool-blue {
+  background: linear-gradient(135deg, rgba(207, 232, 255, 0.3), rgba(96, 165, 250, 0.18));
+  border-color: rgba(96, 165, 250, 0.28);
+  box-shadow: 0 16px 30px -22px rgba(42, 96, 160, 0.22);
+}
+.goal-bucket-item--surface-soft-magenta {
+  background: linear-gradient(135deg, rgba(255, 209, 244, 0.32), rgba(232, 121, 249, 0.2));
+  border-color: rgba(232, 121, 249, 0.3);
+  box-shadow: 0 16px 30px -22px rgba(142, 50, 150, 0.22);
+}
+.goal-bucket-item--surface-muted-lavender {
+  background: linear-gradient(135deg, rgba(233, 225, 255, 0.32), rgba(139, 92, 246, 0.2));
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 16px 30px -22px rgba(80, 50, 150, 0.22);
+}
+.goal-bucket-item--surface-neutral-grey-blue {
+  background: linear-gradient(135deg, rgba(226, 232, 240, 0.32), rgba(100, 116, 139, 0.2));
+  border-color: rgba(100, 116, 139, 0.3);
+  box-shadow: 0 16px 30px -22px rgba(58, 72, 92, 0.22);
+}
+
 html[data-theme='light'] .goal-bucket-item--surface-glass {
   background: rgba(255, 255, 255, 0.84);
   border-color: rgba(128, 146, 238, 0.16);
@@ -3111,6 +3268,47 @@ html[data-theme='light'] .goal-bucket-item--surface-ember {
   background: linear-gradient(135deg, rgba(255, 226, 198, 0.22), rgba(254, 178, 105, 0.14));
   border-color: rgba(249, 115, 22, 0.22);
   box-shadow: 0 12px 22px -18px rgba(174, 108, 42, 0.16);
+}
+
+html[data-theme='light'] .goal-bucket-item--surface-deep-indigo {
+  background: linear-gradient(135deg, rgba(233, 235, 255, 0.9), rgba(199, 204, 255, 0.76));
+  border-color: rgba(99, 102, 241, 0.24);
+  box-shadow: 0 12px 22px -18px rgba(99, 102, 241, 0.14);
+}
+html[data-theme='light'] .goal-bucket-item--surface-warm-amber {
+  background: linear-gradient(135deg, rgba(255, 247, 224, 0.9), rgba(255, 236, 200, 0.78));
+  border-color: rgba(245, 158, 11, 0.24);
+  box-shadow: 0 12px 22px -18px rgba(214, 134, 8, 0.14);
+}
+html[data-theme='light'] .goal-bucket-item--surface-fresh-teal {
+  background: linear-gradient(135deg, rgba(224, 255, 248, 0.9), rgba(198, 252, 238, 0.78));
+  border-color: rgba(20, 184, 166, 0.24);
+  box-shadow: 0 12px 22px -18px rgba(20, 120, 110, 0.14);
+}
+html[data-theme='light'] .goal-bucket-item--surface-sunset-orange {
+  background: linear-gradient(135deg, rgba(255, 242, 236, 0.9), rgba(255, 229, 218, 0.78));
+  border-color: rgba(249, 115, 22, 0.24);
+  box-shadow: 0 12px 22px -18px rgba(180, 90, 30, 0.14);
+}
+html[data-theme='light'] .goal-bucket-item--surface-cool-blue {
+  background: linear-gradient(135deg, rgba(232, 244, 255, 0.9), rgba(210, 234, 255, 0.78));
+  border-color: rgba(59, 130, 246, 0.24);
+  box-shadow: 0 12px 22px -18px rgba(74, 128, 210, 0.14);
+}
+html[data-theme='light'] .goal-bucket-item--surface-soft-magenta {
+  background: linear-gradient(135deg, rgba(255, 239, 251, 0.9), rgba(252, 224, 246, 0.78));
+  border-color: rgba(232, 121, 249, 0.26);
+  box-shadow: 0 12px 22px -18px rgba(180, 90, 160, 0.16);
+}
+html[data-theme='light'] .goal-bucket-item--surface-muted-lavender {
+  background: linear-gradient(135deg, rgba(243, 240, 255, 0.9), rgba(232, 228, 255, 0.78));
+  border-color: rgba(139, 92, 246, 0.24);
+  box-shadow: 0 12px 22px -18px rgba(120, 82, 200, 0.14);
+}
+html[data-theme='light'] .goal-bucket-item--surface-neutral-grey-blue {
+  background: linear-gradient(135deg, rgba(237, 242, 248, 0.9), rgba(226, 232, 240, 0.78));
+  border-color: rgba(100, 116, 139, 0.24);
+  box-shadow: 0 12px 22px -18px rgba(88, 104, 118, 0.14);
 }
 
 .goal-task-row--draft {
@@ -3848,6 +4046,40 @@ html[data-theme='light'] .goal-task-row--diff-green {
   border-color: rgba(249, 140, 52, 0.38);
 }
 
+/* New life routine preview gradients */
+.goal-customizer--life-routine .goal-customizer__surface-preview--deep-indigo {
+  background: linear-gradient(135deg, rgba(180, 184, 255, 0.34), rgba(122, 127, 232, 0.26));
+  border-color: rgba(122, 127, 232, 0.38);
+}
+.goal-customizer--life-routine .goal-customizer__surface-preview--warm-amber {
+  background: linear-gradient(135deg, rgba(255, 230, 179, 0.34), rgba(251, 191, 36, 0.26));
+  border-color: rgba(251, 191, 36, 0.36);
+}
+.goal-customizer--life-routine .goal-customizer__surface-preview--fresh-teal {
+  background: linear-gradient(135deg, rgba(153, 246, 228, 0.3), rgba(109, 230, 206, 0.22));
+  border-color: rgba(45, 212, 191, 0.36);
+}
+.goal-customizer--life-routine .goal-customizer__surface-preview--sunset-orange {
+  background: linear-gradient(135deg, rgba(255, 198, 179, 0.34), rgba(251, 138, 114, 0.24));
+  border-color: rgba(249, 115, 22, 0.36);
+}
+.goal-customizer--life-routine .goal-customizer__surface-preview--cool-blue {
+  background: linear-gradient(135deg, rgba(207, 232, 255, 0.34), rgba(153, 206, 255, 0.24));
+  border-color: rgba(96, 165, 250, 0.36);
+}
+.goal-customizer--life-routine .goal-customizer__surface-preview--soft-magenta {
+  background: linear-gradient(135deg, rgba(255, 209, 244, 0.34), rgba(240, 180, 226, 0.26));
+  border-color: rgba(232, 121, 249, 0.36);
+}
+.goal-customizer--life-routine .goal-customizer__surface-preview--muted-lavender {
+  background: linear-gradient(135deg, rgba(233, 225, 255, 0.34), rgba(204, 196, 253, 0.24));
+  border-color: rgba(139, 92, 246, 0.34);
+}
+.goal-customizer--life-routine .goal-customizer__surface-preview--neutral-grey-blue {
+  background: linear-gradient(135deg, rgba(226, 232, 240, 0.34), rgba(195, 203, 213, 0.24));
+  border-color: rgba(100, 116, 139, 0.34);
+}
+
 html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--glass {
   background: linear-gradient(135deg, rgba(216, 230, 255, 0.94), rgba(188, 210, 255, 0.88));
   border-color: rgba(118, 142, 255, 0.36);
@@ -3891,6 +4123,40 @@ html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surfac
 html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--ember {
   background: rgba(255, 239, 224, 0.94);
   border-color: rgba(249, 115, 22, 0.38);
+}
+
+/* Light theme variants for new life routine previews */
+html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--deep-indigo {
+  background: rgba(233, 235, 255, 0.94);
+  border-color: rgba(99, 102, 241, 0.38);
+}
+html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--warm-amber {
+  background: rgba(255, 247, 224, 0.94);
+  border-color: rgba(245, 158, 11, 0.38);
+}
+html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--fresh-teal {
+  background: rgba(224, 255, 248, 0.94);
+  border-color: rgba(20, 184, 166, 0.36);
+}
+html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--sunset-orange {
+  background: rgba(255, 242, 236, 0.94);
+  border-color: rgba(249, 115, 22, 0.36);
+}
+html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--cool-blue {
+  background: rgba(232, 244, 255, 0.94);
+  border-color: rgba(59, 130, 246, 0.36);
+}
+html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--soft-magenta {
+  background: rgba(255, 239, 251, 0.94);
+  border-color: rgba(232, 121, 249, 0.36);
+}
+html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--muted-lavender {
+  background: rgba(243, 240, 255, 0.94);
+  border-color: rgba(139, 92, 246, 0.34);
+}
+html[data-theme='light'] .goal-customizer--life-routine .goal-customizer__surface-preview--neutral-grey-blue {
+  background: rgba(237, 242, 248, 0.94);
+  border-color: rgba(100, 116, 139, 0.34);
 }
 
 .goal-customizer__surface-title {
