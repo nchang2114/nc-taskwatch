@@ -9899,9 +9899,11 @@ useEffect(() => {
                 aria-selected={isActive}
                 aria-controls={tabPanelId}
                 className={`reflection-tab${isActive ? ' reflection-tab--active' : ''}`}
+                aria-label={config.label}
                 onClick={() => setActiveRange(key)}
               >
-                <span className="reflection-tab__label">{config.label}</span>
+                <span className="reflection-tab__label reflection-tab__label--full">{config.label}</span>
+                <span className="reflection-tab__label reflection-tab__label--short">{`Last ${config.shortLabel}`}</span>
               </button>
             )
           })}

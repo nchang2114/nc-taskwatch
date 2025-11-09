@@ -1410,9 +1410,12 @@ html[data-theme='light'] .snapback-drawer__title-input {
 .reflection-overview__titles { display: grid; gap: 0.25rem; min-width: 0; }
 
 .reflection-tabs {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;        /* always one line */
+  white-space: nowrap;      /* prevent internal wrapping */
   gap: clamp(0.5rem, 1.2vw, 0.75rem);
+  max-width: 100%;
 }
 
 .reflection-tab {
@@ -1421,14 +1424,16 @@ html[data-theme='light'] .snapback-drawer__title-input {
   background: rgba(18, 24, 56, 0.4);
   color: var(--text-secondary);
   border-radius: 999px;
-  padding: 0.55rem 1.25rem;
+  padding: 0.5rem 1.05rem;
   font-family: var(--font-display);
-  font-size: clamp(0.85rem, 1.8vw, 0.95rem);
+  font-size: clamp(0.82rem, 1.6vw, 0.95rem);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
+
+.reflection-tab__label--short { display: none; }
 
 .reflection-tab:hover,
 .reflection-tab:focus-visible {
@@ -1462,6 +1467,19 @@ html[data-theme='light'] .reflection-tab--active {
   color: rgba(28, 34, 90, 0.92);
   background: rgba(202, 210, 255, 0.95);
   border-color: rgba(128, 140, 230, 0.65);
+}
+
+/* Switch to shorter labels later (keep full labels longer) */
+@media (max-width: 640px) {
+  .reflection-tab { padding: 0.45rem 0.9rem; font-size: 0.82rem; }
+  .reflection-tab__label--full { display: none; }
+  .reflection-tab__label--short { display: inline; }
+}
+
+/* Tighten further for very small widths while staying on one line; allow horizontal scroll if truly necessary */
+@media (max-width: 560px) {
+  .reflection-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .reflection-tab { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
 }
 
 /* SnapBack-only pill tabs next to header */
