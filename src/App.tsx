@@ -225,7 +225,7 @@ function App() {
     setIsNavOpen((current) => !current)
   }, [isNavCollapsed])
 
-  // Keyboard shortcuts: 1/2/3 or g/t/r → Goals/Taskwatch/Reflection
+  // Keyboard shortcuts: 1/2/3 or g/f/r → Goals/Taskwatch/Reflection (f = Focus/Taskwatch)
   useEffect(() => {
     if (typeof window === 'undefined') return
     const isEditableTarget = (el: EventTarget | null): boolean => {
@@ -246,9 +246,9 @@ function App() {
       if (isEditableTarget(e.target)) return
       const k = e.key.toLowerCase()
       let target: TabKey | null = null
-      if (k === '1' || k === 'g') target = 'goals'
-      else if (k === '2' || k === 't') target = 'taskwatch'
-      else if (k === '3' || k === 'r') target = 'reflection'
+  if (k === '1' || k === 'g') target = 'goals'
+  else if (k === '2' || k === 'f') target = 'taskwatch'
+  else if (k === '3' || k === 'r') target = 'reflection'
       if (target) {
         e.preventDefault()
         setActiveTab(target)
