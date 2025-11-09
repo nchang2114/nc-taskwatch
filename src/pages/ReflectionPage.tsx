@@ -4,6 +4,7 @@ import {
   useId,
   useLayoutEffect,
   useMemo,
+  memo,
   useRef,
   useState,
   startTransition,
@@ -3074,8 +3075,16 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       setCalendarEditorEntryId(null)
       setCalendarInspectorEntryId(null)
       updateHistory((current) => {
-        const next = [...current, entry]
-        next.sort((a, b) => a.startedAt - b.startedAt)
+        const next = current.slice()
+        // Binary insert by startedAt to avoid O(n log n) resort of entire array
+        let lo = 0
+        let hi = next.length
+        while (lo < hi) {
+          const mid = (lo + hi) >>> 1
+          if (next[mid].startedAt < entry.startedAt) lo = mid + 1
+          else hi = mid
+        }
+        next.splice(lo, 0, entry)
         return next
       })
       // No edit panel: allow the calendar to render the new planned session inline.
@@ -3509,25 +3518,27 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     ) => {
       event.preventDefault()
       event.stopPropagation()
-      // Delete by id against the latest state to avoid stale-index bugs when multiple events fire
-      setHoveredHistoryId((current) => (current === entryId ? null : current))
-      setHoveredDuringDragId((current) => (current === entryId ? null : current))
-      const deletingInspectorEntry = calendarInspectorEntryId === entryId
-      if (selectedHistoryId === entryId) {
-        setSelectedHistoryId(null)
-        setEditingHistoryId(null)
-        setHistoryDraft(createEmptyHistoryDraft())
-      }
-      if (pendingNewHistoryId === entryId) {
-        setPendingNewHistoryId(null)
-      }
-      if (deletingInspectorEntry) {
-        setInspectorFallbackMessage(INSPECTOR_DELETED_MESSAGE)
-        setShowInspectorExtras(false)
-      }
-      updateHistory((current) => {
-        if (!current.some((e) => e.id === entryId)) return current
-        return current.filter((e) => e.id !== entryId)
+      startTransition(() => {
+        // Delete by id against the latest state to avoid stale-index bugs when multiple events fire
+        setHoveredHistoryId((current) => (current === entryId ? null : current))
+        setHoveredDuringDragId((current) => (current === entryId ? null : current))
+        const deletingInspectorEntry = calendarInspectorEntryId === entryId
+        if (selectedHistoryId === entryId) {
+          setSelectedHistoryId(null)
+          setEditingHistoryId(null)
+          setHistoryDraft(createEmptyHistoryDraft())
+        }
+        if (pendingNewHistoryId === entryId) {
+          setPendingNewHistoryId(null)
+        }
+        if (deletingInspectorEntry) {
+          setInspectorFallbackMessage(INSPECTOR_DELETED_MESSAGE)
+          setShowInspectorExtras(false)
+        }
+        updateHistory((current) => {
+          if (!current.some((e) => e.id === entryId)) return current
+          return current.filter((e) => e.id !== entryId)
+        })
       })
     },
     [
@@ -3574,47 +3585,51 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       subtasks: [],
       futureSession: isFuture,
     }
-    updateHistory((current) => {
-      const next = [...current, entry]
-      next.sort((a, b) => a.startedAt - b.startedAt)
-      return next
+    startTransition(() => {
+      updateHistory((current) => {
+        const next = [...current, entry]
+        next.sort((a, b) => a.startedAt - b.startedAt)
+        return next
+      })
+      setInspectorFallbackMessage(null)
+      setHoveredHistoryId(null)
+      setSelectedHistoryId(entry.id)
+      setEditingHistoryId(entry.id)
+      setPendingNewHistoryId(entry.id)
+      setHistoryDraft(createHistoryDraftFromEntry(entry))
+      taskNameAutofilledRef.current = false
+      if (ENABLE_HISTORY_INSPECTOR_PANEL) {
+        setCalendarInspectorEntryId(entry.id)
+        setCalendarEditorEntryId(null)
+      } else {
+        setCalendarEditorEntryId(entry.id)
+        setCalendarInspectorEntryId(null)
+      }
     })
-    setInspectorFallbackMessage(null)
-    setHoveredHistoryId(null)
-    setSelectedHistoryId(entry.id)
-    setEditingHistoryId(entry.id)
-    setPendingNewHistoryId(entry.id)
-    setHistoryDraft(createHistoryDraftFromEntry(entry))
-    taskNameAutofilledRef.current = false
-    if (ENABLE_HISTORY_INSPECTOR_PANEL) {
-      setCalendarInspectorEntryId(entry.id)
-      setCalendarEditorEntryId(null)
-    } else {
-      setCalendarEditorEntryId(entry.id)
-      setCalendarInspectorEntryId(null)
-    }
   }, [historyDayOffset, setCalendarEditorEntryId, setCalendarInspectorEntryId, setInspectorFallbackMessage, updateHistory])
 
   const handleSelectHistorySegment = useCallback(
     (entry: HistoryEntry) => {
-      if (selectedHistoryId === entry.id) {
-        const editorIsOpen = ENABLE_HISTORY_INSPECTOR_PANEL ? calendarInspectorEntryId : calendarEditorEntryId
-        if (editorIsOpen) {
+      startTransition(() => {
+        if (selectedHistoryId === entry.id) {
+          const editorIsOpen = ENABLE_HISTORY_INSPECTOR_PANEL ? calendarInspectorEntryId : calendarEditorEntryId
+          if (editorIsOpen) {
+            return
+          }
+          setSelectedHistoryId(null)
+          setEditingHistoryId(null)
+          setHistoryDraft(createEmptyHistoryDraft())
+          setHoveredHistoryId((current) => (current === entry.id ? null : current))
           return
         }
-        setSelectedHistoryId(null)
+        setHistoryDraft(() => {
+          const base = createHistoryDraftFromEntry(entry)
+          base.taskName = deriveEntryTaskName(entry)
+          return base
+        })
+        setSelectedHistoryId(entry.id)
         setEditingHistoryId(null)
-        setHistoryDraft(createEmptyHistoryDraft())
-        setHoveredHistoryId((current) => (current === entry.id ? null : current))
-        return
-      }
-      setHistoryDraft(() => {
-        const base = createHistoryDraftFromEntry(entry)
-        base.taskName = deriveEntryTaskName(entry)
-        return base
       })
-      setSelectedHistoryId(entry.id)
-      setEditingHistoryId(null)
     },
     [calendarEditorEntryId, calendarInspectorEntryId, selectedHistoryId],
   )
@@ -4242,10 +4257,12 @@ useEffect(() => {
     if (calendarInspectorEntryId) {
       return
     }
-    setSelectedHistoryId(null)
-    setHistoryDraft(createEmptyHistoryDraft())
-    setEditingHistoryId(null)
-    setHoveredHistoryId(null)
+    startTransition(() => {
+      setSelectedHistoryId(null)
+      setHistoryDraft(createEmptyHistoryDraft())
+      setEditingHistoryId(null)
+      setHoveredHistoryId(null)
+    })
   }, [calendarInspectorEntryId])
 
   useEffect(() => {
@@ -4639,8 +4656,8 @@ useEffect(() => {
   const snapPlansRef = useRef<SnapbackPlanState>({})
   useEffect(() => { snapPlansRef.current = snapPlans }, [snapPlans])
   const saveTimersRef = useRef<Map<string, number>>(new Map())
-  const persistPlanForId = useCallback(async (idKey: string) => {
-    const plan = snapPlansRef.current[idKey] ?? { cue: '', deconstruction: '', plan: '' }
+  const persistPlanForId = useCallback(async (idKey: string, planOverride?: { cue: string; deconstruction: string; plan: string }) => {
+    const plan = planOverride ?? (snapPlansRef.current[idKey] ?? { cue: '', deconstruction: '', plan: '' })
     if (!plan) return
     let baseKey = ''
     let triggerName = ''
@@ -4666,24 +4683,91 @@ useEffect(() => {
       plan_text: plan.plan,
     })
     if (row) {
-      setSnapDbRows((cur) => {
-        const idx = cur.findIndex((r) => r.base_key === row.base_key)
-        if (idx >= 0) { const copy = cur.slice(); copy[idx] = row; return copy }
-        return [...cur, row]
+      startTransition(() => {
+        setSnapDbRows((cur) => {
+          const idx = cur.findIndex((r) => r.base_key === row.base_key)
+          if (idx >= 0) { const copy = cur.slice(); copy[idx] = row; return copy }
+          return [...cur, row]
+        })
+        setSnapPlans((cur) => ({ ...cur, [idKey]: { ...plan } }))
       })
     }
   }, [snapDbRows, snapbackOverview.legend])
-  const schedulePersistPlan = useCallback((idKey: string) => {
+  const schedulePersistPlan = useCallback((idKey: string, planSnapshot: { cue: string; deconstruction: string; plan: string }) => {
     if (typeof window === 'undefined') return
     const m = saveTimersRef.current
     const prev = m.get(idKey)
     if (prev) window.clearTimeout(prev)
     const tid = window.setTimeout(() => {
       m.delete(idKey)
-      void persistPlanForId(idKey)
+      void persistPlanForId(idKey, planSnapshot)
     }, 500)
     m.set(idKey, tid as unknown as number)
   }, [persistPlanForId])
+
+  // Lightweight, memoized editor for Snapback plans to avoid re-rendering the whole page while typing
+  const SnapbackPlanForm = useMemo(() => {
+    type Props = {
+      idKey: string
+      initialPlan: { cue: string; deconstruction: string; plan: string }
+      onScheduleSave: (idKey: string, snapshot: { cue: string; deconstruction: string; plan: string }) => void
+    }
+    const Component = memo(function Component({ idKey, initialPlan, onScheduleSave }: Props) {
+      const [draft, setDraft] = useState(initialPlan)
+      useEffect(() => { setDraft(initialPlan) }, [initialPlan])
+      return (
+        <>
+          <div className="snapback-drawer__group">
+            <label className="snapback-drawer__label">Why is this happening?</label>
+            <p className="snapback-drawer__hint">Describe what tends to lead up to this pattern. What’s going on beforehand?</p>
+            <input
+              type="text"
+              className="snapback-drawer__input"
+              placeholder="Describe the lead-up or trigger."
+              value={draft.cue}
+              onChange={(e) => {
+                const next = { cue: e.target.value, deconstruction: draft.deconstruction, plan: draft.plan }
+                setDraft(next)
+                onScheduleSave(idKey, next)
+              }}
+            />
+          </div>
+
+          <div className="snapback-drawer__group">
+            <label className="snapback-drawer__label">Is it aligned with who you want to be? What's the reward, is it sustainable?</label>
+            <p className="snapback-drawer__hint">What’s the reward you’re getting right now? Is it sustainable?</p>
+            <textarea
+              className="snapback-drawer__textarea"
+              placeholder="Be honest about the short-term reward and the long-term cost."
+              value={draft.deconstruction}
+              onChange={(e) => {
+                const next = { cue: draft.cue, deconstruction: e.target.value, plan: draft.plan }
+                setDraft(next)
+                onScheduleSave(idKey, next)
+              }}
+            />
+          </div>
+
+          <div className="snapback-drawer__group">
+            <label className="snapback-drawer__label">How do you change it next time?</label>
+            <p className="snapback-drawer__hint">Write one small, concrete thing you’ll try the next time this trigger appears.</p>
+            <textarea
+              className="snapback-drawer__textarea"
+              placeholder="Write one small, concrete thing you’ll try."
+              value={draft.plan}
+              onChange={(e) => {
+                const next = { cue: draft.cue, deconstruction: draft.deconstruction, plan: e.target.value }
+                setDraft(next)
+                onScheduleSave(idKey, next)
+              }}
+            />
+          </div>
+        </>
+      )
+    })
+    Component.displayName = 'SnapbackPlanForm'
+    return Component
+  }, [])
 
   // Cleanup any pending autosave timers on unmount
   useEffect(() => {
@@ -10183,55 +10267,14 @@ useEffect(() => {
               </div>
               <div className="snapback-drawer__badge">Range: {snapActiveRangeConfig.label}</div>
             </div>
-
-            <div className="snapback-drawer__group">
-              <label className="snapback-drawer__label">Why is this happening?</label>
-              <p className="snapback-drawer__hint">Describe what tends to lead up to this pattern. What’s going on beforehand?</p>
-              <input
-                type="text"
-                className="snapback-drawer__input"
-                placeholder="Describe the lead-up or trigger."
-                value={selectedPlan.cue}
-                onChange={(e) => {
-                  if (!selectedItem) return
-                  const idKey = selectedItem.id!
-                  setSnapPlans((cur) => ({ ...cur, [idKey]: { ...cur[idKey] ?? { cue: '', deconstruction: '', plan: '' }, cue: e.target.value } }))
-                  schedulePersistPlan(idKey)
-                }}
+            {selectedItem ? (
+              <SnapbackPlanForm
+                key={selectedItem.id}
+                idKey={selectedItem.id}
+                initialPlan={selectedPlan}
+                onScheduleSave={schedulePersistPlan}
               />
-            </div>
-
-            <div className="snapback-drawer__group">
-              <label className="snapback-drawer__label">Is it aligned with who you want to be? What's the reward, is it sustainable?</label>
-              <p className="snapback-drawer__hint">What’s the reward you’re getting right now? Is it sustainable?</p>
-              <textarea
-                className="snapback-drawer__textarea"
-                placeholder="Be honest about the short-term reward and the long-term cost."
-                value={selectedPlan.deconstruction}
-                onChange={(e) => {
-                  if (!selectedItem) return
-                  const idKey = selectedItem.id!
-                  setSnapPlans((cur) => ({ ...cur, [idKey]: { ...cur[idKey] ?? { cue: '', deconstruction: '', plan: '' }, deconstruction: e.target.value } }))
-                  schedulePersistPlan(idKey)
-                }}
-              />
-            </div>
-
-            <div className="snapback-drawer__group">
-              <label className="snapback-drawer__label">How do you change it next time?</label>
-              <p className="snapback-drawer__hint">Write one small, concrete thing you’ll try the next time this trigger appears.</p>
-              <textarea
-                className="snapback-drawer__textarea"
-                placeholder="Write one small, concrete thing you’ll try."
-                value={selectedPlan.plan}
-                onChange={(e) => {
-                  if (!selectedItem) return
-                  const idKey = selectedItem.id!
-                  setSnapPlans((cur) => ({ ...cur, [idKey]: { ...cur[idKey] ?? { cue: '', deconstruction: '', plan: '' }, plan: e.target.value } }))
-                  schedulePersistPlan(idKey)
-                }}
-              />
-            </div>
+            ) : null}
 
             {/* Auto-saves on change; no explicit save button */}
           </div>
