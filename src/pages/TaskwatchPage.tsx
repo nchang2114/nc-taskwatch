@@ -22,6 +22,8 @@ import {
   upsertTaskSubtask as apiUpsertTaskSubtask,
   deleteTaskSubtask as apiDeleteTaskSubtask,
 } from '../lib/goalsApi'
+import { fetchRepeatingSessionRules, type RepeatingSessionRule } from '../lib/repeatingSessions'
+import { readRepeatingExceptions } from '../lib/repeatingExceptions'
 import { FOCUS_EVENT_TYPE, type FocusBroadcastDetail, type FocusBroadcastEvent } from '../lib/focusChannel'
 import {
   createGoalsSnapshot,
@@ -1076,11 +1078,25 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   )
 
   // Promote scheduled (planned) sessions that overlap 'now' to the top of the selector
-  type ScheduledSuggestion = FocusCandidate & { startedAt: number; endedAt: number }
+  const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const rules = await fetchRepeatingSessionRules()
+        if (!cancelled) setRepeatingRules(rules)
+      } catch (error) {
+        console.warn('[Taskwatch] Failed to fetch repeating session rules', error)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  type ScheduledSuggestion = FocusCandidate & { startedAt: number; endedAt: number; isGuide?: boolean }
   const scheduledNowSuggestions = useMemo<ScheduledSuggestion[]>(() => {
     const now = Date.now()
+    // Real planned (futureSession) entries overlapping now
     const overlapping = history.filter((h) => (h as any).futureSession && h.startedAt <= now && h.endedAt >= now)
-    if (overlapping.length === 0) return []
     const suggestions: ScheduledSuggestion[] = []
     overlapping.forEach((entry) => {
       // Try to enrich from goals snapshot by id first, else by names
@@ -1169,6 +1185,100 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       }
       suggestions.push(suggestion)
     })
+  // --- Guide (repeating) session suggestions (synthetic) ---
+  // Show guides whose occurrence window overlaps now even if there are NO overlapping planned entries.
+  // Suppress guides that have already been transformed (confirmed/skip/reschedule) via exceptions or materialized history entries.
+    const today = new Date(now)
+    const todayDow = today.getDay()
+    const todayStart = (() => { const d = new Date(now); d.setHours(0,0,0,0); return d.getTime() })()
+    const seenComposite = new Set<string>()
+    suggestions.forEach((s) => {
+      const key = `name:${(s.goalName||'').trim()}::${(s.bucketName||'').trim()}::${(s.taskName||'').trim()}`
+      seenComposite.add(key.toLowerCase())
+    })
+    const exceptions = readRepeatingExceptions()
+    const transformedKeys = new Set<string>()
+    // Build suppression set from history: any real entry with routineId+occurrenceDate
+    history.forEach((h) => {
+      const rid = (h as any).routineId
+      const od = (h as any).occurrenceDate
+      if (rid && od) transformedKeys.add(`${rid}:${od}`)
+    })
+    // Also include explicit exceptions (skipped / rescheduled)
+    exceptions.forEach((ex) => transformedKeys.add(`${ex.routineId}:${ex.occurrenceDate}`))
+
+    repeatingRules.forEach((rule) => {
+      if (!rule.isActive) return
+      // Weekly rules: only consider today if dayOfWeek matches
+      if (rule.frequency === 'weekly' && rule.dayOfWeek !== todayDow) return
+      // Boundaries: respect start/end windows when provided
+      if (Number.isFinite(rule.startAtMs as number) && (rule.startAtMs as number) > now) return
+      if (Number.isFinite(rule.endAtMs as number) && (rule.endAtMs as number) < now) return
+      // Compute today's occurrence start for this rule
+      const occurrenceStart = todayStart + rule.timeOfDayMinutes * 60_000
+      const occurrenceEnd = occurrenceStart + Math.max(1, rule.durationMinutes) * 60_000
+      if (occurrenceStart <= now && occurrenceEnd >= now) {
+        const composite = `name:${(rule.goalName||'').trim()}::${(rule.bucketName||'').trim()}::${(rule.taskName||'').trim()}`.toLowerCase()
+        if (seenComposite.has(composite)) {
+          return // real planned already covers this window
+        }
+        // Suppress if transformed or excepted
+        const occDateYmd = (() => { const d = new Date(occurrenceStart); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}` })()
+        if (transformedKeys.has(`${rule.id}:${occDateYmd}`)) return
+        // Build suggestion using rule labeling (no concrete taskId yet)
+        const fallbackGoalSurface = DEFAULT_SURFACE_STYLE
+        const fallbackBucketSurface = DEFAULT_SURFACE_STYLE
+        suggestions.push({
+          goalId: '',
+          goalName: rule.goalName ?? '',
+          bucketId: '',
+          bucketName: rule.bucketName ?? '',
+            taskId: '',
+          taskName: rule.taskName || 'Session',
+          completed: false,
+          priority: false,
+          difficulty: 'none',
+          goalSurface: fallbackGoalSurface,
+          bucketSurface: fallbackBucketSurface,
+          notes: '',
+          subtasks: [],
+          startedAt: occurrenceStart,
+          endedAt: occurrenceEnd,
+          isGuide: true,
+        })
+        seenComposite.add(composite)
+      }
+    })
+    // Additionally surface any guide entries already present in history (id starts with repeat:) overlapping now
+    history.forEach((h) => {
+      if (typeof h.id === 'string' && h.id.startsWith('repeat:') && h.startedAt <= now && h.endedAt >= now) {
+        const composite = `name:${(h.goalName||'').trim()}::${(h.bucketName||'').trim()}::${(h.taskName||'').trim()}`.toLowerCase()
+        if (seenComposite.has(composite)) return
+        // Suppress if transformed/excepted (history guide may carry routineId/occurrenceDate if already processed)
+        const rid = (h as any).routineId
+        const od = (h as any).occurrenceDate
+        if (rid && od && transformedKeys.has(`${rid}:${od}`)) return
+        suggestions.push({
+          goalId: h.goalId ?? '',
+          goalName: h.goalName ?? '',
+          bucketId: h.bucketId ?? '',
+          bucketName: h.bucketName ?? '',
+          taskId: h.taskId ?? '',
+          taskName: h.taskName || 'Session',
+          completed: false,
+          priority: false,
+          difficulty: 'none',
+          goalSurface: h.goalSurface ?? DEFAULT_SURFACE_STYLE,
+          bucketSurface: h.bucketSurface ?? DEFAULT_SURFACE_STYLE,
+          notes: '',
+          subtasks: [],
+          startedAt: h.startedAt,
+          endedAt: h.endedAt,
+          isGuide: true,
+        })
+        seenComposite.add(composite)
+      }
+    })
     // Sort by start then end
     suggestions.sort((a, b) => (a.startedAt === b.startedAt ? a.endedAt - b.endedAt : a.startedAt - b.startedAt))
     // Deduplicate by taskId if present, else by names composite
@@ -1181,7 +1291,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       unique.push(s)
     })
     return unique
-  }, [history, activeGoalSnapshots])
+  }, [history, activeGoalSnapshots, repeatingRules])
 
   const activeFocusCandidate = useMemo(() => {
     if (!focusSource) {
