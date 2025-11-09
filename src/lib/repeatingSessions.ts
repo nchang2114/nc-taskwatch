@@ -198,6 +198,9 @@ export async function createRepeatingRuleForEntry(
   // guide occurrence timestamps exactly. This avoids start/end millisecond mismatches later.
   const dayStart = (() => { const d = new Date(entry.startedAt); d.setHours(0,0,0,0); return d.getTime() })()
   const ruleStartMs = dayStart + timeOfDayMinutes * 60000
+  // To avoid creating a guide on top of the source entry, start the series at the
+  // NEXT occurrence after this entry (next day for daily, next same weekday for weekly).
+  const nextStartMs = ruleStartMs + (frequency === 'daily' ? 1 : 7) * 24 * 60 * 60 * 1000
 
   // Try Supabase; if not available, persist locally
   if (!supabase) {
@@ -212,8 +215,8 @@ export async function createRepeatingRuleForEntry(
       goalName: entry.goalName ?? null,
       bucketName: entry.bucketName ?? null,
       timezone: tz,
-  createdAtMs: Math.max(0, entry.startedAt),
-  startAtMs: Math.max(0, ruleStartMs),
+      createdAtMs: Math.max(0, entry.startedAt),
+      startAtMs: Math.max(0, nextStartMs),
     }
     const current = readLocalRules()
     const next = [...current, localRule]
@@ -233,8 +236,8 @@ export async function createRepeatingRuleForEntry(
       goalName: entry.goalName ?? null,
       bucketName: entry.bucketName ?? null,
       timezone: tz,
-  createdAtMs: Math.max(0, entry.startedAt),
-  startAtMs: Math.max(0, ruleStartMs),
+      createdAtMs: Math.max(0, entry.startedAt),
+      startAtMs: Math.max(0, nextStartMs),
     }
     const current = readLocalRules()
     const next = [...current, localRule]
@@ -252,7 +255,7 @@ export async function createRepeatingRuleForEntry(
     goal_name: entry.goalName,
     bucket_name: entry.bucketName,
     timezone: tz,
-    start_date: new Date(ruleStartMs).toISOString(),
+    start_date: new Date(nextStartMs).toISOString(),
   }
   const { data, error } = await supabase
     .from('repeating_sessions')
@@ -273,8 +276,8 @@ export async function createRepeatingRuleForEntry(
       goalName: entry.goalName ?? null,
       bucketName: entry.bucketName ?? null,
       timezone: tz,
-  createdAtMs: Math.max(0, entry.startedAt),
-  startAtMs: Math.max(0, entry.startedAt),
+      createdAtMs: Math.max(0, entry.startedAt),
+      startAtMs: Math.max(0, nextStartMs),
     }
     const current = readLocalRules()
     const next = [...current, localRule]
@@ -680,4 +683,3 @@ export async function evaluateAndMaybeRetireRule(ruleId: string): Promise<boolea
   if (!resolved) return false
   return await deleteRepeatingRuleById(ruleId)
 }
-
