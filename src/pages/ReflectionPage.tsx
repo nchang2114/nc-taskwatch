@@ -4632,25 +4632,10 @@ useEffect(() => {
   const snapbackPanelId = 'snapback-range-panel'
   const snapActiveRangeConfig = SNAP_RANGE_DEFS[snapActiveRange]
 
-  // Snapback selection + plans (local storage)
+  // Snapback plans (DB-backed); initialize empty and hydrate from DB rows
   type SnapbackPlan = { cue: string; deconstruction: string; plan: string }
   type SnapbackPlanState = Record<string, SnapbackPlan>
-  const SNAPBACK_PLAN_STORAGE_KEY = 'nc-taskwatch-snapback-plans'
-  const readPlans = (): SnapbackPlanState => {
-    if (typeof window === 'undefined') return {}
-    try {
-      const raw = window.localStorage.getItem(SNAPBACK_PLAN_STORAGE_KEY)
-      if (!raw) return {}
-      const parsed = JSON.parse(raw)
-      if (typeof parsed !== 'object' || parsed === null) return {}
-      return parsed as SnapbackPlanState
-    } catch {
-      return {}
-    }
-  }
-  
-
-  const [snapPlans, setSnapPlans] = useState<SnapbackPlanState>(() => readPlans())
+  const [snapPlans, setSnapPlans] = useState<SnapbackPlanState>({})
   const snapPlansRef = useRef<SnapbackPlanState>({})
   useEffect(() => { snapPlansRef.current = snapPlans }, [snapPlans])
   const saveTimersRef = useRef<Map<string, number>>(new Map())
@@ -4699,6 +4684,19 @@ useEffect(() => {
     }, 500)
     m.set(idKey, tid as unknown as number)
   }, [persistPlanForId])
+
+  // Cleanup any pending autosave timers on unmount
+  useEffect(() => {
+    return () => {
+      const m = saveTimersRef.current
+      m.forEach((tid) => {
+        if (typeof window !== 'undefined') {
+          window.clearTimeout(tid)
+        }
+      })
+      m.clear()
+    }
+  }, [])
 
   // Custom Triggers (user-defined, supplement overview legend)
   type CustomTrigger = { id: string; label: string }
