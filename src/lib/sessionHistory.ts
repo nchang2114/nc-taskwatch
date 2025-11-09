@@ -724,14 +724,15 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     const pendingDeletes = pending.filter((record) => record.pendingAction === 'delete')
 
     if (pendingUpserts.length > 0) {
+      const client = supabase!
       const doUpsertWithFallback = async (pls: any[]) => {
         // First attempt
-        let resp = await supabase.from('session_history').upsert(pls, { onConflict: 'user_id,id' })
+        let resp = await client.from('session_history').upsert(pls, { onConflict: 'user_id,id' })
         // Column-missing: disable feature and retry once
         if (resp.error && isRepeatOriginalEnabled() && isColumnMissingError(resp.error)) {
           disableRepeatOriginal()
           const retried = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
-          resp = await supabase.from('session_history').upsert(retried, { onConflict: 'user_id,id' })
+          resp = await client.from('session_history').upsert(retried, { onConflict: 'user_id,id' })
           return { resp, usedPayloads: retried }
         }
         // Foreign key violation for repeating_session_id → retry stripping linkage
@@ -744,7 +745,7 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
             delete copy.original_time
             return copy
           })
-          resp = await supabase.from('session_history').upsert(stripped, { onConflict: 'user_id,id' })
+          resp = await client.from('session_history').upsert(stripped, { onConflict: 'user_id,id' })
           return { resp, usedPayloads: stripped }
         }
         return { resp, usedPayloads: pls }
@@ -803,19 +804,20 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
   const pendingDeletes = records.filter((record) => record.pendingAction === 'delete')
 
   if (pendingUpserts.length > 0) {
+    const client = supabase!
     const doUpsertWithFallback = async (pls: any[]) => {
-      let resp = await supabase.from('session_history').upsert(pls, { onConflict: 'user_id,id' })
+      let resp = await client.from('session_history').upsert(pls, { onConflict: 'user_id,id' })
       if (resp.error && isRepeatOriginalEnabled() && isColumnMissingError(resp.error)) {
         disableRepeatOriginal()
         const retried = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
-        resp = await supabase.from('session_history').upsert(retried, { onConflict: 'user_id,id' })
+        resp = await client.from('session_history').upsert(retried, { onConflict: 'user_id,id' })
         return { resp, usedPayloads: retried }
       }
       const code = String((resp.error as any)?.code || '')
       const details = String((resp.error as any)?.details || '') + ' ' + String((resp.error as any)?.message || '')
       if (resp.error && code === '23503' && details.toLowerCase().includes('repeating_sessions')) {
         const stripped = pls.map((p) => { const c: any = { ...p }; delete c.repeating_session_id; delete c.original_time; return c })
-        resp = await supabase.from('session_history').upsert(stripped, { onConflict: 'user_id,id' })
+        resp = await client.from('session_history').upsert(stripped, { onConflict: 'user_id,id' })
         return { resp, usedPayloads: stripped }
       }
       return { resp, usedPayloads: pls }
