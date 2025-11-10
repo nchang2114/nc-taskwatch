@@ -147,7 +147,7 @@ const SNAPBACK_ACTIONS = [
 type SnapbackReasonId = (typeof SNAPBACK_REASONS)[number]['id']
 type SnapbackActionId = (typeof SNAPBACK_ACTIONS)[number]['id']
 
-const LIFE_ROUTINES_NAME = 'Life Routines'
+const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
 const makeSessionKey = (goalId: string | null, bucketId: string | null, taskId: string | null) =>
@@ -4260,7 +4260,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             </div>
 
             <div className="task-selector__section">
-              <h2 className="task-selector__section-title">Life Routines</h2>
+              <h2 className="task-selector__section-title">{LIFE_ROUTINES_NAME}</h2>
               <button
                 type="button"
                 className={`task-selector__goal-toggle surface-goal surface-goal--${LIFE_ROUTINES_SURFACE}`}

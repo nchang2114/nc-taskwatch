@@ -50,7 +50,7 @@ const isColumnMissingError = (err: any): boolean => {
   return combined.includes('column') && combined.includes('does not exist')
 }
 
-const LIFE_ROUTINES_NAME = 'Life Routines'
+const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
 
 type HistoryPendingAction = 'upsert' | 'delete'

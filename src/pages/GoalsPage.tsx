@@ -202,7 +202,7 @@ const createTaskDetails = (overrides?: Partial<TaskDetails>): TaskDetails => ({
 })
 
 const TASK_DETAILS_STORAGE_KEY = 'nc-taskwatch-task-details-v1'
-const LIFE_ROUTINES_NAME = 'Life Routines'
+const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_TAGLINE = 'A steady cadence for your everyday wellbeing.'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
 const LIFE_ROUTINES_SURFACE: GoalSurfaceStyle = 'linen'
@@ -8889,7 +8889,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   onClick={() => setLifeRoutinesExpanded((value) => !value)}
                   aria-expanded={lifeRoutinesExpanded}
                   aria-controls="life-routines-body"
-                  aria-label={`${lifeRoutinesExpanded ? 'Collapse' : 'Expand'} life routines`}
+                  aria-label={`${lifeRoutinesExpanded ? 'Collapse' : 'Expand'} daily life`}
                 >
                   <span className="life-routines-card__indicator" aria-hidden="true">
                     <svg className="life-routines-card__chevron" viewBox="0 0 24 24" fill="none">

@@ -370,7 +370,7 @@ type PieArc = {
 
 const UNCATEGORISED_LABEL = 'Uncategorised'
 const CHART_COLORS = ['#6366f1', '#22d3ee', '#f97316', '#f472b6', '#a855f7', '#4ade80', '#60a5fa', '#facc15', '#38bdf8', '#fb7185']
-const LIFE_ROUTINES_NAME = 'Life Routines'
+const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
 // Snapback virtual goal
 // Session History: use orange→crimson gradient
