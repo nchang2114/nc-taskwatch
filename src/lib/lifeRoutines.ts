@@ -118,11 +118,11 @@ const sanitizeLifeRoutine = (value: unknown): LifeRoutineConfig | null => {
 }
 
 export const sanitizeLifeRoutineList = (value: unknown): LifeRoutineConfig[] => {
-  // If nothing stored or provided, seed with current defaults
+  // If nothing stored or provided, seed with current defaults (callers may choose to override this behavior on first-run sync)
   if (!Array.isArray(value)) {
     return LIFE_ROUTINE_DEFAULT_DATA.map(cloneRoutine)
   }
-  // Otherwise, respect the user’s customized list exactly (no auto-restore of removed defaults)
+  // Otherwise, respect the user’s customized list exactly (including empty = user removed all)
   const seen = new Set<string>()
   const result: LifeRoutineConfig[] = []
   for (const entry of value) {
@@ -132,8 +132,8 @@ export const sanitizeLifeRoutineList = (value: unknown): LifeRoutineConfig[] => 
     seen.add(routine.id)
     result.push(cloneRoutine(routine))
   }
-  const source = result.length > 0 ? result : LIFE_ROUTINE_DEFAULT_DATA
-  return source.map((routine, index) => {
+  // Preserve empty if user intentionally removed all
+  return result.map((routine, index) => {
     const normalized = cloneRoutine(routine)
     const bucketId =
       typeof normalized.bucketId === 'string' && normalized.bucketId.trim().length > 0
@@ -166,6 +166,18 @@ const storeLifeRoutinesLocal = (routines: LifeRoutineConfig[]): LifeRoutineConfi
     }
   }
   return clones
+}
+
+// Read raw local value without default seeding; returns null when key is absent
+const readRawLifeRoutinesLocal = (): unknown | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(LIFE_ROUTINE_STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
 }
 
 const mapDbRowToRoutine = (row: LifeRoutineDbRow): LifeRoutineConfig | null => {
@@ -320,15 +332,36 @@ export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[
     return null
   }
 
-  const mapped = (data ?? [])
-    .map((row) => mapDbRowToRoutine(row as LifeRoutineDbRow))
-    .filter((routine): routine is LifeRoutineConfig => Boolean(routine))
-  const sanitized = sanitizeLifeRoutineList(mapped)
-  const stored = storeLifeRoutinesLocal(sanitized)
-
-  if ((data?.length ?? 0) !== sanitized.length) {
-    void pushLifeRoutinesToSupabase(stored)
+  const remoteRows = data ?? []
+  if (remoteRows.length > 0) {
+    // Trust remote when present
+    const mapped = remoteRows
+      .map((row) => mapDbRowToRoutine(row as LifeRoutineDbRow))
+      .filter((routine): routine is LifeRoutineConfig => Boolean(routine))
+    const sanitized = sanitizeLifeRoutineList(mapped)
+    const stored = storeLifeRoutinesLocal(sanitized)
+    // If shape changed (unlikely), push back up
+    if (remoteRows.length !== sanitized.length) {
+      void pushLifeRoutinesToSupabase(stored)
+    }
+    return stored
   }
 
+  // Remote is empty. Decide based on local presence whether to seed defaults (first run) or respect local edits/deletions.
+  const localRaw = readRawLifeRoutinesLocal()
+  if (localRaw === null) {
+    // First run for this browser/user: seed defaults locally and push to server
+    const seeded = LIFE_ROUTINE_DEFAULT_DATA.map(cloneRoutine)
+    const stored = storeLifeRoutinesLocal(seeded)
+    void pushLifeRoutinesToSupabase(stored)
+    return stored
+  }
+
+  // Local exists (maybe empty or customized). Preserve it and mirror to server if needed.
+  const localSanitized = sanitizeLifeRoutineList(localRaw)
+  const stored = storeLifeRoutinesLocal(localSanitized)
+  if (localSanitized.length !== remoteRows.length) {
+    void pushLifeRoutinesToSupabase(stored)
+  }
   return stored
 }
