@@ -8693,6 +8693,30 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
             >
               <button
                 type="button"
+                className="goal-menu__item"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setLifeRoutineMenuOpenId(null)
+                  startLifeRoutineRename(activeLifeRoutine.id, activeLifeRoutine.title)
+                }}
+              >
+                Rename routine
+              </button>
+            <div className="goal-menu__divider" />
+            <button
+              type="button"
+              className="goal-menu__item"
+              onClick={(event) => {
+                event.stopPropagation()
+                setLifeRoutineMenuOpenId(null)
+                startLifeRoutineDescriptionEdit(activeLifeRoutine)
+              }}
+            >
+              Edit description
+            </button>
+            <div className="goal-menu__divider" />
+            <button
+              type="button"
               className="goal-menu__item"
               onClick={(event) => {
                 event.stopPropagation()
@@ -8703,41 +8727,17 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
               Customise gradient
             </button>
             <div className="goal-menu__divider" />
-              <button
-                type="button"
-                className="goal-menu__item"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setLifeRoutineMenuOpenId(null)
-                  startLifeRoutineDescriptionEdit(activeLifeRoutine)
-                }}
-              >
-                Edit description
-              </button>
-              <div className="goal-menu__divider" />
-              <button
-                type="button"
-                className="goal-menu__item"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setLifeRoutineMenuOpenId(null)
-                  startLifeRoutineRename(activeLifeRoutine.id, activeLifeRoutine.title)
-                }}
-              >
-                Rename routine
-              </button>
-              <div className="goal-menu__divider" />
-              <button
-                type="button"
-                className="goal-menu__item goal-menu__item--danger"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setLifeRoutineMenuOpenId(null)
-                  deleteLifeRoutine(activeLifeRoutine.id)
-                }}
-              >
-                Delete routine
-              </button>
+            <button
+              type="button"
+              className="goal-menu__item goal-menu__item--danger"
+              onClick={(event) => {
+                event.stopPropagation()
+                setLifeRoutineMenuOpenId(null)
+                deleteLifeRoutine(activeLifeRoutine.id)
+              }}
+            >
+              Delete routine
+            </button>
             </div>
           </div>,
           document.body,
