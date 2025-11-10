@@ -334,34 +334,26 @@ export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[
 
   const remoteRows = data ?? []
   if (remoteRows.length > 0) {
-    // Trust remote when present
+    // Remote authoritative: replace local snapshot entirely
     const mapped = remoteRows
       .map((row) => mapDbRowToRoutine(row as LifeRoutineDbRow))
       .filter((routine): routine is LifeRoutineConfig => Boolean(routine))
     const sanitized = sanitizeLifeRoutineList(mapped)
-    const stored = storeLifeRoutinesLocal(sanitized)
-    // If shape changed (unlikely), push back up
-    if (remoteRows.length !== sanitized.length) {
-      void pushLifeRoutinesToSupabase(stored)
-    }
-    return stored
+    return storeLifeRoutinesLocal(sanitized)
   }
 
-  // Remote is empty. Decide based on local presence whether to seed defaults (first run) or respect local edits/deletions.
+  // Remote empty: treat DB as authoritative emptiness.
+  // Only seed defaults if an explicit environment flag requests it AND no local routines exist.
+  const SHOULD_SEED = Boolean((import.meta as any)?.env?.VITE_SEED_LIFE_ROUTINES)
   const localRaw = readRawLifeRoutinesLocal()
-  if (localRaw === null) {
-    // First run for this browser/user: seed defaults locally and push to server
+  if (localRaw === null && SHOULD_SEED) {
     const seeded = LIFE_ROUTINE_DEFAULT_DATA.map(cloneRoutine)
     const stored = storeLifeRoutinesLocal(seeded)
+    // Push seed set up to server; ignore failures quietly.
     void pushLifeRoutinesToSupabase(stored)
     return stored
   }
-
-  // Local exists (maybe empty or customized). Preserve it and mirror to server if needed.
-  const localSanitized = sanitizeLifeRoutineList(localRaw)
-  const stored = storeLifeRoutinesLocal(localSanitized)
-  if (localSanitized.length !== remoteRows.length) {
-    void pushLifeRoutinesToSupabase(stored)
-  }
-  return stored
+  // Persist empty (or existing customized empty) locally; do not push anything (empty) to avoid resurrecting deleted server data from another device.
+  const localSanitized = sanitizeLifeRoutineList(Array.isArray(localRaw) ? localRaw : [])
+  return storeLifeRoutinesLocal(localSanitized)
 }
