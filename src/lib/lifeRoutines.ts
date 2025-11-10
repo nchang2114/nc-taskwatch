@@ -13,79 +13,6 @@ export type LifeRoutineConfig = {
 export const LIFE_ROUTINE_STORAGE_KEY = 'nc-taskwatch-life-routines-v1'
 export const LIFE_ROUTINE_UPDATE_EVENT = 'nc-life-routines:updated'
 
-const LIFE_ROUTINE_DEFAULT_DATA: LifeRoutineConfig[] = [
-  {
-    id: 'life-sleep',
-    bucketId: 'life-sleep',
-    title: 'Sleep',
-    blurb: 'Protect 7–9 hours and wind down with intention.',
-    surfaceStyle: 'midnight',
-    sortIndex: 0,
-  },
-  {
-    id: 'life-cook-eat',
-    bucketId: 'life-cook-eat',
-    title: 'Cook/Eat',
-    blurb: 'Prep, cook, and enjoy a proper meal.',
-    surfaceStyle: 'grove',
-    sortIndex: 1,
-  },
-  {
-    id: 'life-travel',
-    bucketId: 'life-travel',
-    title: 'Travel',
-    blurb: 'Transit time—commutes, driving, or getting around.',
-    surfaceStyle: 'slate',
-    sortIndex: 2,
-  },
-  {
-    id: 'life-mindfulness',
-    bucketId: 'life-mindfulness',
-    title: 'Mindfulness',
-    blurb: 'Breathe, meditate, or a short moment of awareness.',
-    surfaceStyle: 'glass',
-    sortIndex: 3,
-  },
-  {
-    id: 'life-admin',
-    bucketId: 'life-admin',
-    title: 'Life Admin',
-    blurb: 'Bills, bookings, messages, and small housekeeping tasks.',
-    surfaceStyle: 'neutral-grey-blue',
-    sortIndex: 4,
-  },
-  {
-    id: 'life-nature',
-    bucketId: 'life-nature',
-    title: 'Nature',
-    blurb: 'Step outside—sunlight, fresh air, or a short walk.',
-    surfaceStyle: 'leaf',
-    sortIndex: 5,
-  },
-  {
-    id: 'life-socials',
-    bucketId: 'life-socials',
-    title: 'Socials',
-    blurb: 'Reach out, share a laugh, or check in with someone.',
-    surfaceStyle: 'ember',
-    sortIndex: 6,
-  },
-  {
-    id: 'life-chill',
-    bucketId: 'life-chill',
-    title: 'Chill',
-    blurb: 'Unwind—light reading, music, or a calm break.',
-    surfaceStyle: 'cool-blue',
-    sortIndex: 7,
-  },
-]
-
-export const LIFE_ROUTINE_DEFAULTS: readonly LifeRoutineConfig[] = LIFE_ROUTINE_DEFAULT_DATA.map((routine) =>
-  Object.freeze({ ...routine }),
-)
-
-const LIFE_ROUTINE_DEFAULT_MAP = new Map(LIFE_ROUTINE_DEFAULT_DATA.map((routine) => [routine.id, routine]))
-
 const cloneRoutine = (routine: LifeRoutineConfig): LifeRoutineConfig => ({ ...routine })
 
 const sanitizeLifeRoutine = (value: unknown): LifeRoutineConfig | null => {
@@ -97,21 +24,17 @@ const sanitizeLifeRoutine = (value: unknown): LifeRoutineConfig | null => {
   if (!id) {
     return null
   }
-  const defaults = LIFE_ROUTINE_DEFAULT_MAP.get(id)
   const bucketIdRaw = typeof record.bucketId === 'string' ? record.bucketId.trim() : ''
   const titleRaw = typeof record.title === 'string' ? record.title.trim() : ''
   const blurbRaw = typeof record.blurb === 'string' ? record.blurb.trim() : ''
-  const surfaceStyle = ensureSurfaceStyle(record.surfaceStyle, defaults?.surfaceStyle ?? DEFAULT_SURFACE_STYLE)
-  const sortIndex =
-    typeof record.sortIndex === 'number' && Number.isFinite(record.sortIndex)
-      ? record.sortIndex
-      : defaults?.sortIndex ?? 0
+  const surfaceStyle = ensureSurfaceStyle(record.surfaceStyle, DEFAULT_SURFACE_STYLE)
+  const sortIndex = typeof record.sortIndex === 'number' && Number.isFinite(record.sortIndex) ? record.sortIndex : 0
 
   return {
     id,
     bucketId: bucketIdRaw || id,
-    title: titleRaw || defaults?.title || 'Routine',
-    blurb: blurbRaw || defaults?.blurb || '',
+    title: titleRaw || 'Routine',
+    blurb: blurbRaw || '',
     surfaceStyle,
     sortIndex,
   }
@@ -315,7 +238,7 @@ export const writeStoredLifeRoutines = (
 
 export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[] | null> => {
   if (!supabase) {
-    return null
+    return []
   }
   const session = await ensureSingleUserSession()
   if (!session) {
@@ -342,17 +265,7 @@ export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[
     return storeLifeRoutinesLocal(sanitized)
   }
 
-  // Remote empty: treat DB as authoritative emptiness.
-  // Only seed defaults if an explicit environment flag requests it AND no local routines exist.
-  const SHOULD_SEED = Boolean((import.meta as any)?.env?.VITE_SEED_LIFE_ROUTINES)
   const localRaw = readRawLifeRoutinesLocal()
-  if (localRaw === null && SHOULD_SEED) {
-    const seeded = LIFE_ROUTINE_DEFAULT_DATA.map(cloneRoutine)
-    const stored = storeLifeRoutinesLocal(seeded)
-    // Push seed set up to server; ignore failures quietly.
-    void pushLifeRoutinesToSupabase(stored)
-    return stored
-  }
   // Persist empty (or existing customized empty) locally; do not push anything (empty) to avoid resurrecting deleted server data from another device.
   const localSanitized = sanitizeLifeRoutineList(Array.isArray(localRaw) ? localRaw : [])
   return storeLifeRoutinesLocal(localSanitized)

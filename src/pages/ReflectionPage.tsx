@@ -31,7 +31,6 @@ import {
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
 import {
-  LIFE_ROUTINE_DEFAULTS,
   LIFE_ROUTINE_STORAGE_KEY,
   LIFE_ROUTINE_UPDATE_EVENT,
   readStoredLifeRoutines,
@@ -391,9 +390,7 @@ const SNAPBACK_COLOR_INFO: GoalColorInfo = {
   },
   solidColor: '#ef4444',
 }
-const LIFE_ROUTINE_DEFAULT_SURFACE_LOOKUP = new Map(
-  LIFE_ROUTINE_DEFAULTS.map((routine) => [routine.title.toLowerCase(), routine.surfaceStyle]),
-)
+// Removed default surface lookup; life routine surfaces are derived only from user data.
 
 type SurfaceGradientInfo = {
   gradient: string
@@ -2993,7 +2990,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
   }, [])
 
   const lifeRoutineSurfaceLookup = useMemo(() => {
-    const map = new Map<string, SurfaceStyle>(LIFE_ROUTINE_DEFAULT_SURFACE_LOOKUP)
+    const map = new Map<string, SurfaceStyle>()
     lifeRoutineTasks.forEach((routine) => {
       const title = routine.title.trim().toLowerCase()
       if (title) {

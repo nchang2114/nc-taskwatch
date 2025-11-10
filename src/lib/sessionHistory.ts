@@ -5,7 +5,6 @@ import {
   sanitizeSurfaceStyle,
   type SurfaceStyle,
 } from './surfaceStyles'
-import { LIFE_ROUTINE_DEFAULTS } from './lifeRoutines'
 
 export const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
 export const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
@@ -142,9 +141,6 @@ type HistoryRecordCandidate = HistoryCandidate & {
   pendingAction?: unknown
 }
 
-const LIFE_ROUTINE_BUCKET_SURFACES = new Map(
-  LIFE_ROUTINE_DEFAULTS.map((routine) => [routine.title.trim().toLowerCase(), routine.surfaceStyle]),
-)
 
 const sanitizeHistorySubtasks = (value: unknown): HistorySubtask[] => {
   if (!Array.isArray(value)) {
@@ -292,15 +288,7 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
       if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
         goalSurface = LIFE_ROUTINES_SURFACE
       }
-      if (!bucketSurface && normalizedBucketName.length > 0) {
-        const routineSurface = LIFE_ROUTINE_BUCKET_SURFACES.get(normalizedBucketName.toLowerCase())
-        if (routineSurface) {
-          bucketSurface = routineSurface
-          if (!goalSurface && normalizedGoalName.toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()) {
-            goalSurface = LIFE_ROUTINES_SURFACE
-          }
-        }
-      }
+      // No default bucket surface mapping; bucket surface remains as provided or null
 
       const normalized: HistoryEntry = {
         id,
