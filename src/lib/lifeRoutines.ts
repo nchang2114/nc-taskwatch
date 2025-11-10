@@ -118,9 +118,9 @@ const sanitizeLifeRoutine = (value: unknown): LifeRoutineConfig | null => {
 }
 
 export const sanitizeLifeRoutineList = (value: unknown): LifeRoutineConfig[] => {
-  // If nothing stored or provided, seed with current defaults (callers may choose to override this behavior on first-run sync)
+  // If nothing stored or provided, return an empty list; seeding is handled explicitly elsewhere.
   if (!Array.isArray(value)) {
-    return LIFE_ROUTINE_DEFAULT_DATA.map(cloneRoutine)
+    return []
   }
   // Otherwise, respect the user’s customized list exactly (including empty = user removed all)
   const seen = new Set<string>()
@@ -286,17 +286,17 @@ const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]): Promis
 
 export const readStoredLifeRoutines = (): LifeRoutineConfig[] => {
   if (typeof window === 'undefined') {
-    return LIFE_ROUTINE_DEFAULT_DATA.map(cloneRoutine)
+    return []
   }
   try {
     const raw = window.localStorage.getItem(LIFE_ROUTINE_STORAGE_KEY)
     if (!raw) {
-      return LIFE_ROUTINE_DEFAULT_DATA.map(cloneRoutine)
+      return []
     }
     const parsed = JSON.parse(raw)
     return sanitizeLifeRoutineList(parsed)
   } catch {
-    return LIFE_ROUTINE_DEFAULT_DATA.map(cloneRoutine)
+    return []
   }
 }
 
