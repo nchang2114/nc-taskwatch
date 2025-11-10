@@ -18,6 +18,23 @@ export const SURFACE_STYLES = [
   // Note: corrected spelling from earlier draft 'muted-lavendar'
   'muted-lavender',
   'neutral-grey-blue',
+  // Life routine: additional green variants (#6EBF77/bg-green-400 family)
+  'leaf',
+  'sprout',
+  'fern',
+  'sage',
+  'meadow',
+  'willow',
+  'pine',
+  'basil',
+  'mint',
+  // Life routine: additional warm/coral variants (#FF8C69 family)
+  'coral',
+  'peach',
+  'apricot',
+  'salmon',
+  'tangerine',
+  'papaya',
 ] as const
 
 export type SurfaceStyle = (typeof SURFACE_STYLES)[number]
