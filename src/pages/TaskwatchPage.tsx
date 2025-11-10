@@ -22,8 +22,8 @@ import {
   upsertTaskSubtask as apiUpsertTaskSubtask,
   deleteTaskSubtask as apiDeleteTaskSubtask,
 } from '../lib/goalsApi'
-import { fetchRepeatingSessionRules, type RepeatingSessionRule } from '../lib/repeatingSessions'
-import { readRepeatingExceptions } from '../lib/repeatingExceptions'
+// Repeating rules fetch not needed for selector coloring; omit imports to avoid unused warnings
+// import { readRepeatingExceptions } from '../lib/repeatingExceptions'
 import { FOCUS_EVENT_TYPE, type FocusBroadcastDetail, type FocusBroadcastEvent } from '../lib/focusChannel'
 import {
   createGoalsSnapshot,
@@ -615,6 +615,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     () => new Set(lifeRoutineTasks.map((task) => task.bucketId)),
     [lifeRoutineTasks],
   )
+  // Build a lookup of life routine (bucket) title -> surface style so we can restore colors for
+  // history-derived life routine suggestions that may have missing bucketSurface metadata.
+  const lifeRoutineSurfaceLookup = useMemo(() => {
+    const map = new Map<string, SurfaceStyle>()
+    lifeRoutineTasks.forEach((r) => {
+      const key = r.title.trim().toLowerCase()
+      if (key) map.set(key, r.surfaceStyle)
+    })
+    return map
+  }, [lifeRoutineTasks])
   useEffect(() => {
     goalsSnapshotSignatureRef.current = JSON.stringify(goalsSnapshot)
   }, [goalsSnapshot])
@@ -1078,19 +1088,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   )
 
   // Promote scheduled (planned) sessions that overlap 'now' to the top of the selector
-  const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const rules = await fetchRepeatingSessionRules()
-        if (!cancelled) setRepeatingRules(rules)
-      } catch (error) {
-        console.warn('[Taskwatch] Failed to fetch repeating session rules', error)
-      }
-    })()
-    return () => { cancelled = true }
-  }, [])
 
   type ScheduledSuggestion = FocusCandidate & { startedAt: number; endedAt: number; isGuide?: boolean }
   const scheduledNowSuggestions = useMemo<ScheduledSuggestion[]>(() => {
@@ -1138,7 +1135,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           for (let bi = 0; bi < goal.buckets.length; bi += 1) {
             const bucket = goal.buckets[bi]
             if ((entry.bucketName ?? '').trim() && bucket.name.trim() !== (entry.bucketName ?? '').trim()) continue
-            const task = bucket.tasks.find((t) => t.text.trim() === (entry.taskName ?? '').trim())
+            const task = bucket.tasks.find((t) => t.text.trim().toLowerCase() === (entry.taskName ?? '').trim().toLowerCase())
             if (task) {
               match = {
                 goalId: goal.id,
@@ -1162,136 +1159,40 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           }
         }
       }
-      const fallbackGoalSurface = ensureSurfaceStyle(entry.goalSurface ?? DEFAULT_SURFACE_STYLE, DEFAULT_SURFACE_STYLE)
-      const fallbackBucketSurface = entry.bucketSurface !== null && entry.bucketSurface !== undefined
-        ? ensureSurfaceStyle(entry.bucketSurface, DEFAULT_SURFACE_STYLE)
-        : DEFAULT_SURFACE_STYLE
-      const suggestion: ScheduledSuggestion = {
-        goalId: match?.goalId ?? (entry.goalId ?? ''),
-        goalName: match?.goalName ?? (entry.goalName ?? ''),
-        bucketId: match?.bucketId ?? (entry.bucketId ?? ''),
-        bucketName: match?.bucketName ?? (entry.bucketName ?? ''),
-        taskId: match?.taskId ?? (entry.taskId ?? ''),
-        taskName: match?.taskName ?? (entry.taskName?.trim() || 'Session'),
-        completed: match?.completed ?? false,
-        priority: match?.priority ?? false,
-        difficulty: match?.difficulty ?? 'none',
-        goalSurface: match?.goalSurface ?? fallbackGoalSurface,
-        bucketSurface: match?.bucketSurface ?? fallbackBucketSurface,
-        notes: match?.notes ?? '',
-        subtasks: match?.subtasks ?? [],
-        startedAt: entry.startedAt,
-        endedAt: entry.endedAt,
+      // Ensure we have a concrete candidate object (assign fallback when no match found)
+      const candidate: FocusCandidate = match ?? {
+        goalId: '',
+        goalName: entry.goalName ?? '',
+        bucketId: '',
+        bucketName: entry.bucketName ?? '',
+        taskId: '',
+        taskName: entry.taskName,
+        completed: false,
+        priority: false,
+        difficulty: 'none',
+        goalSurface: ensureSurfaceStyle(entry.goalSurface, DEFAULT_SURFACE_STYLE),
+        bucketSurface: ensureSurfaceStyle(entry.bucketSurface ?? undefined, DEFAULT_SURFACE_STYLE),
+        notes: entry.notes ?? '',
+        subtasks: [],
       }
-      suggestions.push(suggestion)
-    })
-  // --- Guide (repeating) session suggestions (synthetic) ---
-  // Show guides whose occurrence window overlaps now even if there are NO overlapping planned entries.
-  // Suppress guides that have already been transformed (confirmed/skip/reschedule) via exceptions or materialized history entries.
-    const today = new Date(now)
-    const todayDow = today.getDay()
-    const todayStart = (() => { const d = new Date(now); d.setHours(0,0,0,0); return d.getTime() })()
-    const seenComposite = new Set<string>()
-    suggestions.forEach((s) => {
-      const key = `name:${(s.goalName||'').trim()}::${(s.bucketName||'').trim()}::${(s.taskName||'').trim()}`
-      seenComposite.add(key.toLowerCase())
-    })
-    const exceptions = readRepeatingExceptions()
-    const transformedKeys = new Set<string>()
-    // Build suppression set from history: any real entry with routineId+occurrenceDate
-    history.forEach((h) => {
-      const rid = (h as any).routineId
-      const od = (h as any).occurrenceDate
-      if (rid && od) transformedKeys.add(`${rid}:${od}`)
-    })
-    // Also include explicit exceptions (skipped / rescheduled)
-    exceptions.forEach((ex) => transformedKeys.add(`${ex.routineId}:${ex.occurrenceDate}`))
-
-    repeatingRules.forEach((rule) => {
-      if (!rule.isActive) return
-      // Weekly rules: only consider today if dayOfWeek matches
-      if (rule.frequency === 'weekly' && rule.dayOfWeek !== todayDow) return
-      // Boundaries: respect start/end windows when provided
-      if (Number.isFinite(rule.startAtMs as number) && (rule.startAtMs as number) > now) return
-      if (Number.isFinite(rule.endAtMs as number) && (rule.endAtMs as number) < now) return
-      // Compute today's occurrence start for this rule
-      const occurrenceStart = todayStart + rule.timeOfDayMinutes * 60_000
-      const occurrenceEnd = occurrenceStart + Math.max(1, rule.durationMinutes) * 60_000
-      if (occurrenceStart <= now && occurrenceEnd >= now) {
-        const composite = `name:${(rule.goalName||'').trim()}::${(rule.bucketName||'').trim()}::${(rule.taskName||'').trim()}`.toLowerCase()
-        if (seenComposite.has(composite)) {
-          return // real planned already covers this window
+      // Life routine color restoration: if this represents a Daily Life entry but the bucket surface
+      // is missing or defaulted, look up the surface from current life routine config.
+      if (
+        (entry.goalName ?? '').trim().toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase() &&
+        candidate.bucketName.trim().length > 0 &&
+        (!candidate.bucketSurface || candidate.bucketSurface === DEFAULT_SURFACE_STYLE)
+      ) {
+        const lrSurface = lifeRoutineSurfaceLookup.get(candidate.bucketName.trim().toLowerCase())
+        if (lrSurface) {
+          // Maintain goal as Daily Life and apply routine-specific surface
+          candidate.goalSurface = LIFE_ROUTINES_SURFACE
+          candidate.bucketSurface = lrSurface
         }
-        // Suppress if transformed or excepted
-        const occDateYmd = (() => { const d = new Date(occurrenceStart); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}` })()
-        if (transformedKeys.has(`${rule.id}:${occDateYmd}`)) return
-        // Build suggestion using rule labeling (no concrete taskId yet)
-        const fallbackGoalSurface = DEFAULT_SURFACE_STYLE
-        const fallbackBucketSurface = DEFAULT_SURFACE_STYLE
-        suggestions.push({
-          goalId: '',
-          goalName: rule.goalName ?? '',
-          bucketId: '',
-          bucketName: rule.bucketName ?? '',
-            taskId: '',
-          taskName: rule.taskName || 'Session',
-          completed: false,
-          priority: false,
-          difficulty: 'none',
-          goalSurface: fallbackGoalSurface,
-          bucketSurface: fallbackBucketSurface,
-          notes: '',
-          subtasks: [],
-          startedAt: occurrenceStart,
-          endedAt: occurrenceEnd,
-          isGuide: true,
-        })
-        seenComposite.add(composite)
       }
+      suggestions.push({ ...candidate, startedAt: entry.startedAt, endedAt: entry.endedAt, isGuide: false })
     })
-    // Additionally surface any guide entries already present in history (id starts with repeat:) overlapping now
-    history.forEach((h) => {
-      if (typeof h.id === 'string' && h.id.startsWith('repeat:') && h.startedAt <= now && h.endedAt >= now) {
-        const composite = `name:${(h.goalName||'').trim()}::${(h.bucketName||'').trim()}::${(h.taskName||'').trim()}`.toLowerCase()
-        if (seenComposite.has(composite)) return
-        // Suppress if transformed/excepted (history guide may carry routineId/occurrenceDate if already processed)
-        const rid = (h as any).routineId
-        const od = (h as any).occurrenceDate
-        if (rid && od && transformedKeys.has(`${rid}:${od}`)) return
-        suggestions.push({
-          goalId: h.goalId ?? '',
-          goalName: h.goalName ?? '',
-          bucketId: h.bucketId ?? '',
-          bucketName: h.bucketName ?? '',
-          taskId: h.taskId ?? '',
-          taskName: h.taskName || 'Session',
-          completed: false,
-          priority: false,
-          difficulty: 'none',
-          goalSurface: h.goalSurface ?? DEFAULT_SURFACE_STYLE,
-          bucketSurface: h.bucketSurface ?? DEFAULT_SURFACE_STYLE,
-          notes: '',
-          subtasks: [],
-          startedAt: h.startedAt,
-          endedAt: h.endedAt,
-          isGuide: true,
-        })
-        seenComposite.add(composite)
-      }
-    })
-    // Sort by start then end
-    suggestions.sort((a, b) => (a.startedAt === b.startedAt ? a.endedAt - b.endedAt : a.startedAt - b.startedAt))
-    // Deduplicate by taskId if present, else by names composite
-    const seen = new Set<string>()
-    const unique: ScheduledSuggestion[] = []
-    suggestions.forEach((s) => {
-      const key = s.taskId ? `id:${s.taskId}` : `name:${s.goalName}::${s.bucketName}::${s.taskName}`
-      if (seen.has(key)) return
-      seen.add(key)
-      unique.push(s)
-    })
-    return unique
-  }, [history, activeGoalSnapshots, repeatingRules])
+    return suggestions
+  }, [history, activeGoalSnapshots, lifeRoutineSurfaceLookup])
 
   const activeFocusCandidate = useMemo(() => {
     if (!focusSource) {
@@ -4104,11 +4005,18 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                       : !isDefaultTask && candidateLower === currentTaskLower
                     const diffClass =
                       task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : ''
+                    const isLifeSuggestion =
+                      (task.goalName ?? '').trim().toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
+                    const lifeSurfaceClasses =
+                      isLifeSuggestion && task.bucketSurface
+                        ? ['surface-life-routine', `surface-life-routine--${task.bucketSurface}`]
+                        : []
                     const rowClassName = [
                       'task-selector__task',
                       'goal-task-row',
                       diffClass,
                       'goal-task-row--priority',
+                      ...lifeSurfaceClasses,
                       matches ? 'task-selector__task--active' : '',
                     ]
                       .filter(Boolean)
@@ -4201,11 +4109,18 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                       : !isDefaultTask && candidateLower === currentTaskLower
                     const diffClass =
                       task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : ''
+                    const isLifePriority =
+                      (task.goalName ?? '').trim().toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
+                    const lifeRowClasses =
+                      isLifePriority && task.bucketSurface
+                        ? ['surface-life-routine', `surface-life-routine--${task.bucketSurface}`]
+                        : []
                     const rowClassName = [
                       'task-selector__task',
                       'goal-task-row',
                       diffClass,
                       task.priority ? 'goal-task-row--priority' : '',
+                      ...lifeRowClasses,
                       matches ? 'task-selector__task--active' : '',
                     ]
                       .filter(Boolean)

@@ -244,6 +244,7 @@ export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[
   if (!session) {
     return null
   }
+  // Fetch remote snapshot
   const { data, error } = await supabase
     .from('life_routines')
     .select('id, title, blurb, surface_style, sort_index')
@@ -256,8 +257,21 @@ export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[
   }
 
   const remoteRows = data ?? []
+  const localRaw = readRawLifeRoutinesLocal()
+  const localSanitized = sanitizeLifeRoutineList(Array.isArray(localRaw) ? localRaw : [])
+
+  // Prefer local if the user already has any routines configured locally.
+  // This avoids surprising "random" routines appearing from a stale server snapshot
+  // (e.g., defaults or data from another device) overriding local choices.
+  if (localSanitized.length > 0) {
+    const stored = storeLifeRoutinesLocal(localSanitized)
+    // Best-effort push so other devices converge to local
+    void pushLifeRoutinesToSupabase(stored)
+    return stored
+  }
+
+  // If local is empty, adopt remote when available; otherwise persist an empty list locally
   if (remoteRows.length > 0) {
-    // Remote authoritative: replace local snapshot entirely
     const mapped = remoteRows
       .map((row) => mapDbRowToRoutine(row as LifeRoutineDbRow))
       .filter((routine): routine is LifeRoutineConfig => Boolean(routine))
@@ -265,8 +279,6 @@ export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[
     return storeLifeRoutinesLocal(sanitized)
   }
 
-  const localRaw = readRawLifeRoutinesLocal()
-  // Persist empty (or existing customized empty) locally; do not push anything (empty) to avoid resurrecting deleted server data from another device.
-  const localSanitized = sanitizeLifeRoutineList(Array.isArray(localRaw) ? localRaw : [])
-  return storeLifeRoutinesLocal(localSanitized)
+  // Both empty: persist empty locally
+  return storeLifeRoutinesLocal([])
 }
