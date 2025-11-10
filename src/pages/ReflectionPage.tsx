@@ -403,7 +403,8 @@ type SurfaceGradientInfo = {
   base: string
 }
 
-const SURFACE_GRADIENT_INFO: Record<SurfaceStyle, SurfaceGradientInfo> = {
+// Not all surfaces need explicit gradients; provide for core ones and fall back dynamically.
+const SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGradientInfo>> = {
   glass: {
     gradient: 'linear-gradient(135deg, #313c67 0%, #1f2952 45%, #121830 100%)',
     start: '#313c67',
@@ -540,7 +541,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(118, 126, 255, 0.3)',
     mid: 'rgba(110, 118, 246, 0.26)',
     end: 'rgba(92, 106, 230, 0.22)',
-    base: SURFACE_GRADIENT_INFO.midnight.base,
+  base: (SURFACE_GRADIENT_INFO.midnight!).base,
   },
   slate: {
     gradient:
@@ -548,7 +549,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(151, 227, 255, 0.3)',
     mid: 'rgba(120, 198, 255, 0.26)',
     end: 'rgba(96, 180, 255, 0.22)',
-    base: SURFACE_GRADIENT_INFO.slate.base,
+  base: (SURFACE_GRADIENT_INFO.slate!).base,
   },
   charcoal: {
     gradient:
@@ -556,7 +557,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(255, 188, 213, 0.34)',
     mid: 'rgba(250, 190, 216, 0.3)',
     end: 'rgba(244, 174, 206, 0.26)',
-    base: SURFACE_GRADIENT_INFO.charcoal.base,
+  base: (SURFACE_GRADIENT_INFO.charcoal!).base,
   },
   linen: {
     gradient:
@@ -564,7 +565,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(255, 214, 170, 0.34)',
     mid: 'rgba(255, 200, 156, 0.3)',
     end: 'rgba(255, 233, 192, 0.26)',
-    base: SURFACE_GRADIENT_INFO.linen.base,
+  base: (SURFACE_GRADIENT_INFO.linen!).base,
   },
   frost: {
     gradient:
@@ -572,7 +573,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(174, 233, 255, 0.3)',
     mid: 'rgba(150, 224, 255, 0.26)',
     end: 'rgba(142, 210, 255, 0.22)',
-    base: SURFACE_GRADIENT_INFO.frost.base,
+  base: (SURFACE_GRADIENT_INFO.frost!).base,
   },
   grove: {
     gradient:
@@ -580,7 +581,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(140, 255, 204, 0.3)',
     mid: 'rgba(112, 240, 176, 0.26)',
     end: 'rgba(74, 222, 128, 0.22)',
-    base: SURFACE_GRADIENT_INFO.grove.base,
+  base: (SURFACE_GRADIENT_INFO.grove!).base,
   },
   lagoon: {
     gradient:
@@ -588,7 +589,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(146, 213, 255, 0.3)',
     mid: 'rgba(116, 190, 255, 0.26)',
     end: 'rgba(88, 168, 255, 0.22)',
-    base: SURFACE_GRADIENT_INFO.lagoon.base,
+  base: (SURFACE_GRADIENT_INFO.lagoon!).base,
   },
   ember: {
     gradient:
@@ -596,7 +597,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(255, 210, 170, 0.34)',
     mid: 'rgba(255, 192, 136, 0.3)',
     end: 'rgba(249, 160, 68, 0.24)',
-    base: SURFACE_GRADIENT_INFO.ember.base,
+  base: (SURFACE_GRADIENT_INFO.ember!).base,
   },
   'deep-indigo': {
     gradient:
@@ -604,7 +605,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(180, 184, 255, 0.34)',
     mid: 'rgba(144, 149, 255, 0.3)',
     end: 'rgba(122, 127, 232, 0.26)',
-    base: SURFACE_GRADIENT_INFO['deep-indigo'].base,
+  base: (SURFACE_GRADIENT_INFO['deep-indigo']!).base,
   },
   'warm-amber': {
     gradient:
@@ -612,7 +613,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(255, 230, 179, 0.34)',
     mid: 'rgba(255, 214, 140, 0.3)',
     end: 'rgba(251, 191, 36, 0.26)',
-    base: SURFACE_GRADIENT_INFO['warm-amber'].base,
+  base: (SURFACE_GRADIENT_INFO['warm-amber']!).base,
   },
   'fresh-teal': {
     gradient:
@@ -620,7 +621,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(153, 246, 228, 0.3)',
     mid: 'rgba(125, 238, 214, 0.26)',
     end: 'rgba(109, 230, 206, 0.22)',
-    base: SURFACE_GRADIENT_INFO['fresh-teal'].base,
+  base: (SURFACE_GRADIENT_INFO['fresh-teal']!).base,
   },
   'sunset-orange': {
     gradient:
@@ -628,7 +629,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(255, 198, 179, 0.34)',
     mid: 'rgba(255, 182, 156, 0.3)',
     end: 'rgba(251, 138, 114, 0.24)',
-    base: SURFACE_GRADIENT_INFO['sunset-orange'].base,
+  base: (SURFACE_GRADIENT_INFO['sunset-orange']!).base,
   },
   'cool-blue': {
     gradient:
@@ -636,7 +637,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(207, 232, 255, 0.34)',
     mid: 'rgba(190, 225, 255, 0.3)',
     end: 'rgba(153, 206, 255, 0.24)',
-    base: SURFACE_GRADIENT_INFO['cool-blue'].base,
+  base: (SURFACE_GRADIENT_INFO['cool-blue']!).base,
   },
   'soft-magenta': {
     gradient:
@@ -644,7 +645,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(255, 209, 244, 0.34)',
     mid: 'rgba(245, 195, 234, 0.3)',
     end: 'rgba(240, 180, 226, 0.26)',
-    base: SURFACE_GRADIENT_INFO['soft-magenta'].base,
+  base: (SURFACE_GRADIENT_INFO['soft-magenta']!).base,
   },
   'muted-lavender': {
     gradient:
@@ -652,7 +653,7 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(233, 225, 255, 0.34)',
     mid: 'rgba(221, 212, 255, 0.3)',
     end: 'rgba(204, 196, 253, 0.24)',
-  base: SURFACE_GRADIENT_INFO['muted-lavender'].base,
+  base: (SURFACE_GRADIENT_INFO['muted-lavender']!).base,
   },
   'neutral-grey-blue': {
     gradient:
@@ -660,8 +661,18 @@ const LIFE_ROUTINE_SURFACE_GRADIENT_INFO: Partial<Record<SurfaceStyle, SurfaceGr
     start: 'rgba(226, 232, 240, 0.34)',
     mid: 'rgba(209, 216, 225, 0.3)',
     end: 'rgba(195, 203, 213, 0.24)',
-    base: SURFACE_GRADIENT_INFO['neutral-grey-blue'].base,
+  base: (SURFACE_GRADIENT_INFO['neutral-grey-blue']!).base,
   },
+}
+
+// Resolve gradient info for a surface with a safe fallback to the default style
+const getGradientInfo = (surface: SurfaceStyle): SurfaceGradientInfo => {
+  const info = SURFACE_GRADIENT_INFO[surface]
+  if (info) return info
+  // Fall back to default style which is guaranteed to exist in the map
+  const fallback = SURFACE_GRADIENT_INFO[DEFAULT_SURFACE_STYLE]
+  // Non-null assertion: default entry is defined in literal above
+  return fallback!
 }
 
 const toGoalColorInfo = (info: SurfaceGradientInfo): GoalColorInfo => ({
@@ -692,7 +703,7 @@ const hexToRgba = (hex: string, alpha: number): string => {
 }
 
 const deriveLifeRoutineSolidColor = (surface: SurfaceStyle): string => {
-  const info = LIFE_ROUTINE_SURFACE_GRADIENT_INFO[surface] ?? SURFACE_GRADIENT_INFO[surface]
+  const info = LIFE_ROUTINE_SURFACE_GRADIENT_INFO[surface] ?? getGradientInfo(surface)
   return hexToRgba(info.base, 0.78)
 }
 
@@ -1063,7 +1074,7 @@ const HistoryDropdown = ({ id, value, placeholder, options, onChange, disabled, 
   )
 }
 
-const getSurfaceColorInfo = (surface: SurfaceStyle): GoalColorInfo => toGoalColorInfo(SURFACE_GRADIENT_INFO[surface])
+const getSurfaceColorInfo = (surface: SurfaceStyle): GoalColorInfo => toGoalColorInfo(getGradientInfo(surface))
 
 const getLifeRoutineSurfaceColorInfo = (surface: SurfaceStyle): GoalColorInfo => {
   return {

@@ -50,6 +50,24 @@ const isColumnMissingError = (err: any): boolean => {
   return combined.includes('column') && combined.includes('does not exist')
 }
 
+// Database-enforced surface styles (session_history goal_surface check and bucket_surface check)
+// Keep in sync with scripts/READONLY sql (DO NOT EDIT)/session_history.sql
+const DB_SURFACES = new Set<SurfaceStyle>([
+  'glass',
+  'midnight',
+  'slate',
+  'charcoal',
+  'linen',
+  'frost',
+  'grove',
+  'lagoon',
+  'ember',
+])
+const toDbSurface = (value: SurfaceStyle | null | undefined): SurfaceStyle | null => {
+  if (!value) return null
+  return DB_SURFACES.has(value) ? value : DEFAULT_SURFACE_STYLE
+}
+
 const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
 
@@ -538,8 +556,9 @@ const payloadFromRecord = (
     goal_id: record.goalId,
     bucket_id: record.bucketId,
     task_id: record.taskId,
-    goal_surface: record.goalSurface,
-    bucket_surface: record.bucketSurface,
+    // Clamp surfaces to DB-allowed values to satisfy CHECK constraints server-side
+    goal_surface: toDbSurface(record.goalSurface),
+    bucket_surface: toDbSurface(record.bucketSurface ?? undefined),
     created_at: new Date(record.createdAt).toISOString(),
     updated_at: new Date(updatedAt).toISOString(),
     ...(typeof record.futureSession === 'boolean' ? { future_session: record.futureSession } : {}),
@@ -737,14 +756,25 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       const doUpsertWithFallback = async (pls: any[]) => {
         // First attempt
         let resp = await client.from('session_history').upsert(pls, { onConflict: 'user_id,id' })
-        // Column-missing: disable feature and retry once
-        if (resp.error && isRepeatOriginalEnabled() && isColumnMissingError(resp.error)) {
-          disableRepeatOriginal()
-          const retried = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
-          resp = await client.from('session_history').upsert(retried, { onConflict: 'user_id,id' })
-          return { resp, usedPayloads: retried }
+        // Column missing for ANY optional column (routine_id, occurrence_date, repeating_session_id, original_time)
+        // Retry once stripping all optional linkage/tag columns.
+        if (resp.error && isColumnMissingError(resp.error)) {
+          if (isRepeatOriginalEnabled()) {
+            // Disable repeat-original feature dynamically so future payloads omit linkage columns
+            disableRepeatOriginal()
+          }
+          const strippedOptional = pls.map((p) => {
+            const c: any = { ...p }
+            delete c.routine_id
+            delete c.occurrence_date
+            delete c.repeating_session_id
+            delete c.original_time
+            return c
+          })
+          resp = await client.from('session_history').upsert(strippedOptional, { onConflict: 'user_id,id' })
+          return { resp, usedPayloads: strippedOptional }
         }
-        // Foreign key violation for repeating_session_id → retry stripping linkage
+        // Foreign key violation for repeating_session_id → retry stripping linkage only (keep routine tags if present)
         const code = String((resp.error as any)?.code || '')
         const details = String((resp.error as any)?.details || '') + ' ' + String((resp.error as any)?.message || '')
         if (resp.error && code === '23503' && details.toLowerCase().includes('repeating_sessions')) {
@@ -816,11 +846,14 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
     const client = supabase!
     const doUpsertWithFallback = async (pls: any[]) => {
       let resp = await client.from('session_history').upsert(pls, { onConflict: 'user_id,id' })
-      if (resp.error && isRepeatOriginalEnabled() && isColumnMissingError(resp.error)) {
-        disableRepeatOriginal()
-        const retried = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
-        resp = await client.from('session_history').upsert(retried, { onConflict: 'user_id,id' })
-        return { resp, usedPayloads: retried }
+      // Handle missing columns for any optional set (routine tags or repeat-original linkage)
+      if (resp.error && isColumnMissingError(resp.error)) {
+        if (isRepeatOriginalEnabled()) {
+          disableRepeatOriginal()
+        }
+        const strippedOptional = pls.map((p) => { const c: any = { ...p }; delete c.routine_id; delete c.occurrence_date; delete c.repeating_session_id; delete c.original_time; return c })
+        resp = await client.from('session_history').upsert(strippedOptional, { onConflict: 'user_id,id' })
+        return { resp, usedPayloads: strippedOptional }
       }
       const code = String((resp.error as any)?.code || '')
       const details = String((resp.error as any)?.details || '') + ' ' + String((resp.error as any)?.message || '')

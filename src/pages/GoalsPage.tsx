@@ -995,7 +995,8 @@ const sampleGradientColor = (stops: ColorStop[], pct: number): string => {
   return rgbToHex({ r: lerp(ra.r, rb.r, t), g: lerp(ra.g, rb.g, t), b: lerp(ra.b, rb.b, t) })
 }
 
-const GOAL_SURFACE_CLASS_MAP: Record<GoalSurfaceStyle, string> = {
+// Use Partial<Record<GoalSurfaceStyle, string>> so newly added surfaces don't trigger build errors until styled.
+const GOAL_SURFACE_CLASS_MAP: Partial<Record<GoalSurfaceStyle, string>> = {
   glass: 'goal-card--glass',
   midnight: 'goal-card--midnight',
   slate: 'goal-card--slate',
@@ -1015,7 +1016,8 @@ const GOAL_SURFACE_CLASS_MAP: Record<GoalSurfaceStyle, string> = {
   'neutral-grey-blue': 'goal-card--neutral-grey-blue',
 }
 
-const BUCKET_SURFACE_CLASS_MAP: Record<BucketSurfaceStyle, string> = {
+// Same Partial strategy for bucket surfaces.
+const BUCKET_SURFACE_CLASS_MAP: Partial<Record<BucketSurfaceStyle, string>> = {
   glass: 'goal-bucket-item--surface-glass',
   midnight: 'goal-bucket-item--surface-midnight',
   slate: 'goal-bucket-item--surface-slate',
