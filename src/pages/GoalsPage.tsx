@@ -2144,7 +2144,22 @@ const MilestoneLayer: React.FC<{
     <>
       <div className="milestones__header">
         <div className="flex items-center gap-1.5">
-          <h4 className="goal-subheading">Milestone Layer</h4>
+          <h4
+            className="goal-subheading"
+            role="button"
+            tabIndex={0}
+            onClick={() => setCollapsed((v) => !v)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setCollapsed((v) => !v)
+              }
+            }}
+            aria-label={collapsed ? 'Expand Milestone Layer' : 'Collapse Milestone Layer'}
+            aria-expanded={!collapsed}
+          >
+            Milestone Layer
+          </h4>
           <button
             type="button"
             className="inline-flex items-center justify-center h-6 w-6 rounded-md hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
@@ -4416,7 +4431,20 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         )}
                                       >
                                         <div className="goal-task-details__section-title">
-                                          <p className="goal-task-details__heading">
+                                          <p
+                                            className="goal-task-details__heading"
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-expanded={!isSubtasksCollapsed}
+                                            aria-controls={subtaskListId}
+                                            onClick={() => handleToggleSubtaskSection(task.id)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault()
+                                                handleToggleSubtaskSection(task.id)
+                                              }
+                                            }}
+                                          >
                                             Subtasks
                                             <button
                                               type="button"
@@ -4540,7 +4568,20 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       </div>
                                       <div className={classNames('goal-task-details__notes', isNotesCollapsed && 'goal-task-details__notes--collapsed')}>
                                         <div className="goal-task-details__section-title goal-task-details__section-title--notes">
-                                          <p className="goal-task-details__heading">
+                                          <p
+                                            className="goal-task-details__heading"
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-expanded={!isNotesCollapsed}
+                                            aria-controls={notesBodyId}
+                                            onClick={() => handleToggleNotesSection(task.id)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault()
+                                                handleToggleNotesSection(task.id)
+                                              }
+                                            }}
+                                          >
                                             Notes
                                             <button
                                               type="button"
@@ -5028,7 +5069,22 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                               />
                                             </svg>
                                           </button>
-                                          <p className="goal-task-details__heading">Subtasks</p>
+                                          <p
+                                            className="goal-task-details__heading"
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-expanded={!isSubtasksCollapsed}
+                                            aria-controls={subtaskListId}
+                                            onClick={() => handleToggleSubtaskSection(task.id)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault()
+                                                handleToggleSubtaskSection(task.id)
+                                              }
+                                            }}
+                                          >
+                                            Subtasks
+                                          </p>
                                           {/* Subtask progress removed */}
                                           <button
                                             type="button"
@@ -5134,7 +5190,20 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       </div>
                                       <div className={classNames('goal-task-details__notes', isNotesCollapsed && 'goal-task-details__notes--collapsed')}>
                                         <div className="goal-task-details__section-title goal-task-details__section-title--notes">
-                                          <p className="goal-task-details__heading">
+                                          <p
+                                            className="goal-task-details__heading"
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-expanded={!isNotesCollapsed}
+                                            aria-controls={notesBodyId}
+                                            onClick={() => handleToggleNotesSection(task.id)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault()
+                                                handleToggleNotesSection(task.id)
+                                              }
+                                            }}
+                                          >
                                             Notes
                                             <button
                                               type="button"
