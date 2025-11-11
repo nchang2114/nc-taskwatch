@@ -4296,6 +4296,11 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           }, rowTotalMs + 80)
                                         }
                                       } catch {}
+                                      // Suppress delete reveal shortly after marking complete (avoid long-press contextmenu)
+                                      suppressDeleteRevealRef.current = {
+                                        key: makeTaskFocusKey(goal.id, b.id, task.id),
+                                        until: Date.now() + 3000,
+                                      }
                                       // Trigger completing state for marker/check + row timing
                                       setCompletingMap((prev) => ({ ...prev, [key]: true }))
                                       // Commit completion after row slide (duration set above)
@@ -4593,6 +4598,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                           event.stopPropagation()
                                                           handleToggleSubtaskCompleted(task.id, subtask.id)
                                                         }}
+                                                        onClick={(event) => event.stopPropagation()}
                                                         onPointerDown={(event) => event.stopPropagation()}
                                                       />
                                                       <textarea
@@ -4885,6 +4891,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         onContextMenu={(event) => {
                                           event.preventDefault()
                                           event.stopPropagation()
+                                          const sup = suppressDeleteRevealRef.current
+                                          if (sup && sup.key === deleteKey && Date.now() < sup.until) {
+                                            return
+                                          }
                                           onRevealDeleteTask(isDeleteRevealed ? null : deleteKey)
                                         }}
                                         onDragStart={(e) => {
@@ -4956,6 +4966,11 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     className="goal-task-marker goal-task-marker--completed"
                                     onClick={() => {
                                       onRevealDeleteTask(null)
+                                      // Suppress near-immediate contextmenu reveal for this task
+                                      suppressDeleteRevealRef.current = {
+                                        key: deleteKey,
+                                        until: Date.now() + 2500,
+                                      }
                                       onToggleTaskComplete(b.id, task.id)
                                     }}
                                     aria-label="Mark task incomplete"
@@ -5242,6 +5257,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                           event.stopPropagation()
                                                           handleToggleSubtaskCompleted(task.id, subtask.id)
                                                         }}
+                                                        onClick={(event) => event.stopPropagation()}
                                                         onPointerDown={(event) => event.stopPropagation()}
                                                       />
                                                       <textarea
@@ -5907,6 +5923,8 @@ export default function GoalsPage(): ReactElement {
 
   const [focusPromptTarget, setFocusPromptTarget] = useState<FocusPromptTarget | null>(null)
   const [revealedDeleteTaskKey, setRevealedDeleteTaskKey] = useState<string | null>(null)
+  // Suppresses accidental delete-icon reveal immediately after toggling a task's completion
+  const suppressDeleteRevealRef = useRef<{ key: string; until: number } | null>(null)
   const [managingArchivedGoalId, setManagingArchivedGoalId] = useState<string | null>(null)
   useEffect(() => {
     if (!revealedDeleteTaskKey || typeof window === 'undefined') {
