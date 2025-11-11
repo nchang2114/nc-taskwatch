@@ -525,6 +525,87 @@ const findActivationCaretOffset = (
   return computeSelectionOffsetWithin(element, 'end')
 }
 
+// Precisely place caret in a textarea under a client point using a mirror element.
+function setTextareaCaretFromPoint(field: HTMLTextAreaElement, clientX: number, clientY: number): void {
+  try {
+    const rect = field.getBoundingClientRect()
+    const cs = window.getComputedStyle(field)
+    const mirror = document.createElement('div')
+    mirror.style.position = 'fixed'
+    mirror.style.left = `${rect.left}px`
+    mirror.style.top = `${rect.top}px`
+    mirror.style.width = `${rect.width}px`
+    mirror.style.visibility = 'hidden'
+    mirror.style.whiteSpace = 'pre-wrap'
+    mirror.style.wordWrap = 'break-word'
+    mirror.style.overflowWrap = 'break-word'
+    mirror.style.boxSizing = cs.boxSizing as string
+    mirror.style.padding = cs.padding
+    mirror.style.border = cs.border
+    mirror.style.fontFamily = cs.fontFamily
+    mirror.style.fontSize = cs.fontSize
+    mirror.style.fontWeight = cs.fontWeight as string
+    mirror.style.fontStyle = cs.fontStyle
+    mirror.style.letterSpacing = cs.letterSpacing
+    mirror.style.lineHeight = cs.lineHeight
+    mirror.style.tabSize = cs.tabSize
+    mirror.style.pointerEvents = 'none'
+
+    const host = document.createElement('div')
+    mirror.appendChild(host)
+    const text = field.value
+    const len = text.length
+    const markers: HTMLSpanElement[] = []
+    for (let i = 0; i <= len; i += 1) {
+      const mark = document.createElement('span')
+      mark.style.display = 'inline-block'
+      mark.style.width = '0px'
+      mark.style.height = '1em'
+      mark.dataset.index = String(i)
+      host.appendChild(mark)
+      markers.push(mark)
+      if (i < len) {
+        const ch = text[i]
+        if (ch === '\n') {
+          host.appendChild(document.createElement('br'))
+        } else {
+          host.appendChild(document.createTextNode(ch))
+        }
+      }
+    }
+    document.body.appendChild(mirror)
+    let bestIndex = len
+    let bestDist = Number.POSITIVE_INFINITY
+    const targetX = clientX
+    const targetY = clientY
+    for (let i = 0; i < markers.length; i += 1) {
+      const r = markers[i].getBoundingClientRect()
+      const cx = r.left
+      const cy = r.top + r.height / 2
+      const dx = cx - targetX
+      const dy = cy - targetY
+      const d = dx * dx + dy * dy
+      if (d < bestDist) {
+        bestDist = d
+        bestIndex = i
+      }
+    }
+    document.body.removeChild(mirror)
+    try {
+      field.focus({ preventScroll: true })
+    } catch {
+      field.focus()
+    }
+    field.setSelectionRange(bestIndex, bestIndex)
+  } catch {
+    try {
+      field.focus()
+      const end = field.value.length
+      field.setSelectionRange(end, end)
+    } catch {}
+  }
+}
+
 // Limit for inline task text editing (mirrors Taskwatch behavior)
 const MAX_TASK_TEXT_LENGTH = 256
 
@@ -2770,6 +2851,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
     | null
   >(null)
   const dragCloneRef = useRef<HTMLElement | null>(null)
+  // UI-only: single vs double click handling for subtask rows, and edit mode toggle
+  const subtaskClickTimersRef = useRef<Map<string, number>>(new Map())
+  const [editingSubtaskKey, setEditingSubtaskKey] = useState<string | null>(null)
   const [dragLine, setDragLine] = useState<
     | { bucketId: string; section: 'active' | 'completed'; top: number }
     | null
@@ -4449,10 +4533,54 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                       subtask.completed && 'goal-task-details__subtask--completed',
                                                       isSubDeleteRevealed && 'goal-task-details__subtask--delete-revealed',
                                                     )}
-                                                    onContextMenu={(event) => {
-                                                      event.preventDefault()
+                                                    onClick={(event) => {
                                                       event.stopPropagation()
-                                                      onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
+                                                      if (editingSubtaskKey === `${task.id}:${subtask.id}`) {
+                                                        return
+                                                      }
+                                                      const timers = subtaskClickTimersRef.current
+                                                      const existing = timers.get(subDeleteKey)
+                                                      if (existing) {
+                                                        window.clearTimeout(existing)
+                                                        timers.delete(subDeleteKey)
+                                                      }
+                                                      const tid = window.setTimeout(() => {
+                                                        onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
+                                                        timers.delete(subDeleteKey)
+                                                      }, 200)
+                                                      timers.set(subDeleteKey, tid)
+                                                    }}
+                                                    onDoubleClick={(event) => {
+                                                      event.stopPropagation()
+                                                      const timers = subtaskClickTimersRef.current
+                                                      const existing = timers.get(subDeleteKey)
+                                                      if (existing) {
+                                                        window.clearTimeout(existing)
+                                                        timers.delete(subDeleteKey)
+                                                      }
+                                                      onRevealDeleteTask(null)
+                                                      setEditingSubtaskKey(`${task.id}:${subtask.id}`)
+                                                      try {
+                                                        const target = event.target as HTMLElement
+                                                        const field = target.closest('textarea.goal-task-details__subtask-input') as HTMLTextAreaElement | null
+                                                        if (field) {
+                                                          const alreadyFocused = document.activeElement === field
+                                                          if (!alreadyFocused) {
+                                                            event.preventDefault()
+                                                            window.setTimeout(() => setTextareaCaretFromPoint(field, event.clientX, event.clientY), 0)
+                                                          } else {
+                                                            window.setTimeout(() => field.focus({ preventScroll: true }), 0)
+                                                          }
+                                                        } else {
+                                                          const el = document.getElementById(
+                                                            makeGoalSubtaskInputId(task.id, subtask.id),
+                                                          ) as HTMLTextAreaElement | null
+                                                          if (el) {
+                                                            event.preventDefault()
+                                                            setTextareaCaretFromPoint(el, event.clientX, event.clientY)
+                                                          }
+                                                        }
+                                                      } catch {}
                                                     }}
                                                   >
                                                   <label className="goal-task-details__subtask-item">
@@ -4473,6 +4601,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                       rows={1}
                                                         ref={(el) => autosizeTextArea(el)}
                                                       value={subtask.text}
+                                                      readOnly={editingSubtaskKey !== `${task.id}:${subtask.id}`}
                                                       onChange={(event) => {
                                                         const el = event.currentTarget
                                                         // auto-resize height
@@ -4510,7 +4639,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                         el.style.height = 'auto'
                                                         el.style.height = `${el.scrollHeight}px`
                                                       }}
-                                                      onBlur={() => handleSubtaskBlur(task.id, subtask.id)}
+                                                      onBlur={() => {
+                                                        handleSubtaskBlur(task.id, subtask.id)
+                                                        if (editingSubtaskKey === `${task.id}:${subtask.id}`) {
+                                                          setEditingSubtaskKey(null)
+                                                        }
+                                                      }}
                                                       onPointerDown={(event) => event.stopPropagation()}
                                                       placeholder="Describe subtask"
                                                       />
@@ -5057,10 +5191,45 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                       subtask.completed && 'goal-task-details__subtask--completed',
                                                       isSubDeleteRevealed && 'goal-task-details__subtask--delete-revealed',
                                                     )}
-                                                    onContextMenu={(event) => {
-                                                      event.preventDefault()
+                                                    onClick={(event) => {
                                                       event.stopPropagation()
-                                                      onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
+                                                      if (editingSubtaskKey === `${task.id}:${subtask.id}`) {
+                                                        return
+                                                      }
+                                                      const timers = subtaskClickTimersRef.current
+                                                      const existing = timers.get(subDeleteKey)
+                                                      if (existing) {
+                                                        window.clearTimeout(existing)
+                                                        timers.delete(subDeleteKey)
+                                                      }
+                                                      const tid = window.setTimeout(() => {
+                                                        onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
+                                                        timers.delete(subDeleteKey)
+                                                      }, 200)
+                                                      timers.set(subDeleteKey, tid)
+                                                    }}
+                                                    onDoubleClick={(event) => {
+                                                      event.stopPropagation()
+                                                      const timers = subtaskClickTimersRef.current
+                                                      const existing = timers.get(subDeleteKey)
+                                                      if (existing) {
+                                                        window.clearTimeout(existing)
+                                                        timers.delete(subDeleteKey)
+                                                      }
+                                                      onRevealDeleteTask(null)
+                                                      setEditingSubtaskKey(`${task.id}:${subtask.id}`)
+                                                      try {
+                                                        const target = event.target as HTMLElement
+                                                        const field = target.closest('textarea.goal-task-details__subtask-input') as HTMLTextAreaElement | null
+                                                        if (field) {
+                                                          window.setTimeout(() => field.focus({ preventScroll: true }), 0)
+                                                        } else {
+                                                          const el = document.getElementById(
+                                                            makeGoalSubtaskInputId(task.id, subtask.id),
+                                                          ) as HTMLTextAreaElement | null
+                                                          el?.focus({ preventScroll: true })
+                                                        }
+                                                      } catch {}
                                                     }}
                                                   >
                                                   <label className="goal-task-details__subtask-item">
@@ -5081,6 +5250,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                       rows={1}
                                                         ref={(el) => autosizeTextArea(el)}
                                                       value={subtask.text}
+                                                      readOnly={editingSubtaskKey !== `${task.id}:${subtask.id}`}
                                                       onChange={(event) => {
                                                         const el = event.currentTarget
                                                         el.style.height = 'auto'
@@ -5114,7 +5284,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                         el.style.height = 'auto'
                                                         el.style.height = `${el.scrollHeight}px`
                                                       }}
-                                                      onBlur={() => handleSubtaskBlur(task.id, subtask.id)}
+                                                      onBlur={() => {
+                                                        handleSubtaskBlur(task.id, subtask.id)
+                                                        if (editingSubtaskKey === `${task.id}:${subtask.id}`) {
+                                                          setEditingSubtaskKey(null)
+                                                        }
+                                                      }}
                                                       onPointerDown={(event) => event.stopPropagation()}
                                                       placeholder="Describe subtask"
                                                       />
