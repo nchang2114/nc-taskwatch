@@ -2558,8 +2558,6 @@ interface GoalRowProps {
   onTaskEditBlur: (goalId: string, bucketId: string, taskId: string) => void
   onTaskEditCancel: (taskId: string) => void
   registerTaskEditRef: (taskId: string, element: HTMLSpanElement | null) => void
-  focusPromptTarget: FocusPromptTarget | null
-  onTaskTextClick: (goalId: string, bucketId: string, taskId: string) => void
   onDismissFocusPrompt: () => void
   onStartFocusTask: (goal: Goal, bucket: Bucket, task: TaskItem) => void
   onReorderTasks: (
@@ -2755,8 +2753,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
   onTaskEditChange,
   onTaskEditBlur,
   registerTaskEditRef,
-  focusPromptTarget,
-  onTaskTextClick,
   onDismissFocusPrompt,
   onStartFocusTask,
   onReorderTasks,
@@ -4016,12 +4012,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
                               const notesFieldId = `task-notes-${task.id}`
                               const notesBodyId = `goal-task-notes-${task.id}`
                               const focusPromptKey = makeTaskFocusKey(goal.id, b.id, task.id)
-                              const isFocusPromptActive =
-                                !isEditing &&
-                                focusPromptTarget !== null &&
-                                focusPromptTarget.goalId === goal.id &&
-                                focusPromptTarget.bucketId === b.id &&
-                                focusPromptTarget.taskId === task.id
                               
                               return (
                                 <React.Fragment key={`${task.id}-wrap`}>
@@ -4110,35 +4100,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                     }}
                                   >
                                   <div className="goal-task-row__content">
-                                  {showDetails && (
-                                    <button
-                                      type="button"
-                                      className={classNames(
-                                        'goal-task-toggle',
-                                        isDetailsOpen && 'goal-task-toggle--open',
-                                        hasDetailsContent && 'goal-task-toggle--active',
-                                      )}
-                                      onClick={(event) => {
-                                        event.stopPropagation()
-                                        handleToggleTaskDetails(task.id)
-                                      }}
-                                      onPointerDown={(event) => {
-                                        event.stopPropagation()
-                                      }}
-                                      aria-label={
-                                        isDetailsOpen
-                                          ? 'Hide subtasks and notes'
-                                          : hasDetailsContent
-                                          ? 'Show subtasks and notes'
-                                          : 'Add subtasks or notes'
-                                      }
-                                      aria-expanded={isDetailsOpen}
-                                    >
-                                      <svg viewBox="0 0 24 24" className="goal-task-toggle__icon" aria-hidden="true">
-                                        <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                      </svg>
-                                    </button>
-                                  )}
+                                  
                                   <button
                                     type="button"
                                     className="goal-task-marker goal-task-marker--action"
@@ -4319,7 +4281,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       className="goal-task-text goal-task-text--button"
                                       onClick={(e) => {
                                         e.stopPropagation()
-                                        onTaskTextClick(goal.id, b.id, task.id)
+                                        handleToggleTaskDetails(task.id)
                                       }}
                                       onPointerDown={(e) => {
                                         // guard capture and drag vs edit/long-press
@@ -4341,7 +4303,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           caretOffset !== null ? { caretOffset } : undefined,
                                         )
                                       }}
-                                      aria-label="Edit task text"
+                                      aria-label="Toggle task details"
                                     >
                                       <span className="goal-task-text__inner" aria-hidden="true">
                                         {highlightText(task.text, highlightTerm)}
@@ -4632,49 +4594,44 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           />
                                         </div>
                                       </div>
+                                      {
+                                        <div className="goal-task-focus">
+                                          <button
+                                            type="button"
+                                            className="goal-task-focus__button"
+                                            onClick={(event) => {
+                                              event.stopPropagation()
+                                              broadcastScheduleTask({
+                                                goalId: goal.id,
+                                                goalName: goal.name,
+                                                bucketId: b.id,
+                                                bucketName: b.name,
+                                                taskId: task.id,
+                                                taskName: task.text,
+                                              })
+                                              onDismissFocusPrompt()
+                                            }}
+                                          >
+                                            Schedule Task
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="goal-task-focus__button"
+                                            onClick={(event) => {
+                                              event.stopPropagation()
+                                              onStartFocusTask(goal, b, task)
+                                              onDismissFocusPrompt()
+                                            }}
+                                          >
+                                            Start Focus
+                                          </button>
+                                        </div>
+                                      }
                                     </div>
                                   )}
                                 </div>
                                 </li>
-                                {!isEditing && isFocusPromptActive ? (
-                                  <li
-                                    key={`${task.id}-focus`}
-                                    className="goal-task-focus-row"
-                                    data-focus-prompt-key={focusPromptKey}
-                                  >
-                                    <div className="goal-task-focus">
-                                      <button
-                                        type="button"
-                                        className="goal-task-focus__button"
-                                        onClick={(event) => {
-                                          event.stopPropagation()
-                                          broadcastScheduleTask({
-                                            goalId: goal.id,
-                                            goalName: goal.name,
-                                            bucketId: b.id,
-                                            bucketName: b.name,
-                                            taskId: task.id,
-                                            taskName: task.text,
-                                          })
-                                          onDismissFocusPrompt()
-                                        }}
-                                      >
-                                        Schedule Task
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="goal-task-focus__button"
-                                        onClick={(event) => {
-                                          event.stopPropagation()
-                                          onStartFocusTask(goal, b, task)
-                                          onDismissFocusPrompt()
-                                        }}
-                                      >
-                                        Start Focus
-                                      </button>
-                                    </div>
-                                  </li>
-                                ) : null}
+                                
                                 </React.Fragment>
                               )
                             })}
@@ -4770,12 +4727,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                   const notesFieldId = `task-notes-${task.id}`
                                   const notesBodyId = `goal-task-notes-${task.id}`
                                   const focusPromptKey = makeTaskFocusKey(goal.id, b.id, task.id)
-                                  const isFocusPromptActive =
-                                    !isEditing &&
-                                    focusPromptTarget !== null &&
-                                    focusPromptTarget.goalId === goal.id &&
-                                    focusPromptTarget.bucketId === b.id &&
-                                    focusPromptTarget.taskId === task.id
                                   const deleteKey = focusPromptKey
                                   const isDeleteRevealed = revealedDeleteTaskKey === deleteKey
                                   
@@ -4792,7 +4743,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           diffClass,
                                           task.priority && 'goal-task-row--priority',
                                           isEditing && 'goal-task-row--draft',
-                                          isFocusPromptActive && 'goal-task-row--focus-prompt',
                                           showDetails && isDetailsOpen && 'goal-task-row--expanded',
                                           showDetails && hasDetailsContent && 'goal-task-row--has-details',
                                           isDeleteRevealed && 'goal-task-row--delete-revealed',
@@ -4866,35 +4816,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         }}
                                       >
                                       <div className="goal-task-row__content">
-                                      {showDetails && (
-                                        <button
-                                          type="button"
-                                          className={classNames(
-                                            'goal-task-toggle',
-                                            isDetailsOpen && 'goal-task-toggle--open',
-                                            hasDetailsContent && 'goal-task-toggle--active',
-                                          )}
-                                          onClick={(event) => {
-                                            event.stopPropagation()
-                                            handleToggleTaskDetails(task.id)
-                                          }}
-                                          onPointerDown={(event) => {
-                                            event.stopPropagation()
-                                          }}
-                                          aria-label={
-                                            isDetailsOpen
-                                              ? 'Hide subtasks and notes'
-                                              : hasDetailsContent
-                                              ? 'Show subtasks and notes'
-                                              : 'Add subtasks or notes'
-                                          }
-                                          aria-expanded={isDetailsOpen}
-                                        >
-                                          <svg viewBox="0 0 24 24" className="goal-task-toggle__icon" aria-hidden="true">
-                                            <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                          </svg>
-                                        </button>
-                                      )}
+                                      
                                   <button
                                     type="button"
                                     className="goal-task-marker goal-task-marker--completed"
@@ -4957,10 +4879,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         <button
                                           type="button"
                                           className="goal-task-text goal-task-text--button"
-                                        onClick={(e) => {
-                                        e.stopPropagation()
-                                        onTaskTextClick(goal.id, b.id, task.id)
-                                      }}
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleToggleTaskDetails(task.id)
+                                          }}
                                         onDoubleClick={(e) => {
                                         e.preventDefault()
                                         e.stopPropagation()
@@ -4975,7 +4897,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                               caretOffset !== null ? { caretOffset } : undefined,
                                             )
                                           }}
-                                          aria-label="Edit task text"
+                                          aria-label="Toggle task details"
                                         >
                                           <span className="goal-task-text__inner">{highlightText(task.text, highlightTerm)}</span>
                                         </button>
@@ -5275,40 +5197,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                             aria-label="Task notes"
                                           />
                                         </div>
-                                      </div>
-                                      </div>
-                                      )}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="goal-task-row__delete"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    onRevealDeleteTask(null)
-                                    onDeleteCompletedTask(goal.id, b.id, task.id)
-                                  }}
-                                  onPointerDown={(event) => event.stopPropagation()}
-                                  aria-label="Delete task permanently"
-                                  title="Delete task"
-                                >
-                                  <svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-row__delete-icon">
-                                    <path
-                                      d="M9 4h6l1 2h4v2H4V6h4l1-2Zm1 5v9m4-9v9m-6 0h8a1 1 0 0 0 1-1V8H7v9a1 1 0 0 0 1 1Z"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="1.6"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    />
-                                  </svg>
-                                </button>
-                                </li>
-                                    {!isEditing && isFocusPromptActive ? (
-                                      <li
-                                        key={`${task.id}-focus`}
-                                        className="goal-task-focus-row"
-                                        data-focus-prompt-key={focusPromptKey}
-                                      >
+                                      {
                                         <div className="goal-task-focus">
                                           <button
                                             type="button"
@@ -5340,8 +5229,35 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                             Start Focus
                                           </button>
                                         </div>
-                                      </li>
-                                    ) : null}
+                                      }
+                                      </div>
+                                      </div>
+                                      )}
+                                </div>
+                                <button
+                                  type="button"
+                                  className="goal-task-row__delete"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    onRevealDeleteTask(null)
+                                    onDeleteCompletedTask(goal.id, b.id, task.id)
+                                  }}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  aria-label="Delete task permanently"
+                                  title="Delete task"
+                                >
+                                  <svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-row__delete-icon">
+                                    <path
+                                      d="M9 4h6l1 2h4v2H4V6h4l1-2Zm1 5v9m4-9v9m-6 0h8a1 1 0 0 0 1-1V8H7v9a1 1 0 0 0 1 1Z"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="1.6"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                </button>
+                                </li>
                                     </React.Fragment>
                                   )
                                 })}
@@ -6489,14 +6405,17 @@ export default function GoalsPage(): ReactElement {
 
   const handleToggleTaskDetails = useCallback(
     (taskId: string) => {
-      const wasExpanded = Boolean(taskDetailsRef.current[taskId]?.expanded)
+      const snapshot = taskDetailsRef.current[taskId] ?? createTaskDetails()
+      const wasExpanded = Boolean(snapshot.expanded)
       const willExpand = !wasExpanded
+      // Decide initial collapsed states when opening details
+      const hasAnySubtasks = Array.isArray(snapshot.subtasks) && snapshot.subtasks.length > 0
+      const hasAnyNotes = typeof snapshot.notes === 'string' && snapshot.notes.trim().length > 0
       updateTaskDetails(taskId, (current) => ({
         ...current,
         expanded: willExpand,
-        // When opening details, ensure sections are visible
-        subtasksCollapsed: willExpand ? false : current.subtasksCollapsed,
-        notesCollapsed: willExpand ? false : current.notesCollapsed,
+        subtasksCollapsed: willExpand ? !hasAnySubtasks : current.subtasksCollapsed,
+        notesCollapsed: willExpand ? !hasAnyNotes : current.notesCollapsed,
       }))
       // Lazy-load notes when opening the details panel for the first time
       if (willExpand) {
@@ -8102,20 +8021,6 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     taskDraftRefs.current.delete(bucketId)
   }
 
-  const handleTaskTextClick = useCallback((goalId: string, bucketId: string, taskId: string) => {
-    setFocusPromptTarget((current) => {
-      if (
-        current &&
-        current.goalId === goalId &&
-        current.bucketId === bucketId &&
-        current.taskId === taskId
-      ) {
-        return null
-      }
-      return { goalId, bucketId, taskId }
-    })
-  }, [])
-
   const dismissFocusPrompt = useCallback(() => {
     setFocusPromptTarget(null)
   }, [])
@@ -9460,8 +9365,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     onTaskEditBlur={(goalId, bucketId, taskId) => handleTaskEditBlur(goalId, bucketId, taskId)}
                     onTaskEditCancel={(taskId) => handleTaskEditCancel(taskId)}
                     registerTaskEditRef={registerTaskEditRef}
-                    focusPromptTarget={focusPromptTarget}
-                    onTaskTextClick={handleTaskTextClick}
+                    
+                    
                     onDismissFocusPrompt={dismissFocusPrompt}
                     onStartFocusTask={handleStartFocusTask}
                     onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
@@ -9591,8 +9496,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                         onTaskEditBlur={(goalId, bucketId, taskId) => handleTaskEditBlur(goalId, bucketId, taskId)}
                         onTaskEditCancel={(taskId) => handleTaskEditCancel(taskId)}
                         registerTaskEditRef={registerTaskEditRef}
-                        focusPromptTarget={focusPromptTarget}
-                        onTaskTextClick={handleTaskTextClick}
+                        
+                        
                         onDismissFocusPrompt={dismissFocusPrompt}
                         onStartFocusTask={handleStartFocusTask}
                         onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
