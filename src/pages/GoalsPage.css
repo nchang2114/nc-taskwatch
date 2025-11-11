@@ -265,6 +265,11 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   margin-top: clamp(0.75rem, 2.4vw, 1.3rem);
 }
 
+/* Tighter spacing when toolbar lives under heading */
+.goals-intro .goals-toolbar {
+  margin-top: clamp(0.25rem, 1.4vw, 0.6rem);
+}
+
 .goal-search {
   flex: 1 1 auto;
   min-width: 0;
@@ -449,12 +454,7 @@ html[data-theme='light'] .goal-favorite-toggle--active {
   letter-spacing: -0.01em;
 }
 
-.life-routines-card__subtitle {
-  margin: 0;
-  font-size: clamp(0.68rem, 1.7vw, 0.8rem);
-  line-height: 1.38;
-  color: var(--lr-muted);
-}
+/* .life-routines-card__subtitle removed */
 
 .life-routines-card__indicator {
   flex: none;
@@ -2161,12 +2161,21 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 }
 
 .goal-task-details__section-title--notes {
-  grid-template-columns: 1fr;
+  grid-template-columns: auto 1fr;
 }
 
 .goal-task-details__section-title--notes .goal-task-details__heading {
   flex: 0 0 auto;
   color: rgba(211, 218, 255, 0.52);
+}
+
+/* Collapse behavior for Notes */
+.goal-task-details__notes-body {
+  display: grid;
+}
+
+.goal-task-details__notes--collapsed .goal-task-details__notes-body {
+  display: none;
 }
 
 .goal-task-details__label {
@@ -2222,13 +2231,7 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   transform: translateY(-1px);
 }
 
-.goal-task-details__progress {
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: rgba(216, 222, 255, 0.65);
-  justify-self: end;
-}
+/* .goal-task-details__progress removed */
 
 /* Subtle inline caret button (solid triangle, like bucket caret) */
 .goal-task-details__collapse {
@@ -2289,6 +2292,16 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
   border-top: 0.54em solid currentColor; /* larger downward triangle */
   border-bottom: 0 solid transparent;
   /* center base width */
+  border-left: 0.36em solid transparent;
+  border-right: 0.36em solid transparent;
+}
+
+/* Match caret behavior for Notes */
+.goal-task-details__notes:not(.goal-task-details__notes--collapsed) .goal-task-details__collapse::before {
+  border-left: 0 solid transparent;
+  border-right: 0 solid transparent;
+  border-top: 0.54em solid currentColor;
+  border-bottom: 0 solid transparent;
   border-left: 0.36em solid transparent;
   border-right: 0.36em solid transparent;
 }
@@ -2976,9 +2989,7 @@ html[data-theme='light'] .goal-task-details__add:focus-visible {
   color: rgba(29, 36, 84, 0.92);
 }
 
-html[data-theme='light'] .goal-task-details__progress {
-  color: rgba(62, 72, 128, 0.65);
-}
+/* light theme .goal-task-details__progress removed */
 
 html[data-theme='light'] .goal-task-details__checkbox {
   border-color: rgba(106, 122, 204, 0.46);
