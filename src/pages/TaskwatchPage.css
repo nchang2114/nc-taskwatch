@@ -54,6 +54,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* Make button visibly larger: ~50% of viewport, but never overflow container */
+  width: min(50vw, 600px);
+  max-width: 100%;
   padding: clamp(0.6rem, 1.8vw, 0.85rem) clamp(1.4rem, 3.4vw, 2rem);
   border-radius: 999px;
   border: 1px solid rgba(160, 176, 255, 0.6);

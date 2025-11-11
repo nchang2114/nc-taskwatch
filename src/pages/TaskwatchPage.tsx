@@ -2057,16 +2057,31 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   ])
   const notebookNotes = activeNotebookEntry.notes
   const notebookSubtasks = activeNotebookEntry.subtasks
-  // Ensure existing multi-line subtasks render at full height (without requiring focus)
+  // Ensure existing multi-line subtasks render at full height (without requiring focus).
+  // Run immediately and again on the next frames to catch late layout/font paints.
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const host = document.querySelector('.taskwatch-notes') || document.body
-      host
-        .querySelectorAll<HTMLTextAreaElement>('.goal-task-details__subtask-input')
-        .forEach((el) => autosizeTextArea(el))
-    } catch {}
-  }, [notebookSubtasks])
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
+    const run = () => {
+      try {
+        const host = document.querySelector('.taskwatch-notes') || document.body
+        host
+          .querySelectorAll<HTMLTextAreaElement>('.goal-task-details__subtask-input')
+          .forEach((el) => {
+            el.style.height = 'auto'
+            el.style.height = `${el.scrollHeight}px`
+          })
+      } catch {}
+    }
+    run()
+    const id1 = window.requestAnimationFrame(run)
+    const id2 = window.requestAnimationFrame(() => run())
+    const t = window.setTimeout(run, 0)
+    return () => {
+      window.cancelAnimationFrame(id1)
+      window.cancelAnimationFrame(id2)
+      window.clearTimeout(t)
+    }
+  }, [notebookSubtasks, notebookKey])
   const completedNotebookSubtasks = useMemo(
     () => notebookSubtasks.filter((subtask) => subtask.completed).length,
     [notebookSubtasks],
