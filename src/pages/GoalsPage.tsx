@@ -2243,7 +2243,7 @@ const MilestoneLayer: React.FC<{
           </h4>
           <button
             type="button"
-            className="inline-flex items-center justify-center h-6 w-6 rounded-md hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
+            className="inline-flex items-center justify-center h-6 w-6 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
             onClick={() => setCollapsed((v) => !v)}
             aria-label={collapsed ? 'Expand Milestone Layer' : 'Collapse Milestone Layer'}
             aria-expanded={!collapsed}
@@ -2870,6 +2870,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
   const PRIORITY_HOLD_MS = 300
   const longPressTimersRef = useRef<Map<string, number>>(new Map())
   const longPressTriggeredRef = useRef<Set<string>>(new Set())
+  // Suppress accidental delete-reveal immediately after completion toggles (per GoalRow)
+  const suppressDeleteRevealRef = useRef<{ key: string; until: number } | null>(null)
 
   // FLIP animation for moving task to top
   const taskRowRefs = useRef(new Map<string, HTMLLIElement>())
@@ -5923,8 +5925,6 @@ export default function GoalsPage(): ReactElement {
 
   const [focusPromptTarget, setFocusPromptTarget] = useState<FocusPromptTarget | null>(null)
   const [revealedDeleteTaskKey, setRevealedDeleteTaskKey] = useState<string | null>(null)
-  // Suppresses accidental delete-icon reveal immediately after toggling a task's completion
-  const suppressDeleteRevealRef = useRef<{ key: string; until: number } | null>(null)
   const [managingArchivedGoalId, setManagingArchivedGoalId] = useState<string | null>(null)
   useEffect(() => {
     if (!revealedDeleteTaskKey || typeof window === 'undefined') {
