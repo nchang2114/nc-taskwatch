@@ -317,7 +317,8 @@ html[data-theme='light'] .snapback-option-input.is-active { background: linear-g
   .snapback-tool__card { flex-direction: column; align-items: stretch; text-align: center; gap: clamp(0.7rem, 2.6vw, 1rem); }
   .snapback-tool__body { max-width: 100%; align-items: center; }
   .snapback-tool__text { text-align: center; }
-  .snapback-tool__button { width: 100%; }
+  /* Keep same width logic on small viewports (centered, half viewport) */
+  .snapback-tool__button { width: min(50vw, 600px); max-width: 100%; }
 }
 
 /* Light theme */

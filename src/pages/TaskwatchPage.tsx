@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -508,9 +509,17 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           })
       } catch {}
     }
+    // Initial run
     handle()
+    // Keep sizes correct when viewport changes or when returning to the tab/page
     window.addEventListener('resize', handle)
-    return () => window.removeEventListener('resize', handle)
+    window.addEventListener('visibilitychange', handle)
+    window.addEventListener('pageshow', handle)
+    return () => {
+      window.removeEventListener('resize', handle)
+      window.removeEventListener('visibilitychange', handle)
+      window.removeEventListener('pageshow', handle)
+    }
   }, [])
   const initialTaskName = useMemo(() => getStoredTaskName(), [])
   const [elapsed, setElapsed] = useState(0)
@@ -2059,7 +2068,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const notebookSubtasks = activeNotebookEntry.subtasks
   // Ensure existing multi-line subtasks render at full height (without requiring focus).
   // Run immediately and again on the next frames to catch late layout/font paints.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return
     const run = () => {
       try {
