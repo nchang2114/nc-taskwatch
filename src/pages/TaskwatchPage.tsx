@@ -530,7 +530,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     },
     [],
   )
-  const [lastSnapbackSummary, setLastSnapbackSummary] = useState<string | null>(null)
+  
   const [isSnapbackOpen, setIsSnapbackOpen] = useState(false)
   const [snapbackDurationMin, setSnapbackDurationMin] = useState<number>(5)
   const [snapbackDurationMode, setSnapbackDurationMode] = useState<'preset' | 'custom'>('preset')
@@ -3720,7 +3720,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       }
     } catch {}
 
-    setLastSnapbackSummary(`${durationLabel} • ${reasonLabel} → ${actionLabel}`)
+    
     setIsSnapbackOpen(false)
     setSnapbackNote('')
     setSnapbackCustomReason('')
@@ -4443,22 +4443,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       </section>
 
       <section className="snapback-tool" aria-label="Snap back momentum">
-        <div className="snapback-tool__card">
-          <div className="snapback-tool__body">
-            <h2 className="snapback-tool__title">Snap Back</h2>
-            <p className="snapback-tool__text">
-              Momentum dipped? Pause, capture what happened, and choose your next move.
-            </p>
-            {lastSnapbackSummary ? (
-              <p className="snapback-tool__last" aria-live="polite">
-                Last snapback: {lastSnapbackSummary}
-              </p>
-            ) : null}
-          </div>
-          <button type="button" className="snapback-tool__button" onClick={handleOpenSnapback}>
-            Snap Back
-          </button>
-        </div>
+        <button type="button" className="snapback-tool__button" onClick={handleOpenSnapback}>
+          Snap Back
+        </button>
       </section>
 
       {notebookSection}
@@ -4477,7 +4464,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                 <h2 className="snapback-panel__title" id="snapback-title">
                   Snap back to focus
                 </h2>
-                <p className="snapback-panel__lead">Capture what happened and line up your next move.</p>
               </div>
               <button type="button" className="snapback-panel__close" onClick={handleCloseSnapback} aria-label="Close snapback panel">
                 ×
