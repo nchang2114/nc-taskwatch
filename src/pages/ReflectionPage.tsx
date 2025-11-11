@@ -4847,7 +4847,7 @@ useEffect(() => {
         <>
           <div className="snapback-drawer__group">
             <label className="snapback-drawer__label">Why is this happening?</label>
-            <p className="snapback-drawer__hint">Describe what tends to lead up to this pattern. What’s going on beforehand?</p>
+            {/* Hint removed */}
             <input
               type="text"
               className="snapback-drawer__input"
@@ -4863,7 +4863,7 @@ useEffect(() => {
 
           <div className="snapback-drawer__group">
             <label className="snapback-drawer__label">Is it aligned with who you want to be? What's the reward, is it sustainable?</label>
-            <p className="snapback-drawer__hint">What’s the reward you’re getting right now? Is it sustainable?</p>
+            {/* Hint removed */}
             <textarea
               className="snapback-drawer__textarea"
               placeholder="Be honest about the short-term reward and the long-term cost."
@@ -4878,7 +4878,7 @@ useEffect(() => {
 
           <div className="snapback-drawer__group">
             <label className="snapback-drawer__label">How do you change it next time?</label>
-            <p className="snapback-drawer__hint">Write one small, concrete thing you’ll try the next time this trigger appears.</p>
+            {/* Hint removed */}
             <textarea
               className="snapback-drawer__textarea"
               placeholder="Write one small, concrete thing you’ll try."
@@ -9278,15 +9278,13 @@ useEffect(() => {
     <section className="site-main__inner reflection-page" aria-label="Reflection">
       <div className="reflection-intro">
         <h1 className="reflection-title">Reflection</h1>
-        <p className="reflection-subtitle">Review your progress and capture insights to guide your future.</p>
+        {/* Subtitle removed for cleaner header */}
       </div>
 
       <div className="history-block">
         <div className="history-section__heading">
           <h2 className="reflection-section__title">Session History Calendar</h2>
-          <p className="history-section__desc">
-            Review focus sessions over time. Click on a session to view or edit details.
-          </p>
+          {/* History section description removed */}
         </div>
         <div className="history-layout">
           <div className="history-layout__primary">
@@ -10243,7 +10241,7 @@ useEffect(() => {
         <div className="reflection-overview__header">
           <div className="reflection-overview__titles">
             <h2 className="reflection-section__title">Snap Back Overview</h2>
-            <p className="reflection-section__desc">Review your recurring snap-back patterns and plan your next move.</p>
+            {/* Overview description removed */}
           </div>
           <div className="snap-tabs" role="tablist" aria-label="Snap back time ranges">
             {SNAP_RANGE_KEYS.map((key) => {
@@ -10363,7 +10361,6 @@ useEffect(() => {
           <div className="snapback-drawer">
             <div className="snapback-drawer__header">
               <div className="snapback-drawer__titles">
-                <span className="snapback-drawer__eyebrow">Pattern</span>
                 <SnapbackEditableTitle
                   item={selectedItem ? { id: selectedItem.id, label: selectedItem.label } : null}
                   isCustom={Boolean(selectedItem && customTriggers.some((ct) => ct.id === selectedItem.id))}

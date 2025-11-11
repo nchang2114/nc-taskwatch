@@ -1061,6 +1061,11 @@ html[data-theme='light'] {
   overflow-x: hidden; /* avoid any horizontal scroll on mobile */
 }
 
+/* Tighten spacing between the main title and the calendar heading */
+.reflection-page > .history-block {
+  margin-top: calc(-1 * clamp(2.5rem, 5vw, 3.5rem));
+}
+
 /* --- Intro --- */
 .reflection-intro {
   display: flex;
@@ -1084,13 +1089,7 @@ html[data-theme='light'] {
   }
 }
 
-.reflection-subtitle {
-  margin: 0;
-  font-size: clamp(0.95rem, 2vw, 1.05rem);
-  color: var(--text-secondary);
-  max-width: 100%; /* allow full width */
-  line-height: 1.6;
-}
+/* .reflection-subtitle removed */
 
 /* --- Sections --- */
 .reflection-section {
@@ -1312,11 +1311,11 @@ html[data-theme='light'] .snapback-item__delete:focus-visible {
 }
 .snapback-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
 .snapback-drawer__titles { display: flex; flex-direction: column; gap: 0.25rem; }
-.snapback-drawer__eyebrow { display: block; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.7rem; color: var(--text-secondary); }
+
 .snapback-drawer__title { margin: 0.1rem 0 0 0; font-weight: 700; font-size: 1.1rem; color: var(--text-primary); }
 .snapback-drawer__title--editable { cursor: text; user-select: text; }
 .snapback-drawer__subtitle { margin: 0; color: var(--text-secondary); font-size: 0.9rem; }
-.snapback-drawer__hint { margin: -0.2rem 0 0.2rem; color: var(--text-secondary); font-size: 0.82rem; }
+/* .snapback-drawer__hint removed */
 .snapback-drawer__privacy { margin: 0.3rem 0 0; color: var(--text-secondary); font-size: 0.82rem; }
 .snapback-drawer__badge { padding: 0.28rem 0.5rem; border-radius: 0.5rem; border: 1px solid rgba(132, 148, 228, 0.4); background: rgba(255, 255, 255, 0.06); color: var(--text-primary); font-size: 0.78rem; white-space: nowrap; }
 html[data-theme='light'] .snapback-drawer__badge { background: rgba(246, 248, 255, 0.96); border-color: rgba(160, 172, 236, 0.45); }
@@ -1378,22 +1377,14 @@ html[data-theme='light'] .snapback-drawer__title-input {
   text-align: center;
 }
 
-.reflection-section__desc {
-  margin: -0.75rem 0 0.5rem 0;
-  font-size: clamp(0.875rem, 1.8vw, 0.95rem);
-  color: var(--text-secondary);
-  line-height: 1.5;
-  width: 100%;
-  text-align: center;
-}
+/* .reflection-section__desc removed */
 
 .reflection-section--overview {
   gap: clamp(1.5rem, 3vw, 2rem);
   align-items: stretch;
 }
 
-.reflection-section--overview .reflection-section__title,
-.reflection-section--overview .reflection-section__desc {
+.reflection-section--overview .reflection-section__title {
   text-align: left;
   align-self: flex-start;
 }
