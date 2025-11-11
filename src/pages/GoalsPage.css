@@ -2326,12 +2326,13 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 .goal-task-details__subtask {
   /* Use grid so the remove button always stays on the same row as the field */
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   /* Keep row height driven by the field itself, and center controls visually */
   align-items: center;
   column-gap: 0.4rem;
   row-gap: 0;
   padding: 0; /* let the textarea define the row height exactly */
+  position: relative;
 }
 
 .goal-task-details__subtask-item {
@@ -2462,27 +2463,57 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 }
 
 .goal-task-details__remove {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translate(110%, -50%);
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 0.55rem;
+  border: none;
+  background: rgba(248, 113, 113, 0.12);
+  color: rgba(252, 165, 165, 0.92);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem; /* square-ish button */
-  height: 1.75rem;
-  border-radius: 0.45rem;
-  border: 1px solid rgba(136, 156, 255, 0.35);
-  background: rgba(22, 28, 64, 0.55);
-  color: rgba(236, 242, 255, 0.9);
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
-  margin-left: 0; /* grid places it in its own column */
-  align-self: center; /* vertically center relative to the row height */
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+  z-index: 3;
 }
 
 .goal-task-details__remove:hover,
 .goal-task-details__remove:focus-visible {
-  background: rgba(255, 102, 132, 0.22);
-  border-color: rgba(255, 170, 190, 0.7);
-  color: rgba(255, 198, 208, 0.98);
-  transform: translateY(-1px);
+  background: rgba(248, 113, 113, 0.22);
+  color: rgba(254, 226, 226, 0.96);
+}
+
+.goal-task-details__remove:focus-visible {
+  outline: 2px solid rgba(252, 165, 165, 0.75);
+  outline-offset: 2px;
+}
+
+.goal-task-details__remove-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.goal-subtask-field {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.goal-task-details__subtask--delete-revealed .goal-subtask-field {
+  transform: translateX(-2.5rem);
+}
+
+.goal-task-details__subtask--delete-revealed .goal-task-details__remove {
+  transform: translate(0, -50%);
+  opacity: 1;
+  pointer-events: auto;
 }
 @media (max-width: 520px) {
   .goal-task-details__subtask-input {
@@ -2491,9 +2522,8 @@ html[data-theme='light'] .goals-layer :where(.bg-white\/10.text-xs, .bg-white\/1
 }
 
 html[data-theme='light'] .goal-task-details__remove {
-  background: rgba(246, 248, 255, 0.9);
-  border-color: rgba(28, 32, 68, 0.16);
-  color: rgba(28, 34, 90, 0.88);
+  background: rgba(254, 226, 226, 0.85);
+  color: rgba(190, 18, 60, 0.9);
 }
 html[data-theme='light'] .goal-task-details__remove:hover,
 html[data-theme='light'] .goal-task-details__remove:focus-visible {

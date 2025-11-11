@@ -4475,14 +4475,24 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         <div className="goal-task-details__subtasks-body" id={subtaskListId}>
                                           {hasSubtasks ? (
                                             <ul className="goal-task-details__subtask-list">
-                                              {subtasks.map((subtask) => (
-                                                <li
-                                                  key={subtask.id}
-                                                  className={classNames(
-                                                    'goal-task-details__subtask',
-                                                    subtask.completed && 'goal-task-details__subtask--completed',
-                                                  )}
-                                                >
+                                              {subtasks.map((subtask) => {
+                                                const subDeleteKey = `${goal.id}__${b.id}__${task.id}__subtask__${subtask.id}`
+                                                const isSubDeleteRevealed = revealedDeleteTaskKey === subDeleteKey
+                                                return (
+                                                  <li
+                                                    key={subtask.id}
+                                                    data-delete-key={subDeleteKey}
+                                                    className={classNames(
+                                                      'goal-task-details__subtask',
+                                                      subtask.completed && 'goal-task-details__subtask--completed',
+                                                      isSubDeleteRevealed && 'goal-task-details__subtask--delete-revealed',
+                                                    )}
+                                                    onContextMenu={(event) => {
+                                                      event.preventDefault()
+                                                      event.stopPropagation()
+                                                      onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
+                                                    }}
+                                                  >
                                                   <label className="goal-task-details__subtask-item">
                                                     <div className="goal-subtask-field">
                                                       <input
@@ -4549,15 +4559,27 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                     className="goal-task-details__remove"
                                                     onClick={(event) => {
                                                       event.stopPropagation()
+                                                      onRevealDeleteTask(null)
                                                       handleRemoveSubtask(task.id, subtask.id)
                                                     }}
                                                     onPointerDown={(event) => event.stopPropagation()}
-                                                    aria-label="Remove subtask"
+                                                    aria-label="Delete subtask permanently"
+                                                    title="Delete subtask"
                                                   >
-                                                    ×
+                                                    <svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-details__remove-icon">
+                                                      <path
+                                                        d="M9 4h6l1 2h4v2H4V6h4l1-2Zm1 5v9m4-9v9m-6 0h8a1 1 0 0 0 1-1V8H7v9a1 1 0 0 0 1 1Z"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.6"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                      />
+                                                    </svg>
                                                   </button>
                                                 </li>
-                                              ))}
+                                                )
+                                              })}
                                             </ul>
                                           ) : (
                                             <div className="goal-task-details__empty">
@@ -5101,14 +5123,24 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                         <div className="goal-task-details__subtasks-body" id={subtaskListId}>
                                           {hasSubtasks ? (
                                             <ul className="goal-task-details__subtask-list">
-                                              {subtasks.map((subtask) => (
-                                                <li
-                                                  key={subtask.id}
-                                                  className={classNames(
-                                                    'goal-task-details__subtask',
-                                                    subtask.completed && 'goal-task-details__subtask--completed',
-                                                  )}
-                                                >
+                                              {subtasks.map((subtask) => {
+                                                const subDeleteKey = `${goal.id}__${b.id}__${task.id}__subtask__${subtask.id}`
+                                                const isSubDeleteRevealed = revealedDeleteTaskKey === subDeleteKey
+                                                return (
+                                                  <li
+                                                    key={subtask.id}
+                                                    data-delete-key={subDeleteKey}
+                                                    className={classNames(
+                                                      'goal-task-details__subtask',
+                                                      subtask.completed && 'goal-task-details__subtask--completed',
+                                                      isSubDeleteRevealed && 'goal-task-details__subtask--delete-revealed',
+                                                    )}
+                                                    onContextMenu={(event) => {
+                                                      event.preventDefault()
+                                                      event.stopPropagation()
+                                                      onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
+                                                    }}
+                                                  >
                                                   <label className="goal-task-details__subtask-item">
                                                     <div className="goal-subtask-field">
                                                       <input
@@ -5171,15 +5203,27 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                     className="goal-task-details__remove"
                                                     onClick={(event) => {
                                                       event.stopPropagation()
+                                                      onRevealDeleteTask(null)
                                                       handleRemoveSubtask(task.id, subtask.id)
                                                     }}
                                                     onPointerDown={(event) => event.stopPropagation()}
-                                                    aria-label="Remove subtask"
+                                                    aria-label="Delete subtask permanently"
+                                                    title="Delete subtask"
                                                   >
-                                                    ×
+                                                    <svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-details__remove-icon">
+                                                      <path
+                                                        d="M9 4h6l1 2h4v2H4V6h4l1-2Zm1 5v9m4-9v9m-6 0h8a1 1 0 0 0 1-1V8H7v9a1 1 0 0 0 1 1Z"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.6"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                      />
+                                                    </svg>
                                                   </button>
                                                 </li>
-                                              ))}
+                                                )
+                                              })}
                                             </ul>
                                           ) : (
                                             <div className="goal-task-details__empty">
