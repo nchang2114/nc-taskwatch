@@ -2417,6 +2417,8 @@ export default function ReflectionPage() {
   const historyDayOffsetRef = useRef(historyDayOffset)
   const multiChooserRef = useRef<HTMLDivElement | null>(null)
   const lastCalendarHotkeyRef = useRef<{ key: string; timestamp: number } | null>(null)
+  // Defer clearing the calendar title override until the anchor date has updated
+  const pendingTitleClearRef = useRef<number | null>(null)
   const multiDayKeyboardStateRef = useRef<{ active: boolean; selection: number }>({
     active: false,
     selection: multiDayCount,
@@ -5566,6 +5568,18 @@ useEffect(() => {
     return anchorDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
   }, [anchorDate, calendarView, calendarTitleOverride])
 
+  // Clear preview title once the anchor date reflects the committed window
+  useEffect(() => {
+    if (!(calendarView === 'month' || calendarView === 'year')) return
+    const target = pendingTitleClearRef.current
+    if (target == null) return
+    const currentAnchorMs = new Date(anchorDate.getFullYear(), calendarView === 'month' ? anchorDate.getMonth() : 0, 1).getTime()
+    if (currentAnchorMs === target) {
+      setCalendarTitleOverride(null)
+      pendingTitleClearRef.current = null
+    }
+  }, [anchorDate, calendarView])
+
   // Ensure the month/year carousel track is centered on the middle panel
   // even on initial render or after anchorDate/view changes.
   useLayoutEffect(() => {
@@ -5678,11 +5692,10 @@ useEffect(() => {
       }
       // Animate to the right (dir = +1)
       const target = baseX + 1 * width
-      requestAnimationFrame(() => {
-        track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
-        track.style.transform = `translateX(${target}px)`
-      })
+      let done = false
+      let fallback: number | null = null
       const commit = () => {
+        if (done) return; done = true
         // Commit the new window first to avoid any flash
         const nextBase = calendarView === 'month'
           ? new Date(anchorDate.getFullYear(), anchorDate.getMonth() - 1, 1)
@@ -5695,7 +5708,8 @@ useEffect(() => {
         } else {
           setHistoryDayOffset(deltaDays)
         }
-        setCalendarTitleOverride(null)
+        // Defer clearing the title until the anchor date updates
+        pendingTitleClearRef.current = nextBase.getTime()
         // After new content mounts, snap track back to base without anim
         requestAnimationFrame(() => {
           const latestTrack = monthYearCarouselRef.current?.querySelector('.calendar-carousel__track') as HTMLDivElement | null
@@ -5710,10 +5724,17 @@ useEffect(() => {
       }
       const onEnd = () => {
         track.removeEventListener('transitionend', onEnd)
+        if (fallback != null) { window.clearTimeout(fallback); fallback = null }
         track.style.transition = ''
         track.style.willChange = ''
         commit()
       }
+      fallback = window.setTimeout(onEnd, 360)
+      const start = () => {
+        track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
+        track.style.transform = `translateX(${target}px)`
+      }
+      requestAnimationFrame(start)
       track.addEventListener('transitionend', onEnd, { once: true })
       return
     }
@@ -5755,11 +5776,10 @@ useEffect(() => {
       }
       // Animate to the left (dir = -1)
       const target = baseX - 1 * width
-      requestAnimationFrame(() => {
-        track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
-        track.style.transform = `translateX(${target}px)`
-      })
+      let done = false
+      let fallback: number | null = null
       const commit = () => {
+        if (done) return; done = true
         // Commit the new window first to avoid any flash
         const nextBase = calendarView === 'month'
           ? new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 1)
@@ -5772,7 +5792,8 @@ useEffect(() => {
         } else {
           setHistoryDayOffset(deltaDays)
         }
-        setCalendarTitleOverride(null)
+        // Defer clearing the title until the anchor date updates
+        pendingTitleClearRef.current = nextBase.getTime()
         // After new content mounts, snap track back to base without anim
         requestAnimationFrame(() => {
           const latestTrack = monthYearCarouselRef.current?.querySelector('.calendar-carousel__track') as HTMLDivElement | null
@@ -5787,10 +5808,17 @@ useEffect(() => {
       }
       const onEnd = () => {
         track.removeEventListener('transitionend', onEnd)
+        if (fallback != null) { window.clearTimeout(fallback); fallback = null }
         track.style.transition = ''
         track.style.willChange = ''
         commit()
       }
+      fallback = window.setTimeout(onEnd, 360)
+      const start = () => {
+        track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
+        track.style.transform = `translateX(${target}px)`
+      }
+      requestAnimationFrame(start)
       track.addEventListener('transitionend', onEnd, { once: true })
       return
     }
@@ -5991,6 +6019,9 @@ useEffect(() => {
     setView,
     setShowMultiDayChooser,
     showMultiDayChooser,
+    handlePrevWindow,
+    handleNextWindow,
+    handleJumpToToday,
   ])
 
   // Outside-React updater for the calendar now-line to keep UI smooth without full re-renders
