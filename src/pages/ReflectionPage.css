@@ -2323,6 +2323,36 @@ html[data-theme='light'] .history-calendar {
   opacity: 0.6;
 }
 
+/* Highlight today's date in month view */
+.calendar-cell--today { /* no special cell styling; highlight only the number */ }
+.calendar-day-number {
+  position: relative; /* anchor for today badge */
+  display: inline-block; /* shrink to text width so badge centers correctly */
+  z-index: 0; /* create stacking context so badge can sit behind */
+}
+.calendar-cell--today .calendar-day-number::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%); /* exact centering */
+  width: 1.55em; /* match year-view badge size */
+  height: 1.55em;
+  border-radius: 999px;
+  background: #3b82f6; /* match year-view color in dark */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+  z-index: -1; /* render behind the number */
+}
+/* Ensure date stays readable on top of the filled badge */
+.calendar-cell--today .calendar-day-number { color: #fff; }
+
+html[data-theme='light'] .calendar-cell--today { }
+html[data-theme='light'] .calendar-cell--today .calendar-day-number::after {
+  background: #2563eb; /* match year-view color in light */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
 .calendar-day-number {
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -2340,21 +2370,76 @@ html[data-theme='light'] .history-calendar {
 
 .calendar-grid--year {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.5rem;
 }
 
 .calendar-year-cell {
-  min-height: 64px;
+  min-height: 140px;
   border: 1px solid rgba(124, 138, 220, 0.22);
   background: rgba(14, 18, 36, 0.35);
   border-radius: 0.5rem;
-  padding: 0.35rem;
+  padding: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .calendar-year-label {
   font-weight: 600;
   color: var(--text-primary);
+}
+
+/* Mini month grid (year view) */
+.calendar-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.calendar-month-day {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  font-size: 0.7rem;
+  line-height: 1;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  z-index: 0; /* allow pseudo background to sit behind text */
+}
+.calendar-month-day--muted { opacity: 0.35; }
+
+/* Today badge in year grid */
+.calendar-month-day--today::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 1.55em;
+  height: 1.55em;
+  border-radius: 999px;
+  background: #3b82f6; /* vivid blue in dark theme */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+  z-index: -1; /* ensure it's behind the number */
+}
+.calendar-month-day--today {
+  color: #fff; /* ensure strong contrast on the filled circle */
+  font-weight: 600;
+}
+
+html[data-theme='light'] .calendar-year-cell {
+  border-color: rgba(176, 186, 240, 0.35);
+  background: rgba(248, 250, 255, 0.9);
+}
+html[data-theme='light'] .calendar-month-day--today::before {
+  background: #2563eb; /* deeper blue for light background */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+html[data-theme='light'] .calendar-month-day--today {
+  color: #fff;
 }
 
 /* Vertical time grid for 3-day / week views */

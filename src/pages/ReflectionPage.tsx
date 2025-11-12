@@ -6061,16 +6061,23 @@ useEffect(() => {
     const dayHasSessions = (startMs: number, endMs: number) =>
       entries.some((e) => Math.min(e.endedAt, endMs) > Math.max(e.startedAt, startMs))
 
+    const todayMidnightMs = (() => {
+      const t = new Date()
+      t.setHours(0, 0, 0, 0)
+      return t.getTime()
+    })()
+
     const renderCell = (date: Date, isCurrentMonth: boolean) => {
       const start = new Date(date)
       start.setHours(0, 0, 0, 0)
       const end = new Date(start)
       end.setDate(end.getDate() + 1)
       const has = dayHasSessions(start.getTime(), end.getTime())
+      const isToday = start.getTime() === todayMidnightMs
       return (
         <div
           key={`cell-${start.toISOString()}`}
-          className={`calendar-cell${isCurrentMonth ? '' : ' calendar-cell--muted'}`}
+          className={`calendar-cell${isCurrentMonth ? '' : ' calendar-cell--muted'}${isToday ? ' calendar-cell--today' : ''}`}
           aria-label={start.toDateString()}
         >
           <div className="calendar-day-number">{start.getDate()}</div>
@@ -7434,12 +7441,45 @@ useEffect(() => {
     }
 
     if (calendarView === 'year') {
+      const year = anchorDate.getFullYear()
+      const todayMidnight = (() => {
+        const t = new Date()
+        t.setHours(0, 0, 0, 0)
+        return t.getTime()
+      })()
+
       const months = Array.from({ length: 12 }).map((_, idx) => {
-        const d = new Date(anchorDate.getFullYear(), idx, 1)
-        const label = d.toLocaleDateString(undefined, { month: 'short' })
+        const firstOfMonth = new Date(year, idx, 1)
+        const label = firstOfMonth.toLocaleDateString(undefined, { month: 'short' })
+
+        // Build a 6x7 grid of days for consistent height
+        const start = new Date(firstOfMonth)
+        const startDow = start.getDay() // 0=Sun
+        start.setDate(start.getDate() - startDow)
+        const cells: ReactElement[] = []
+        for (let i = 0; i < 42; i += 1) {
+          const d = new Date(start)
+          d.setDate(start.getDate() + i)
+          d.setHours(0, 0, 0, 0)
+          const inMonth = d.getMonth() === idx
+          const isToday = d.getTime() === todayMidnight
+          cells.push(
+            <div
+              key={`y-${year}-${idx}-${i}`}
+              className={`calendar-month-day${inMonth ? '' : ' calendar-month-day--muted'}${isToday ? ' calendar-month-day--today' : ''}`}
+              aria-hidden={!inMonth}
+            >
+              {inMonth ? d.getDate() : ''}
+            </div>
+          )
+        }
+
         return (
           <div key={`m-${idx}`} className="calendar-year-cell">
             <div className="calendar-year-label">{label}</div>
+            <div className="calendar-month-grid" role="grid" aria-label={`Calendar for ${label} ${year}`}>
+              {cells}
+            </div>
           </div>
         )
       })
