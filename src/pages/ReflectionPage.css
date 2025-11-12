@@ -2298,6 +2298,8 @@ html[data-theme='light'] .history-calendar {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 0.25rem;
+  /* Allow natural vertical scroll, we intercept horizontal swipes */
+  touch-action: pan-y;
 }
 
 .calendar-week-headers {
@@ -2373,6 +2375,30 @@ html[data-theme='light'] .calendar-cell--today .calendar-day-number::after {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.5rem;
+  touch-action: pan-y;
+}
+
+/* Generic carousel wrapper used for month/year swipe with preview panes */
+.calendar-carousel {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y; /* allow vertical scroll, capture horizontal swipes */
+  cursor: grab;
+}
+.calendar-carousel__track {
+  display: grid;
+  grid-template-columns: 100% 100% 100%;
+  will-change: transform;
+  transform: translateX(-100%);
+}
+.calendar-carousel__panel { width: 100%; }
+
+.calendar-carousel.is-dragging {
+  cursor: grabbing;
+}
+.calendar-carousel.is-dragging,
+.calendar-carousel.is-dragging * {
+  user-select: none;
 }
 
 .calendar-year-cell {
@@ -2389,6 +2415,7 @@ html[data-theme='light'] .calendar-cell--today .calendar-day-number::after {
 .calendar-year-label {
   font-weight: 600;
   color: var(--text-primary);
+  cursor: pointer;
 }
 
 /* Mini month grid (year view) */

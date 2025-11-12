@@ -5555,12 +5555,14 @@ useEffect(() => {
 
   const anchoredTooltipId = hoveredHistoryId ?? selectedHistoryId
   const dayEntryCount = daySegments.length
+  const [calendarTitleOverride, setCalendarTitleOverride] = useState<string | null>(null)
   const monthAndYearLabel = useMemo(() => {
+    if (calendarTitleOverride) return calendarTitleOverride
     if (calendarView === 'year') {
       return String(anchorDate.getFullYear())
     }
     return anchorDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-  }, [anchorDate, calendarView])
+  }, [anchorDate, calendarView, calendarTitleOverride])
   const dayLabel = useMemo(() => {
     const date = new Date(dayStart)
     const weekday = date.toLocaleDateString(undefined, { weekday: 'long' })
@@ -5626,12 +5628,46 @@ useEffect(() => {
   )
 
   const handlePrevWindow = useCallback(() => {
+    if (calendarView === 'month') {
+      const base = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
+      base.setMonth(base.getMonth() - 1)
+      base.setHours(0, 0, 0, 0)
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const deltaDays = Math.round((base.getTime() - today.getTime()) / DAY_DURATION_MS)
+      setHistoryDayOffset(deltaDays)
+      return
+    }
+    if (calendarView === 'year') {
+      const base = new Date(anchorDate.getFullYear() - 1, 0, 1)
+      base.setHours(0, 0, 0, 0)
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const deltaDays = Math.round((base.getTime() - today.getTime()) / DAY_DURATION_MS)
+      setHistoryDayOffset(deltaDays)
+      return
+    }
     navigateByDelta(-stepSizeByView[calendarView])
-  }, [calendarView, navigateByDelta, stepSizeByView])
+  }, [anchorDate, calendarView, navigateByDelta, setHistoryDayOffset, stepSizeByView])
 
   const handleNextWindow = useCallback(() => {
+    if (calendarView === 'month') {
+      const base = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
+      base.setMonth(base.getMonth() + 1)
+      base.setHours(0, 0, 0, 0)
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const deltaDays = Math.round((base.getTime() - today.getTime()) / DAY_DURATION_MS)
+      setHistoryDayOffset(deltaDays)
+      return
+    }
+    if (calendarView === 'year') {
+      const base = new Date(anchorDate.getFullYear() + 1, 0, 1)
+      base.setHours(0, 0, 0, 0)
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const deltaDays = Math.round((base.getTime() - today.getTime()) / DAY_DURATION_MS)
+      setHistoryDayOffset(deltaDays)
+      return
+    }
     navigateByDelta(stepSizeByView[calendarView])
-  }, [calendarView, navigateByDelta, stepSizeByView])
+  }, [anchorDate, calendarView, navigateByDelta, setHistoryDayOffset, stepSizeByView])
 
   const handleJumpToToday = useCallback(() => {
     const currentOffset = historyDayOffsetRef.current
@@ -6064,6 +6100,82 @@ useEffect(() => {
     const dayHasSessions = (startMs: number, endMs: number) =>
       entries.some((e) => Math.min(e.endedAt, endMs) > Math.max(e.startedAt, startMs))
 
+    // Simple horizontal swipe navigation for month/year grids
+    const handleMonthYearSwipePointerDown = (ev: ReactPointerEvent<HTMLDivElement>) => {
+      if (!(calendarView === 'month' || calendarView === 'year')) return
+      if (ev.button !== 0 && (ev as any).pointerType !== 'touch') return
+      const container = ev.currentTarget as HTMLDivElement
+      const startX = ev.clientX
+      const startY = ev.clientY
+      const pointerId = ev.pointerId
+      const threshold = 20
+      let engaged = false
+
+      // Prepare for smooth transforms
+      container.style.transition = 'none'
+      container.style.willChange = 'transform'
+
+      const onMove = (e: PointerEvent) => {
+        if (e.pointerId !== pointerId) return
+        const dx = e.clientX - startX
+        const dy = e.clientY - startY
+        if (!engaged) {
+          if (Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy) * 1.25) {
+            engaged = true
+          } else {
+            return
+          }
+        }
+        // Apply constrained tracking translation (px)
+        const limit = Math.min(120, Math.max(-120, dx))
+        container.style.transform = `translateX(${limit}px)`
+        e.preventDefault()
+        e.stopPropagation()
+      }
+
+      const finish = (commitDir: -1 | 0 | 1) => {
+        // Animate out or snap back
+        const distance = commitDir === 0 ? 0 : commitDir * (container.clientWidth || 300)
+        container.style.transition = 'transform 260ms cubic-bezier(0.2, 0, 0, 1)'
+        container.style.transform = `translateX(${distance}px)`
+        const onEnd = () => {
+          container.removeEventListener('transitionend', onEnd)
+          // Reset styles
+          container.style.transition = ''
+          container.style.transform = ''
+          container.style.willChange = ''
+          if (commitDir !== 0) {
+            const step = stepSizeByView[calendarView]
+            navigateByDelta(commitDir < 0 ? -step : step) // commitDir -1 means swipe right → previous
+          }
+        }
+        container.addEventListener('transitionend', onEnd, { once: true })
+      }
+
+      const onUp = (e: PointerEvent) => {
+        if (e.pointerId !== pointerId) return
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+        if (!engaged) {
+          // No swipe; ensure any tiny translation resets
+          finish(0)
+          return
+        }
+        const dx = e.clientX - startX
+        const dy = e.clientY - startY
+        if (Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy) * 1.1) {
+          // dx < 0 → next period; dx > 0 → previous period
+          finish(dx < 0 ? 1 : -1)
+        } else {
+          finish(0)
+        }
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+    }
+
     const jumpToDateAndShowWeek = (targetMidnightMs: number) => {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
@@ -6071,6 +6183,15 @@ useEffect(() => {
       const deltaDays = Math.round((targetMidnightMs - todayMs) / DAY_DURATION_MS)
       setHistoryDayOffset(deltaDays)
       setView('week')
+    }
+
+    const jumpToMonthView = (year: number, monthIndex: number) => {
+      const base = new Date(year, monthIndex, 1)
+      base.setHours(0, 0, 0, 0)
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const deltaDays = Math.round((base.getTime() - today.getTime()) / DAY_DURATION_MS)
+      setHistoryDayOffset(deltaDays)
+      setView('month')
     }
 
     const todayMidnightMs = (() => {
@@ -7435,35 +7556,144 @@ useEffect(() => {
     }
 
     if (calendarView === 'month') {
-      const firstOfMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
-      const lastOfMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0)
-      const start = new Date(firstOfMonth)
-      const startDow = start.getDay() // 0=Sun
-      start.setDate(start.getDate() - startDow)
-      const end = new Date(lastOfMonth)
-      const endDow = end.getDay()
-      end.setDate(end.getDate() + (6 - endDow))
-  const cells: any[] = []
       const headers = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-      const headerRow = (
-        <div className="calendar-week-headers" key="hdr">
-          {headers.map((h) => (
-            <div className="calendar-week-header" key={h} aria-hidden>
-              {h}
-            </div>
-          ))}
+      const buildMonthPanel = (baseDate: Date) => {
+        const firstOfMonth = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1)
+        const lastOfMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0)
+        const gridStart = new Date(firstOfMonth)
+        const offset = gridStart.getDay()
+        gridStart.setDate(gridStart.getDate() - offset)
+        const gridEnd = new Date(lastOfMonth)
+        const gridEndDow = gridEnd.getDay()
+        gridEnd.setDate(gridEnd.getDate() + (6 - gridEndDow))
+        const innerCells: ReactElement[] = []
+        innerCells.push(
+          <div className="calendar-week-headers" key={`hdr-${firstOfMonth.getMonth()}`}>
+            {headers.map((h) => (
+              <div className="calendar-week-header" key={h} aria-hidden>
+                {h}
+              </div>
+            ))}
+          </div>,
+        )
+        const iter2 = new Date(gridStart)
+        while (iter2 <= gridEnd) {
+          for (let i = 0; i < 7; i += 1) {
+            const current = new Date(iter2)
+            innerCells.push(renderCell(current, current.getMonth() === firstOfMonth.getMonth()))
+            iter2.setDate(iter2.getDate() + 1)
+          }
+        }
+        return (
+          <div className="calendar-carousel__panel" key={`panel-${firstOfMonth.getFullYear()}-${firstOfMonth.getMonth()}`}>
+            <div className="calendar-grid calendar-grid--month">{innerCells}</div>
+          </div>
+        )
+      }
+
+      const center = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
+      const prev = new Date(center)
+      prev.setMonth(prev.getMonth() - 1)
+      const next = new Date(center)
+      next.setMonth(next.getMonth() + 1)
+
+      const step = stepSizeByView[calendarView]
+      const handlePointerDown: any = (ev: ReactPointerEvent<HTMLDivElement>) => {
+        const container = ev.currentTarget as HTMLDivElement
+        const track = container.querySelector('.calendar-carousel__track') as HTMLDivElement | null
+        if (!track) return
+        if ((container as any).dataset.animating === '1') return
+        if ((container as any).dataset.animating === '1') return
+        const startX = ev.clientX
+        const startY = ev.clientY
+        const pointerId = ev.pointerId
+        let engaged = false
+        let captured = false
+        let raf = 0
+        const width = container.clientWidth
+        const base = -width
+        const thresholdPx = Math.max(24, Math.floor(width * 0.12))
+        let lastDx = 0
+        track.style.transition = 'none'
+        track.style.transform = `translateX(${base}px)`
+        track.style.willChange = 'transform'
+        const onMove = (e: PointerEvent) => {
+          if (e.pointerId !== pointerId) return
+          const dx = e.clientX - startX
+          const dy = e.clientY - startY
+          if (!engaged) {
+            if (Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+              engaged = true
+              container.classList.add('is-dragging')
+              if (!captured) { try { (container as any).setPointerCapture?.(pointerId) } catch {} captured = true }
+            } else {
+              return
+            }
+          }
+          lastDx = Math.max(-width, Math.min(width, dx))
+          if (!raf) {
+            raf = window.requestAnimationFrame(() => { raf = 0; track.style.transform = `translateX(${base + lastDx}px)` })
+          }
+          e.preventDefault(); e.stopPropagation()
+        }
+        const stopNextClick = (evt: MouseEvent) => { evt.preventDefault(); evt.stopPropagation(); window.removeEventListener('click', stopNextClick, true) }
+        const finish = (dir: -1 | 0 | 1) => {
+          if (raf) { window.cancelAnimationFrame(raf); raf = 0 }
+          ;(container as any).dataset.animating = '1'
+          const prevPointer = container.style.pointerEvents
+          container.style.pointerEvents = 'none'
+          track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
+          const target = dir === 0 ? base : base + dir * width
+          track.style.transform = `translateX(${target}px)`
+          const onEnd = () => {
+            track.removeEventListener('transitionend', onEnd)
+            track.style.transition = ''
+            track.style.transform = ''
+            track.style.willChange = ''
+            container.classList.remove('is-dragging')
+            setCalendarTitleOverride(null)
+            if (dir !== 0) {
+              // dir -1 (left) => next month; dir +1 (right) => previous month
+              const m = new Date(
+                anchorDate.getFullYear(),
+                anchorDate.getMonth() + (dir < 0 ? 1 : -1),
+                1,
+              )
+              m.setHours(0, 0, 0, 0)
+              const today = new Date(); today.setHours(0, 0, 0, 0)
+              const deltaDays = Math.round((m.getTime() - today.getTime()) / DAY_DURATION_MS)
+              setHistoryDayOffset(deltaDays)
+            }
+            delete (container as any).dataset.animating
+            container.style.pointerEvents = prevPointer
+          }
+          track.addEventListener('transitionend', onEnd, { once: true })
+        }
+        const onUp = (e: PointerEvent) => {
+          if (e.pointerId !== pointerId) return
+          window.removeEventListener('pointermove', onMove)
+          window.removeEventListener('pointerup', onUp)
+          window.removeEventListener('pointercancel', onUp)
+          if (captured) { try { (container as any).releasePointerCapture?.(pointerId) } catch {} }
+          if (!engaged) return
+          window.addEventListener('click', stopNextClick, true)
+          const commit = Math.abs(lastDx) > thresholdPx ? (lastDx < 0 ? -1 : 1) : 0
+          finish(commit)
+        }
+        window.addEventListener('pointermove', onMove)
+        window.addEventListener('pointerup', onUp)
+        window.addEventListener('pointercancel', onUp)
+      }
+
+      return (
+        <div className="calendar-carousel" onPointerDown={handlePointerDown}>
+          <div className="calendar-carousel__track">
+            {buildMonthPanel(prev)}
+            {buildMonthPanel(center)}
+            {buildMonthPanel(next)}
+          </div>
         </div>
       )
-      cells.push(headerRow)
-      const iter = new Date(start)
-      while (iter <= end) {
-        for (let i = 0; i < 7; i += 1) {
-          const current = new Date(iter)
-          cells.push(renderCell(current, current.getMonth() === anchorDate.getMonth()))
-          iter.setDate(iter.getDate() + 1)
-        }
-      }
-      return <div className="calendar-grid calendar-grid--month">{cells}</div>
     }
 
     if (calendarView === 'year') {
@@ -7474,56 +7704,163 @@ useEffect(() => {
         return t.getTime()
       })()
 
-      const months = Array.from({ length: 12 }).map((_, idx) => {
-        const firstOfMonth = new Date(year, idx, 1)
-        const label = firstOfMonth.toLocaleDateString(undefined, { month: 'short' })
-
-        // Build a 6x7 grid of days for consistent height
-        const start = new Date(firstOfMonth)
-        const startDow = start.getDay() // 0=Sun
-        start.setDate(start.getDate() - startDow)
-        const cells: ReactElement[] = []
-        for (let i = 0; i < 42; i += 1) {
-          const d = new Date(start)
-          d.setDate(start.getDate() + i)
-          d.setHours(0, 0, 0, 0)
-          const inMonth = d.getMonth() === idx
-          const isToday = d.getTime() === todayMidnight
-          const cell = (
-            <div
-              key={`y-${year}-${idx}-${i}`}
-              className={`calendar-month-day${inMonth ? '' : ' calendar-month-day--muted'}${isToday ? ' calendar-month-day--today' : ''}`}
-              aria-hidden={!inMonth}
-              role={inMonth ? 'button' : undefined}
-              tabIndex={inMonth ? 0 : -1}
-              onClick={inMonth ? () => jumpToDateAndShowWeek(d.getTime()) : undefined}
-              onKeyDown={inMonth ? (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  jumpToDateAndShowWeek(d.getTime())
-                }
-              } : undefined}
-            >
-              {inMonth ? d.getDate() : ''}
+      const buildYearPanel = (yr: number) => {
+        const months = Array.from({ length: 12 }).map((_, idx) => {
+          const firstOfMonth = new Date(yr, idx, 1)
+          const label = firstOfMonth.toLocaleDateString(undefined, { month: 'short' })
+          // Build a 6x7 grid of days for consistent height
+          const start = new Date(firstOfMonth)
+          const startDow = start.getDay() // 0=Sun
+          start.setDate(start.getDate() - startDow)
+          const cells: ReactElement[] = []
+          for (let i = 0; i < 42; i += 1) {
+            const d = new Date(start)
+            d.setDate(start.getDate() + i)
+            d.setHours(0, 0, 0, 0)
+            const inMonth = d.getMonth() === idx
+            const isToday = d.getTime() === todayMidnight
+            const cell = (
+              <div
+                key={`y-${yr}-${idx}-${i}`}
+                className={`calendar-month-day${inMonth ? '' : ' calendar-month-day--muted'}${isToday ? ' calendar-month-day--today' : ''}`}
+                aria-hidden={!inMonth}
+                role={inMonth ? 'button' : undefined}
+                tabIndex={inMonth ? 0 : -1}
+                onClick={inMonth ? () => jumpToDateAndShowWeek(d.getTime()) : undefined}
+                onKeyDown={inMonth ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    jumpToDateAndShowWeek(d.getTime())
+                  }
+                } : undefined}
+              >
+                {inMonth ? d.getDate() : ''}
+              </div>
+            )
+            cells.push(cell)
+          }
+          return (
+            <div key={`m-${yr}-${idx}`} className="calendar-year-cell">
+              <div
+                className="calendar-year-label"
+                role="button"
+                tabIndex={0}
+                onClick={() => jumpToMonthView(yr, idx)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jumpToMonthView(yr, idx) }
+                }}
+                title={`Open ${label} ${yr}`}
+              >
+                {label}
+              </div>
+              <div className="calendar-month-grid" role="grid" aria-label={`Calendar for ${label} ${yr}`}>
+                {cells}
+              </div>
             </div>
           )
-          cells.push(cell)
-        }
-
+        })
         return (
-          <div key={`m-${idx}`} className="calendar-year-cell">
-            <div className="calendar-year-label">{label}</div>
-            <div className="calendar-month-grid" role="grid" aria-label={`Calendar for ${label} ${year}`}>
-              {cells}
-            </div>
-          </div>
+          <div className="calendar-grid calendar-grid--year">{months}</div>
         )
-      })
-      return <div className="calendar-grid calendar-grid--year">{months}</div>
+      }
+
+      const prev = buildYearPanel(year - 1)
+      const curr = buildYearPanel(year)
+      const next = buildYearPanel(year + 1)
+      const step = stepSizeByView[calendarView]
+      const handlePointerDown: any = (ev: ReactPointerEvent<HTMLDivElement>) => {
+        const container = ev.currentTarget as HTMLDivElement
+        const track = container.querySelector('.calendar-carousel__track') as HTMLDivElement | null
+        if (!track) return
+        const width = container.clientWidth
+        const base = -width
+        const startX = ev.clientX
+        const startY = ev.clientY
+        const pointerId = ev.pointerId
+        let engaged = false
+        let lastDx = 0
+        let captured = false
+        let raf = 0
+        const thresholdPx = Math.max(24, Math.floor(width * 0.12))
+        track.style.transition = 'none'
+        track.style.transform = `translateX(${base}px)`
+        track.style.willChange = 'transform'
+        const onMove = (e: PointerEvent) => {
+          if (e.pointerId !== pointerId) return
+          const dx = e.clientX - startX
+          const dy = e.clientY - startY
+          if (!engaged) {
+            if (Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+              engaged = true
+              container.classList.add('is-dragging')
+              if (!captured) { try { (container as any).setPointerCapture?.(pointerId) } catch {} captured = true }
+            } else {
+              return
+            }
+          }
+          lastDx = Math.max(-width, Math.min(width, dx))
+          if (!raf) { raf = window.requestAnimationFrame(() => { raf = 0; track.style.transform = `translateX(${base + lastDx}px)` }) }
+          e.preventDefault(); e.stopPropagation()
+        }
+        const stopNextClick = (evt: MouseEvent) => { evt.preventDefault(); evt.stopPropagation(); window.removeEventListener('click', stopNextClick, true) }
+        const finish = (dir: -1 | 0 | 1) => {
+          if (raf) { window.cancelAnimationFrame(raf); raf = 0 }
+          ;(container as any).dataset.animating = '1'
+          const prevPointer = container.style.pointerEvents
+          container.style.pointerEvents = 'none'
+          track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
+          const target = dir === 0 ? base : base + dir * width
+          track.style.transform = `translateX(${target}px)`
+          const onEnd = () => {
+            track.removeEventListener('transitionend', onEnd)
+            track.style.transition = ''
+            track.style.transform = ''
+            track.style.willChange = ''
+            setCalendarTitleOverride(null)
+            container.classList.remove('is-dragging')
+            if (dir !== 0) {
+              // dir -1 (left) => next year; dir +1 (right) => previous year
+              const y = year - dir
+              const targetDate = new Date(y, 0, 1)
+              targetDate.setHours(0, 0, 0, 0)
+              const today = new Date(); today.setHours(0, 0, 0, 0)
+              const deltaDays = Math.round((targetDate.getTime() - today.getTime()) / DAY_DURATION_MS)
+              setHistoryDayOffset(deltaDays)
+            }
+            delete (container as any).dataset.animating
+            container.style.pointerEvents = prevPointer
+          }
+          track.addEventListener('transitionend', onEnd, { once: true })
+        }
+        const onUp = (e: PointerEvent) => {
+          if (e.pointerId !== pointerId) return
+          window.removeEventListener('pointermove', onMove)
+          window.removeEventListener('pointerup', onUp)
+          window.removeEventListener('pointercancel', onUp)
+          if (captured) { try { (container as any).releasePointerCapture?.(pointerId) } catch {} }
+          if (!engaged) return
+          window.addEventListener('click', stopNextClick, true)
+          const commit = Math.abs(lastDx) > thresholdPx ? (lastDx < 0 ? -1 : 1) : 0
+          finish(commit)
+        }
+        window.addEventListener('pointermove', onMove)
+        window.addEventListener('pointerup', onUp)
+        window.addEventListener('pointercancel', onUp)
+      }
+
+      return (
+        <div className="calendar-carousel" onPointerDown={handlePointerDown}>
+          <div className="calendar-carousel__track">
+            <div className="calendar-carousel__panel">{prev}</div>
+            <div className="calendar-carousel__panel">{curr}</div>
+            <div className="calendar-carousel__panel">{next}</div>
+          </div>
+        </div>
+      )
     }
 
     return null
-  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, resetCalendarPanTransform, stopCalendarPanAnimation, repeatingRules, setView, setHistoryDayOffset])
+  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, resetCalendarPanTransform, stopCalendarPanAnimation, repeatingRules, setView, setHistoryDayOffset, navigateByDelta, stepSizeByView])
 
   // Simple inline icons for popover actions
   const IconEdit = () => (
