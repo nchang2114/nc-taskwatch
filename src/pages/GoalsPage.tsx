@@ -526,7 +526,7 @@ const findActivationCaretOffset = (
 }
 
 // Precisely place caret in a textarea under a client point using a mirror element.
-function setTextareaCaretFromPoint(field: HTMLTextAreaElement, clientX: number, clientY: number): void {
+export function setTextareaCaretFromPoint(field: HTMLTextAreaElement, clientX: number, clientY: number): void {
   try {
     const rect = field.getBoundingClientRect()
     const cs = window.getComputedStyle(field)
@@ -4559,27 +4559,18 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                         timers.delete(subDeleteKey)
                                                       }
                                                       onRevealDeleteTask(null)
-                                                      setEditingSubtaskKey(`${task.id}:${subtask.id}`)
                                                       try {
                                                         const target = event.target as HTMLElement
                                                         const field = target.closest('textarea.goal-task-details__subtask-input') as HTMLTextAreaElement | null
                                                         if (field) {
-                                                          const alreadyFocused = document.activeElement === field
-                                                          if (!alreadyFocused) {
-                                                            event.preventDefault()
-                                                            window.setTimeout(() => setTextareaCaretFromPoint(field, event.clientX, event.clientY), 0)
-                                                          } else {
-                                                            window.setTimeout(() => field.focus({ preventScroll: true }), 0)
-                                                          }
-                                                        } else {
-                                                          const el = document.getElementById(
-                                                            makeGoalSubtaskInputId(task.id, subtask.id),
-                                                          ) as HTMLTextAreaElement | null
-                                                          if (el) {
-                                                            event.preventDefault()
-                                                            setTextareaCaretFromPoint(el, event.clientX, event.clientY)
-                                                          }
+                                                          // Let browser handle caret; just ensure focus
+                                                          field.focus({ preventScroll: true } as any)
+                                                          return
                                                         }
+                                                        const el = document.getElementById(
+                                                          makeGoalSubtaskInputId(task.id, subtask.id),
+                                                        ) as HTMLTextAreaElement | null
+                                                        el?.focus({ preventScroll: true } as any)
                                                       } catch {}
                                                     }}
                                                   >
@@ -4602,7 +4593,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                       rows={1}
                                                         ref={(el) => autosizeTextArea(el)}
                                                       value={subtask.text}
-                                                      readOnly={editingSubtaskKey !== `${task.id}:${subtask.id}` && subtask.text.trim().length > 0}
+                                                      readOnly={false}
                                                       onChange={(event) => {
                                                         const el = event.currentTarget
                                                         // auto-resize height
@@ -4611,16 +4602,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                         handleSubtaskTextChange(task.id, subtask.id, event.target.value)
                                                       }}
                                                       onClick={(event) => {
+                                                        // Let the browser place caret naturally; just stop bubbling
                                                         event.stopPropagation()
-                                                        if (editingSubtaskKey !== `${task.id}:${subtask.id}`) {
-                                                          setEditingSubtaskKey(`${task.id}:${subtask.id}`)
-                                                          if (typeof window !== 'undefined') {
-                                                            const el = event.currentTarget
-                                                            window.setTimeout(() =>
-                                                              setTextareaCaretFromPoint(el, (event as any).clientX, (event as any).clientY),
-                                                            0)
-                                                          }
-                                                        }
                                                       }}
                                                       onKeyDown={(event) => {
                                                         // Enter commits a new subtask; Shift+Enter inserts newline
@@ -5229,18 +5212,17 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                         timers.delete(subDeleteKey)
                                                       }
                                                       onRevealDeleteTask(null)
-                                                      setEditingSubtaskKey(`${task.id}:${subtask.id}`)
                                                       try {
                                                         const target = event.target as HTMLElement
                                                         const field = target.closest('textarea.goal-task-details__subtask-input') as HTMLTextAreaElement | null
                                                         if (field) {
-                                                          window.setTimeout(() => field.focus({ preventScroll: true }), 0)
-                                                        } else {
-                                                          const el = document.getElementById(
-                                                            makeGoalSubtaskInputId(task.id, subtask.id),
-                                                          ) as HTMLTextAreaElement | null
-                                                          el?.focus({ preventScroll: true })
+                                                          field.focus({ preventScroll: true } as any)
+                                                          return
                                                         }
+                                                        const el = document.getElementById(
+                                                          makeGoalSubtaskInputId(task.id, subtask.id),
+                                                        ) as HTMLTextAreaElement | null
+                                                        el?.focus({ preventScroll: true } as any)
                                                       } catch {}
                                                     }}
                                                   >
@@ -5263,7 +5245,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                       rows={1}
                                                         ref={(el) => autosizeTextArea(el)}
                                                       value={subtask.text}
-                                                      readOnly={editingSubtaskKey !== `${task.id}:${subtask.id}` && subtask.text.trim().length > 0}
+                                                      readOnly={false}
                                                       onChange={(event) => {
                                                         const el = event.currentTarget
                                                         el.style.height = 'auto'
@@ -5272,15 +5254,6 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                       }}
                                                       onClick={(event) => {
                                                         event.stopPropagation()
-                                                        if (editingSubtaskKey !== `${task.id}:${subtask.id}`) {
-                                                          setEditingSubtaskKey(`${task.id}:${subtask.id}`)
-                                                          if (typeof window !== 'undefined') {
-                                                            const el = event.currentTarget
-                                                            window.setTimeout(() =>
-                                                              setTextareaCaretFromPoint(el, (event as any).clientX, (event as any).clientY),
-                                                            0)
-                                                          }
-                                                        }
                                                       }}
                                                       onKeyDown={(event) => {
                                                         if (event.key === 'Enter' && !event.shiftKey) {

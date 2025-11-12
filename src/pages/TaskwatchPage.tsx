@@ -1597,6 +1597,24 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     },
     [apiUpsertTaskSubtask, cancelNotebookSubtaskPersist, refreshGoalsSnapshotFromSupabase],
   )
+  const flushNotebookSubtaskPersist = useCallback(
+    (taskId: string, subtask: NotebookSubtask) => {
+      if (!taskId) return
+      cancelNotebookSubtaskPersist(taskId, subtask.id)
+      if (subtask.text.trim().length === 0) return
+      const payload = {
+        id: subtask.id,
+        text: subtask.text,
+        completed: subtask.completed,
+        sort_index: subtask.sortIndex,
+        updated_at: subtask.updatedAt ?? new Date().toISOString(),
+      }
+      void apiUpsertTaskSubtask(taskId, payload).catch((error) =>
+        console.warn('[Taskwatch] Failed to flush subtask on blur:', error),
+      )
+    },
+    [apiUpsertTaskSubtask, cancelNotebookSubtaskPersist],
+  )
   const notebookSubtasksToSnapshot = useCallback(
     (subtasks: NotebookSubtask[]): GoalTaskSnapshot['subtasks'] =>
       subtasks
@@ -2098,9 +2116,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     if (!activeTaskId) {
       return
     }
-    if (notebookHydrationBlockRef.current > Date.now()) {
-      return
-    }
     let snapshotTask: GoalTaskSnapshot | null = null
     outer: for (let goalIndex = 0; goalIndex < goalsSnapshot.length; goalIndex += 1) {
       const goal = goalsSnapshot[goalIndex]
@@ -2116,11 +2131,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     if (!snapshotTask) {
       return
     }
+    const snapSubs = snapshotSubtasksToNotebook(snapshotTask.subtasks ?? [])
+    // Preserve local notes, always mirror subtasks from snapshot so deletes/adds apply immediately
+    const localEntry = notebookState[notebookKey] ?? createNotebookEntry()
     const entryFromSnapshot: NotebookEntry = {
-      notes: typeof snapshotTask.notes === 'string' ? snapshotTask.notes : '',
-      subtasks: snapshotSubtasksToNotebook(snapshotTask.subtasks ?? []),
+      notes: localEntry.notes,
+      subtasks: snapSubs,
     }
-    // Note the source of this change so downstream effects don't persist it to DB
+    // Always allow subtasks hydration; we preserved local notes above
     notebookChangeFromSnapshotRef.current = true
     const result = updateNotebookForKey(notebookKey, (entry) =>
       areNotebookEntriesEqual(entry, entryFromSnapshot) ? entry : entryFromSnapshot,
@@ -2141,6 +2159,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     areNotebookEntriesEqual,
     goalsSnapshot,
     notebookKey,
+    notebookState,
     snapshotSubtasksToNotebook,
     updateFocusSourceFromEntry,
     updateNotebookForKey,
@@ -2507,6 +2526,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         // Publish on blur even if no structural change (commit point)
         if (linkedTaskId) {
           updateGoalSnapshotTask(linkedTaskId, entryToPublish, true)
+          // Also flush latest subtask edit for this id to DB on blur
+          const updated = entryToPublish.subtasks.find((s) => s.id === subtaskId)
+          if (updated) {
+            flushNotebookSubtaskPersist(linkedTaskId, updated)
+          }
           if (DEBUG_SYNC) {
             console.debug('[Sync][Taskwatch] subtask blur publish (no structural change)', {
               taskId: linkedTaskId,
