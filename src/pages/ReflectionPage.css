@@ -2427,10 +2427,33 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
 
 .calendar-time-label {
   position: absolute;
+  /* Stretch to the right edge so the hour stub can align
+     with the day grid boundary regardless of label width. */
   left: 0.25rem;
+  right: 0; /* allow ::after to anchor to the axis/right edge */
   transform: translateY(-50%);
-  font-size: 0.75rem;
+  font-size: 0.75rem; /* revert to default size */
   color: var(--text-secondary);
+  text-align: right; /* align numbers toward the grid edge */
+  padding-right: 10px; /* leave room for the shorter stub */
+}
+
+/* Subtle stub that extends the hour gridline into the time axis */
+.calendar-time-label::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0; /* sit flush against the day grid boundary */
+  transform: translateY(-50%);
+  height: 1px;
+  width: 8px; /* shorter extension into the label gutter */
+  background: rgba(124, 138, 220, 0.2);
+  pointer-events: none;
+}
+
+/* Match light theme gridline color for the stubs */
+html[data-theme='light'] .calendar-time-label::after {
+  background: rgba(160, 172, 236, 0.2);
 }
 
 .calendar-days-area {

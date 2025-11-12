@@ -6903,11 +6903,11 @@ useEffect(() => {
 
       const hours = Array.from({ length: 25 }).map((_, h) => h) // 0..24 (24 for bottom line)
       const body = (
-        <div className="calendar-vertical__body">
+          <div className="calendar-vertical__body">
           <div className="calendar-time-axis" aria-hidden>
             {hours.map((h) => (
               <div key={`t-${h}`} className="calendar-time-label" style={{ top: `${(h / 24) * 100}%` }}>
-                {h < 24 ? formatHourLabel(h) : ''}
+                {h > 0 && h < 24 ? formatHourLabel(h) : ''}
               </div>
             ))}
           </div>
