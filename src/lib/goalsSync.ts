@@ -171,6 +171,16 @@ export const publishGoalsSnapshot = (snapshot: GoalSnapshot[]) => {
   if (typeof window === 'undefined') {
     return
   }
+  // Visible publish log to aid cross-page debugging
+  try {
+    const subtaskCount = snapshot.reduce(
+      (sum, g) =>
+        sum + g.buckets.reduce((s, b) => s + b.tasks.reduce((t, task) => t + ((task.subtasks?.length) || 0), 0), 0),
+      0,
+    )
+    // Use console.log so it shows in default filters
+    console.log('[Sync][Goals][Publish] snapshot', { goals: snapshot.length, subtasks: subtaskCount })
+  } catch {}
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot))
   } catch {

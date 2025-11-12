@@ -4541,11 +4541,20 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                       isSubDeleteRevealed && 'goal-task-details__subtask--delete-revealed',
                                                     )}
                                                     onClick={(event) => {
-                                                      // Left-click no longer reveals delete; only right-click does.
                                                       event.stopPropagation()
+                                                      const timers = subtaskClickTimersRef.current
+                                                      const existing = timers.get(subDeleteKey)
+                                                      if (existing) {
+                                                        window.clearTimeout(existing)
+                                                        timers.delete(subDeleteKey)
+                                                      }
+                                                      const tid = window.setTimeout(() => {
+                                                        onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
+                                                        timers.delete(subDeleteKey)
+                                                      }, 200)
+                                                      timers.set(subDeleteKey, tid)
                                                     }}
                                                     onContextMenu={(event) => {
-                                                      // Right-click toggles delete reveal
                                                       event.preventDefault()
                                                       event.stopPropagation()
                                                       onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
@@ -5197,6 +5206,17 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                     )}
                                                     onClick={(event) => {
                                                       event.stopPropagation()
+                                                      const timers = subtaskClickTimersRef.current
+                                                      const existing = timers.get(subDeleteKey)
+                                                      if (existing) {
+                                                        window.clearTimeout(existing)
+                                                        timers.delete(subDeleteKey)
+                                                      }
+                                                      const tid = window.setTimeout(() => {
+                                                        onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
+                                                        timers.delete(subDeleteKey)
+                                                      }, 200)
+                                                      timers.set(subDeleteKey, tid)
                                                     }}
                                                     onContextMenu={(event) => {
                                                       event.preventDefault()
@@ -5535,7 +5555,7 @@ export default function GoalsPage(): ReactElement {
           sum + g.buckets.reduce((s, b) => s + b.tasks.reduce((t, task) => t + ((task.subtasks?.length) || 0), 0), 0),
         0,
       )
-      console.debug('[Sync][Goals][Publish] snapshot', { goals: goals.length, subtasks: subtaskCount })
+      console.log('[Sync][Goals][Publish] snapshot', { goals: goals.length, subtasks: subtaskCount })
     } catch {}
     publishGoalsSnapshot(snapshot)
   }, [goals])
@@ -6677,6 +6697,9 @@ export default function GoalsPage(): ReactElement {
       const currentDetails = taskDetailsRef.current[taskId] ?? createTaskDetails()
       const sortIndex = getNextSubtaskSortIndex(currentDetails.subtasks ?? [])
       const newSubtask = createEmptySubtask(sortIndex)
+      try {
+        console.log('[Sync][Goals] add subtask', { taskId, subtaskId: newSubtask.id })
+      } catch {}
       updateTaskDetails(taskId, (current) => ({
         ...current,
         expanded: true,
@@ -6762,6 +6785,9 @@ export default function GoalsPage(): ReactElement {
       }
       const trimmed = existing.text.trim()
       if (trimmed.length === 0) {
+        try {
+          console.log('[Sync][Goals] remove subtask (empty on blur)', { taskId, subtaskId })
+        } catch {}
         subtaskDeletedRef.current.add(`${taskId}:${subtaskId}`)
         updateTaskDetails(taskId, (current) => ({
           ...current,
@@ -6932,7 +6958,7 @@ export default function GoalsPage(): ReactElement {
         return
       }
       try {
-        console.debug('[Sync][Goals] remove subtask', { taskId, subtaskId })
+        console.log('[Sync][Goals] remove subtask', { taskId, subtaskId })
       } catch {}
       subtaskDeletedRef.current.add(`${taskId}:${subtaskId}`)
       updateGoalTaskSubtasks(taskId, (current) => current.filter((item) => item.id !== subtaskId))
