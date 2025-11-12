@@ -172,86 +172,7 @@ const autosizeTextArea = (el: HTMLTextAreaElement | null) => {
   } catch {}
 }
 
-// Precisely place caret in a textarea under a client point using a mirror element.
-function setTextareaCaretFromPoint(field: HTMLTextAreaElement, clientX: number, clientY: number): void {
-  try {
-    const rect = field.getBoundingClientRect()
-    const cs = window.getComputedStyle(field)
-    const mirror = document.createElement('div')
-    mirror.style.position = 'fixed'
-    mirror.style.left = `${rect.left}px`
-    mirror.style.top = `${rect.top}px`
-    mirror.style.width = `${rect.width}px`
-    mirror.style.visibility = 'hidden'
-    mirror.style.whiteSpace = 'pre-wrap'
-    mirror.style.wordWrap = 'break-word'
-    mirror.style.overflowWrap = 'break-word'
-    mirror.style.boxSizing = cs.boxSizing as string
-    mirror.style.padding = cs.padding
-    mirror.style.border = cs.border
-    mirror.style.fontFamily = cs.fontFamily
-    mirror.style.fontSize = cs.fontSize
-    mirror.style.fontWeight = cs.fontWeight as string
-    mirror.style.fontStyle = cs.fontStyle
-    mirror.style.letterSpacing = cs.letterSpacing
-    mirror.style.lineHeight = cs.lineHeight
-    mirror.style.tabSize = cs.tabSize
-    mirror.style.pointerEvents = 'none'
-
-    const host = document.createElement('div')
-    mirror.appendChild(host)
-    const text = field.value
-    const len = text.length
-    const markers: HTMLSpanElement[] = []
-    for (let i = 0; i <= len; i += 1) {
-      const mark = document.createElement('span')
-      mark.style.display = 'inline-block'
-      mark.style.width = '0px'
-      mark.style.height = '1em'
-      mark.dataset.index = String(i)
-      host.appendChild(mark)
-      markers.push(mark)
-      if (i < len) {
-        const ch = text[i]
-        if (ch === '\n') {
-          host.appendChild(document.createElement('br'))
-        } else {
-          host.appendChild(document.createTextNode(ch))
-        }
-      }
-    }
-    document.body.appendChild(mirror)
-    let bestIndex = len
-    let bestDist = Number.POSITIVE_INFINITY
-    const targetX = clientX
-    const targetY = clientY
-    for (let i = 0; i < markers.length; i += 1) {
-      const r = markers[i].getBoundingClientRect()
-      const cx = r.left
-      const cy = r.top + r.height / 2
-      const dx = cx - targetX
-      const dy = cy - targetY
-      const d = dx * dx + dy * dy
-      if (d < bestDist) {
-        bestDist = d
-        bestIndex = i
-      }
-    }
-    document.body.removeChild(mirror)
-    try {
-      field.focus({ preventScroll: true })
-    } catch {
-      field.focus()
-    }
-    field.setSelectionRange(bestIndex, bestIndex)
-  } catch {
-    try {
-      field.focus()
-      const end = field.value.length
-      field.setSelectionRange(end, end)
-    } catch {}
-  }
-}
+// removed unused helper
 
 // (hook moved into TaskwatchPage component body)
 
@@ -2253,8 +2174,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     ],
   )
   const pendingNotebookSubtaskFocusRef = useRef<{ notebookKey: string; subtaskId: string } | null>(null)
-  // UI-only: single vs double click handling for subtask rows, and delete reveal
-  const subtaskClickTimersRef = useRef<Map<string, number>>(new Map())
+  // UI-only: delete reveal state
   const [revealedNotebookDeleteKey, setRevealedNotebookDeleteKey] = useState<string | null>(null)
   const previousNotebookSubtaskIdsRef = useRef<Set<string>>(new Set())
   const notebookSubtaskIdsInitializedRef = useRef(false)
@@ -2805,35 +2725,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                     setRevealedNotebookDeleteKey(isSubDeleteRevealed ? null : subDeleteKey)
                   }}
                   onDoubleClick={(event) => {
+                    // Do not interfere with native selection behavior
                     event.stopPropagation()
-                    const timers = subtaskClickTimersRef.current
-                    const existing = timers.get(subDeleteKey)
-                    if (existing) {
-                      window.clearTimeout(existing)
-                      timers.delete(subDeleteKey)
-                    }
                     setRevealedNotebookDeleteKey(null)
-                    try {
-                      const target = event.target as HTMLElement
-                      const field = target.closest('textarea.goal-task-details__subtask-input') as HTMLTextAreaElement | null
-                      if (field) {
-                        const alreadyFocused = document.activeElement === field
-                        if (!alreadyFocused) {
-                          event.preventDefault()
-                          window.setTimeout(() => setTextareaCaretFromPoint(field, event.clientX, event.clientY), 0)
-                        } else {
-                          window.setTimeout(() => field.focus({ preventScroll: true }), 0)
-                        }
-                      } else {
-                        const el = document.getElementById(
-                          makeNotebookSubtaskInputId(notebookKey, subtask.id),
-                        ) as HTMLTextAreaElement | null
-                        if (el) {
-                          event.preventDefault()
-                          setTextareaCaretFromPoint(el, event.clientX, event.clientY)
-                        }
-                      }
-                    } catch {}
                   }}
                 >
                   <label className="goal-task-details__subtask-item">
@@ -2863,10 +2757,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                          handleNotebookSubtaskTextChange(subtask.id, event.target.value)
                         }}
                         onClick={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => {
-                          event.stopPropagation()
-                          setTextareaCaretFromPoint(event.currentTarget, event.clientX, event.clientY)
-                        }}
                         onPointerDown={(event) => event.stopPropagation()}
                         onKeyDown={(event) => {
                           // Enter commits a new subtask; Shift+Enter inserts newline

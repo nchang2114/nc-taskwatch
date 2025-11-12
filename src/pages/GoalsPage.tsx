@@ -5529,6 +5529,14 @@ export default function GoalsPage(): ReactElement {
     const snapshot = createGoalsSnapshot(goals)
     const signature = computeSnapshotSignature(snapshot)
     lastSnapshotSignatureRef.current = signature
+    try {
+      const subtaskCount = goals.reduce(
+        (sum, g) =>
+          sum + g.buckets.reduce((s, b) => s + b.tasks.reduce((t, task) => t + ((task.subtasks?.length) || 0), 0), 0),
+        0,
+      )
+      console.debug('[Sync][Goals][Publish] snapshot', { goals: goals.length, subtasks: subtaskCount })
+    } catch {}
     publishGoalsSnapshot(snapshot)
   }, [goals])
 
@@ -6923,6 +6931,9 @@ export default function GoalsPage(): ReactElement {
       if (!removed) {
         return
       }
+      try {
+        console.debug('[Sync][Goals] remove subtask', { taskId, subtaskId })
+      } catch {}
       subtaskDeletedRef.current.add(`${taskId}:${subtaskId}`)
       updateGoalTaskSubtasks(taskId, (current) => current.filter((item) => item.id !== subtaskId))
       cancelPendingSubtaskSave(taskId, subtaskId)
