@@ -4609,18 +4609,13 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                       rows={1}
                                                         ref={(el) => autosizeTextArea(el)}
                                                       value={subtask.text}
-                                                      readOnly={editingSubtaskKey !== `${task.id}:${subtask.id}`}
+                                                      readOnly={editingSubtaskKey !== `${task.id}:${subtask.id}` && subtask.text.trim().length > 0}
                                                       onChange={(event) => {
                                                         const el = event.currentTarget
                                                         // auto-resize height
                                                         el.style.height = 'auto'
                                                         el.style.height = `${el.scrollHeight}px`
                                                         handleSubtaskTextChange(task.id, subtask.id, event.target.value)
-                                                      }}
-                                                      onInput={(event) => {
-                                                        const el = event.currentTarget
-                                                        el.style.height = 'auto'
-                                                        el.style.height = `${el.scrollHeight}px`
                                                       }}
                                                       onKeyDown={(event) => {
                                                         // Enter commits a new subtask; Shift+Enter inserts newline
@@ -4646,6 +4641,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                         const el = event.currentTarget
                                                         el.style.height = 'auto'
                                                         el.style.height = `${el.scrollHeight}px`
+                                                        // auto-enter edit mode for new/empty subtasks so typing continues past 1 char
+                                                        if (subtask.text.trim().length === 0 && editingSubtaskKey !== `${task.id}:${subtask.id}`) {
+                                                          setEditingSubtaskKey(`${task.id}:${subtask.id}`)
+                                                        }
                                                       }}
                                                       onBlur={() => {
                                                         handleSubtaskBlur(task.id, subtask.id)
@@ -5268,17 +5267,12 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                       rows={1}
                                                         ref={(el) => autosizeTextArea(el)}
                                                       value={subtask.text}
-                                                      readOnly={editingSubtaskKey !== `${task.id}:${subtask.id}`}
+                                                      readOnly={editingSubtaskKey !== `${task.id}:${subtask.id}` && subtask.text.trim().length > 0}
                                                       onChange={(event) => {
                                                         const el = event.currentTarget
                                                         el.style.height = 'auto'
                                                         el.style.height = `${el.scrollHeight}px`
                                                         handleSubtaskTextChange(task.id, subtask.id, event.target.value)
-                                                      }}
-                                                      onInput={(event) => {
-                                                        const el = event.currentTarget
-                                                        el.style.height = 'auto'
-                                                        el.style.height = `${el.scrollHeight}px`
                                                       }}
                                                       onKeyDown={(event) => {
                                                         if (event.key === 'Enter' && !event.shiftKey) {
@@ -5301,6 +5295,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                         const el = event.currentTarget
                                                         el.style.height = 'auto'
                                                         el.style.height = `${el.scrollHeight}px`
+                                                        if (subtask.text.trim().length === 0 && editingSubtaskKey !== `${task.id}:${subtask.id}`) {
+                                                          setEditingSubtaskKey(`${task.id}:${subtask.id}`)
+                                                        }
                                                       }}
                                                       onBlur={() => {
                                                         handleSubtaskBlur(task.id, subtask.id)
@@ -5975,19 +5972,33 @@ export default function GoalsPage(): ReactElement {
   const taskNotesEditedAtRef = useRef<Map<string, number>>(new Map())
   const subtaskSaveTimersRef = useRef<Map<string, number>>(new Map())
   const subtaskLatestRef = useRef<Map<string, TaskSubtask>>(new Map())
+  // Tombstones to guard against race: if an upsert completes after a delete, re-delete.
+  const subtaskDeletedRef = useRef<Set<string>>(new Set())
   const isMountedRef = useRef(true)
   const goalsRefreshInFlightRef = useRef(false)
   const goalsRefreshPendingRef = useRef(false)
 
+  const taskDetailsPersistTimerRef = useRef<number | null>(null)
+  const taskDetailsLatestPersistRef = useRef<TaskDetailsState>(taskDetails)
   useEffect(() => {
+    taskDetailsLatestPersistRef.current = taskDetails
     if (typeof window === 'undefined') {
       return
     }
-    try {
-      window.localStorage.setItem(TASK_DETAILS_STORAGE_KEY, JSON.stringify(taskDetails))
-    } catch {
-      // Ignore quota or storage errors silently
+    if (taskDetailsPersistTimerRef.current) {
+      window.clearTimeout(taskDetailsPersistTimerRef.current)
     }
+    taskDetailsPersistTimerRef.current = window.setTimeout(() => {
+      taskDetailsPersistTimerRef.current = null
+      try {
+        window.localStorage.setItem(
+          TASK_DETAILS_STORAGE_KEY,
+          JSON.stringify(taskDetailsLatestPersistRef.current),
+        )
+      } catch {
+        // Ignore quota or storage errors silently
+      }
+    }, 300)
   }, [taskDetails])
   useEffect(() => {
     taskDetailsRef.current = taskDetails
@@ -6556,6 +6567,12 @@ export default function GoalsPage(): ReactElement {
             ) {
               subtaskLatestRef.current.delete(key)
             }
+            // If this subtask was deleted while the upsert was in-flight, ensure deletion wins
+            if (subtaskDeletedRef.current.has(key)) {
+              void apiDeleteTaskSubtask(taskId, payload.id)
+                .catch((error) => console.warn('[GoalsPage] Re-delete subtask after upsert:', error))
+                .finally(() => subtaskDeletedRef.current.delete(key))
+            }
           })
           .catch((error) => console.warn('[GoalsPage] Failed to persist subtask:', error))
       }, 400)
@@ -6589,6 +6606,11 @@ export default function GoalsPage(): ReactElement {
             currentLatest.sortIndex === payload.sortIndex
           ) {
             subtaskLatestRef.current.delete(key)
+          }
+          if (subtaskDeletedRef.current.has(key)) {
+            void apiDeleteTaskSubtask(taskId, payload.id)
+              .catch((error) => console.warn('[GoalsPage] Re-delete subtask after flush:', error))
+              .finally(() => subtaskDeletedRef.current.delete(key))
           }
         })
         .catch((error) => console.warn('[GoalsPage] Failed to persist subtask:', error))
@@ -6674,6 +6696,7 @@ export default function GoalsPage(): ReactElement {
       }))
       updateGoalTaskSubtasks(taskId, (current) => [...current, newSubtask])
       if (options?.focus) {
+        // Mark this subtask to receive focus immediately after render
         pendingGoalSubtaskFocusRef.current = { taskId, subtaskId: newSubtask.id }
       }
     },
@@ -6691,14 +6714,25 @@ export default function GoalsPage(): ReactElement {
     const inputId = makeGoalSubtaskInputId(pending.taskId, pending.subtaskId)
     let attempts = 0
     const tryFocus = () => {
-      const input = document.getElementById(inputId) as HTMLInputElement | null
+      const input = document.getElementById(inputId) as HTMLTextAreaElement | null
       if (input) {
-        input.focus()
-        input.select()
+        try {
+          input.focus({ preventScroll: true })
+        } catch {
+          input.focus()
+        }
+        try {
+          const end = input.value.length
+          input.setSelectionRange(end, end)
+        } catch {
+          try {
+            input.select()
+          } catch {}
+        }
         pendingGoalSubtaskFocusRef.current = null
         return
       }
-      if (typeof window.requestAnimationFrame === 'function' && attempts < 2) {
+      if (typeof window.requestAnimationFrame === 'function' && attempts < 8) {
         attempts += 1
         window.requestAnimationFrame(tryFocus)
       } else {
@@ -6721,16 +6755,13 @@ export default function GoalsPage(): ReactElement {
         expanded: true,
         subtasks: current.subtasks.map((item) => (item.id === subtaskId ? updated : item)),
       }))
-      updateGoalTaskSubtasks(taskId, (current) =>
-        current.map((item) => (item.id === subtaskId ? updated : item)),
-      )
       if (value.trim().length > 0) {
         scheduleSubtaskPersist(taskId, updated)
       } else {
         cancelPendingSubtaskSave(taskId, subtaskId)
       }
     },
-    [cancelPendingSubtaskSave, scheduleSubtaskPersist, updateGoalTaskSubtasks, updateTaskDetails],
+    [cancelPendingSubtaskSave, scheduleSubtaskPersist, updateTaskDetails],
   )
 
   const handleSubtaskBlur = useCallback(
@@ -6742,6 +6773,7 @@ export default function GoalsPage(): ReactElement {
       }
       const trimmed = existing.text.trim()
       if (trimmed.length === 0) {
+        subtaskDeletedRef.current.add(`${taskId}:${subtaskId}`)
         updateTaskDetails(taskId, (current) => ({
           ...current,
           subtasks: current.subtasks.filter((item) => item.id !== subtaskId),
@@ -6910,6 +6942,7 @@ export default function GoalsPage(): ReactElement {
       if (!removed) {
         return
       }
+      subtaskDeletedRef.current.add(`${taskId}:${subtaskId}`)
       updateGoalTaskSubtasks(taskId, (current) => current.filter((item) => item.id !== subtaskId))
       cancelPendingSubtaskSave(taskId, subtaskId)
       void apiDeleteTaskSubtask(taskId, subtaskId).catch((error) =>
