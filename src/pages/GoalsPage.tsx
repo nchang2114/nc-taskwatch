@@ -6942,21 +6942,16 @@ export default function GoalsPage(): ReactElement {
 
   const handleRemoveSubtask = useCallback(
     (taskId: string, subtaskId: string) => {
-      let removed = false
       updateTaskDetails(taskId, (current) => {
         const nextSubtasks = current.subtasks.filter((item) => item.id !== subtaskId)
         if (nextSubtasks.length === current.subtasks.length) {
           return current
         }
-        removed = true
         return {
           ...current,
           subtasks: nextSubtasks,
         }
       })
-      if (!removed) {
-        return
-      }
       try {
         console.log('[Sync][Goals] remove subtask', { taskId, subtaskId })
       } catch {}
