@@ -5655,6 +5655,13 @@ useEffect(() => {
       track.style.transition = 'none'
       track.style.willChange = 'transform'
       track.style.transform = `translateX(${baseX}px)`
+      // Show target title during animation
+      if (calendarView === 'month') {
+        const previewMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth() - 1, 1)
+        setCalendarTitleOverride(previewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }))
+      } else {
+        setCalendarTitleOverride(String(anchorDate.getFullYear() - 1))
+      }
       // Animate to the right (dir = +1)
       const target = baseX + 1 * width
       requestAnimationFrame(() => {
@@ -5674,6 +5681,7 @@ useEffect(() => {
         } else {
           setHistoryDayOffset(deltaDays)
         }
+        setCalendarTitleOverride(null)
         // After new content mounts, snap track back to base without anim
         requestAnimationFrame(() => {
           const latestTrack = monthYearCarouselRef.current?.querySelector('.calendar-carousel__track') as HTMLDivElement | null
@@ -5724,6 +5732,13 @@ useEffect(() => {
       track.style.transition = 'none'
       track.style.willChange = 'transform'
       track.style.transform = `translateX(${baseX}px)`
+      // Show target title during animation
+      if (calendarView === 'month') {
+        const previewMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 1)
+        setCalendarTitleOverride(previewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }))
+      } else {
+        setCalendarTitleOverride(String(anchorDate.getFullYear() + 1))
+      }
       // Animate to the left (dir = -1)
       const target = baseX - 1 * width
       requestAnimationFrame(() => {
@@ -5743,6 +5758,7 @@ useEffect(() => {
         } else {
           setHistoryDayOffset(deltaDays)
         }
+        setCalendarTitleOverride(null)
         // After new content mounts, snap track back to base without anim
         requestAnimationFrame(() => {
           const latestTrack = monthYearCarouselRef.current?.querySelector('.calendar-carousel__track') as HTMLDivElement | null
@@ -7732,6 +7748,20 @@ useEffect(() => {
           if (!raf) {
             raf = window.requestAnimationFrame(() => { raf = 0; track.style.transform = `translateX(${base + lastDx}px)` })
           }
+          // Live preview the title once the gesture would commit
+          const absDx = Math.abs(lastDx)
+          if (absDx > thresholdPx) {
+            const dir: -1 | 1 = lastDx < 0 ? -1 : 1
+            const previewMonth = new Date(
+              anchorDate.getFullYear(),
+              anchorDate.getMonth() + (dir < 0 ? 1 : -1),
+              1,
+            )
+            const previewLabel = previewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+            setCalendarTitleOverride(previewLabel)
+          } else {
+            setCalendarTitleOverride(null)
+          }
           e.preventDefault(); e.stopPropagation()
         }
         const stopNextClick = (evt: MouseEvent) => { evt.preventDefault(); evt.stopPropagation(); window.removeEventListener('click', stopNextClick, true) }
@@ -7740,6 +7770,16 @@ useEffect(() => {
           ;(container as any).dataset.animating = '1'
           const prevPointer = container.style.pointerEvents
           container.style.pointerEvents = 'none'
+          // Preview the target month title during the slide
+          if (dir !== 0) {
+            const previewMonth = new Date(
+              anchorDate.getFullYear(),
+              anchorDate.getMonth() + (dir < 0 ? 1 : -1),
+              1,
+            )
+            const previewLabel = previewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+            setCalendarTitleOverride(previewLabel)
+          }
           track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
           const target = dir === 0 ? base : base + dir * width
           track.style.transform = `translateX(${target}px)`
@@ -7749,7 +7789,6 @@ useEffect(() => {
             track.style.transition = ''
             track.style.willChange = ''
             container.classList.remove('is-dragging')
-            setCalendarTitleOverride(null)
             if (dir !== 0) {
               // dir -1 (left) => next month; dir +1 (right) => previous month
               const m = new Date(
@@ -7765,6 +7804,8 @@ useEffect(() => {
               } else {
                 setHistoryDayOffset(deltaDays)
               }
+              // Clear title override now that the anchorDate has been updated
+              setCalendarTitleOverride(null)
               // After the new content mounts, snap back to the centered base without animation
               requestAnimationFrame(() => {
                 track.style.transition = 'none'
@@ -7774,6 +7815,7 @@ useEffect(() => {
             } else {
               // No commit; reset to base immediately
               track.style.transform = `translateX(${base}px)`
+              setCalendarTitleOverride(null)
             }
             delete (container as any).dataset.animating
             container.style.pointerEvents = prevPointer
@@ -7911,6 +7953,15 @@ useEffect(() => {
           }
           lastDx = Math.max(-width, Math.min(width, dx))
           if (!raf) { raf = window.requestAnimationFrame(() => { raf = 0; track.style.transform = `translateX(${base + lastDx}px)` }) }
+          // Live preview the title once the gesture would commit
+          const absDx = Math.abs(lastDx)
+          if (absDx > thresholdPx) {
+            const dir: -1 | 1 = lastDx < 0 ? -1 : 1
+            const previewYear = year - dir
+            setCalendarTitleOverride(String(previewYear))
+          } else {
+            setCalendarTitleOverride(null)
+          }
           e.preventDefault(); e.stopPropagation()
         }
         const stopNextClick = (evt: MouseEvent) => { evt.preventDefault(); evt.stopPropagation(); window.removeEventListener('click', stopNextClick, true) }
@@ -7919,6 +7970,11 @@ useEffect(() => {
           ;(container as any).dataset.animating = '1'
           const prevPointer = container.style.pointerEvents
           container.style.pointerEvents = 'none'
+          // Preview the target year during the slide
+          if (dir !== 0) {
+            const previewYear = year - dir
+            setCalendarTitleOverride(String(previewYear))
+          }
           track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
           const target = dir === 0 ? base : base + dir * width
           track.style.transform = `translateX(${target}px)`
@@ -7927,7 +7983,6 @@ useEffect(() => {
             // Keep the final transform in place to avoid a visible flash
             track.style.transition = ''
             track.style.willChange = ''
-            setCalendarTitleOverride(null)
             container.classList.remove('is-dragging')
             if (dir !== 0) {
               // dir -1 (left) => next year; dir +1 (right) => previous year
@@ -7941,6 +7996,8 @@ useEffect(() => {
               } else {
                 setHistoryDayOffset(deltaDays)
               }
+              // Clear title override now that the anchorDate has been updated
+              setCalendarTitleOverride(null)
               // After the new content mounts, snap back to the centered base without animation
               requestAnimationFrame(() => {
                 track.style.transition = 'none'
@@ -7950,6 +8007,7 @@ useEffect(() => {
             } else {
               // No commit; reset to base immediately
               track.style.transform = `translateX(${base}px)`
+              setCalendarTitleOverride(null)
             }
             delete (container as any).dataset.animating
             container.style.pointerEvents = prevPointer
