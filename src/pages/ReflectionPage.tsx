@@ -5565,6 +5565,20 @@ useEffect(() => {
     }
     return anchorDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
   }, [anchorDate, calendarView, calendarTitleOverride])
+
+  // Ensure the month/year carousel track is centered on the middle panel
+  // even on initial render or after anchorDate/view changes.
+  useLayoutEffect(() => {
+    if (!(calendarView === 'month' || calendarView === 'year')) return
+    const container = monthYearCarouselRef.current
+    const track = container?.querySelector('.calendar-carousel__track') as HTMLDivElement | null
+    if (!container || !track) return
+    if ((container as any).dataset.animating === '1') return
+    const base = -container.clientWidth
+    track.style.transition = 'none'
+    track.style.transform = `translate3d(${base}px, 0, 0)`
+    requestAnimationFrame(() => { track.style.transition = '' })
+  }, [calendarView, anchorDate])
   const dayLabel = useMemo(() => {
     const date = new Date(dayStart)
     const weekday = date.toLocaleDateString(undefined, { weekday: 'long' })
@@ -7604,35 +7618,43 @@ useEffect(() => {
         const gridStart = new Date(firstOfMonth)
         const offset = gridStart.getDay()
         gridStart.setDate(gridStart.getDate() - offset)
-        // Always render exactly 5 rows (35 days). If 35 days starting at gridStart
-        // would end before the last day of the month (i.e., would require 6 rows),
-        // shift forward one week so the 35-day window covers the end of the month.
-        const endCandidate = new Date(gridStart)
-        endCandidate.setDate(endCandidate.getDate() + 34)
-        if (endCandidate < lastOfMonth) {
-          gridStart.setDate(gridStart.getDate() + 7)
-        }
-        const innerCells: ReactElement[] = []
-        innerCells.push(
-          <div className="calendar-week-headers" key={`hdr-${firstOfMonth.getMonth()}`}>
-            {headers.map((h) => (
-              <div className="calendar-week-header" key={h} aria-hidden>
-                {h}
-              </div>
-            ))}
-          </div>,
-        )
-        const iter2 = new Date(gridStart)
-        for (let i = 0; i < 35; i += 1) {
-          const current = new Date(iter2)
-          innerCells.push(
+        // Extend to Saturday on/after the end of the month
+        const gridEnd = new Date(lastOfMonth)
+        const gridEndDow = gridEnd.getDay()
+        gridEnd.setDate(gridEnd.getDate() + (6 - gridEndDow))
+
+        // Build day cells
+        const dayCells: ReactElement[] = []
+        const iter = new Date(gridStart)
+        while (iter <= gridEnd) {
+          const current = new Date(iter)
+          dayCells.push(
             renderCell(current, current.getMonth() === firstOfMonth.getMonth()),
           )
-          iter2.setDate(iter2.getDate() + 1)
+          iter.setDate(iter.getDate() + 1)
         }
+
+        // Calculate rows (5 or 6) and fix the grid height so rows share space equally
+        const totalDays = Math.round((gridEnd.getTime() - gridStart.getTime()) / DAY_DURATION_MS) + 1
+        const rows = Math.max(1, Math.ceil(totalDays / 7))
+        // Keep overall day-grid height equivalent to 5 rows of 80px plus approx 4 gaps (1rem)
+        const gridHeight = 'calc(400px + 1rem)'
+
         return (
           <div className="calendar-carousel__panel" key={`panel-${firstOfMonth.getFullYear()}-${firstOfMonth.getMonth()}`}>
-            <div className="calendar-grid calendar-grid--month">{innerCells}</div>
+            <div className="calendar-week-headers">
+              {headers.map((h) => (
+                <div className="calendar-week-header" key={h} aria-hidden>
+                  {h}
+                </div>
+              ))}
+            </div>
+            <div
+              className="calendar-grid calendar-grid--month"
+              style={{ gridTemplateRows: `repeat(${rows}, 1fr)`, height: gridHeight }}
+            >
+              {dayCells}
+            </div>
           </div>
         )
       }
@@ -7660,7 +7682,7 @@ useEffect(() => {
         const thresholdPx = Math.max(24, Math.floor(width * 0.12))
         let lastDx = 0
         track.style.transition = 'none'
-        track.style.transform = `translateX(${base}px)`
+        track.style.transform = `translate3d(${base}px, 0, 0)`
         track.style.willChange = 'transform'
         const onMove = (e: PointerEvent) => {
           if (e.pointerId !== pointerId) return
@@ -7677,21 +7699,7 @@ useEffect(() => {
           }
           lastDx = Math.max(-width, Math.min(width, dx))
           if (!raf) {
-            raf = window.requestAnimationFrame(() => { raf = 0; track.style.transform = `translateX(${base + lastDx}px)` })
-          }
-          // Live preview the title once the gesture would commit
-          const absDx = Math.abs(lastDx)
-          if (absDx > thresholdPx) {
-            const dir: -1 | 1 = lastDx < 0 ? -1 : 1
-            const previewMonth = new Date(
-              anchorDate.getFullYear(),
-              anchorDate.getMonth() + (dir < 0 ? 1 : -1),
-              1,
-            )
-            const previewLabel = previewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-            setCalendarTitleOverride(previewLabel)
-          } else {
-            setCalendarTitleOverride(null)
+            raf = window.requestAnimationFrame(() => { raf = 0; track.style.transform = `translate3d(${base + lastDx}px, 0, 0)` })
           }
           e.preventDefault(); e.stopPropagation()
         }
@@ -7701,19 +7709,9 @@ useEffect(() => {
           ;(container as any).dataset.animating = '1'
           const prevPointer = container.style.pointerEvents
           container.style.pointerEvents = 'none'
-          // Preview the target month title during the slide
-          if (dir !== 0) {
-            const previewMonth = new Date(
-              anchorDate.getFullYear(),
-              anchorDate.getMonth() + (dir < 0 ? 1 : -1),
-              1,
-            )
-            const previewLabel = previewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-            setCalendarTitleOverride(previewLabel)
-          }
           track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
           const target = dir === 0 ? base : base + dir * width
-          track.style.transform = `translateX(${target}px)`
+          track.style.transform = `translate3d(${target}px, 0, 0)`
           const onEnd = () => {
             track.removeEventListener('transitionend', onEnd)
             // Keep the final transform in place to avoid a visible flash
@@ -7740,12 +7738,12 @@ useEffect(() => {
               // After the new content mounts, snap back to the centered base without animation
               requestAnimationFrame(() => {
                 track.style.transition = 'none'
-                track.style.transform = `translateX(${base}px)`
+                track.style.transform = `translate3d(${base}px, 0, 0)`
                 requestAnimationFrame(() => { track.style.transition = '' })
               })
             } else {
               // No commit; reset to base immediately
-              track.style.transform = `translateX(${base}px)`
+              track.style.transform = `translate3d(${base}px, 0, 0)`
               setCalendarTitleOverride(null)
             }
             delete (container as any).dataset.animating
@@ -7866,7 +7864,7 @@ useEffect(() => {
         let raf = 0
         const thresholdPx = Math.max(24, Math.floor(width * 0.12))
         track.style.transition = 'none'
-        track.style.transform = `translateX(${base}px)`
+        track.style.transform = `translate3d(${base}px, 0, 0)`
         track.style.willChange = 'transform'
         const onMove = (e: PointerEvent) => {
           if (e.pointerId !== pointerId) return
@@ -7882,16 +7880,7 @@ useEffect(() => {
             }
           }
           lastDx = Math.max(-width, Math.min(width, dx))
-          if (!raf) { raf = window.requestAnimationFrame(() => { raf = 0; track.style.transform = `translateX(${base + lastDx}px)` }) }
-          // Live preview the title once the gesture would commit
-          const absDx = Math.abs(lastDx)
-          if (absDx > thresholdPx) {
-            const dir: -1 | 1 = lastDx < 0 ? -1 : 1
-            const previewYear = year - dir
-            setCalendarTitleOverride(String(previewYear))
-          } else {
-            setCalendarTitleOverride(null)
-          }
+          if (!raf) { raf = window.requestAnimationFrame(() => { raf = 0; track.style.transform = `translate3d(${base + lastDx}px, 0, 0)` }) }
           e.preventDefault(); e.stopPropagation()
         }
         const stopNextClick = (evt: globalThis.MouseEvent) => { evt.preventDefault(); evt.stopPropagation(); window.removeEventListener('click', stopNextClick, true) }
@@ -7900,14 +7889,9 @@ useEffect(() => {
           ;(container as any).dataset.animating = '1'
           const prevPointer = container.style.pointerEvents
           container.style.pointerEvents = 'none'
-          // Preview the target year during the slide
-          if (dir !== 0) {
-            const previewYear = year - dir
-            setCalendarTitleOverride(String(previewYear))
-          }
           track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
           const target = dir === 0 ? base : base + dir * width
-          track.style.transform = `translateX(${target}px)`
+          track.style.transform = `translate3d(${target}px, 0, 0)`
           const onEnd = () => {
             track.removeEventListener('transitionend', onEnd)
             // Keep the final transform in place to avoid a visible flash
@@ -7931,12 +7915,12 @@ useEffect(() => {
               // After the new content mounts, snap back to the centered base without animation
               requestAnimationFrame(() => {
                 track.style.transition = 'none'
-                track.style.transform = `translateX(${base}px)`
+                track.style.transform = `translate3d(${base}px, 0, 0)`
                 requestAnimationFrame(() => { track.style.transition = '' })
               })
             } else {
               // No commit; reset to base immediately
-              track.style.transform = `translateX(${base}px)`
+              track.style.transform = `translate3d(${base}px, 0, 0)`
               setCalendarTitleOverride(null)
             }
             delete (container as any).dataset.animating
