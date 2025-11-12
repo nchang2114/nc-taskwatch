@@ -2708,6 +2708,8 @@ export default function ReflectionPage() {
   const activeTooltipRef = useRef<HTMLDivElement | null>(null)
   const editingTooltipRef = useRef<HTMLDivElement | null>(null)
   const historyCalendarRef = useRef<HTMLDivElement | null>(null)
+  // Month/Year carousel root for programmatic keyboard navigation animations
+  const monthYearCarouselRef = useRef<HTMLDivElement | null>(null)
   // Ref to the calendar editor panel so global outside-click handlers don't cancel edits when interacting with the modal
   const [calendarInspectorEntryId, setCalendarInspectorEntryId] = useState<string | null>(null)
 const calendarEditorRef = useRef<HTMLDivElement | null>(null)
@@ -5628,42 +5630,138 @@ useEffect(() => {
   )
 
   const handlePrevWindow = useCallback(() => {
-    if (calendarView === 'month') {
-      const base = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
-      base.setMonth(base.getMonth() - 1)
-      base.setHours(0, 0, 0, 0)
-      const today = new Date(); today.setHours(0, 0, 0, 0)
-      const deltaDays = Math.round((base.getTime() - today.getTime()) / DAY_DURATION_MS)
-      setHistoryDayOffset(deltaDays)
-      return
-    }
-    if (calendarView === 'year') {
-      const base = new Date(anchorDate.getFullYear() - 1, 0, 1)
-      base.setHours(0, 0, 0, 0)
-      const today = new Date(); today.setHours(0, 0, 0, 0)
-      const deltaDays = Math.round((base.getTime() - today.getTime()) / DAY_DURATION_MS)
-      setHistoryDayOffset(deltaDays)
+    if (calendarView === 'month' || calendarView === 'year') {
+      // Animate month/year like a swipe: previous = slide right (dir = +1)
+      const container = monthYearCarouselRef.current
+      const track = container?.querySelector('.calendar-carousel__track') as HTMLDivElement | null
+      if (!container || !track) {
+        // Fallback: instant jump
+        const base = calendarView === 'month'
+          ? new Date(anchorDate.getFullYear(), anchorDate.getMonth() - 1, 1)
+          : new Date(anchorDate.getFullYear() - 1, 0, 1)
+        base.setHours(0, 0, 0, 0)
+        const today = new Date(); today.setHours(0, 0, 0, 0)
+        const deltaDays = Math.round((base.getTime() - today.getTime()) / DAY_DURATION_MS)
+        setHistoryDayOffset(deltaDays)
+        return
+      }
+      if ((container as any).dataset.animating === '1') return
+      ;(container as any).dataset.animating = '1'
+      const prevPointer = container.style.pointerEvents
+      container.style.pointerEvents = 'none'
+      const width = container.clientWidth
+      const baseX = -width
+      // Prepare base position
+      track.style.transition = 'none'
+      track.style.willChange = 'transform'
+      track.style.transform = `translateX(${baseX}px)`
+      // Animate to the right (dir = +1)
+      const target = baseX + 1 * width
+      requestAnimationFrame(() => {
+        track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
+        track.style.transform = `translateX(${target}px)`
+      })
+      const commit = () => {
+        // Commit the new window first to avoid any flash
+        const nextBase = calendarView === 'month'
+          ? new Date(anchorDate.getFullYear(), anchorDate.getMonth() - 1, 1)
+          : new Date(anchorDate.getFullYear() - 1, 0, 1)
+        nextBase.setHours(0, 0, 0, 0)
+        const today = new Date(); today.setHours(0, 0, 0, 0)
+        const deltaDays = Math.round((nextBase.getTime() - today.getTime()) / DAY_DURATION_MS)
+        if (typeof flushSync === 'function') {
+          flushSync(() => setHistoryDayOffset(deltaDays))
+        } else {
+          setHistoryDayOffset(deltaDays)
+        }
+        // After new content mounts, snap track back to base without anim
+        requestAnimationFrame(() => {
+          const latestTrack = monthYearCarouselRef.current?.querySelector('.calendar-carousel__track') as HTMLDivElement | null
+          if (latestTrack) {
+            latestTrack.style.transition = 'none'
+            latestTrack.style.transform = `translateX(${baseX}px)`
+            requestAnimationFrame(() => { latestTrack.style.transition = '' })
+          }
+          delete (container as any).dataset.animating
+          container.style.pointerEvents = prevPointer
+        })
+      }
+      const onEnd = () => {
+        track.removeEventListener('transitionend', onEnd)
+        track.style.transition = ''
+        track.style.willChange = ''
+        commit()
+      }
+      track.addEventListener('transitionend', onEnd, { once: true })
       return
     }
     navigateByDelta(-stepSizeByView[calendarView])
   }, [anchorDate, calendarView, navigateByDelta, setHistoryDayOffset, stepSizeByView])
 
   const handleNextWindow = useCallback(() => {
-    if (calendarView === 'month') {
-      const base = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
-      base.setMonth(base.getMonth() + 1)
-      base.setHours(0, 0, 0, 0)
-      const today = new Date(); today.setHours(0, 0, 0, 0)
-      const deltaDays = Math.round((base.getTime() - today.getTime()) / DAY_DURATION_MS)
-      setHistoryDayOffset(deltaDays)
-      return
-    }
-    if (calendarView === 'year') {
-      const base = new Date(anchorDate.getFullYear() + 1, 0, 1)
-      base.setHours(0, 0, 0, 0)
-      const today = new Date(); today.setHours(0, 0, 0, 0)
-      const deltaDays = Math.round((base.getTime() - today.getTime()) / DAY_DURATION_MS)
-      setHistoryDayOffset(deltaDays)
+    if (calendarView === 'month' || calendarView === 'year') {
+      // Animate month/year like a swipe: next = slide left (dir = -1)
+      const container = monthYearCarouselRef.current
+      const track = container?.querySelector('.calendar-carousel__track') as HTMLDivElement | null
+      if (!container || !track) {
+        // Fallback: instant jump
+        const base = calendarView === 'month'
+          ? new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 1)
+          : new Date(anchorDate.getFullYear() + 1, 0, 1)
+        base.setHours(0, 0, 0, 0)
+        const today = new Date(); today.setHours(0, 0, 0, 0)
+        const deltaDays = Math.round((base.getTime() - today.getTime()) / DAY_DURATION_MS)
+        setHistoryDayOffset(deltaDays)
+        return
+      }
+      if ((container as any).dataset.animating === '1') return
+      ;(container as any).dataset.animating = '1'
+      const prevPointer = container.style.pointerEvents
+      container.style.pointerEvents = 'none'
+      const width = container.clientWidth
+      const baseX = -width
+      // Prepare base position
+      track.style.transition = 'none'
+      track.style.willChange = 'transform'
+      track.style.transform = `translateX(${baseX}px)`
+      // Animate to the left (dir = -1)
+      const target = baseX - 1 * width
+      requestAnimationFrame(() => {
+        track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
+        track.style.transform = `translateX(${target}px)`
+      })
+      const commit = () => {
+        // Commit the new window first to avoid any flash
+        const nextBase = calendarView === 'month'
+          ? new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 1)
+          : new Date(anchorDate.getFullYear() + 1, 0, 1)
+        nextBase.setHours(0, 0, 0, 0)
+        const today = new Date(); today.setHours(0, 0, 0, 0)
+        const deltaDays = Math.round((nextBase.getTime() - today.getTime()) / DAY_DURATION_MS)
+        if (typeof flushSync === 'function') {
+          flushSync(() => setHistoryDayOffset(deltaDays))
+        } else {
+          setHistoryDayOffset(deltaDays)
+        }
+        // After new content mounts, snap track back to base without anim
+        requestAnimationFrame(() => {
+          const latestTrack = monthYearCarouselRef.current?.querySelector('.calendar-carousel__track') as HTMLDivElement | null
+          if (latestTrack) {
+            latestTrack.style.transition = 'none'
+            latestTrack.style.transform = `translateX(${baseX}px)`
+            requestAnimationFrame(() => { latestTrack.style.transition = '' })
+          }
+          delete (container as any).dataset.animating
+          container.style.pointerEvents = prevPointer
+        })
+      }
+      const onEnd = () => {
+        track.removeEventListener('transitionend', onEnd)
+        track.style.transition = ''
+        track.style.willChange = ''
+        commit()
+      }
+      track.addEventListener('transitionend', onEnd, { once: true })
       return
     }
     navigateByDelta(stepSizeByView[calendarView])
@@ -7699,7 +7797,7 @@ useEffect(() => {
       }
 
       return (
-        <div className="calendar-carousel" onPointerDown={handlePointerDown}>
+        <div className="calendar-carousel" ref={monthYearCarouselRef} onPointerDown={handlePointerDown}>
           <div className="calendar-carousel__track">
             {buildMonthPanel(prev)}
             {buildMonthPanel(center)}
@@ -7875,7 +7973,7 @@ useEffect(() => {
       }
 
       return (
-        <div className="calendar-carousel" onPointerDown={handlePointerDown}>
+        <div className="calendar-carousel" ref={monthYearCarouselRef} onPointerDown={handlePointerDown}>
           <div className="calendar-carousel__track">
             <div className="calendar-carousel__panel">{prev}</div>
             <div className="calendar-carousel__panel">{curr}</div>
