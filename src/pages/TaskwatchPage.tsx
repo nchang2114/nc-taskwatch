@@ -311,19 +311,7 @@ const createNotebookEmptySubtask = (sortIndex: number): NotebookSubtask => ({
   sortIndex,
 })
 
-const getNextNotebookSubtaskSortIndex = (subtasks: NotebookSubtask[]): number => {
-  if (subtasks.length === 0) {
-    return NOTEBOOK_SUBTASK_SORT_STEP
-  }
-  let max = 0
-  for (let index = 0; index < subtasks.length; index += 1) {
-    const candidate = subtasks[index]?.sortIndex ?? 0
-    if (candidate > max) {
-      max = candidate
-    }
-  }
-  return max + NOTEBOOK_SUBTASK_SORT_STEP
-}
+// removed: append-oriented sort index helper (we now prepend)
 
 const computeNotebookKey = (focusSource: FocusSource | null, taskName: string): string => {
   if (focusSource?.taskId) {
@@ -2053,13 +2041,27 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       return
     }
     const snapSubs = snapshotSubtasksToNotebook(snapshotTask.subtasks ?? [])
-    // Preserve local notes, always mirror subtasks from snapshot so deletes/adds apply immediately
     const localEntry = notebookState[notebookKey] ?? createNotebookEntry()
-    const entryFromSnapshot: NotebookEntry = {
-      notes: localEntry.notes,
-      subtasks: snapSubs,
+    // Respect hydration block unless the snapshot reflects deletions of non-empty local subtasks
+    if (notebookHydrationBlockRef.current > Date.now()) {
+      try {
+        const snapIds = new Set(snapSubs.map((s) => s.id))
+        let hasMeaningfulDeletion = false
+        for (const s of localEntry.subtasks) {
+          if (!snapIds.has(s.id) && s.text.trim().length > 0) {
+            hasMeaningfulDeletion = true
+            break
+          }
+        }
+        if (!hasMeaningfulDeletion) {
+          return
+        }
+      } catch {
+        return
+      }
     }
-    // Always allow subtasks hydration; we preserved local notes above
+    // Preserve local notes, mirror snapshot subtasks
+    const entryFromSnapshot: NotebookEntry = { notes: localEntry.notes, subtasks: snapSubs }
     notebookChangeFromSnapshotRef.current = true
     const result = updateNotebookForKey(notebookKey, (entry) =>
       areNotebookEntriesEqual(entry, entryFromSnapshot) ? entry : entryFromSnapshot,
@@ -2080,7 +2082,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     areNotebookEntriesEqual,
     goalsSnapshot,
     notebookKey,
-    notebookState,
     snapshotSubtasksToNotebook,
     updateFocusSourceFromEntry,
     updateNotebookForKey,
@@ -2183,16 +2184,38 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     notebookSubtaskIdsInitializedRef.current = false
   }, [notebookKey])
   const handleAddNotebookSubtask = useCallback(
-    (options?: { focus?: boolean }) => {
+    (options?: { focus?: boolean; afterId?: string }) => {
       let created: NotebookSubtask | null = null
       blockNotebookHydration()
       const result = updateNotebookForKey(notebookKey, (entry) => {
-        const sortIndex = getNextNotebookSubtaskSortIndex(entry.subtasks)
+        const subs = entry.subtasks
+        const afterId = options?.afterId
+        let insertIndex = 0
+        if (afterId) {
+          const idx = subs.findIndex((s) => s.id === afterId)
+          insertIndex = idx >= 0 ? idx + 1 : 0
+        }
+        const prev = subs[insertIndex - 1] || null
+        const next = subs[insertIndex] || null
+        let sortIndex: number
+        if (prev && next) {
+          const a = prev.sortIndex
+          const b = next.sortIndex
+          sortIndex = a < b ? Math.floor(a + (b - a) / 2) : a + NOTEBOOK_SUBTASK_SORT_STEP
+        } else if (prev && !next) {
+          sortIndex = prev.sortIndex + NOTEBOOK_SUBTASK_SORT_STEP
+        } else if (!prev && next) {
+          sortIndex = next.sortIndex - NOTEBOOK_SUBTASK_SORT_STEP
+        } else {
+          sortIndex = NOTEBOOK_SUBTASK_SORT_STEP
+        }
         const subtask = createNotebookEmptySubtask(sortIndex)
         created = subtask
+        const copy = [...subs]
+        copy.splice(insertIndex, 0, subtask)
         return {
           ...entry,
-          subtasks: [...entry.subtasks, subtask],
+          subtasks: copy,
         }
       })
       if (!result || !result.changed || !created) {
@@ -2759,14 +2782,10 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                         onClick={(event) => event.stopPropagation()}
                         onPointerDown={(event) => event.stopPropagation()}
                         onKeyDown={(event) => {
-                          // Enter commits a new subtask; Shift+Enter inserts newline
+                          // Enter commits a new subtask at the top; Shift+Enter inserts newline
                           if (event.key === 'Enter' && !event.shiftKey) {
                             event.preventDefault()
-                            const value = event.currentTarget.value.trim()
-                            if (value.length === 0) {
-                              return
-                            }
-                            handleAddNotebookSubtask()
+                            handleAddNotebookSubtask({ focus: true })
                           }
                           // Escape on empty behaves like clicking off (remove empty)
                           if (event.key === 'Escape') {

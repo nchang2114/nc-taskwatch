@@ -372,19 +372,7 @@ const createEmptySubtask = (sortIndex: number) => ({
   updatedAt: new Date().toISOString(),
 })
 
-const getNextSubtaskSortIndex = (subtasks: TaskSubtask[]): number => {
-  if (subtasks.length === 0) {
-    return SUBTASK_SORT_STEP
-  }
-  let max = 0
-  for (let index = 0; index < subtasks.length; index += 1) {
-    const candidate = subtasks[index]?.sortIndex ?? 0
-    if (candidate > max) {
-      max = candidate
-    }
-  }
-  return max + SUBTASK_SORT_STEP
-}
+// removed: append-oriented sort index helper (we now prepend)
 
 const sanitizeDomIdSegment = (value: string): string => value.replace(/[^a-z0-9]/gi, '-')
 
@@ -2595,7 +2583,7 @@ interface GoalRowProps {
   taskDetails: TaskDetailsState
   handleToggleTaskDetails: (taskId: string) => void
   handleTaskNotesChange: (taskId: string, value: string) => void
-  handleAddSubtask: (taskId: string, options?: { focus?: boolean }) => void
+  handleAddSubtask: (taskId: string, options?: { focus?: boolean; afterId?: string }) => void
   handleSubtaskTextChange: (taskId: string, subtaskId: string, value: string) => void
   handleSubtaskBlur: (taskId: string, subtaskId: string) => void
   handleToggleSubtaskSection: (taskId: string) => void
@@ -5549,14 +5537,6 @@ export default function GoalsPage(): ReactElement {
     const snapshot = createGoalsSnapshot(goals)
     const signature = computeSnapshotSignature(snapshot)
     lastSnapshotSignatureRef.current = signature
-    try {
-      const subtaskCount = goals.reduce(
-        (sum, g) =>
-          sum + g.buckets.reduce((s, b) => s + b.tasks.reduce((t, task) => t + ((task.subtasks?.length) || 0), 0), 0),
-        0,
-      )
-      console.log('[Sync][Goals][Publish] snapshot', { goals: goals.length, subtasks: subtaskCount })
-    } catch {}
     publishGoalsSnapshot(snapshot)
   }, [goals])
 
@@ -6693,20 +6673,52 @@ export default function GoalsPage(): ReactElement {
   )
 
   const handleAddSubtask = useCallback(
-    (taskId: string, options?: { focus?: boolean }) => {
+    (taskId: string, options?: { focus?: boolean; afterId?: string }) => {
       const currentDetails = taskDetailsRef.current[taskId] ?? createTaskDetails()
-      const sortIndex = getNextSubtaskSortIndex(currentDetails.subtasks ?? [])
+      const subs = currentDetails.subtasks ?? []
+      const afterId = options?.afterId
+      // Compute insertion index
+      let insertIndex = 0
+      if (afterId) {
+        const idx = subs.findIndex((s) => s.id === afterId)
+        insertIndex = idx >= 0 ? idx + 1 : 0
+      }
+      // Compute sortIndex between neighbours (or before first/after last)
+      const prev = subs[insertIndex - 1] || null
+      const next = subs[insertIndex] || null
+      let sortIndex: number
+      if (prev && next) {
+        const a = prev.sortIndex
+        const b = next.sortIndex
+        sortIndex = a < b ? Math.floor(a + (b - a) / 2) : a + SUBTASK_SORT_STEP
+      } else if (prev && !next) {
+        sortIndex = prev.sortIndex + SUBTASK_SORT_STEP
+      } else if (!prev && next) {
+        sortIndex = next.sortIndex - SUBTASK_SORT_STEP
+      } else {
+        sortIndex = SUBTASK_SORT_STEP
+      }
       const newSubtask = createEmptySubtask(sortIndex)
-      try {
-        console.log('[Sync][Goals] add subtask', { taskId, subtaskId: newSubtask.id })
-      } catch {}
-      updateTaskDetails(taskId, (current) => ({
-        ...current,
-        expanded: true,
-        subtasksCollapsed: false,
-        subtasks: [...current.subtasks, newSubtask],
-      }))
-      updateGoalTaskSubtasks(taskId, (current) => [...current, newSubtask])
+      updateTaskDetails(taskId, (current) => {
+        const base = current.subtasks
+        const idx = afterId ? base.findIndex((s) => s.id === afterId) : -1
+        const at = idx >= 0 ? idx + 1 : 0
+        const copy = [...base]
+        copy.splice(at, 0, newSubtask)
+        return {
+          ...current,
+          expanded: true,
+          subtasksCollapsed: false,
+          subtasks: copy,
+        }
+      })
+      updateGoalTaskSubtasks(taskId, (current) => {
+        const idx = afterId ? current.findIndex((s) => s.id === afterId) : -1
+        const at = idx >= 0 ? idx + 1 : 0
+        const copy = [...current]
+        copy.splice(at, 0, newSubtask)
+        return copy
+      })
       if (options?.focus) {
         // Mark this subtask to receive focus immediately after render
         pendingGoalSubtaskFocusRef.current = { taskId, subtaskId: newSubtask.id }
@@ -6785,9 +6797,6 @@ export default function GoalsPage(): ReactElement {
       }
       const trimmed = existing.text.trim()
       if (trimmed.length === 0) {
-        try {
-          console.log('[Sync][Goals] remove subtask (empty on blur)', { taskId, subtaskId })
-        } catch {}
         subtaskDeletedRef.current.add(`${taskId}:${subtaskId}`)
         updateTaskDetails(taskId, (current) => ({
           ...current,
@@ -6952,9 +6961,6 @@ export default function GoalsPage(): ReactElement {
           subtasks: nextSubtasks,
         }
       })
-      try {
-        console.log('[Sync][Goals] remove subtask', { taskId, subtaskId })
-      } catch {}
       subtaskDeletedRef.current.add(`${taskId}:${subtaskId}`)
       updateGoalTaskSubtasks(taskId, (current) => current.filter((item) => item.id !== subtaskId))
       cancelPendingSubtaskSave(taskId, subtaskId)

@@ -2312,6 +2312,13 @@ html[data-theme='light'] .nav-links--drawer {
   gap: clamp(0.45rem, 1.1vw, 0.65rem);
 }
 
+/* Clip the subtask slide reveal inside the Taskwatch notes card */
+.taskwatch-notes .goal-task-details__subtasks-body,
+.taskwatch-notes .goal-task-details__subtask-list {
+  position: relative;
+  overflow: hidden;
+}
+
 .taskwatch-notes__subtasks-row {
   display: flex;
   align-items: center;
