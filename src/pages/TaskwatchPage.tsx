@@ -11,7 +11,6 @@ import {
   useRef,
   useState,
 } from 'react'
-import '../App.css'
 import './TaskwatchPage.css'
 import './GoalsPage.css'
 import {
