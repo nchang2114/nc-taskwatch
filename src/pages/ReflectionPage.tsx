@@ -6214,81 +6214,7 @@ useEffect(() => {
     const dayHasSessions = (startMs: number, endMs: number) =>
       entries.some((e) => Math.min(e.endedAt, endMs) > Math.max(e.startedAt, startMs))
 
-    // Simple horizontal swipe navigation for month/year grids
-    const handleMonthYearSwipePointerDown = (ev: ReactPointerEvent<HTMLDivElement>) => {
-      if (!(calendarView === 'month' || calendarView === 'year')) return
-      if (ev.button !== 0 && (ev as any).pointerType !== 'touch') return
-      const container = ev.currentTarget as HTMLDivElement
-      const startX = ev.clientX
-      const startY = ev.clientY
-      const pointerId = ev.pointerId
-      const threshold = 20
-      let engaged = false
-
-      // Prepare for smooth transforms
-      container.style.transition = 'none'
-      container.style.willChange = 'transform'
-
-      const onMove = (e: PointerEvent) => {
-        if (e.pointerId !== pointerId) return
-        const dx = e.clientX - startX
-        const dy = e.clientY - startY
-        if (!engaged) {
-          if (Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy) * 1.25) {
-            engaged = true
-          } else {
-            return
-          }
-        }
-        // Apply constrained tracking translation (px)
-        const limit = Math.min(120, Math.max(-120, dx))
-        container.style.transform = `translateX(${limit}px)`
-        e.preventDefault()
-        e.stopPropagation()
-      }
-
-      const finish = (commitDir: -1 | 0 | 1) => {
-        // Animate out or snap back
-        const distance = commitDir === 0 ? 0 : commitDir * (container.clientWidth || 300)
-        container.style.transition = 'transform 260ms cubic-bezier(0.2, 0, 0, 1)'
-        container.style.transform = `translateX(${distance}px)`
-        const onEnd = () => {
-          container.removeEventListener('transitionend', onEnd)
-          // Reset styles
-          container.style.transition = ''
-          container.style.transform = ''
-          container.style.willChange = ''
-          if (commitDir !== 0) {
-            const step = stepSizeByView[calendarView]
-            navigateByDelta(commitDir < 0 ? -step : step) // commitDir -1 means swipe right → previous
-          }
-        }
-        container.addEventListener('transitionend', onEnd, { once: true })
-      }
-
-      const onUp = (e: PointerEvent) => {
-        if (e.pointerId !== pointerId) return
-        window.removeEventListener('pointermove', onMove)
-        window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', onUp)
-        if (!engaged) {
-          // No swipe; ensure any tiny translation resets
-          finish(0)
-          return
-        }
-        const dx = e.clientX - startX
-        const dy = e.clientY - startY
-        if (Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy) * 1.1) {
-          // dx < 0 → next period; dx > 0 → previous period
-          finish(dx < 0 ? 1 : -1)
-        } else {
-          finish(0)
-        }
-      }
-      window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onUp)
-    }
+    // (removed unused legacy swipe handler for month/year grids)
 
     const jumpToDateAndShowWeek = (targetMidnightMs: number) => {
       const today = new Date()
@@ -7674,12 +7600,18 @@ useEffect(() => {
       const buildMonthPanel = (baseDate: Date) => {
         const firstOfMonth = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1)
         const lastOfMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0)
+        // Start from the Sunday on/before the first of the month
         const gridStart = new Date(firstOfMonth)
         const offset = gridStart.getDay()
         gridStart.setDate(gridStart.getDate() - offset)
-        const gridEnd = new Date(lastOfMonth)
-        const gridEndDow = gridEnd.getDay()
-        gridEnd.setDate(gridEnd.getDate() + (6 - gridEndDow))
+        // Always render exactly 5 rows (35 days). If 35 days starting at gridStart
+        // would end before the last day of the month (i.e., would require 6 rows),
+        // shift forward one week so the 35-day window covers the end of the month.
+        const endCandidate = new Date(gridStart)
+        endCandidate.setDate(endCandidate.getDate() + 34)
+        if (endCandidate < lastOfMonth) {
+          gridStart.setDate(gridStart.getDate() + 7)
+        }
         const innerCells: ReactElement[] = []
         innerCells.push(
           <div className="calendar-week-headers" key={`hdr-${firstOfMonth.getMonth()}`}>
@@ -7691,12 +7623,12 @@ useEffect(() => {
           </div>,
         )
         const iter2 = new Date(gridStart)
-        while (iter2 <= gridEnd) {
-          for (let i = 0; i < 7; i += 1) {
-            const current = new Date(iter2)
-            innerCells.push(renderCell(current, current.getMonth() === firstOfMonth.getMonth()))
-            iter2.setDate(iter2.getDate() + 1)
-          }
+        for (let i = 0; i < 35; i += 1) {
+          const current = new Date(iter2)
+          innerCells.push(
+            renderCell(current, current.getMonth() === firstOfMonth.getMonth()),
+          )
+          iter2.setDate(iter2.getDate() + 1)
         }
         return (
           <div className="calendar-carousel__panel" key={`panel-${firstOfMonth.getFullYear()}-${firstOfMonth.getMonth()}`}>
@@ -7711,7 +7643,6 @@ useEffect(() => {
       const next = new Date(center)
       next.setMonth(next.getMonth() + 1)
 
-      const step = stepSizeByView[calendarView]
       const handlePointerDown: any = (ev: ReactPointerEvent<HTMLDivElement>) => {
         const container = ev.currentTarget as HTMLDivElement
         const track = container.querySelector('.calendar-carousel__track') as HTMLDivElement | null
@@ -7764,7 +7695,7 @@ useEffect(() => {
           }
           e.preventDefault(); e.stopPropagation()
         }
-        const stopNextClick = (evt: MouseEvent) => { evt.preventDefault(); evt.stopPropagation(); window.removeEventListener('click', stopNextClick, true) }
+        const stopNextClick = (evt: globalThis.MouseEvent) => { evt.preventDefault(); evt.stopPropagation(); window.removeEventListener('click', stopNextClick, true) }
         const finish = (dir: -1 | 0 | 1) => {
           if (raf) { window.cancelAnimationFrame(raf); raf = 0 }
           ;(container as any).dataset.animating = '1'
@@ -7920,7 +7851,6 @@ useEffect(() => {
       const prev = buildYearPanel(year - 1)
       const curr = buildYearPanel(year)
       const next = buildYearPanel(year + 1)
-      const step = stepSizeByView[calendarView]
       const handlePointerDown: any = (ev: ReactPointerEvent<HTMLDivElement>) => {
         const container = ev.currentTarget as HTMLDivElement
         const track = container.querySelector('.calendar-carousel__track') as HTMLDivElement | null
@@ -7964,7 +7894,7 @@ useEffect(() => {
           }
           e.preventDefault(); e.stopPropagation()
         }
-        const stopNextClick = (evt: MouseEvent) => { evt.preventDefault(); evt.stopPropagation(); window.removeEventListener('click', stopNextClick, true) }
+        const stopNextClick = (evt: globalThis.MouseEvent) => { evt.preventDefault(); evt.stopPropagation(); window.removeEventListener('click', stopNextClick, true) }
         const finish = (dir: -1 | 0 | 1) => {
           if (raf) { window.cancelAnimationFrame(raf); raf = 0 }
           ;(container as any).dataset.animating = '1'
