@@ -129,3 +129,37 @@ export const hasExceptionFor = (routineId: string, occurrenceDate: string): bool
 	const list = readLocal()
 	return list.some((r) => r.routineId === routineId && r.occurrenceDate === occurrenceDate)
 }
+
+// Remove a single reschedule exception for a specific occurrence so that a guide
+// can re-render (used when deleting a confirmed instance). Skipped exceptions are
+// intentionally preserved.
+export const deleteRescheduleExceptionFor = async (
+  routineId: string,
+  occurrenceDate: string,
+): Promise<boolean> => {
+  const current = readLocal()
+  const idx = current.findIndex(
+    (r) => r.routineId === routineId && r.occurrenceDate === occurrenceDate && r.action === 'rescheduled',
+  )
+  if (idx === -1) return false
+  const [removed] = current.splice(idx, 1)
+  writeLocal(current)
+
+  const ENABLE_REMOTE = Boolean((import.meta as any)?.env?.VITE_ENABLE_REPEATING_EXCEPTIONS)
+  if (supabase && ENABLE_REMOTE) {
+    try {
+      const session = await ensureSingleUserSession()
+      if (session) {
+        await supabase
+          .from('repeating_exceptions')
+          .delete()
+          .eq('id', removed.id)
+          .eq('user_id', session.user.id)
+      }
+    } catch (err) {
+      // Non-fatal: local removal already took effect for UI
+      console.warn('[repeatingExceptions] delete rescheduled error', err)
+    }
+  }
+  return true
+}

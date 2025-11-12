@@ -61,6 +61,7 @@ import {
   readRepeatingExceptions,
   subscribeRepeatingExceptions,
   upsertRepeatingException,
+  deleteRescheduleExceptionFor,
   type RepeatingException,
 } from '../lib/repeatingExceptions'
 import { evaluateAndMaybeRetireRule, setRepeatToNoneAfterTimestamp, deleteRepeatingRuleById } from '../lib/repeatingSessions'
@@ -3671,10 +3672,44 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
           setInspectorFallbackMessage(INSPECTOR_DELETED_MESSAGE)
           setShowInspectorExtras(false)
         }
+        // If deleting a confirmed instance of a repeating guide (rescheduled),
+        // remove the associated 'rescheduled' exception so the guide re-renders
+        // unless another entry for the same occurrence still exists.
+        let maybeCleanup: { routineId: string; occurrenceDate: string } | null = null
         updateHistory((current) => {
-          if (!current.some((e) => e.id === entryId)) return current
-          return current.filter((e) => e.id !== entryId)
+          const idx = current.findIndex((e) => e.id === entryId)
+          if (idx === -1) return current
+          const target = current[idx] as any
+          const rid = typeof target.routineId === 'string' ? (target.routineId as string) : null
+          const od = typeof target.occurrenceDate === 'string' ? (target.occurrenceDate as string) : null
+          const next = current.filter((e) => e.id !== entryId)
+          if (rid && od) {
+            const stillConfirmed = next.some((e: any) => e && e.routineId === rid && e.occurrenceDate === od)
+            if (!stillConfirmed) {
+              maybeCleanup = { routineId: rid, occurrenceDate: od }
+            }
+          }
+          return next
         })
+        if (maybeCleanup) {
+          // Optimistically update local exception state so the guide re-renders immediately,
+          // then perform the durable removal (local persistence + optional remote) in the background.
+          setRepeatingExceptions((prev) =>
+            Array.isArray(prev)
+              ? prev.filter(
+                  (r) =>
+                    !(
+                      r.routineId === maybeCleanup!.routineId &&
+                      r.occurrenceDate === maybeCleanup!.occurrenceDate &&
+                      r.action === 'rescheduled'
+                    ),
+                )
+              : prev,
+          )
+          try {
+            void deleteRescheduleExceptionFor(maybeCleanup.routineId, maybeCleanup.occurrenceDate)
+          } catch {}
+        }
       })
     },
     [
@@ -6454,8 +6489,15 @@ useEffect(() => {
           return set
         })()
         const excKeySet = (() => {
+          // Only skipped occurrences should suppress guides. Rescheduled ones
+          // are already covered by the presence of a confirmed entry (via
+          // routineId+occurrenceDate) or by repeat-original linkage.
           const set = new Set<string>()
-          repeatingExceptions.forEach((r) => set.add(`${r.routineId}:${r.occurrenceDate}`))
+          repeatingExceptions.forEach((r) => {
+            if ((r as any).action === 'skipped') {
+              set.add(`${r.routineId}:${r.occurrenceDate}`)
+            }
+          })
           return set
         })()
         // Also suppress guides that have already transformed (confirmed/skipped/rescheduled)
@@ -8039,7 +8081,29 @@ useEffect(() => {
     }
 
     return null
-  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, resetCalendarPanTransform, stopCalendarPanAnimation, repeatingRules, setView, setHistoryDayOffset, navigateByDelta, stepSizeByView])
+  }, [
+    calendarView,
+    anchorDate,
+    effectiveHistory,
+    dragPreview,
+    multiDayCount,
+    enhancedGoalLookup,
+    goalColorLookup,
+    lifeRoutineSurfaceLookup,
+    calendarPreview,
+    handleOpenCalendarPreview,
+    handleCloseCalendarPreview,
+    animateCalendarPan,
+    resolvePanSnap,
+    resetCalendarPanTransform,
+    stopCalendarPanAnimation,
+    repeatingRules,
+    repeatingExceptions,
+    setView,
+    setHistoryDayOffset,
+    navigateByDelta,
+    stepSizeByView,
+  ])
 
   // Simple inline icons for popover actions
   const IconEdit = () => (
