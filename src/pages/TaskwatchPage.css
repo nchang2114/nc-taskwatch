@@ -600,7 +600,7 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible { backgroun
 .meta-note { margin-top: clamp(0.4rem, 1.6vw, 1rem); }
 
 /* Notes card */
-.taskwatch-notes { width: 100%; max-width: min(720px, 100%); display: flex; flex-direction: column; gap: clamp(0.85rem, 2.2vw, 1.4rem); padding: clamp(1.5rem, 3.8vw, 2.2rem); border-radius: clamp(16px, 3.4vw, 22px); border: 1px solid rgba(118, 142, 255, 0.36); background: linear-gradient(155deg, rgba(14, 18, 48, 0.9) 0%, rgba(10, 16, 40, 0.9) 58%, rgba(8, 14, 36, 0.92) 100%); box-shadow: 0 32px 72px -36px rgba(2, 6, 24, 0.85); backdrop-filter: blur(16px); }
+.taskwatch-notes { width: 100%; max-width: min(720px, 100%); display: flex; flex-direction: column; gap: clamp(0.85rem, 2.2vw, 1.4rem); /* expose padding as a var so children can align/clip to the section edge */ --notes-pad: clamp(1.5rem, 3.8vw, 2.2rem); padding: var(--notes-pad); border-radius: clamp(16px, 3.4vw, 22px); border: 1px solid rgba(118, 142, 255, 0.36); background: linear-gradient(155deg, rgba(14, 18, 48, 0.9) 0%, rgba(10, 16, 40, 0.9) 58%, rgba(8, 14, 36, 0.92) 100%); box-shadow: 0 32px 72px -36px rgba(2, 6, 24, 0.85); backdrop-filter: blur(16px); }
 .taskwatch-notes__header { display: flex; align-items: flex-start; justify-content: space-between; gap: clamp(0.85rem, 2.4vw, 1.6rem); }
 .taskwatch-notes__heading { display: flex; flex-direction: column; gap: clamp(0.3rem, 1vw, 0.55rem); }
 .taskwatch-notes__title { margin: 0; font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.16em; font-size: clamp(1.05rem, 2.6vw, 1.35rem); color: var(--text-primary); }
@@ -614,7 +614,15 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible { backgroun
 .taskwatch-notes__notes,
 .taskwatch-notes__subtasks { display: flex; flex-direction: column; gap: clamp(0.45rem, 1.1vw, 0.65rem); }
 .taskwatch-notes .goal-task-details__subtasks-body,
-.taskwatch-notes .goal-task-details__subtask-list { position: relative; overflow: hidden; }
+.taskwatch-notes .goal-task-details__subtask-list {
+  position: relative;
+  overflow: hidden;
+  /* Expand the clipping box to the section border, not the inner padding. */
+  margin-left: calc(-1 * var(--notes-pad));
+  margin-right: calc(-1 * var(--notes-pad));
+  padding-left: var(--notes-pad);
+  padding-right: var(--notes-pad);
+}
 .taskwatch-notes__subtasks-row { display: flex; align-items: center; justify-content: space-between; gap: clamp(0.45rem, 1.2vw, 0.8rem); }
 .taskwatch-notes__subtasks-header { display: inline-flex; align-items: center; gap: clamp(0.35rem, 1vw, 0.55rem); }
 .taskwatch-notes__label { margin: 0; font-size: clamp(0.68rem, 1.3vw, 0.82rem); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; color: rgba(180, 194, 255, 0.72); }
