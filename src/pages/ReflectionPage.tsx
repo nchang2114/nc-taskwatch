@@ -7647,8 +7647,8 @@ useEffect(() => {
           track.style.transform = `translateX(${target}px)`
           const onEnd = () => {
             track.removeEventListener('transitionend', onEnd)
+            // Keep the final transform in place to avoid a visible flash
             track.style.transition = ''
-            track.style.transform = ''
             track.style.willChange = ''
             container.classList.remove('is-dragging')
             setCalendarTitleOverride(null)
@@ -7662,7 +7662,20 @@ useEffect(() => {
               m.setHours(0, 0, 0, 0)
               const today = new Date(); today.setHours(0, 0, 0, 0)
               const deltaDays = Math.round((m.getTime() - today.getTime()) / DAY_DURATION_MS)
-              setHistoryDayOffset(deltaDays)
+              if (typeof flushSync === 'function') {
+                flushSync(() => setHistoryDayOffset(deltaDays))
+              } else {
+                setHistoryDayOffset(deltaDays)
+              }
+              // After the new content mounts, snap back to the centered base without animation
+              requestAnimationFrame(() => {
+                track.style.transition = 'none'
+                track.style.transform = `translateX(${base}px)`
+                requestAnimationFrame(() => { track.style.transition = '' })
+              })
+            } else {
+              // No commit; reset to base immediately
+              track.style.transform = `translateX(${base}px)`
             }
             delete (container as any).dataset.animating
             container.style.pointerEvents = prevPointer
@@ -7813,8 +7826,8 @@ useEffect(() => {
           track.style.transform = `translateX(${target}px)`
           const onEnd = () => {
             track.removeEventListener('transitionend', onEnd)
+            // Keep the final transform in place to avoid a visible flash
             track.style.transition = ''
-            track.style.transform = ''
             track.style.willChange = ''
             setCalendarTitleOverride(null)
             container.classList.remove('is-dragging')
@@ -7825,7 +7838,20 @@ useEffect(() => {
               targetDate.setHours(0, 0, 0, 0)
               const today = new Date(); today.setHours(0, 0, 0, 0)
               const deltaDays = Math.round((targetDate.getTime() - today.getTime()) / DAY_DURATION_MS)
-              setHistoryDayOffset(deltaDays)
+              if (typeof flushSync === 'function') {
+                flushSync(() => setHistoryDayOffset(deltaDays))
+              } else {
+                setHistoryDayOffset(deltaDays)
+              }
+              // After the new content mounts, snap back to the centered base without animation
+              requestAnimationFrame(() => {
+                track.style.transition = 'none'
+                track.style.transform = `translateX(${base}px)`
+                requestAnimationFrame(() => { track.style.transition = '' })
+              })
+            } else {
+              // No commit; reset to base immediately
+              track.style.transform = `translateX(${base}px)`
             }
             delete (container as any).dataset.animating
             container.style.pointerEvents = prevPointer
