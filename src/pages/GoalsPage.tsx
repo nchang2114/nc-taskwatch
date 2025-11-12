@@ -4541,21 +4541,14 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                       isSubDeleteRevealed && 'goal-task-details__subtask--delete-revealed',
                                                     )}
                                                     onClick={(event) => {
+                                                      // Left-click no longer reveals delete; only right-click does.
                                                       event.stopPropagation()
-                                                      if (editingSubtaskKey === `${task.id}:${subtask.id}`) {
-                                                        return
-                                                      }
-                                                      const timers = subtaskClickTimersRef.current
-                                                      const existing = timers.get(subDeleteKey)
-                                                      if (existing) {
-                                                        window.clearTimeout(existing)
-                                                        timers.delete(subDeleteKey)
-                                                      }
-                                                      const tid = window.setTimeout(() => {
-                                                        onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
-                                                        timers.delete(subDeleteKey)
-                                                      }, 200)
-                                                      timers.set(subDeleteKey, tid)
+                                                    }}
+                                                    onContextMenu={(event) => {
+                                                      // Right-click toggles delete reveal
+                                                      event.preventDefault()
+                                                      event.stopPropagation()
+                                                      onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
                                                     }}
                                                     onDoubleClick={(event) => {
                                                       event.stopPropagation()
@@ -4616,6 +4609,18 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                         el.style.height = 'auto'
                                                         el.style.height = `${el.scrollHeight}px`
                                                         handleSubtaskTextChange(task.id, subtask.id, event.target.value)
+                                                      }}
+                                                      onClick={(event) => {
+                                                        event.stopPropagation()
+                                                        if (editingSubtaskKey !== `${task.id}:${subtask.id}`) {
+                                                          setEditingSubtaskKey(`${task.id}:${subtask.id}`)
+                                                          if (typeof window !== 'undefined') {
+                                                            const el = event.currentTarget
+                                                            window.setTimeout(() =>
+                                                              setTextareaCaretFromPoint(el, (event as any).clientX, (event as any).clientY),
+                                                            0)
+                                                          }
+                                                        }
                                                       }}
                                                       onKeyDown={(event) => {
                                                         // Enter commits a new subtask; Shift+Enter inserts newline
@@ -5209,20 +5214,11 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                     )}
                                                     onClick={(event) => {
                                                       event.stopPropagation()
-                                                      if (editingSubtaskKey === `${task.id}:${subtask.id}`) {
-                                                        return
-                                                      }
-                                                      const timers = subtaskClickTimersRef.current
-                                                      const existing = timers.get(subDeleteKey)
-                                                      if (existing) {
-                                                        window.clearTimeout(existing)
-                                                        timers.delete(subDeleteKey)
-                                                      }
-                                                      const tid = window.setTimeout(() => {
-                                                        onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
-                                                        timers.delete(subDeleteKey)
-                                                      }, 200)
-                                                      timers.set(subDeleteKey, tid)
+                                                    }}
+                                                    onContextMenu={(event) => {
+                                                      event.preventDefault()
+                                                      event.stopPropagation()
+                                                      onRevealDeleteTask(isSubDeleteRevealed ? null : subDeleteKey)
                                                     }}
                                                     onDoubleClick={(event) => {
                                                       event.stopPropagation()
@@ -5273,6 +5269,18 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                                         el.style.height = 'auto'
                                                         el.style.height = `${el.scrollHeight}px`
                                                         handleSubtaskTextChange(task.id, subtask.id, event.target.value)
+                                                      }}
+                                                      onClick={(event) => {
+                                                        event.stopPropagation()
+                                                        if (editingSubtaskKey !== `${task.id}:${subtask.id}`) {
+                                                          setEditingSubtaskKey(`${task.id}:${subtask.id}`)
+                                                          if (typeof window !== 'undefined') {
+                                                            const el = event.currentTarget
+                                                            window.setTimeout(() =>
+                                                              setTextareaCaretFromPoint(el, (event as any).clientX, (event as any).clientY),
+                                                            0)
+                                                          }
+                                                        }
                                                       }}
                                                       onKeyDown={(event) => {
                                                         if (event.key === 'Enter' && !event.shiftKey) {
