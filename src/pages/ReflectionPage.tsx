@@ -3692,22 +3692,18 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
           return next
         })
         if (maybeCleanup) {
+          // Capture ids locally to satisfy TS control-flow narrowing.
+          const rid = maybeCleanup.routineId
+          const occ = maybeCleanup.occurrenceDate
           // Optimistically update local exception state so the guide re-renders immediately,
           // then perform the durable removal (local persistence + optional remote) in the background.
           setRepeatingExceptions((prev) =>
-            Array.isArray(prev)
-              ? prev.filter(
-                  (r) =>
-                    !(
-                      r.routineId === maybeCleanup!.routineId &&
-                      r.occurrenceDate === maybeCleanup!.occurrenceDate &&
-                      r.action === 'rescheduled'
-                    ),
-                )
-              : prev,
+            (prev as RepeatingException[]).filter(
+              (r) => !(r.routineId === rid && r.occurrenceDate === occ && r.action === 'rescheduled'),
+            ),
           )
           try {
-            void deleteRescheduleExceptionFor(maybeCleanup.routineId, maybeCleanup.occurrenceDate)
+            void deleteRescheduleExceptionFor(rid, occ)
           } catch {}
         }
       })
