@@ -2419,6 +2419,8 @@ export default function ReflectionPage() {
   const lastCalendarHotkeyRef = useRef<{ key: string; timestamp: number } | null>(null)
   // Defer clearing the calendar title override until the anchor date has updated
   const pendingTitleClearRef = useRef<number | null>(null)
+  // Queue for month/year carousel keypresses while an animation is active
+  const monthYearNavQueueRef = useRef(0)
   const multiDayKeyboardStateRef = useRef<{ active: boolean; selection: number }>({
     active: false,
     selection: multiDayCount,
@@ -2712,6 +2714,8 @@ export default function ReflectionPage() {
   const historyCalendarRef = useRef<HTMLDivElement | null>(null)
   // Month/Year carousel root for programmatic keyboard navigation animations
   const monthYearCarouselRef = useRef<HTMLDivElement | null>(null)
+  const handlePrevWindowRef = useRef<() => void>(() => {})
+  const handleNextWindowRef = useRef<() => void>(() => {})
   // Ref to the calendar editor panel so global outside-click handlers don't cancel edits when interacting with the modal
   const [calendarInspectorEntryId, setCalendarInspectorEntryId] = useState<string | null>(null)
 const calendarEditorRef = useRef<HTMLDivElement | null>(null)
@@ -5673,7 +5677,11 @@ useEffect(() => {
         setHistoryDayOffset(deltaDays)
         return
       }
-      if ((container as any).dataset.animating === '1') return
+      if ((container as any).dataset.animating === '1') {
+        // Queue a backward step while current animation completes
+        monthYearNavQueueRef.current -= 1
+        return
+      }
       ;(container as any).dataset.animating = '1'
       const prevPointer = container.style.pointerEvents
       container.style.pointerEvents = 'none'
@@ -5682,7 +5690,7 @@ useEffect(() => {
       // Prepare base position
       track.style.transition = 'none'
       track.style.willChange = 'transform'
-      track.style.transform = `translateX(${baseX}px)`
+      track.style.transform = `translate3d(${baseX}px, 0, 0)`
       // Show target title during animation
       if (calendarView === 'month') {
         const previewMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth() - 1, 1)
@@ -5692,6 +5700,8 @@ useEffect(() => {
       }
       // Animate to the right (dir = +1)
       const target = baseX + 1 * width
+      const easing = 'cubic-bezier(0.22, 0.72, 0.28, 1)'
+      const duration = PAN_MIN_ANIMATION_MS
       let done = false
       let fallback: number | null = null
       const commit = () => {
@@ -5715,11 +5725,24 @@ useEffect(() => {
           const latestTrack = monthYearCarouselRef.current?.querySelector('.calendar-carousel__track') as HTMLDivElement | null
           if (latestTrack) {
             latestTrack.style.transition = 'none'
-            latestTrack.style.transform = `translateX(${baseX}px)`
+            latestTrack.style.transform = `translate3d(${baseX}px, 0, 0)`
             requestAnimationFrame(() => { latestTrack.style.transition = '' })
           }
           delete (container as any).dataset.animating
           container.style.pointerEvents = prevPointer
+          // Chain any queued steps
+          const pending = monthYearNavQueueRef.current
+          if (pending !== 0) {
+            const dir = pending > 0 ? 1 : -1
+            monthYearNavQueueRef.current -= dir
+            requestAnimationFrame(() => {
+              if (dir > 0) {
+                handleNextWindowRef.current()
+              } else {
+                handlePrevWindowRef.current()
+              }
+            })
+          }
         })
       }
       const onEnd = () => {
@@ -5729,10 +5752,10 @@ useEffect(() => {
         track.style.willChange = ''
         commit()
       }
-      fallback = window.setTimeout(onEnd, 360)
+      fallback = window.setTimeout(onEnd, duration + 80)
       const start = () => {
-        track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
-        track.style.transform = `translateX(${target}px)`
+        track.style.transition = `transform ${duration}ms ${easing}`
+        track.style.transform = `translate3d(${target}px, 0, 0)`
       }
       requestAnimationFrame(start)
       track.addEventListener('transitionend', onEnd, { once: true })
@@ -5757,7 +5780,11 @@ useEffect(() => {
         setHistoryDayOffset(deltaDays)
         return
       }
-      if ((container as any).dataset.animating === '1') return
+      if ((container as any).dataset.animating === '1') {
+        // Queue a forward step while current animation completes
+        monthYearNavQueueRef.current += 1
+        return
+      }
       ;(container as any).dataset.animating = '1'
       const prevPointer = container.style.pointerEvents
       container.style.pointerEvents = 'none'
@@ -5766,7 +5793,7 @@ useEffect(() => {
       // Prepare base position
       track.style.transition = 'none'
       track.style.willChange = 'transform'
-      track.style.transform = `translateX(${baseX}px)`
+      track.style.transform = `translate3d(${baseX}px, 0, 0)`
       // Show target title during animation
       if (calendarView === 'month') {
         const previewMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 1)
@@ -5776,6 +5803,8 @@ useEffect(() => {
       }
       // Animate to the left (dir = -1)
       const target = baseX - 1 * width
+      const easing = 'cubic-bezier(0.22, 0.72, 0.28, 1)'
+      const duration = PAN_MIN_ANIMATION_MS
       let done = false
       let fallback: number | null = null
       const commit = () => {
@@ -5799,11 +5828,24 @@ useEffect(() => {
           const latestTrack = monthYearCarouselRef.current?.querySelector('.calendar-carousel__track') as HTMLDivElement | null
           if (latestTrack) {
             latestTrack.style.transition = 'none'
-            latestTrack.style.transform = `translateX(${baseX}px)`
+            latestTrack.style.transform = `translate3d(${baseX}px, 0, 0)`
             requestAnimationFrame(() => { latestTrack.style.transition = '' })
           }
           delete (container as any).dataset.animating
           container.style.pointerEvents = prevPointer
+          // Chain any queued steps
+          const pending = monthYearNavQueueRef.current
+          if (pending !== 0) {
+            const dir = pending > 0 ? 1 : -1
+            monthYearNavQueueRef.current -= dir
+            requestAnimationFrame(() => {
+              if (dir > 0) {
+                handleNextWindowRef.current()
+              } else {
+                handlePrevWindowRef.current()
+              }
+            })
+          }
         })
       }
       const onEnd = () => {
@@ -5813,10 +5855,10 @@ useEffect(() => {
         track.style.willChange = ''
         commit()
       }
-      fallback = window.setTimeout(onEnd, 360)
+      fallback = window.setTimeout(onEnd, duration + 80)
       const start = () => {
-        track.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)'
-        track.style.transform = `translateX(${target}px)`
+        track.style.transition = `transform ${duration}ms ${easing}`
+        track.style.transform = `translate3d(${target}px, 0, 0)`
       }
       requestAnimationFrame(start)
       track.addEventListener('transitionend', onEnd, { once: true })
@@ -5824,6 +5866,11 @@ useEffect(() => {
     }
     navigateByDelta(stepSizeByView[calendarView])
   }, [anchorDate, calendarView, navigateByDelta, setHistoryDayOffset, stepSizeByView])
+
+  // Keep refs pointing to the latest prev/next handlers so queued animations
+  // always use fresh logic and the latest anchorDate
+  useEffect(() => { handlePrevWindowRef.current = handlePrevWindow }, [handlePrevWindow])
+  useEffect(() => { handleNextWindowRef.current = handleNextWindow }, [handleNextWindow])
 
   const handleJumpToToday = useCallback(() => {
     const currentOffset = historyDayOffsetRef.current
