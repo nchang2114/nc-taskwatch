@@ -3675,7 +3675,8 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
         // If deleting a confirmed instance of a repeating guide (rescheduled),
         // remove the associated 'rescheduled' exception so the guide re-renders
         // unless another entry for the same occurrence still exists.
-        let maybeCleanup: { routineId: string; occurrenceDate: string } | null = null
+        let cleanupRid: string | null = null
+        let cleanupOcc: string | null = null
         updateHistory((current) => {
           const idx = current.findIndex((e) => e.id === entryId)
           if (idx === -1) return current
@@ -3685,16 +3686,13 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
           const next = current.filter((e) => e.id !== entryId)
           if (rid && od) {
             const stillConfirmed = next.some((e: any) => e && e.routineId === rid && e.occurrenceDate === od)
-            if (!stillConfirmed) {
-              maybeCleanup = { routineId: rid, occurrenceDate: od }
-            }
+            if (!stillConfirmed) { cleanupRid = rid; cleanupOcc = od }
           }
           return next
         })
-        if (maybeCleanup) {
-          // Capture ids locally to satisfy TS control-flow narrowing.
-          const rid = maybeCleanup.routineId
-          const occ = maybeCleanup.occurrenceDate
+        if (cleanupRid && cleanupOcc) {
+          const rid = cleanupRid
+          const occ = cleanupOcc
           // Optimistically update local exception state so the guide re-renders immediately,
           // then perform the durable removal (local persistence + optional remote) in the background.
           setRepeatingExceptions((prev) =>
