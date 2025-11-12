@@ -5556,8 +5556,11 @@ useEffect(() => {
   const anchoredTooltipId = hoveredHistoryId ?? selectedHistoryId
   const dayEntryCount = daySegments.length
   const monthAndYearLabel = useMemo(() => {
+    if (calendarView === 'year') {
+      return String(anchorDate.getFullYear())
+    }
     return anchorDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-  }, [anchorDate])
+  }, [anchorDate, calendarView])
   const dayLabel = useMemo(() => {
     const date = new Date(dayStart)
     const weekday = date.toLocaleDateString(undefined, { weekday: 'long' })
@@ -6061,6 +6064,15 @@ useEffect(() => {
     const dayHasSessions = (startMs: number, endMs: number) =>
       entries.some((e) => Math.min(e.endedAt, endMs) > Math.max(e.startedAt, startMs))
 
+    const jumpToDateAndShowWeek = (targetMidnightMs: number) => {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const todayMs = today.getTime()
+      const deltaDays = Math.round((targetMidnightMs - todayMs) / DAY_DURATION_MS)
+      setHistoryDayOffset(deltaDays)
+      setView('week')
+    }
+
     const todayMidnightMs = (() => {
       const t = new Date()
       t.setHours(0, 0, 0, 0)
@@ -6080,7 +6092,21 @@ useEffect(() => {
           className={`calendar-cell${isCurrentMonth ? '' : ' calendar-cell--muted'}${isToday ? ' calendar-cell--today' : ''}`}
           aria-label={start.toDateString()}
         >
-          <div className="calendar-day-number">{start.getDate()}</div>
+          <div
+            className="calendar-day-number"
+            role="button"
+            tabIndex={0}
+            onClick={() => jumpToDateAndShowWeek(start.getTime())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                jumpToDateAndShowWeek(start.getTime())
+              }
+            }}
+            title={`Go to week of ${start.toDateString()}`}
+          >
+            {start.getDate()}
+          </div>
           {has ? <div className="calendar-session-dot" aria-hidden="true" /> : null}
         </div>
       )
@@ -7463,15 +7489,25 @@ useEffect(() => {
           d.setHours(0, 0, 0, 0)
           const inMonth = d.getMonth() === idx
           const isToday = d.getTime() === todayMidnight
-          cells.push(
+          const cell = (
             <div
               key={`y-${year}-${idx}-${i}`}
               className={`calendar-month-day${inMonth ? '' : ' calendar-month-day--muted'}${isToday ? ' calendar-month-day--today' : ''}`}
               aria-hidden={!inMonth}
+              role={inMonth ? 'button' : undefined}
+              tabIndex={inMonth ? 0 : -1}
+              onClick={inMonth ? () => jumpToDateAndShowWeek(d.getTime()) : undefined}
+              onKeyDown={inMonth ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  jumpToDateAndShowWeek(d.getTime())
+                }
+              } : undefined}
             >
               {inMonth ? d.getDate() : ''}
             </div>
           )
+          cells.push(cell)
         }
 
         return (
@@ -7487,7 +7523,7 @@ useEffect(() => {
     }
 
     return null
-  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, resetCalendarPanTransform, stopCalendarPanAnimation, repeatingRules])
+  }, [calendarView, anchorDate, effectiveHistory, dragPreview, multiDayCount, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup, calendarPreview, handleOpenCalendarPreview, handleCloseCalendarPreview, animateCalendarPan, resolvePanSnap, resetCalendarPanTransform, stopCalendarPanAnimation, repeatingRules, setView, setHistoryDayOffset])
 
   // Simple inline icons for popover actions
   const IconEdit = () => (

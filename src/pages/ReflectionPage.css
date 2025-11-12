@@ -2329,6 +2329,7 @@ html[data-theme='light'] .history-calendar {
   position: relative; /* anchor for today badge */
   display: inline-block; /* shrink to text width so badge centers correctly */
   z-index: 0; /* create stacking context so badge can sit behind */
+  cursor: pointer; /* only the number is interactive */
 }
 .calendar-cell--today .calendar-day-number::after {
   content: '';
@@ -2408,8 +2409,9 @@ html[data-theme='light'] .calendar-cell--today .calendar-day-number::after {
   border-radius: 4px;
   color: var(--text-secondary);
   z-index: 0; /* allow pseudo background to sit behind text */
+  cursor: pointer;
 }
-.calendar-month-day--muted { opacity: 0.35; }
+.calendar-month-day--muted { opacity: 0.35; cursor: default; }
 
 /* Today badge in year grid */
 .calendar-month-day--today::before {
