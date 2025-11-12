@@ -5878,6 +5878,11 @@ useEffect(() => {
   }, [navigateByDelta])
 
   const setView = useCallback((view: CalendarViewMode) => {
+    // If leaving month/year, clear any transient title override right away
+    if (view !== 'month' && view !== 'year') {
+      setCalendarTitleOverride(null)
+      pendingTitleClearRef.current = null
+    }
     setCalendarView(view)
   }, [])
 
@@ -9973,7 +9978,18 @@ useEffect(() => {
                 </div>
               </div>
             </div>
-            <div className="history-calendar" aria-label="Calendar display" ref={historyCalendarRef}>
+            {/*
+              Force a remount when switching views to avoid stale inline
+              transforms/styles carrying over from the month/year carousels
+              into the day/3d/week header track. This ensures headers always
+              render after navigating from month/year views.
+            */}
+            <div
+              key={calendarView}
+              className="history-calendar"
+              aria-label="Calendar display"
+              ref={historyCalendarRef}
+            >
               {renderCalendarContent()}
             </div>
             {renderCalendarPopover()}
