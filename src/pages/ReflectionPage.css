@@ -15,6 +15,7 @@
   align-items: center;
   gap: 0.5rem;
   flex: 0 0 auto; /* keep items inline; don't grow */
+  min-width: 0; /* allow contents to shrink without forcing overflow */
 }
 
 /* Anchor the Today + view toggles group to the right */
@@ -3130,7 +3131,7 @@ html[data-theme='light'] .history-timeline__block--future {
 /* Compact toolbar adjustments for narrow viewports */
 @media (max-width: 560px) {
   .calendar-title {
-    font-size: clamp(1rem, 4.2vw, 1.1rem);
+    font-size: clamp(0.95rem, 3.8vw, 1.05rem);
   }
   .calendar-toolbar {
     gap: 0.5rem;
@@ -3144,16 +3145,16 @@ html[data-theme='light'] .history-timeline__block--future {
     font-size: 0.95rem;
   }
   .calendar-today-button {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.85rem;
+    padding: 0.28rem 0.5rem;
+    font-size: 0.82rem;
   }
   .calendar-toggle-group {
-    gap: 0.2rem;
-    padding: 0.18rem;
+    gap: 0.18rem;
+    padding: 0.16rem;
   }
   .calendar-toggle {
-    padding: 0.28rem 0.5rem;
-    font-size: 0.85rem;
+    padding: 0.26rem 0.46rem;
+    font-size: 0.82rem;
   }
   /* Swap toggle labels to compact form */
   .calendar-toggle__label--full {
@@ -3161,6 +3162,54 @@ html[data-theme='light'] .history-timeline__block--future {
   }
   .calendar-toggle__label--short {
     display: inline;
+  }
+}
+
+/* Ultra-compact toolbar adjustments for very narrow screens */
+@media (max-width: 440px) {
+  .calendar-title {
+    font-size: clamp(0.9rem, 3.6vw, 1rem);
+  }
+  .calendar-toolbar {
+    gap: 0.4rem;
+  }
+  .calendar-toolbar__left,
+  .calendar-toolbar__right {
+    gap: 0.28rem;
+  }
+  .calendar-nav-button {
+    padding: 0.24rem 0.44rem;
+    font-size: 0.9rem;
+  }
+  .calendar-today-button {
+    padding: 0.26rem 0.46rem;
+    font-size: 0.8rem;
+  }
+  .calendar-toggle-group {
+    gap: 0.14rem;
+    padding: 0.14rem;
+  }
+  .calendar-toggle {
+    padding: 0.24rem 0.44rem;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .calendar-title {
+    font-size: clamp(0.85rem, 3.4vw, 0.95rem);
+  }
+  .calendar-nav-button {
+    padding: 0.22rem 0.4rem;
+    font-size: 0.85rem;
+  }
+  .calendar-today-button {
+    padding: 0.24rem 0.42rem;
+    font-size: 0.78rem;
+  }
+  .calendar-toggle {
+    padding: 0.22rem 0.4rem;
+    font-size: 0.78rem;
   }
 }
 

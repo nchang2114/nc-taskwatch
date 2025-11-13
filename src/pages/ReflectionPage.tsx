@@ -9965,7 +9965,8 @@ useEffect(() => {
                   onClick={handleJumpToToday}
                   aria-label="Jump to today"
                 >
-                  Today
+                  <span className="calendar-toggle__label calendar-toggle__label--full">Today</span>
+                  <span className="calendar-toggle__label calendar-toggle__label--short" aria-hidden>T</span>
                 </button>
                 <div className="calendar-toggle-group" role="tablist" aria-label="Calendar views">
                   {(() => {
