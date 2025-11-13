@@ -5647,14 +5647,19 @@ export default function GoalsPage(): ReactElement {
   const [lifeRoutineRenameDraft, setLifeRoutineRenameDraft] = useState('')
   const lifeRoutineRenameInputRef = useRef<HTMLInputElement | null>(null)
 
+  // Gate pushes to Supabase until after the initial remote pull completes
+  const lifeRoutinesSyncedRef = useRef(false)
   useEffect(() => {
     let cancelled = false
     void (async () => {
       const synced = await syncLifeRoutinesWithSupabase()
-      if (!cancelled && synced) {
-        setLifeRoutineTasks((current) =>
-          JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
-        )
+      if (!cancelled) {
+        lifeRoutinesSyncedRef.current = true
+        if (synced) {
+          setLifeRoutineTasks((current) =>
+            JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
+          )
+        }
       }
     })()
     return () => {
@@ -5737,6 +5742,7 @@ export default function GoalsPage(): ReactElement {
     return lifeRoutineTasks.find((task) => task.id === activeLifeRoutineCustomizerId) ?? null
   }, [lifeRoutineTasks, activeLifeRoutineCustomizerId])
   useEffect(() => {
+    if (!lifeRoutinesSyncedRef.current) return
     writeStoredLifeRoutines(lifeRoutineTasks)
   }, [lifeRoutineTasks])
   useEffect(() => {

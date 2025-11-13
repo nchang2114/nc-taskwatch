@@ -244,6 +244,12 @@ export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[
   if (!session) {
     return null
   }
+  // Default to preferring the remote snapshot. You can opt out by setting
+  // VITE_PREFER_REMOTE_LIFE_ROUTINES=false in .env.local.
+  const preferRemoteEnv = String((import.meta as any)?.env?.VITE_PREFER_REMOTE_LIFE_ROUTINES ?? 'true')
+    .trim()
+    .toLowerCase()
+  const PREFER_REMOTE = preferRemoteEnv === 'true' || preferRemoteEnv === '1' || preferRemoteEnv === 'yes'
   // Fetch remote snapshot
   const { data, error } = await supabase
     .from('life_routines')
@@ -263,7 +269,7 @@ export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[
   // Prefer local if the user already has any routines configured locally.
   // This avoids surprising "random" routines appearing from a stale server snapshot
   // (e.g., defaults or data from another device) overriding local choices.
-  if (localSanitized.length > 0) {
+  if (!PREFER_REMOTE && localSanitized.length > 0) {
     const stored = storeLifeRoutinesLocal(localSanitized)
     // Best-effort push so other devices converge to local
     void pushLifeRoutinesToSupabase(stored)
