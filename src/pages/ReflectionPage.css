@@ -2588,9 +2588,95 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
   position: relative;
   display: grid;
   grid-template-columns: 56px 1fr;
+  grid-template-rows: auto 1fr; /* All-day row, then time grid */
   /* Let the body occupy remaining space under headers within the calendar */
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* All-day row (Google Calendar style) */
+.calendar-allday-axis {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  padding: 0.35rem 0.25rem 0.35rem 0.5rem;
+  white-space: nowrap;
+}
+.calendar-allday-wrapper {
+  position: relative;
+  overflow: hidden;
+  padding: 0; /* remove padding to align exactly with days area */
+  min-height: 1.6rem;
+  border-bottom: 1px solid rgba(124, 138, 220, 0.22);
+}
+.calendar-alldays {
+  display: grid;
+  grid-template-columns: repeat(var(--calendar-day-count, 7), 1fr);
+  grid-auto-rows: 1.4rem;
+  gap: 0; /* align with hour grid which has no column gap */
+  will-change: transform;
+  position: relative;
+}
+.calendar-allday-gridlines {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--calendar-day-count, 7), 1fr);
+  pointer-events: none;
+}
+.calendar-allday-gridline {
+  border-left: 1px solid rgba(124, 138, 220, 0.16); /* match .calendar-day-column divider */
+}
+.calendar-allday-gridline.is-first { border-left: none; }
+.calendar-allday-event { z-index: 2; }
+.calendar-allday-hit {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  cursor: cell;
+}
+.calendar-allday-event {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(92, 108, 196, 0.4), 0 1px 3px rgba(6, 8, 20, 0.35);
+  color: #fff; /* match .calendar-event text color */
+  font-size: 0.78rem; /* match normal event font size */
+}
+.calendar-allday-event__background {
+  position: absolute;
+  inset: 0;
+  opacity: 0.9;
+}
+.calendar-allday-event__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.6rem;
+}
+.calendar-allday-event__title {
+  font-size: inherit; /* use the container's font size to match normal events */
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.calendar-allday-event--planned .calendar-allday-event__background {
+  opacity: 0.15;
+}
+
+html[data-theme='light'] .calendar-allday-wrapper { border-color: rgba(176, 186, 240, 0.35); }
+/* No separate light-theme override; follow normal event styling */
+html[data-theme='light'] .calendar-allday-gridline {
+  border-left-color: rgba(160, 172, 236, 0.2);
 }
 
 .calendar-time-axis {

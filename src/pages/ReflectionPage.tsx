@@ -1200,6 +1200,25 @@ const formatHourLabel = (hour24: number) => {
 
 const MINUTE_MS = 60 * 1000
 const DAY_DURATION_MS = 24 * 60 * 60 * 1000
+
+// All‑day helpers (shared across calendar + popover/editor)
+const toLocalMidnightTs = (ms: number): number => {
+  const d = new Date(ms)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+const isLocalMidnightTs = (ms: number): boolean => {
+  const d = new Date(ms)
+  return d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0
+}
+const isAllDayRangeTs = (start: number, end: number): boolean => {
+  if (!(Number.isFinite(start) && Number.isFinite(end)) || end <= start) return false
+  if (!isLocalMidnightTs(start) || !isLocalMidnightTs(end)) return false
+  const startMid = toLocalMidnightTs(start)
+  const endMid = toLocalMidnightTs(end)
+  const days = Math.round((endMid - startMid) / DAY_DURATION_MS)
+  return days >= 1
+}
 const DRAG_DETECTION_THRESHOLD_PX = 3
 const MIN_SESSION_DURATION_DRAG_MS = MINUTE_MS
 // Double-tap (touch) detection settings
@@ -2429,6 +2448,8 @@ export default function ReflectionPage() {
   const calendarDaysAreaRef = useRef<HTMLDivElement | null>(null)
   const calendarDaysRef = useRef<HTMLDivElement | null>(null)
   const calendarHeadersRef = useRef<HTMLDivElement | null>(null)
+  // Track for all-day events row so it pans in sync with days/headers
+  const calendarAllDayRef = useRef<HTMLDivElement | null>(null)
   const calendarBaseTranslateRef = useRef<number>(0)
   const calendarDragRef = useRef<{
     pointerId: number
@@ -2491,12 +2512,16 @@ export default function ReflectionPage() {
       return
     }
     const daysEl = calendarDaysRef.current
+    const allDayEl = calendarAllDayRef.current
     if (daysEl) {
       daysEl.style.transform = `translateX(${base}px)`
     }
     const hdrEl = calendarHeadersRef.current
     if (hdrEl) {
       hdrEl.style.transform = `translateX(${base}px)`
+    }
+    if (allDayEl) {
+      allDayEl.style.transform = `translateX(${base}px)`
     }
   }, [])
   const focusMultiDayOption = useCallback((value: number) => {
@@ -2517,6 +2542,7 @@ export default function ReflectionPage() {
       historyDayOffsetRef.current = targetOffset
       const daysEl = calendarDaysRef.current
       const hdrEl = calendarHeadersRef.current
+      const allDayEl = calendarAllDayRef.current
       if (!daysEl || !hdrEl || !Number.isFinite(dayWidth) || dayWidth <= 0) {
         if (targetOffset !== baseOffset) {
           setHistoryDayOffset(targetOffset)
@@ -2529,8 +2555,10 @@ export default function ReflectionPage() {
         const baseTransform = calendarBaseTranslateRef.current
         daysEl.style.transition = ''
         hdrEl.style.transition = ''
+        if (allDayEl) allDayEl.style.transition = ''
         daysEl.style.transform = `translateX(${baseTransform}px)`
         hdrEl.style.transform = `translateX(${baseTransform}px)`
+        if (allDayEl) allDayEl.style.transform = `translateX(${baseTransform}px)`
         return
       }
 
@@ -2549,8 +2577,10 @@ export default function ReflectionPage() {
       if (Math.abs(deltaPx) < 0.5) {
         daysEl.style.transition = ''
         hdrEl.style.transition = ''
+        if (allDayEl) allDayEl.style.transition = ''
         daysEl.style.transform = `translateX(${baseTransform}px)`
         hdrEl.style.transform = `translateX(${baseTransform}px)`
+        if (allDayEl) allDayEl.style.transform = `translateX(${baseTransform}px)`
         if (targetOffset !== baseOffset) {
           setHistoryDayOffset(targetOffset)
         }
@@ -2567,9 +2597,11 @@ export default function ReflectionPage() {
       const finalize = (shouldCommit: boolean) => {
         daysEl.style.transition = ''
         hdrEl.style.transition = ''
+        if (allDayEl) allDayEl.style.transition = ''
         if (!shouldCommit || snapDays === 0) {
           daysEl.style.transform = `translateX(${baseTransform}px)`
           hdrEl.style.transform = `translateX(${baseTransform}px)`
+          if (allDayEl) allDayEl.style.transform = `translateX(${baseTransform}px)`
           calendarPanDesiredOffsetRef.current = baseOffset
           historyDayOffsetRef.current = baseOffset
         } else {
@@ -2609,8 +2641,10 @@ export default function ReflectionPage() {
       requestAnimationFrame(() => {
         daysEl.style.transition = `transform ${duration}ms ${easing}`
         hdrEl.style.transition = `transform ${duration}ms ${easing}`
+        if (allDayEl) allDayEl.style.transition = `transform ${duration}ms ${easing}`
         daysEl.style.transform = `translateX(${endTransform}px)`
         hdrEl.style.transform = `translateX(${endTransform}px)`
+        if (allDayEl) allDayEl.style.transform = `translateX(${endTransform}px)`
       })
 
       daysEl.addEventListener('transitionend', onTransitionEnd)
@@ -5456,7 +5490,7 @@ useEffect(() => {
       // If tapping a calendar event while a popover is open, handle toggle for the same entry id.
       // For a different event, let its own onClick open the popover so guides (not in effectiveHistory) work too.
       if (node instanceof Element) {
-        const evEl = node.closest('.calendar-event') as HTMLElement | null
+        const evEl = (node.closest('.calendar-event') || node.closest('.calendar-allday-event')) as HTMLElement | null
         const tappedId = evEl?.dataset.entryId
         if (tappedId) {
           if (calendarPreview && calendarPreview.entryId === tappedId) {
@@ -6212,7 +6246,7 @@ useEffect(() => {
     }
     if (event.button !== 0) return
     const target = event.target as HTMLElement | null
-    if (target && (target.closest('.calendar-event') || target.closest('button'))) {
+    if (target && (target.closest('.calendar-event') || target.closest('.calendar-allday-event') || target.closest('button'))) {
       return
     }
     const area = calendarDaysAreaRef.current
@@ -6222,11 +6256,15 @@ useEffect(() => {
     stopCalendarPanAnimation()
     const daysEl = calendarDaysRef.current
     const hdrEl = calendarHeadersRef.current
+    const allDayEl = calendarAllDayRef.current
     if (daysEl) {
       daysEl.style.transition = ''
     }
     if (hdrEl) {
       hdrEl.style.transition = ''
+    }
+    if (allDayEl) {
+      allDayEl.style.transition = ''
     }
     resetCalendarPanTransform()
     const dayCount = calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
@@ -6278,12 +6316,16 @@ useEffect(() => {
       // Smooth pan: do not update historyDayOffset while dragging to avoid re-renders
       const totalPx = calendarBaseTranslateRef.current + constrainedDx
       const daysEl = calendarDaysRef.current
+      const allDayEl = calendarAllDayRef.current
       if (daysEl) {
         daysEl.style.transform = `translateX(${totalPx}px)`
       }
       const hdrEl = calendarHeadersRef.current
       if (hdrEl) {
         hdrEl.style.transform = `translateX(${totalPx}px)`
+      }
+      if (allDayEl) {
+        allDayEl.style.transform = `translateX(${totalPx}px)`
       }
     }
     const handleUp = (e: PointerEvent) => {
@@ -6301,12 +6343,16 @@ useEffect(() => {
         state.lastAppliedDx = appliedDx
         const totalPx = calendarBaseTranslateRef.current + appliedDx
         const daysEl = calendarDaysRef.current
+        const allDayEl = calendarAllDayRef.current
         if (daysEl) {
           daysEl.style.transform = `translateX(${totalPx}px)`
         }
         const hdrEl = calendarHeadersRef.current
         if (hdrEl) {
           hdrEl.style.transform = `translateX(${totalPx}px)`
+        }
+        if (allDayEl) {
+          allDayEl.style.transform = `translateX(${totalPx}px)`
         }
         const { snap } = resolvePanSnap(state, dx, dayWidth, calendarView, appliedDx)
         if (snap !== 0) {
@@ -6319,12 +6365,16 @@ useEffect(() => {
       if (resetImmediately) {
         const base = calendarBaseTranslateRef.current
         const daysEl = calendarDaysRef.current
+        const allDayEl = calendarAllDayRef.current
         if (daysEl) {
           daysEl.style.transform = `translateX(${base}px)`
         }
         const hdrEl = calendarHeadersRef.current
         if (hdrEl) {
           hdrEl.style.transform = `translateX(${base}px)`
+        }
+        if (allDayEl) {
+          allDayEl.style.transform = `translateX(${base}px)`
         }
       }
       calendarDragRef.current = null
@@ -6417,6 +6467,91 @@ useEffect(() => {
         d.setHours(0, 0, 0, 0)
         dayStarts.push(d.getTime())
       }
+
+      // Helpers for all-day support
+      const toLocalMidnight = (ms: number): number => {
+        const d = new Date(ms)
+        d.setHours(0, 0, 0, 0)
+        return d.getTime()
+      }
+      const isLocalMidnight = (ms: number): boolean => {
+        const d = new Date(ms)
+        return d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0
+      }
+      const isAllDayRange = (start: number, end: number): boolean => {
+        if (!(Number.isFinite(start) && Number.isFinite(end)) || end <= start) return false
+        // All‑day if both endpoints are at local midnight and span at least 1 day
+        if (!isLocalMidnight(start) || !isLocalMidnight(end)) return false
+        const startMid = toLocalMidnight(start)
+        const endMid = toLocalMidnight(end)
+        // Allow for DST shifts by comparing local midnight indices instead of exact ms duration
+        const days = Math.round((endMid - startMid) / DAY_DURATION_MS)
+        return days >= 1
+      }
+
+      type AllDayBar = {
+        entry: HistoryEntry
+        colStart: number
+        colEnd: number // exclusive
+        lane: number
+        label: string
+        colorCss: string
+        isPlanned?: boolean
+      }
+
+      const computeAllDayBars = (): AllDayBar[] => {
+        if (dayStarts.length === 0) return []
+        const windowStartMs = dayStarts[0]
+        const windowEndMs = dayStarts[dayStarts.length - 1] + DAY_DURATION_MS
+        type Raw = { entry: HistoryEntry; colStart: number; colEnd: number; label: string; colorCss: string; isPlanned?: boolean }
+
+        const raws: Raw[] = []
+        for (const entry of effectiveHistory) {
+          const isPreviewed = dragPreview && dragPreview.entryId === entry.id
+          const startAt = isPreviewed ? dragPreview.startedAt : entry.startedAt
+          const endAt = isPreviewed ? dragPreview.endedAt : entry.endedAt
+          if (!isAllDayRange(startAt, endAt)) continue
+          // Clamp the visual range to the current window
+          const startMid = toLocalMidnight(startAt)
+          const endMid = toLocalMidnight(endAt)
+          if (endMid <= windowStartMs || startMid >= windowEndMs) continue
+          const clampedStart = Math.max(startMid, windowStartMs)
+          const clampedEnd = Math.min(endMid, windowEndMs)
+          // Map to column indices (inclusive start, exclusive end)
+          const colStart = Math.floor((clampedStart - windowStartMs) / DAY_DURATION_MS)
+          const colEnd = Math.ceil((clampedEnd - windowStartMs) / DAY_DURATION_MS)
+          if (colEnd <= colStart) continue
+          const meta = resolveGoalMetadata(entry, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup)
+          const colorCss = meta.colorInfo?.gradient?.css ?? meta.colorInfo?.solidColor ?? getPaletteColorForLabel(meta.label)
+          raws.push({ entry, colStart: Math.max(0, colStart), colEnd: Math.min(dayStarts.length, colEnd), label: deriveEntryTaskName(entry), colorCss, isPlanned: !!entry.futureSession })
+        }
+        // Lane assignment: greedy place into first lane that doesn't collide
+        const occupancy: boolean[][] = []
+        const bars: AllDayBar[] = []
+        // sort by start then by duration desc so longer bars reserve lanes first
+        raws.sort((a, b) => (a.colStart === b.colStart ? b.colEnd - b.colStart - (a.colEnd - a.colStart) : a.colStart - b.colStart))
+        for (const r of raws) {
+          let lane = 0
+          // find first lane without overlap
+          while (true) {
+            if (!occupancy[lane]) {
+              occupancy[lane] = new Array(dayStarts.length).fill(false)
+            }
+            const row = occupancy[lane]
+            let overlaps = false
+            for (let c = r.colStart; c < r.colEnd; c += 1) {
+              if (row[c]) { overlaps = true; break }
+            }
+            if (!overlaps) {
+              for (let c = r.colStart; c < r.colEnd; c += 1) row[c] = true
+              bars.push({ entry: r.entry, colStart: r.colStart, colEnd: r.colEnd, lane, label: r.label, colorCss: r.colorCss, isPlanned: r.isPlanned })
+              break
+            }
+            lane += 1
+          }
+        }
+        return bars
+      }
       type DayEvent = {
         entry: HistoryEntry
         topPct: number
@@ -6436,7 +6571,17 @@ useEffect(() => {
         isPlanned?: boolean
       }
 
-      const computeDayEvents = (startMs: number): DayEvent[] => {
+      // Render-cost guardrails: only compute events for the visible window ± margin.
+      const visibleStartIndex = bufferDays
+      const visibleEndIndex = bufferDays + visibleDayCount - 1
+      // Ensure upcoming window is fully rendered to avoid blank columns during swipe.
+      // Using full buffer as margin effectively pre-renders the entire track.
+      const RENDER_MARGIN = bufferDays + visibleDayCount
+
+      const computeDayEvents = (startMs: number, dayIndex: number): DayEvent[] => {
+        if (dayIndex < visibleStartIndex - RENDER_MARGIN || dayIndex > visibleEndIndex + RENDER_MARGIN) {
+          return []
+        }
         const endMs = startMs + DAY_DURATION_MS
         const START_GROUP_EPS = 60 * 1000
 
@@ -6453,6 +6598,8 @@ useEffect(() => {
 
         const raw: RawEvent[] = effectiveHistory
           .map((entry) => {
+            // Exclude all‑day entries from the time grid; they render in the all‑day lane
+            if (isAllDayRange(entry.startedAt, entry.endedAt)) return null
             const isPreviewed = dragPreview && dragPreview.entryId === entry.id
             const previewStart = isPreviewed ? dragPreview.startedAt : entry.startedAt
             const previewEnd = isPreviewed ? dragPreview.endedAt : entry.endedAt
@@ -7028,8 +7175,10 @@ useEffect(() => {
                       const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
                       const daysEl = calendarDaysRef.current
                       const hdrEl = calendarHeadersRef.current
+                      const allDayEl = calendarAllDayRef.current
                       if (daysEl) daysEl.style.transition = ''
                       if (hdrEl) hdrEl.style.transition = ''
+                      if (allDayEl) allDayEl.style.transition = ''
                       resetCalendarPanTransform()
                       const baseOffset = calendarPanDesiredOffsetRef.current
                       calendarDragRef.current = {
@@ -7057,9 +7206,11 @@ useEffect(() => {
                         state.lastAppliedDx = constrainedDx
                         const totalPx = calendarBaseTranslateRef.current + constrainedDx
                         const daysEl = calendarDaysRef.current
+                        const allDayEl = calendarAllDayRef.current
                         if (daysEl) daysEl.style.transform = `translateX(${totalPx}px)`
                       const hdrEl = calendarHeadersRef.current
                       if (hdrEl) hdrEl.style.transform = `translateX(${totalPx}px)`
+                      if (allDayEl) allDayEl.style.transform = `translateX(${totalPx}px)`
                     }
                   }
                   return
@@ -7148,9 +7299,11 @@ useEffect(() => {
                 state.lastAppliedDx = appliedDx
                 const totalPx = calendarBaseTranslateRef.current + appliedDx
                 const daysEl = calendarDaysRef.current
+                const allDayEl = calendarAllDayRef.current
                 if (daysEl) daysEl.style.transform = `translateX(${totalPx}px)`
                 const hdrEl = calendarHeadersRef.current
                 if (hdrEl) hdrEl.style.transform = `translateX(${totalPx}px)`
+                if (allDayEl) allDayEl.style.transform = `translateX(${totalPx}px)`
                 const { snap } = resolvePanSnap(state, dx, dayWidth, calendarView, appliedDx)
                 if (snap !== 0) {
                   animateCalendarPan(snap, dayWidth, state.baseOffset)
@@ -7160,9 +7313,11 @@ useEffect(() => {
               } else {
                 const base = calendarBaseTranslateRef.current
                 const daysEl = calendarDaysRef.current
+                const allDayEl = calendarAllDayRef.current
                 if (daysEl) daysEl.style.transform = `translateX(${base}px)`
                 const hdrEl = calendarHeadersRef.current
                 if (hdrEl) hdrEl.style.transform = `translateX(${base}px)`
+                if (allDayEl) allDayEl.style.transform = `translateX(${base}px)`
               }
             }
             calendarDragRef.current = null
@@ -7229,8 +7384,138 @@ useEffect(() => {
       })
 
       const hours = Array.from({ length: 25 }).map((_, h) => h) // 0..24 (24 for bottom line)
+      const allDayBars = computeAllDayBars()
+      const allDayMaxLane = allDayBars.reduce((m, b) => Math.max(m, b.lane), -1)
+      const allDayRowCount = Math.max(0, allDayMaxLane + 1)
+      const allDayTrackRows = Math.max(1, allDayRowCount)
       const body = (
-          <div className="calendar-vertical__body">
+        <div className="calendar-vertical__body">
+          {/* All‑day row inside the body grid so it behaves as an extension of the days area */}
+          <div className="calendar-allday-axis">All-day</div>
+          <div className="calendar-allday-wrapper" onPointerDown={handleCalendarAreaPointerDown}>
+            <div
+              className="calendar-alldays"
+              ref={calendarAllDayRef}
+              style={{ width: `${(dayStarts.length / visibleDayCount) * 100}%`, gridTemplateRows: `repeat(${allDayTrackRows}, 1.4rem)` }}
+            >
+              {/* Vertical day separators in all-day row (pan with track) */}
+              <div className="calendar-allday-gridlines" aria-hidden>
+                {dayStarts.map((_, i) => (
+                  <div key={`adgl-${i}`} className={`calendar-allday-gridline${i === 0 ? ' is-first' : ''}`} />)
+                )}
+              </div>
+              {allDayBars.map((bar, i) => (
+                <div
+                  key={`adb-${i}-${bar.entry.id}`}
+                  className={`calendar-allday-event${bar.isPlanned ? ' calendar-allday-event--planned' : ''}`}
+                  style={{ gridColumn: `${bar.colStart + 1} / ${bar.colEnd + 1}`, gridRow: `${bar.lane + 1}` }}
+                  data-entry-id={bar.entry.id}
+                  role={'button'}
+                  aria-label={`${bar.label} · All-day`}
+                  onClick={(e) => {
+                    e.preventDefault(); e.stopPropagation()
+                    if (dragPreventClickRef.current) { dragPreventClickRef.current = false; return }
+                    if (suppressEventOpenRef.current) { suppressEventOpenRef.current = false; return }
+                    if (calendarPreview && calendarPreview.entryId === bar.entry.id) { handleCloseCalendarPreview(); return }
+                    handleOpenCalendarPreview(bar.entry, e.currentTarget as HTMLElement)
+                  }}
+                  onDoubleClick={(e) => {
+                    e.preventDefault(); e.stopPropagation()
+                    setSelectedHistoryId(bar.entry.id)
+                    setHoveredHistoryId(bar.entry.id)
+                    setEditingHistoryId(bar.entry.id)
+                    taskNameAutofilledRef.current = false
+                    setHistoryDraft(createHistoryDraftFromEntry(bar.entry))
+                    openCalendarInspector(bar.entry)
+                    handleCloseCalendarPreview()
+                  }}
+                  onPointerDown={(pev) => {
+                    if (pev.button !== 0) return
+                    // Start horizontal drag to move all-day block across days
+                    pev.preventDefault(); pev.stopPropagation(); handleCloseCalendarPreview()
+                    const track = calendarAllDayRef.current
+                    if (!track) return
+                    const rect = track.getBoundingClientRect()
+                    if (!(Number.isFinite(rect.width) && rect.width > 0 && dayStarts.length > 0)) return
+                    const pointerId = pev.pointerId
+                    let moved = false
+                    const startX = pev.clientX
+                    const dayWidth = rect.width / Math.max(1, dayStarts.length)
+                    const initialStart = bar.entry.startedAt
+                    const initialEnd = bar.entry.endedAt
+                    const onMove = (e: PointerEvent) => {
+                      if (e.pointerId !== pointerId) return
+                      const dx = e.clientX - startX
+                      const deltaDays = Math.round(dx / dayWidth)
+                      if (Math.abs(dx) > 4 && !moved) { moved = true; dragPreventClickRef.current = true }
+                      if (!moved) return
+                      const nextStart = initialStart + deltaDays * DAY_DURATION_MS
+                      const nextEnd = initialEnd + deltaDays * DAY_DURATION_MS
+                      const current = dragPreviewRef.current
+                      if (current && current.entryId === bar.entry.id && current.startedAt === nextStart && current.endedAt === nextEnd) return
+                      const preview = { entryId: bar.entry.id, startedAt: nextStart, endedAt: nextEnd }
+                      dragPreviewRef.current = preview
+                      setDragPreview(preview)
+                      try { e.preventDefault() } catch {}
+                    }
+                    const onUp = (e: PointerEvent) => {
+                      if (e.pointerId !== pointerId) return
+                      window.removeEventListener('pointermove', onMove)
+                      window.removeEventListener('pointerup', onUp)
+                      window.removeEventListener('pointercancel', onUp)
+                      try { (pev.currentTarget as any).releasePointerCapture?.(pointerId) } catch {}
+                      const preview = dragPreviewRef.current
+                      if (moved && preview && preview.entryId === bar.entry.id && (preview.startedAt !== initialStart || preview.endedAt !== initialEnd)) {
+                        updateHistory((current) => {
+                          const idx = current.findIndex((h) => h.id === bar.entry.id)
+                          if (idx === -1) return current
+                          const target = current[idx]
+                          const next = [...current]
+                          next[idx] = { ...target, startedAt: preview.startedAt, endedAt: preview.endedAt, elapsed: Math.max(preview.endedAt - preview.startedAt, 1) }
+                          return next
+                        })
+                      }
+                      dragPreviewRef.current = null
+                      setDragPreview(null)
+                    }
+                    try { (pev.currentTarget as any).setPointerCapture?.(pointerId) } catch {}
+                    window.addEventListener('pointermove', onMove)
+                    window.addEventListener('pointerup', onUp)
+                    window.addEventListener('pointercancel', onUp)
+                  }}
+                >
+                  <div className="calendar-allday-event__background" style={{ background: bar.colorCss }} aria-hidden />
+                  <div className="calendar-allday-event__content">
+                    <div className="calendar-allday-event__title">{bar.label}</div>
+                  </div>
+                </div>
+              ))}
+              {/* Click/creation hit areas per day (span all rows) */}
+              {dayStarts.map((start, i) => (
+                <button
+                  key={`adh-${i}`}
+                  type="button"
+                  className="calendar-allday-hit"
+                  style={{ gridColumn: `${i + 1} / ${i + 2}`, gridRow: `1 / ${allDayTrackRows + 1}` }}
+                  onClick={(ev) => {
+                    ev.preventDefault(); ev.stopPropagation()
+                    const newId = makeHistoryId()
+                    const dayStart = start
+                    const newEntry: HistoryEntry = {
+                      id: newId, taskName: '', elapsed: DAY_DURATION_MS,
+                      startedAt: dayStart, endedAt: dayStart + DAY_DURATION_MS,
+                      goalName: null, bucketName: null, goalId: null, bucketId: null, taskId: null,
+                      goalSurface: DEFAULT_SURFACE_STYLE, bucketSurface: null, notes: '', subtasks: [],
+                    }
+                    updateHistory((current) => { const next = [...current, newEntry]; next.sort((a, b) => a.startedAt - b.startedAt); return next })
+                    setPendingNewHistoryId(newId)
+                    setTimeout(() => { openCalendarInspector(newEntry) }, 0)
+                  }}
+                  aria-label={`Create all-day session for ${new Date(start).toDateString()}`}
+                />
+              ))}
+            </div>
+          </div>
           <div className="calendar-time-axis" aria-hidden>
             {hours.map((h) => (
               <div key={`t-${h}`} className="calendar-time-label" style={{ top: `${(h / 24) * 100}%` }}>
@@ -7250,7 +7535,7 @@ useEffect(() => {
               style={{ width: `${(dayStarts.length / visibleDayCount) * 100}%` }}
             >
               {dayStarts.map((start, di) => {
-                const events = computeDayEvents(start)
+                const events = computeDayEvents(start, di)
                 const isTodayColumn = start === todayMidnight
                 const initialNowTopPct = (() => {
                   if (!isTodayColumn) return null as number | null
@@ -7381,9 +7666,11 @@ useEffect(() => {
                       state.lastAppliedDx = constrainedDx
                       const totalPx = calendarBaseTranslateRef.current + constrainedDx
                       const daysEl = calendarDaysRef.current
+                      const allDayEl = calendarAllDayRef.current
                       if (daysEl) daysEl.style.transform = `translateX(${totalPx}px)`
                       const hdrEl = calendarHeadersRef.current
                       if (hdrEl) hdrEl.style.transform = `translateX(${totalPx}px)`
+                      if (allDayEl) allDayEl.style.transform = `translateX(${totalPx}px)`
                       return
                     }
                     if (startedCreate) {
@@ -8126,6 +8413,25 @@ useEffect(() => {
   const entry = effectiveHistory.find((h) => h.id === calendarPreview.entryId) || calendarPreview.entrySnapshot || null
     if (!entry) return null
     const dateLabel = (() => {
+      if (isAllDayRangeTs(entry.startedAt, entry.endedAt)) {
+        // All‑day rendering: same‑day => "Mon, Oct 14 · All day"; multi‑day => "Oct 14 – Oct 16"
+        const startD = new Date(entry.startedAt)
+        const endD = new Date(entry.endedAt)
+        const sameDay =
+          startD.getFullYear() === endD.getFullYear() &&
+          startD.getMonth() === endD.getMonth() &&
+          startD.getDate() === endD.getDate()
+        if (sameDay) {
+          const dateFmt = startD.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+          return `${dateFmt} · All day`
+        }
+        // Show end as the day before (since end is exclusive midnight)
+        const endMinus = new Date(endD.getTime() - 1)
+        const includeYears = startD.getFullYear() !== endMinus.getFullYear()
+        const startFmt = startD.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: includeYears ? 'numeric' : undefined })
+        const endFmt = endMinus.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: includeYears ? 'numeric' : undefined })
+        return `${startFmt} – ${endFmt}`
+      }
       const startD = new Date(entry.startedAt)
       const endD = new Date(entry.endedAt)
       const sameDay =
@@ -8739,6 +9045,7 @@ useEffect(() => {
     const endBase = entry.endedAt
     const resolvedStart = resolveTimestamp(historyDraft.startedAt, startBase)
     const resolvedEnd = resolveTimestamp(historyDraft.endedAt, endBase)
+    const isDraftAllDay = isAllDayRangeTs(resolvedStart, resolvedEnd)
   // Using inspector pickers for date/time in the editor panel; input-formatted strings no longer needed here
 
     return createPortal(
@@ -8783,6 +9090,7 @@ useEffect(() => {
                 onKeyDown={handleHistoryFieldKeyDown}
               />
             </label>
+            {/* All-day toggle removed per request; preserve read-only all-day state via isDraftAllDay to hide time pickers */}
             <label className="history-timeline__field">
               <span className="history-timeline__field-text">Start</span>
               <div className="calendar-inspector__schedule-inputs">
@@ -8793,13 +9101,15 @@ useEffect(() => {
                   }}
                   ariaLabel="Select start date"
                 />
-                <InspectorTimeInput
-                  value={resolvedStart}
-                  onChange={(timestamp) => {
-                    setHistoryDraft((draft) => ({ ...draft, startedAt: timestamp }))
-                  }}
-                  ariaLabel="Select start time"
-                />
+                {isDraftAllDay ? null : (
+                  <InspectorTimeInput
+                    value={resolvedStart}
+                    onChange={(timestamp) => {
+                      setHistoryDraft((draft) => ({ ...draft, startedAt: timestamp }))
+                    }}
+                    ariaLabel="Select start time"
+                  />
+                )}
               </div>
             </label>
             <label className="history-timeline__field">
@@ -8812,13 +9122,15 @@ useEffect(() => {
                   }}
                   ariaLabel="Select end date"
                 />
-                <InspectorTimeInput
-                  value={resolvedEnd}
-                  onChange={(timestamp) => {
-                    setHistoryDraft((draft) => ({ ...draft, endedAt: timestamp }))
-                  }}
-                  ariaLabel="Select end time"
-                />
+                {isDraftAllDay ? null : (
+                  <InspectorTimeInput
+                    value={resolvedEnd}
+                    onChange={(timestamp) => {
+                      setHistoryDraft((draft) => ({ ...draft, endedAt: timestamp }))
+                    }}
+                    ariaLabel="Select end time"
+                  />
+                )}
               </div>
             </label>
                             <div className="history-timeline__field">
@@ -9056,6 +9368,7 @@ useEffect(() => {
     const area = calendarDaysAreaRef.current
     const daysEl = calendarDaysRef.current
     const hdrEl = calendarHeadersRef.current
+    const allDayEl = calendarAllDayRef.current
     if (!area || !daysEl || !hdrEl) return
     const visibleDayCount = calendarView === '3d' ? Math.max(2, Math.min(multiDayCount, 14)) : calendarView === 'week' ? 7 : 1
     const bufferDays = getCalendarBufferDays(visibleDayCount)
@@ -9068,6 +9381,7 @@ useEffect(() => {
     calendarBaseTranslateRef.current = base
     daysEl.style.transform = `translateX(${base}px)`
     hdrEl.style.transform = `translateX(${base}px)`
+    if (allDayEl) allDayEl.style.transform = `translateX(${base}px)`
     // ready by default
   }, [anchorDate, calendarInspectorEntryId, calendarView, multiDayCount, calendarViewportVersion])
 
