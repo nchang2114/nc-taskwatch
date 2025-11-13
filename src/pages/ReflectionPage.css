@@ -35,7 +35,8 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem; /* tighten space between toolbar and calendar for full fit */
+  height: 85vh; 
+  gap: 0.2rem; /* tighten space between toolbar and calendar for full fit */
 }
 
 @media (min-width: 1024px) {
@@ -2269,6 +2270,42 @@ html[data-theme='light'] .calendar-toggle--active {
   background: rgba(14, 18, 36, 0.5);
   border-radius: 0.75rem;
   padding: 0.5rem;
+  /* Fill remaining height under the toolbar without overlapping siblings */
+  flex: 1 1 auto;
+  min-height: 0; /* allow flex child to shrink within container */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Month/year containers fill available height under the toolbar */
+.history-calendar > .calendar-carousel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* Allow vertical scroll if content (e.g., year view) exceeds available height */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.history-calendar > .calendar-carousel > .calendar-carousel__track,
+.history-calendar > .calendar-carousel > .calendar-carousel__track > .calendar-carousel__panel {
+  height: 100%;
+  min-height: 0;
+}
+/* Ensure the month grid uses available height instead of its inline fixed px height */
+/* Month view: make the month grid flex to fill below the weekday headers */
+.history-calendar .calendar-carousel__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.history-calendar .calendar-week-headers {
+  flex: 0 0 auto;
+}
+.history-calendar .calendar-carousel__panel > .calendar-grid--month {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto !important; /* override inline px height */
 }
 
 html[data-theme='light'] .history-calendar {
@@ -2376,6 +2413,9 @@ html[data-theme='light'] .calendar-cell--today .calendar-day-number::after {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.5rem;
   touch-action: pan-y;
+  /* Let the year grid stretch within the carousel panel */
+  height: 100%;
+  min-height: 0;
 }
 
 /* Generic carousel wrapper used for month/year swipe with preview panes */
@@ -2478,6 +2518,11 @@ html[data-theme='light'] .calendar-month-day--today {
   background: rgba(14, 18, 36, 0.5);
   border-radius: 0.75rem;
   overflow: hidden;
+  /* Allow header + body to stack and body to flex */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto; /* fill available space inside history-calendar */
 }
 
 /* --- Month grid equal-height rows and headers outside the grid --- */
@@ -2542,7 +2587,9 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
   position: relative;
   display: grid;
   grid-template-columns: 56px 1fr;
-  height: 720px; /* increased viewport height for more vertical space per hour */
+  /* Let the body occupy remaining space under headers within the calendar */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .calendar-time-axis {
