@@ -2541,7 +2541,8 @@ html[data-theme='light'] .calendar-month-day--today {
   grid-template-columns: 56px 1fr;
   gap: 0;
   padding: 0.4rem 0 0.35rem;
-  border-bottom: 1px solid rgba(124, 138, 220, 0.22);
+  /* Remove dividing line above the all-day row */
+  border-bottom: none;
 }
 
 .calendar-axis-header {
@@ -2598,14 +2599,19 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
 .calendar-allday-axis {
   font-size: 0.78rem;
   color: var(--text-secondary);
-  padding: 0.35rem 0.25rem 0.35rem 0.5rem;
+  /* Remove vertical padding so the row height is driven by entries */
+  padding: 0 0.25rem 0 0.5rem;
+  display: flex;
+  align-items: center; /* vertically center label against entry height */
+  height: 100%;
   white-space: nowrap;
 }
 .calendar-allday-wrapper {
   position: relative;
   overflow: hidden;
   padding: 0; /* remove padding to align exactly with days area */
-  min-height: 1.6rem;
+  /* Let height shrink-wrap to the all-day bars (no fixed minimum) */
+  min-height: 0;
   border-bottom: 1px solid rgba(124, 138, 220, 0.22);
 }
 .calendar-alldays {
@@ -2635,12 +2641,15 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
   height: 100%;
   border: none;
   background: transparent;
-  cursor: cell;
+  /* Use default arrow cursor instead of a plus/crosshair */
+  cursor: default;
 }
 .calendar-allday-event {
   position: relative;
   display: flex;
   align-items: center;
+  /* Right-side inset only; keep left edge aligned */
+  margin: 0 0.6rem 0 0;
   min-width: 0;
   border-radius: 0.5rem;
   overflow: hidden;
