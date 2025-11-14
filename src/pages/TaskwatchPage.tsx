@@ -1356,13 +1356,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     // Use subscribed exceptions to avoid stale reads
     const exc = repeatingExceptions
     const skippedSet = new Set<string>()
-    const rescheduledByOcc = new Map<string, { start: number; end: number }>()
     exc.forEach((e) => {
       const key = `${e.routineId}:${e.occurrenceDate}`
       if (e.action === 'skipped') skippedSet.add(key)
-      if (e.action === 'rescheduled' && Number.isFinite(e.newStartedAt) && Number.isFinite(e.newEndedAt)) {
-        rescheduledByOcc.set(key, { start: Math.max(0, Number(e.newStartedAt)), end: Math.max(0, Number(e.newEndedAt)) })
-      }
     })
     // Also suppress guides that have transformed (confirmed/rescheduled) by checking history linkage
     const coveredOriginalSet = (() => {
@@ -1377,7 +1373,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     const coveredOccurrenceSet = (() => {
       const set = new Set<string>()
       history.forEach((h) => {
-        const rid = (h as any).repeatingSessionId as string | undefined | null
+        const rid = (h as any).routineId as string | undefined | null
         const occ = (h as any).occurrenceDate as string | undefined | null
         if (rid && typeof occ === 'string' && occ) set.add(`${rid}:${occ}`)
       })
@@ -1406,9 +1402,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       if (Number.isFinite(startAtMs as number) && startedAt < (startAtMs as number)) return
       if (!Number.isFinite(startAtMs as number) && Number.isFinite(createdAtMs as number) && startedAt <= (createdAtMs as number)) return
       if (Number.isFinite(endAtMs as number) && startedAt > (endAtMs as number)) return
-      // Skip if explicitly skipped, rescheduled for this occurrence, or already transformed
+      // Skip if explicitly skipped or already transformed/confirmed
       const occKey = `${rule.id}:${formatYmd(baseStart)}`
-      if (skippedSet.has(occKey) || rescheduledByOcc.has(occKey) || coveredOriginalSet.has(`${rule.id}:${startedAt}`) || coveredOccurrenceSet.has(occKey)) return
+      if (skippedSet.has(occKey) || coveredOriginalSet.has(`${rule.id}:${startedAt}`) || coveredOccurrenceSet.has(occKey)) return
       // Overlap check with tolerance for minute rounding/DST
       const TOL = MINUTE_MS
       if (now < startedAt - TOL || now > endedAt + TOL) return
@@ -1472,6 +1468,16 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           candidate.bucketSurface = lrSurface
         }
       }
+      // Suppress if an identical real entry already exists at this timing (±1m), even without linkage
+      const duplicateReal = history.some((h) => {
+        const sameLabel = (h.taskName?.trim() || 'Session') === (candidate!.taskName?.trim() || 'Session') && (h.goalName ?? null) === (candidate!.goalName ?? null) && (h.bucketName ?? null) === (candidate!.bucketName ?? null)
+        const TOL = MINUTE_MS
+        const startMatch = Math.abs(h.startedAt - startedAt) <= TOL
+        const endMatch = Math.abs(h.endedAt - endedAt) <= TOL
+        return sameLabel && startMatch && endMatch
+      })
+      if (duplicateReal) return
+
       pushCandidate(candidate, startedAt, endedAt)
     }
 
@@ -1480,73 +1486,6 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       // Consider both today and yesterday to account for guides that cross midnight
       considerOccurrence(rule, todayStart)
       considerOccurrence(rule, yesterdayStart)
-    })
-    // Also consider rescheduled windows that overlap now (if not already represented)
-    rescheduledByOcc.forEach((window, key) => {
-      if (now < window.start || now > window.end) return
-      const [ruleId] = key.split(':')
-      const rule = repeatingRules.find((r) => r.id === ruleId)
-      if (!rule || !rule.isActive) return
-      // Build candidate from rule labels
-      const lower = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
-      const goalNameLower = lower(rule.goalName)
-      const bucketNameLower = lower(rule.bucketName)
-      const taskNameLower = lower(rule.taskName)
-      let candidate: FocusCandidate | null = null
-      outer2: for (let gi = 0; gi < activeGoalSnapshots.length; gi += 1) {
-        const goal = activeGoalSnapshots[gi]
-        if (goalNameLower && goal.name.trim().toLowerCase() !== goalNameLower) continue
-        for (let bi = 0; bi < goal.buckets.length; bi += 1) {
-          const bucket = goal.buckets[bi]
-          if (bucketNameLower && bucket.name.trim().toLowerCase() !== bucketNameLower) continue
-          const task = bucket.tasks.find((t) => t.text.trim().toLowerCase() === taskNameLower)
-          if (task) {
-            candidate = {
-              goalId: goal.id,
-              goalName: goal.name,
-              bucketId: bucket.id,
-              bucketName: bucket.name,
-              taskId: task.id,
-              taskName: task.text,
-              completed: task.completed,
-              priority: !!task.priority,
-              difficulty: (task.difficulty as any) ?? 'none',
-              goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
-              bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
-              notes: typeof task.notes === 'string' ? task.notes : '',
-              subtasks: Array.isArray(task.subtasks)
-                ? task.subtasks.map((s, idx) => ({ id: s.id, text: s.text, completed: s.completed, sortIndex: typeof s.sortIndex === 'number' ? s.sortIndex : (idx + 1) * NOTEBOOK_SUBTASK_SORT_STEP }))
-                : [],
-            }
-            break outer2
-          }
-        }
-      }
-      if (!candidate) {
-        candidate = {
-          goalId: '',
-          goalName: rule.goalName ?? '',
-          bucketId: '',
-          bucketName: rule.bucketName ?? '',
-          taskId: '',
-          taskName: rule.taskName,
-          completed: false,
-          priority: false,
-          difficulty: 'none',
-          goalSurface: DEFAULT_SURFACE_STYLE,
-          bucketSurface: DEFAULT_SURFACE_STYLE,
-          notes: '',
-          subtasks: [],
-        }
-      }
-      if ((candidate.goalName ?? '').trim().toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase() && candidate.bucketName.trim().length > 0) {
-        const lrSurface = lifeRoutineSurfaceLookup.get(candidate.bucketName.trim().toLowerCase())
-        if (lrSurface) {
-          candidate.goalSurface = LIFE_ROUTINES_SURFACE
-          candidate.bucketSurface = lrSurface
-        }
-      }
-      list.push({ ...candidate, startedAt: window.start, endedAt: window.end, isGuide: true })
     })
     return list
   }, [repeatingRules, repeatingExceptions, activeGoalSnapshots, lifeRoutineSurfaceLookup, history, currentTime])
