@@ -8017,10 +8017,6 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     () => filteredGoals.filter((goal) => !goal.archived),
     [filteredGoals],
   )
-  const openActiveGoals = useMemo(
-    () => visibleActiveGoals.filter((g) => expanded[g.id]),
-    [visibleActiveGoals, expanded],
-  )
   const dashboardSelectedGoal = useMemo(
     () => (dashboardSelectedGoalId ? visibleActiveGoals.find((g) => g.id === dashboardSelectedGoalId) ?? null : null),
     [visibleActiveGoals, dashboardSelectedGoalId],
@@ -9714,7 +9710,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           {lifeRoutineLineTop !== null ? (
                             <div className="goal-insert-line" style={{ top: `${lifeRoutineLineTop}px` }} aria-hidden />
                           ) : null}
-                          {lifeRoutineTasks.map((task, index) => {
+                          {lifeRoutineTasks.map((task) => {
                             const isRenamingRoutine = renamingLifeRoutineId === task.id
                             const isEditingRoutineDescription = editingLifeRoutineDescriptionId === task.id
                             const isRoutineEditorOpen = isRenamingRoutine || isEditingRoutineDescription
