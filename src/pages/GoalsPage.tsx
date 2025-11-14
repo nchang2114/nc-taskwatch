@@ -5855,6 +5855,8 @@ export default function GoalsPage(): ReactElement {
   }
   // Completion overlay timing
   const [quickCompletingMap, setQuickCompletingMap] = useState<Record<string, boolean>>({})
+  // Quick List: single vs double click handling for subtask rows
+  const quickSubtaskClickTimersRef = useRef<Map<string, number>>(new Map())
   // Long-press for priority
   const QUICK_PRIORITY_HOLD_MS = 300
   const quickLongPressTimersRef = useRef<Map<string, number>>(new Map())
@@ -6101,12 +6103,14 @@ export default function GoalsPage(): ReactElement {
           id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? (crypto.randomUUID() as string) : `ql-sub-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
           text: '',
           completed: false,
-          sortIndex: subs.length,
+          // Insert at top; sanitizer will reindex from 0
+          sortIndex: (subs[0]?.sortIndex ?? 0) - 1,
           updatedAt: new Date().toISOString(),
         }
-        subs.push(newSub)
+        // Prepend so it appears first visually like bucket tasks
+        const nextSubs = [newSub, ...subs].map((s, i) => ({ ...s, sortIndex: i }))
         pendingQuickSubtaskFocusRef.current = { taskId, subtaskId: newSub.id }
-        return { ...it, expanded: true, subtasksCollapsed: false, subtasks: subs, updatedAt: new Date().toISOString() }
+        return { ...it, expanded: true, subtasksCollapsed: false, subtasks: nextSubs, updatedAt: new Date().toISOString() }
       }),
     )
     setQuickListItems(stored)
@@ -10055,9 +10059,9 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
               </div>
               {quickListExpanded ? (
                 <div id="quick-list-body" className="goal-bucket-body px-3 md:px-4 pb-3 md:pb-4">
-                  <div className="goal-bucket-body-header">
+                    <div className="goal-bucket-body-header">
                     <div className="goal-section-header">
-                      <p className="goal-section-title">Tasks ({quickListItems.length})</p>
+                      <p className="goal-section-title">Tasks ({quickListItems.filter((it) => !it.completed).length})</p>
                     </div>
                     <button
                       type="button"
@@ -10105,12 +10109,11 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   {(() => {
                     const activeItems = quickListItems.filter((it) => !it.completed)
                     const completedItems = quickListItems.filter((it) => it.completed)
-                    if (activeItems.length === 0 && !quickDraftActive) {
-                      return <p className="goal-task-empty">No tasks yet.</p>
-                    }
                     return (
                       <>
-                        {activeItems.length > 0 ? (
+                        {activeItems.length === 0 && !quickDraftActive ? (
+                          <p className="goal-task-empty">No tasks yet.</p>
+                        ) : activeItems.length > 0 ? (
                           <ul
                             className="mt-2 space-y-2"
                             onDragOver={(e) => {
@@ -10200,18 +10203,18 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                       setQuickDragLine(null)
                                     }}
                                   >
-                                    <button
-                                      type="button"
-                                      className="goal-task-marker goal-task-marker--action"
-                                      onClick={(e) => { e.stopPropagation(); toggleQuickCompleteWithAnimation(item.id) }}
-                                      aria-pressed={item.completed}
-                                      aria-label={item.completed ? 'Mark as incomplete' : 'Mark as complete'}
-                                    >
-                                      <svg viewBox="0 0 24 24" width="20" height="20" className="goal-task-check" aria-hidden="true">
-                                        <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                      </svg>
-                                    </button>
                               <div className="goal-task-row__content">
+                                <button
+                                  type="button"
+                                  className="goal-task-marker goal-task-marker--action"
+                                  onClick={(e) => { e.stopPropagation(); toggleQuickCompleteWithAnimation(item.id) }}
+                                  aria-pressed={item.completed}
+                                  aria-label={item.completed ? 'Mark as incomplete' : 'Mark as complete'}
+                                >
+                                  <svg viewBox="0 0 24 24" width="20" height="20" className="goal-task-check" aria-hidden="true">
+                                    <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                </button>
                                 {quickEdits[item.id] !== undefined ? (
                                   <span
                                     className="goal-task-input"
@@ -10277,7 +10280,6 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                     <span className="goal-task-text__inner" style={{ textDecoration: item.completed ? 'line-through' : undefined }}>{item.text}</span>
                                   </button>
                                 )}
-                              </div>
                                     <button
                                       type="button"
                                       className={classNames(
@@ -10320,21 +10322,27 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                       aria-label="Set task difficulty"
                                       title="Tap to cycle difficulty • Hold ~300ms for Priority"
                                     />
+                              </div>
                                     <button
                                       type="button"
                                       className="goal-task-row__delete"
-                                      aria-label="Delete task"
+                                      aria-label="Delete task permanently"
+                                      title="Delete task"
                                       onClick={(e) => { e.stopPropagation(); deleteQuickItem(item.id) }}
+                                      onPointerDown={(e) => e.stopPropagation()}
                                     >
                                       <svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-row__delete-icon">
-                                        <path d="M3 6h18" />
-                                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                        <path d="M10 11v6M14 11v6" />
+                                        <path
+                                          d="M9 4h6l1 2h4v2H4V6h4l1-2Zm1 5v9m4-9v9m-6 0h8a1 1 0 0 0 1-1V8H7v9a1 1 0 0 0 1 1Z"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="1.6"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
                                       </svg>
                                     </button>
-                                  </li>
-                                  {isDetailsOpen && (
+                                    {isDetailsOpen && (
                                     <div className={classNames('goal-task-details', isDetailsOpen && 'goal-task-details--open')} onPointerDown={(e) => e.stopPropagation()}>
                                       <div className={classNames('goal-task-details__subtasks', item.subtasksCollapsed && 'goal-task-details__subtasks--collapsed')}>
                                         <div className="goal-task-details__section-title">
@@ -10358,15 +10366,67 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                               aria-label={item.subtasksCollapsed ? 'Expand subtasks' : 'Collapse subtasks'}
                                             />
                                           </p>
-                                          <button type="button" className="goal-task-details__add" onClick={(e) => { e.stopPropagation(); addQuickSubtask(item.id) }}>
+                                          <button type="button" className="goal-task-details__add" onClick={(e) => { e.stopPropagation(); addQuickSubtask(item.id) }} onPointerDown={(event) => event.stopPropagation()}>
                                             + Subtask
                                           </button>
                                         </div>
                                         <div className="goal-task-details__subtasks-body" id={subtaskListId}>
                                           {hasSubtasks ? (
                                             <ul className="goal-task-details__subtask-list">
-                                              {(item.subtasks ?? []).map((subtask) => (
-                                                <li key={subtask.id} className={classNames('goal-task-details__subtask', subtask.completed && 'goal-task-details__subtask--completed')}>
+                                              {(item.subtasks ?? []).map((subtask) => {
+                                                const subDeleteKey = `quick-sub__${item.id}__${subtask.id}`
+                                                const isSubDeleteRevealed = revealedDeleteTaskKey === subDeleteKey
+                                                return (
+                                                <li
+                                                  key={subtask.id}
+                                                  data-delete-key={subDeleteKey}
+                                                  className={classNames(
+                                                    'goal-task-details__subtask',
+                                                    subtask.completed && 'goal-task-details__subtask--completed',
+                                                    isSubDeleteRevealed && 'goal-task-details__subtask--delete-revealed',
+                                                  )}
+                                                  onClick={(event) => {
+                                                    event.stopPropagation()
+                                                    const timers = quickSubtaskClickTimersRef.current
+                                                    const existing = timers.get(subDeleteKey)
+                                                    if (existing) {
+                                                      window.clearTimeout(existing)
+                                                      timers.delete(subDeleteKey)
+                                                    }
+                                                    const tid = window.setTimeout(() => {
+                                                      setRevealedDeleteTaskKey(isSubDeleteRevealed ? null : subDeleteKey)
+                                                      timers.delete(subDeleteKey)
+                                                    }, 200)
+                                                    timers.set(subDeleteKey, tid)
+                                                  }}
+                                                  onContextMenu={(event) => {
+                                                    event.preventDefault()
+                                                    event.stopPropagation()
+                                                    setRevealedDeleteTaskKey(isSubDeleteRevealed ? null : subDeleteKey)
+                                                  }}
+                                                  onDoubleClick={(event) => {
+                                                    event.stopPropagation()
+                                                    const timers = quickSubtaskClickTimersRef.current
+                                                    const existing = timers.get(subDeleteKey)
+                                                    if (existing) {
+                                                      window.clearTimeout(existing)
+                                                      timers.delete(subDeleteKey)
+                                                    }
+                                                    setRevealedDeleteTaskKey(null)
+                                                    try {
+                                                      const target = event.target as HTMLElement
+                                                      const field = target.closest('textarea.goal-task-details__subtask-input') as HTMLTextAreaElement | null
+                                                      if (field) {
+                                                        field.focus({ preventScroll: true } as any)
+                                                        return
+                                                      }
+                                                      const el = document.getElementById(
+                                                        makeGoalSubtaskInputId(item.id, subtask.id),
+                                                      ) as HTMLTextAreaElement | null
+                                                      el?.focus({ preventScroll: true } as any)
+                                                    } catch {}
+                                                  }}
+                                                >
                                                   <label className="goal-task-details__subtask-item">
                                                     <div className="goal-subtask-field">
                                                       <input
@@ -10391,29 +10451,59 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                                           updateQuickSubtaskText(item.id, subtask.id, event.target.value)
                                                         }}
                                                         onClick={(event) => event.stopPropagation()}
-                                                        onKeyDown={(event) => {
-                                                          if (event.key === 'Enter' && !event.shiftKey) {
+                                                      onKeyDown={(event) => {
+                                                        if (event.key === 'Enter' && !event.shiftKey) {
+                                                          event.preventDefault()
+                                                          const value = event.currentTarget.value.trim()
+                                                          if (value.length === 0) return
+                                                          addQuickSubtask(item.id)
+                                                        }
+                                                        if (event.key === 'Escape') {
+                                                          const value = event.currentTarget.value
+                                                          if (value.trim().length === 0) {
                                                             event.preventDefault()
-                                                            const value = event.currentTarget.value.trim()
-                                                            if (value.length === 0) return
-                                                            addQuickSubtask(item.id)
+                                                            event.currentTarget.blur()
                                                           }
-                                                        }}
-                                                        placeholder="Add details"
-                                                        aria-label="Subtask text"
+                                                        }
+                                                      }}
+                                                      onBlur={(event) => {
+                                                        const trimmed = event.currentTarget.value.trim()
+                                                        if (trimmed.length === 0) {
+                                                          setRevealedDeleteTaskKey(null)
+                                                          deleteQuickSubtask(item.id, subtask.id)
+                                                          return
+                                                        }
+                                                        if (trimmed !== subtask.text) {
+                                                          updateQuickSubtaskText(item.id, subtask.id, trimmed)
+                                                        }
+                                                      }}
+                                                      placeholder="Describe subtask"
+                                                      aria-label="Subtask text"
+                                                    />
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    className="goal-task-details__remove"
+                                                    onClick={(e) => { e.stopPropagation(); setRevealedDeleteTaskKey(null); deleteQuickSubtask(item.id, subtask.id) }}
+                                                    onPointerDown={(event) => event.stopPropagation()}
+                                                    aria-label="Delete subtask permanently"
+                                                    title="Delete subtask"
+                                                  >
+                                                    <svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-details__remove-icon">
+                                                      <path
+                                                        d="M9 4h6l1 2h4v2H4V6h4l1-2Zm1 5v9m4-9v9m-6 0h8a1 1 0 0 0 1-1V8H7v9a1 1 0 0 0 1 1Z"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.6"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
                                                       />
-                                                    </div>
-                                                    <button type="button" className="goal-task-details__remove" onClick={(e) => { e.stopPropagation(); deleteQuickSubtask(item.id, subtask.id) }}>
-                                                      <svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-details__remove-icon">
-                                                        <path d="M3 6h18" />
-                                                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                                        <path d="M10 11v6M14 11v6" />
-                                                        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                                                      </svg>
-                                                    </button>
+                                                    </svg>
+                                                  </button>
                                                   </label>
                                                 </li>
-                                              ))}
+                                                )
+                                              })}
                                             </ul>
                                           ) : (
                                             <div className="goal-task-details__empty"><p className="goal-task-details__empty-text">No subtasks yet</p></div>
@@ -10456,8 +10546,53 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                           />
                                         </div>
                                       </div>
+                                      <div className="goal-task-focus">
+                                        <button
+                                          type="button"
+                                          className="goal-task-focus__button"
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            broadcastScheduleTask({
+                                              goalId: 'quick-list',
+                                              goalName: 'Quick List',
+                                              bucketId: 'quick-list',
+                                              bucketName: 'Quick List',
+                                              taskId: item.id,
+                                              taskName: item.text,
+                                            })
+                                          }}
+                                        >
+                                          Schedule Task
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="goal-task-focus__button"
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            const subtasks = (item.subtasks ?? []).map((s) => ({ id: s.id, text: s.text, completed: s.completed, sortIndex: s.sortIndex }))
+                                            broadcastFocusTask({
+                                              goalId: 'quick-list',
+                                              goalName: 'Quick List',
+                                              bucketId: 'quick-list',
+                                              bucketName: 'Quick List',
+                                              taskId: item.id,
+                                              taskName: item.text,
+                                              taskDifficulty: item.difficulty ?? null,
+                                              priority: item.priority ?? null,
+                                              goalSurface: DEFAULT_SURFACE_STYLE,
+                                              bucketSurface: DEFAULT_SURFACE_STYLE,
+                                              autoStart: true,
+                                              notes: item.notes ?? '',
+                                              subtasks,
+                                            })
+                                          }}
+                                        >
+                                          Start Focus
+                                        </button>
+                                      </div>
                                     </div>
-                                  )}
+                                    )}
+                                  </li>
                                 </React.Fragment>
                               )
                             })}
@@ -10580,18 +10715,18 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                           setQuickDragLine(null)
                                         }}
                                       >
-                                        <button
-                                          type="button"
-                                          className="goal-task-marker goal-task-marker--action"
-                                          onClick={(e) => { e.stopPropagation(); toggleQuickCompleteWithAnimation(item.id) }}
-                                          aria-pressed={item.completed}
-                                          aria-label={item.completed ? 'Mark as incomplete' : 'Mark as complete'}
-                                        >
-                                          <svg viewBox="0 0 24 24" width="20" height="20" className="goal-task-check" aria-hidden="true">
-                                            <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                          </svg>
-                                        </button>
                                         <div className="goal-task-row__content">
+                                          <button
+                                            type="button"
+                                            className="goal-task-marker goal-task-marker--action"
+                                            onClick={(e) => { e.stopPropagation(); toggleQuickCompleteWithAnimation(item.id) }}
+                                            aria-pressed={item.completed}
+                                            aria-label={item.completed ? 'Mark as incomplete' : 'Mark as complete'}
+                                          >
+                                            <svg viewBox="0 0 24 24" width="20" height="20" className="goal-task-check" aria-hidden="true">
+                                              <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                            </svg>
+                                          </button>
                                           {quickEdits[item.id] !== undefined ? (
                                             <span
                                               className="goal-task-input"
@@ -10657,7 +10792,6 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                               <span className="goal-task-text__inner" style={{ textDecoration: item.completed ? 'line-through' : undefined }}>{item.text}</span>
                                             </button>
                                           )}
-                                        </div>
                                         <button
                                           type="button"
                                           className={classNames(
@@ -10700,6 +10834,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                           aria-label="Set task difficulty"
                                           title="Tap to cycle difficulty • Hold ~300ms for Priority"
                                         />
+                                        </div>
                                         <button
                                           type="button"
                                           className="goal-task-row__delete"
@@ -10713,14 +10848,17 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                           title="Delete task"
                                         >
                                           <svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-row__delete-icon">
-                                            <path d="M3 6h18" />
-                                            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                            <path d="M10 11v6M14 11v6" />
+                                            <path
+                                              d="M9 4h6l1 2h4v2H4V6h4l1-2Zm1 5v9m4-9v9m-6 0h8a1 1 0 0 0 1-1V8H7v9a1 1 0 0 0 1 1Z"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              strokeWidth="1.6"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            />
                                           </svg>
                                         </button>
-                                      </li>
-                                      {isDetailsOpen && (
+                                        {isDetailsOpen && (
                                         <div className={classNames('goal-task-details', isDetailsOpen && 'goal-task-details--open')} onPointerDown={(e) => e.stopPropagation()}>
                                           <div className={classNames('goal-task-details__subtasks', item.subtasksCollapsed && 'goal-task-details__subtasks--collapsed')}>
                                             <div className="goal-task-details__section-title">
@@ -10744,15 +10882,67 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                                   aria-label={item.subtasksCollapsed ? 'Expand subtasks' : 'Collapse subtasks'}
                                                 />
                                               </p>
-                                              <button type="button" className="goal-task-details__add" onClick={(e) => { e.stopPropagation(); addQuickSubtask(item.id) }}>
+                                              <button type="button" className="goal-task-details__add" onClick={(e) => { e.stopPropagation(); addQuickSubtask(item.id) }} onPointerDown={(event) => event.stopPropagation()}>
                                                 + Subtask
                                               </button>
                                             </div>
                                             <div className="goal-task-details__subtasks-body" id={subtaskListId}>
                                               {hasSubtasks ? (
                                                 <ul className="goal-task-details__subtask-list">
-                                                  {(item.subtasks ?? []).map((subtask) => (
-                                                    <li key={subtask.id} className={classNames('goal-task-details__subtask', subtask.completed && 'goal-task-details__subtask--completed')}>
+                                                  {(item.subtasks ?? []).map((subtask) => {
+                                                    const subDeleteKey = `quick-sub__${item.id}__${subtask.id}`
+                                                    const isSubDeleteRevealed = revealedDeleteTaskKey === subDeleteKey
+                                                    return (
+                                                    <li
+                                                      key={subtask.id}
+                                                      data-delete-key={subDeleteKey}
+                                                      className={classNames(
+                                                        'goal-task-details__subtask',
+                                                        subtask.completed && 'goal-task-details__subtask--completed',
+                                                        isSubDeleteRevealed && 'goal-task-details__subtask--delete-revealed',
+                                                      )}
+                                                      onClick={(event) => {
+                                                        event.stopPropagation()
+                                                        const timers = quickSubtaskClickTimersRef.current
+                                                        const existing = timers.get(subDeleteKey)
+                                                        if (existing) {
+                                                          window.clearTimeout(existing)
+                                                          timers.delete(subDeleteKey)
+                                                        }
+                                                        const tid = window.setTimeout(() => {
+                                                          setRevealedDeleteTaskKey(isSubDeleteRevealed ? null : subDeleteKey)
+                                                          timers.delete(subDeleteKey)
+                                                        }, 200)
+                                                        timers.set(subDeleteKey, tid)
+                                                      }}
+                                                      onContextMenu={(event) => {
+                                                        event.preventDefault()
+                                                        event.stopPropagation()
+                                                        setRevealedDeleteTaskKey(isSubDeleteRevealed ? null : subDeleteKey)
+                                                      }}
+                                                      onDoubleClick={(event) => {
+                                                        event.stopPropagation()
+                                                        const timers = quickSubtaskClickTimersRef.current
+                                                        const existing = timers.get(subDeleteKey)
+                                                        if (existing) {
+                                                          window.clearTimeout(existing)
+                                                          timers.delete(subDeleteKey)
+                                                        }
+                                                        setRevealedDeleteTaskKey(null)
+                                                        try {
+                                                          const target = event.target as HTMLElement
+                                                          const field = target.closest('textarea.goal-task-details__subtask-input') as HTMLTextAreaElement | null
+                                                          if (field) {
+                                                            field.focus({ preventScroll: true } as any)
+                                                            return
+                                                          }
+                                                          const el = document.getElementById(
+                                                            makeGoalSubtaskInputId(item.id, subtask.id),
+                                                          ) as HTMLTextAreaElement | null
+                                                          el?.focus({ preventScroll: true } as any)
+                                                        } catch {}
+                                                      }}
+                                                    >
                                                       <label className="goal-task-details__subtask-item">
                                                         <div className="goal-subtask-field">
                                                           <input
@@ -10777,29 +10967,59 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                                               updateQuickSubtaskText(item.id, subtask.id, event.target.value)
                                                             }}
                                                             onClick={(event) => event.stopPropagation()}
-                                                            onKeyDown={(event) => {
-                                                              if (event.key === 'Enter' && !event.shiftKey) {
+                                                          onKeyDown={(event) => {
+                                                            if (event.key === 'Enter' && !event.shiftKey) {
+                                                              event.preventDefault()
+                                                              const value = event.currentTarget.value.trim()
+                                                              if (value.length === 0) return
+                                                              addQuickSubtask(item.id)
+                                                            }
+                                                            if (event.key === 'Escape') {
+                                                              const value = event.currentTarget.value
+                                                              if (value.trim().length === 0) {
                                                                 event.preventDefault()
-                                                                const value = event.currentTarget.value.trim()
-                                                                if (value.length === 0) return
-                                                                addQuickSubtask(item.id)
+                                                                event.currentTarget.blur()
                                                               }
-                                                            }}
-                                                            placeholder="Add details"
-                                                            aria-label="Subtask text"
-                                                          />
-                                                        </div>
-                                                        <button type="button" className="goal-task-details__remove" onClick={(e) => { e.stopPropagation(); deleteQuickSubtask(item.id, subtask.id) }}>
+                                                            }
+                                                          }}
+                                                          onBlur={(event) => {
+                                                            const trimmed = event.currentTarget.value.trim()
+                                                            if (trimmed.length === 0) {
+                                                              setRevealedDeleteTaskKey(null)
+                                                              deleteQuickSubtask(item.id, subtask.id)
+                                                              return
+                                                            }
+                                                            if (trimmed !== subtask.text) {
+                                                              updateQuickSubtaskText(item.id, subtask.id, trimmed)
+                                                            }
+                                                          }}
+                                                          placeholder="Describe subtask"
+                                                          aria-label="Subtask text"
+                                                        />
+                                                      </div>
+                                                        <button
+                                                          type="button"
+                                                          className="goal-task-details__remove"
+                                                          onClick={(e) => { e.stopPropagation(); setRevealedDeleteTaskKey(null); deleteQuickSubtask(item.id, subtask.id) }}
+                                                          onPointerDown={(event) => event.stopPropagation()}
+                                                          aria-label="Delete subtask permanently"
+                                                          title="Delete subtask"
+                                                        >
                                                           <svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-details__remove-icon">
-                                                            <path d="M3 6h18" />
-                                                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                                            <path d="M10 11v6M14 11v6" />
-                                                            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                                                            <path
+                                                              d="M9 4h6l1 2h4v2H4V6h4l1-2Zm1 5v9m4-9v9m-6 0h8a1 1 0 0 0 1-1V8H7v9a1 1 0 0 0 1 1Z"
+                                                              fill="none"
+                                                              stroke="currentColor"
+                                                              strokeWidth="1.6"
+                                                              strokeLinecap="round"
+                                                              strokeLinejoin="round"
+                                                            />
                                                           </svg>
                                                         </button>
                                                       </label>
                                                     </li>
-                                                  ))}
+                                                    )
+                                                  })}
                                                 </ul>
                                               ) : (
                                                 <div className="goal-task-details__empty"><p className="goal-task-details__empty-text">No subtasks yet</p></div>
@@ -10840,10 +11060,55 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                                 rows={3}
                                                 aria-label="Task notes"
                                               />
-                                            </div>
-                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="goal-task-focus">
+                                        <button
+                                          type="button"
+                                          className="goal-task-focus__button"
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            broadcastScheduleTask({
+                                              goalId: 'quick-list',
+                                              goalName: 'Quick List',
+                                              bucketId: 'quick-list',
+                                              bucketName: 'Quick List',
+                                              taskId: item.id,
+                                              taskName: item.text,
+                                            })
+                                          }}
+                                        >
+                                          Schedule Task
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="goal-task-focus__button"
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            const subtasks = (item.subtasks ?? []).map((s) => ({ id: s.id, text: s.text, completed: s.completed, sortIndex: s.sortIndex }))
+                                            broadcastFocusTask({
+                                              goalId: 'quick-list',
+                                              goalName: 'Quick List',
+                                              bucketId: 'quick-list',
+                                              bucketName: 'Quick List',
+                                              taskId: item.id,
+                                              taskName: item.text,
+                                              taskDifficulty: item.difficulty ?? null,
+                                              priority: item.priority ?? null,
+                                              goalSurface: DEFAULT_SURFACE_STYLE,
+                                              bucketSurface: DEFAULT_SURFACE_STYLE,
+                                              autoStart: true,
+                                              notes: item.notes ?? '',
+                                              subtasks,
+                                            })
+                                          }}
+                                        >
+                                          Start Focus
+                                        </button>
+                                      </div>
                                         </div>
                                       )}
+                                      </li>
                                     </React.Fragment>
                                   )
                                 })}
