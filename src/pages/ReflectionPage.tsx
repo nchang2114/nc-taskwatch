@@ -7396,7 +7396,7 @@ useEffect(() => {
             <div
               className="calendar-alldays"
               ref={calendarAllDayRef}
-              style={{ width: `${(dayStarts.length / visibleDayCount) * 100}%`, gridTemplateRows: `repeat(${allDayTrackRows}, 1.4rem)` }}
+              style={{ width: `${(dayStarts.length / visibleDayCount) * 100}%`, gridTemplateRows: `repeat(${allDayTrackRows}, 1.1rem)` }}
             >
               {/* Vertical day separators in all-day row (pan with track) */}
               <div className="calendar-allday-gridlines" aria-hidden>

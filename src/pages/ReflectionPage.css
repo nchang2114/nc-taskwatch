@@ -2617,7 +2617,7 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
 .calendar-alldays {
   display: grid;
   grid-template-columns: repeat(var(--calendar-day-count, 7), 1fr);
-  grid-auto-rows: 1.4rem;
+  grid-auto-rows: 1.1rem;
   gap: 0; /* align with hour grid which has no column gap */
   will-change: transform;
   position: relative;
