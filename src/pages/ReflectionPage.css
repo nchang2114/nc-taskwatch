@@ -2411,7 +2411,9 @@ html[data-theme='light'] .calendar-cell--today .calendar-day-number::after {
 
 .calendar-grid--year {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  /* Force a 4 × 3 layout so 12 months always fill perfectly */
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
   gap: 0.5rem;
   touch-action: pan-y;
   /* Let the year grid stretch within the carousel panel */
@@ -2443,7 +2445,9 @@ html[data-theme='light'] .calendar-cell--today .calendar-day-number::after {
 }
 
 .calendar-year-cell {
-  min-height: 140px;
+  /* Stretch to fully fill its grid area */
+  height: 100%;
+  min-height: 0;
   border: 1px solid rgba(124, 138, 220, 0.22);
   background: rgba(14, 18, 36, 0.35);
   border-radius: 0.5rem;
