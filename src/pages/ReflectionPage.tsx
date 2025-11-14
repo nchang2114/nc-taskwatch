@@ -5733,29 +5733,27 @@ useEffect(() => {
     if (!(calendarView === 'month' || calendarView === 'year')) return
     const container = monthYearCarouselRef.current
     if (!container || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(() => {
+    const recenter = () => {
       const track = container.querySelector('.calendar-carousel__track') as HTMLDivElement | null
       if (!track) return
       if ((container as any).dataset.animating === '1') return
       const base = -container.clientWidth
       track.style.transition = 'none'
       track.style.transform = `translate3d(${base}px, 0, 0)`
-      requestAnimationFrame(() => { track.style.transition = '' })
-    })
+      // Double rAF to ensure styles apply after layout settles during resize
+      requestAnimationFrame(() => { requestAnimationFrame(() => { track.style.transition = '' }) })
+    }
+    const ro = new ResizeObserver(() => recenter())
     ro.observe(container)
     // Also recenter on orientation change (mobile browsers)
-    const handleOrientation = () => {
-      const track = container.querySelector('.calendar-carousel__track') as HTMLDivElement | null
-      if (!track) return
-      const base = -container.clientWidth
-      track.style.transition = 'none'
-      track.style.transform = `translate3d(${base}px, 0, 0)`
-      requestAnimationFrame(() => { track.style.transition = '' })
-    }
+    const handleOrientation = () => recenter()
+    const handleWindowResize = () => recenter()
     window.addEventListener('orientationchange', handleOrientation)
+    window.addEventListener('resize', handleWindowResize)
     return () => {
       ro.disconnect()
       window.removeEventListener('orientationchange', handleOrientation)
+      window.removeEventListener('resize', handleWindowResize)
     }
   }, [calendarView])
   const dayLabel = useMemo(() => {
