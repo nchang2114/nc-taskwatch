@@ -39,6 +39,8 @@ import {
   sanitizeSurfaceStyle,
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
+import { fetchRepeatingSessionRules, type RepeatingSessionRule } from '../lib/repeatingSessions'
+import { readRepeatingExceptions } from '../lib/repeatingExceptions'
 import {
   LIFE_ROUTINE_STORAGE_KEY,
   LIFE_ROUTINE_UPDATE_EVENT,
@@ -1090,8 +1092,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   type ScheduledSuggestion = FocusCandidate & { startedAt: number; endedAt: number; isGuide?: boolean }
   const scheduledNowSuggestions = useMemo<ScheduledSuggestion[]>(() => {
     const now = Date.now()
-    // Real planned (futureSession) entries overlapping now
-    const overlapping = history.filter((h) => (h as any).futureSession && h.startedAt <= now && h.endedAt >= now)
+    const TOL = 60 * 1000
+    // Any entries overlapping now (real or planned)
+    const overlapping = history.filter((h) => h.startedAt <= (now + TOL) && h.endedAt >= (now - TOL))
     const suggestions: ScheduledSuggestion[] = []
     overlapping.forEach((entry) => {
       // Try to enrich from goals snapshot by id first, else by names
@@ -1189,8 +1192,363 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       }
       suggestions.push({ ...candidate, startedAt: entry.startedAt, endedAt: entry.endedAt, isGuide: false })
     })
-    return suggestions
+    // Also include the active (running) session overlay from CURRENT_SESSION_STORAGE_KEY if present
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(CURRENT_SESSION_STORAGE_KEY)
+        if (raw) {
+          const s = JSON.parse(raw) as any
+          const baseElapsed = Math.max(0, Number(s?.baseElapsed) || 0)
+          const updatedAt = Number(s?.updatedAt) || now
+          const startedAtStored = Number(s?.startedAt)
+          const startedAt = Number.isFinite(startedAtStored) ? startedAtStored : (updatedAt - baseElapsed)
+          const isRunningFlag = Boolean(s?.isRunning)
+          const endedAt = isRunningFlag ? now : startedAt + baseElapsed
+          if (Number.isFinite(startedAt) && startedAt <= (now + TOL) && endedAt >= (now - TOL)) {
+            // Build candidate
+            const goalName = typeof s?.goalName === 'string' ? s.goalName : ''
+            const bucketName = typeof s?.bucketName === 'string' ? s.bucketName : ''
+            const taskName = typeof s?.taskName === 'string' ? s.taskName : (bucketName || goalName || 'Session')
+            // Try enrich from snapshots by ids first
+            let candidate: FocusCandidate | null = null
+            const goalId = typeof s?.goalId === 'string' ? s.goalId : ''
+            const bucketId = typeof s?.bucketId === 'string' ? s.bucketId : ''
+            const taskId = typeof s?.taskId === 'string' ? s.taskId : ''
+            if (goalId && bucketId && taskId) {
+              outer: for (let gi = 0; gi < activeGoalSnapshots.length; gi += 1) {
+                const goal = activeGoalSnapshots[gi]
+                if (goal.id !== goalId) continue
+                for (let bi = 0; bi < goal.buckets.length; bi += 1) {
+                  const bucket = goal.buckets[bi]
+                  if (bucket.id !== bucketId) continue
+                  const task = bucket.tasks.find((t) => t.id === taskId)
+                  if (task) {
+                    candidate = {
+                      goalId: goal.id,
+                      goalName: goal.name,
+                      bucketId: bucket.id,
+                      bucketName: bucket.name,
+                      taskId: task.id,
+                      taskName: task.text,
+                      completed: task.completed,
+                      priority: !!task.priority,
+                      difficulty: (task.difficulty as any) ?? 'none',
+                      goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+                      bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+                      notes: typeof task.notes === 'string' ? task.notes : '',
+                      subtasks: Array.isArray(task.subtasks)
+                        ? task.subtasks.map((sub, idx) => ({ id: sub.id, text: sub.text, completed: sub.completed, sortIndex: typeof sub.sortIndex === 'number' ? sub.sortIndex : (idx + 1) * NOTEBOOK_SUBTASK_SORT_STEP }))
+                        : [],
+                    }
+                    break outer
+                  }
+                }
+              }
+            }
+            if (!candidate) {
+              // Fallback: match by labels or build minimal
+              const goalLower = (goalName || '').trim().toLowerCase()
+              const bucketLower = (bucketName || '').trim().toLowerCase()
+              const taskLower = (taskName || '').trim().toLowerCase()
+              outer2: for (let gi = 0; gi < activeGoalSnapshots.length; gi += 1) {
+                const goal = activeGoalSnapshots[gi]
+                if (goalLower && goal.name.trim().toLowerCase() !== goalLower) continue
+                for (let bi = 0; bi < goal.buckets.length; bi += 1) {
+                  const bucket = goal.buckets[bi]
+                  if (bucketLower && bucket.name.trim().toLowerCase() !== bucketLower) continue
+                  const task = bucket.tasks.find((t) => t.text.trim().toLowerCase() === taskLower)
+                  if (task) {
+                    candidate = {
+                      goalId: goal.id,
+                      goalName: goal.name,
+                      bucketId: bucket.id,
+                      bucketName: bucket.name,
+                      taskId: task.id,
+                      taskName: task.text,
+                      completed: task.completed,
+                      priority: !!task.priority,
+                      difficulty: (task.difficulty as any) ?? 'none',
+                      goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+                      bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+                      notes: typeof task.notes === 'string' ? task.notes : '',
+                      subtasks: Array.isArray(task.subtasks)
+                        ? task.subtasks.map((sub, idx) => ({ id: sub.id, text: sub.text, completed: sub.completed, sortIndex: typeof sub.sortIndex === 'number' ? sub.sortIndex : (idx + 1) * NOTEBOOK_SUBTASK_SORT_STEP }))
+                        : [],
+                    }
+                    break outer2
+                  }
+                }
+              }
+            }
+            if (!candidate) {
+              candidate = {
+                goalId: '',
+                goalName: goalName ?? '',
+                bucketId: '',
+                bucketName: bucketName ?? '',
+                taskId: '',
+                taskName: taskName ?? 'Session',
+                completed: false,
+                priority: false,
+                difficulty: 'none',
+                goalSurface: DEFAULT_SURFACE_STYLE,
+                bucketSurface: DEFAULT_SURFACE_STYLE,
+                notes: '',
+                subtasks: [],
+              }
+            }
+            // Restore Daily Life colors if applicable
+            if ((candidate.goalName ?? '').trim().toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase() && candidate.bucketName.trim().length > 0) {
+              const lrSurface = lifeRoutineSurfaceLookup.get(candidate.bucketName.trim().toLowerCase())
+              if (lrSurface) {
+                candidate.goalSurface = LIFE_ROUTINES_SURFACE
+                candidate.bucketSurface = lrSurface
+              }
+            }
+            suggestions.push({ ...candidate, startedAt, endedAt, isGuide: false })
+          }
+        }
+      } catch {}
+    }
+
+    // De-duplicate suggestions by name tuple to avoid duplicates when active overlay mirrors history
+    const seen = new Set<string>()
+    const norm = (s?: string | null) => (s ?? '').trim().toLowerCase()
+    const unique: ScheduledSuggestion[] = []
+    for (const s of suggestions) {
+      const key = `${norm(s.goalName)}|${norm(s.bucketName)}|${norm(s.taskName)}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      unique.push(s)
+    }
+    return unique
   }, [history, activeGoalSnapshots, lifeRoutineSurfaceLookup])
+
+  // Fetch repeating rules to surface guide tasks that overlap 'now'
+  const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const rules = await fetchRepeatingSessionRules()
+        if (!cancelled && Array.isArray(rules)) setRepeatingRules(rules)
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const guideNowSuggestions = useMemo<ScheduledSuggestion[]>(() => {
+    if (repeatingRules.length === 0) return []
+    const MINUTE_MS = 60 * 1000
+    const now = Date.now()
+    const nowDate = new Date(now)
+    const dow = nowDate.getDay()
+    const toDayStart = (t: number) => { const x = new Date(t); x.setHours(0,0,0,0); return x.getTime() }
+    const todayStart = toDayStart(now)
+    const yesterdayStart = todayStart - 24 * 60 * 60 * 1000
+    const formatYmd = (ms: number) => { const d = new Date(ms); const y = d.getFullYear(); const m = String(d.getMonth()+1).padStart(2,'0'); const da = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${da}` }
+    // Read local exceptions to avoid showing skipped occurrences
+    const exc = readRepeatingExceptions()
+    const skippedSet = new Set<string>()
+    const rescheduledByOcc = new Map<string, { start: number; end: number }>()
+    exc.forEach((e) => {
+      const key = `${e.routineId}:${e.occurrenceDate}`
+      if (e.action === 'skipped') skippedSet.add(key)
+      if (e.action === 'rescheduled' && Number.isFinite(e.newStartedAt) && Number.isFinite(e.newEndedAt)) {
+        rescheduledByOcc.set(key, { start: Math.max(0, Number(e.newStartedAt)), end: Math.max(0, Number(e.newEndedAt)) })
+      }
+    })
+    // Also suppress guides that have transformed (confirmed/rescheduled) by checking history linkage
+    const coveredOriginalSet = (() => {
+      const set = new Set<string>()
+      history.forEach((h) => {
+        const rid = (h as any).repeatingSessionId as string | undefined | null
+        const ot = (h as any).originalTime as number | undefined | null
+        if (rid && Number.isFinite(ot as number)) set.add(`${rid}:${ot as number}`)
+      })
+      return set
+    })()
+
+    const list: ScheduledSuggestion[] = []
+    const pushCandidate = (task: FocusCandidate, start: number, end: number) => {
+      list.push({ ...task, startedAt: start, endedAt: end, isGuide: true })
+    }
+    const lower = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
+    const considerOccurrence = (rule: RepeatingSessionRule, baseStart: number) => {
+      // Frequency filter for weekly
+      if (rule.frequency === 'weekly') {
+        const d = new Date(baseStart)
+        if (rule.dayOfWeek !== null && rule.dayOfWeek !== d.getDay()) return
+      }
+      // Boundaries based on scheduled start time
+      const tMin = Math.max(0, Math.min(1439, rule.timeOfDayMinutes))
+      const startedAt = baseStart + tMin * MINUTE_MS
+      const durationMs = Math.max(1, (rule.durationMinutes ?? 60) * MINUTE_MS)
+      const endedAt = startedAt + durationMs
+      const startAtMs = (rule as any).startAtMs as number | undefined
+      const createdAtMs = (rule as any).createdAtMs as number | undefined
+      const endAtMs = (rule as any).endAtMs as number | undefined
+      if (Number.isFinite(startAtMs as number) && startedAt < (startAtMs as number)) return
+      if (!Number.isFinite(startAtMs as number) && Number.isFinite(createdAtMs as number) && startedAt <= (createdAtMs as number)) return
+      if (Number.isFinite(endAtMs as number) && startedAt > (endAtMs as number)) return
+      // Skip if explicitly skipped or already transformed
+      const occKey = `${rule.id}:${formatYmd(baseStart)}`
+      if (skippedSet.has(occKey) || coveredOriginalSet.has(`${rule.id}:${startedAt}`)) return
+      // Overlap check with tolerance for minute rounding/DST
+      const TOL = MINUTE_MS
+      if (now < startedAt - TOL || now > endedAt + TOL) return
+
+      // Try to match to current goals snapshot to enrich surfaces and ids
+      const goalNameLower = lower(rule.goalName)
+      const bucketNameLower = lower(rule.bucketName)
+      const taskNameLower = lower(rule.taskName)
+      let candidate: FocusCandidate | null = null
+      outer: for (let gi = 0; gi < activeGoalSnapshots.length; gi += 1) {
+        const goal = activeGoalSnapshots[gi]
+        if (goalNameLower && goal.name.trim().toLowerCase() !== goalNameLower) continue
+        for (let bi = 0; bi < goal.buckets.length; bi += 1) {
+          const bucket = goal.buckets[bi]
+          if (bucketNameLower && bucket.name.trim().toLowerCase() !== bucketNameLower) continue
+          const task = bucket.tasks.find((t) => t.text.trim().toLowerCase() === taskNameLower)
+          if (task) {
+            candidate = {
+              goalId: goal.id,
+              goalName: goal.name,
+              bucketId: bucket.id,
+              bucketName: bucket.name,
+              taskId: task.id,
+              taskName: task.text,
+              completed: task.completed,
+              priority: !!task.priority,
+              difficulty: (task.difficulty as any) ?? 'none',
+              goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+              bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+              notes: typeof task.notes === 'string' ? task.notes : '',
+              subtasks: Array.isArray(task.subtasks)
+                ? task.subtasks.map((s, idx) => ({ id: s.id, text: s.text, completed: s.completed, sortIndex: typeof s.sortIndex === 'number' ? s.sortIndex : (idx + 1) * NOTEBOOK_SUBTASK_SORT_STEP }))
+                : [],
+            }
+            break outer
+          }
+        }
+      }
+      if (!candidate) {
+        candidate = {
+          goalId: '',
+          goalName: rule.goalName ?? '',
+          bucketId: '',
+          bucketName: rule.bucketName ?? '',
+          taskId: '',
+          taskName: rule.taskName,
+          completed: false,
+          priority: false,
+          difficulty: 'none',
+          goalSurface: DEFAULT_SURFACE_STYLE,
+          bucketSurface: DEFAULT_SURFACE_STYLE,
+          notes: '',
+          subtasks: [],
+        }
+      }
+      // Life routine color restoration
+      if ((candidate.goalName ?? '').trim().toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase() && candidate.bucketName.trim().length > 0) {
+        const lrSurface = lifeRoutineSurfaceLookup.get(candidate.bucketName.trim().toLowerCase())
+        if (lrSurface) {
+          candidate.goalSurface = LIFE_ROUTINES_SURFACE
+          candidate.bucketSurface = lrSurface
+        }
+      }
+      pushCandidate(candidate, startedAt, endedAt)
+    }
+
+    repeatingRules.forEach((rule) => {
+      if (!rule.isActive) return
+      // Consider both today and yesterday to account for guides that cross midnight
+      considerOccurrence(rule, todayStart)
+      considerOccurrence(rule, yesterdayStart)
+    })
+    // Also consider rescheduled windows that overlap now (if not already represented)
+    rescheduledByOcc.forEach((window, key) => {
+      if (now < window.start || now > window.end) return
+      const [ruleId] = key.split(':')
+      const rule = repeatingRules.find((r) => r.id === ruleId)
+      if (!rule || !rule.isActive) return
+      // Build candidate from rule labels
+      const lower = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
+      const goalNameLower = lower(rule.goalName)
+      const bucketNameLower = lower(rule.bucketName)
+      const taskNameLower = lower(rule.taskName)
+      let candidate: FocusCandidate | null = null
+      outer2: for (let gi = 0; gi < activeGoalSnapshots.length; gi += 1) {
+        const goal = activeGoalSnapshots[gi]
+        if (goalNameLower && goal.name.trim().toLowerCase() !== goalNameLower) continue
+        for (let bi = 0; bi < goal.buckets.length; bi += 1) {
+          const bucket = goal.buckets[bi]
+          if (bucketNameLower && bucket.name.trim().toLowerCase() !== bucketNameLower) continue
+          const task = bucket.tasks.find((t) => t.text.trim().toLowerCase() === taskNameLower)
+          if (task) {
+            candidate = {
+              goalId: goal.id,
+              goalName: goal.name,
+              bucketId: bucket.id,
+              bucketName: bucket.name,
+              taskId: task.id,
+              taskName: task.text,
+              completed: task.completed,
+              priority: !!task.priority,
+              difficulty: (task.difficulty as any) ?? 'none',
+              goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+              bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+              notes: typeof task.notes === 'string' ? task.notes : '',
+              subtasks: Array.isArray(task.subtasks)
+                ? task.subtasks.map((s, idx) => ({ id: s.id, text: s.text, completed: s.completed, sortIndex: typeof s.sortIndex === 'number' ? s.sortIndex : (idx + 1) * NOTEBOOK_SUBTASK_SORT_STEP }))
+                : [],
+            }
+            break outer2
+          }
+        }
+      }
+      if (!candidate) {
+        candidate = {
+          goalId: '',
+          goalName: rule.goalName ?? '',
+          bucketId: '',
+          bucketName: rule.bucketName ?? '',
+          taskId: '',
+          taskName: rule.taskName,
+          completed: false,
+          priority: false,
+          difficulty: 'none',
+          goalSurface: DEFAULT_SURFACE_STYLE,
+          bucketSurface: DEFAULT_SURFACE_STYLE,
+          notes: '',
+          subtasks: [],
+        }
+      }
+      if ((candidate.goalName ?? '').trim().toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase() && candidate.bucketName.trim().length > 0) {
+        const lrSurface = lifeRoutineSurfaceLookup.get(candidate.bucketName.trim().toLowerCase())
+        if (lrSurface) {
+          candidate.goalSurface = LIFE_ROUTINES_SURFACE
+          candidate.bucketSurface = lrSurface
+        }
+      }
+      list.push({ ...candidate, startedAt: window.start, endedAt: window.end, isGuide: true })
+    })
+    return list
+  }, [repeatingRules, activeGoalSnapshots, lifeRoutineSurfaceLookup, history])
+
+  // Combine planned and guide suggestions for the "now" section, de-duplicated by names
+  const combinedNowSuggestions = useMemo<ScheduledSuggestion[]>(() => {
+    if (scheduledNowSuggestions.length === 0 && guideNowSuggestions.length === 0) return []
+    const merged = [...scheduledNowSuggestions, ...guideNowSuggestions]
+    const seen = new Set<string>()
+    const norm = (s?: string | null) => (s ?? '').trim().toLowerCase()
+    return merged.filter((t) => {
+      const key = `${norm(t.goalName)}|${norm(t.bucketName)}|${norm(t.taskName)}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [scheduledNowSuggestions, guideNowSuggestions])
 
   const activeFocusCandidate = useMemo(() => {
     if (!focusSource) {
@@ -4328,11 +4686,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                   aria-label="Select focus task"
                   ref={selectorPopoverRef}
                 >
-                  {scheduledNowSuggestions.length > 0 ? (
+                  {combinedNowSuggestions.length > 0 ? (
                     <div className="task-selector__section">
                       <h2 className="task-selector__section-title">Scheduled now</h2>
                       <ul className="task-selector__list">
-                        {scheduledNowSuggestions.map((task) => {
+                        {combinedNowSuggestions.map((task) => {
                           const candidateLower = task.taskName.trim().toLocaleLowerCase()
                           const matches = focusSource
                             ? focusSource.goalId === task.goalId &&
@@ -4430,6 +4788,158 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
                     >
                       Clear focus
                     </button>
+                  </div>
+
+                  <div className="task-selector__section">
+                    <h2 className="task-selector__section-title">Priority</h2>
+                    {priorityTasks.length > 0 ? (
+                      <ul className="task-selector__list">
+                        {priorityTasks.map((task) => {
+                          const candidateLower = task.taskName.trim().toLocaleLowerCase()
+                          const matches = focusSource
+                            ? focusSource.goalId === task.goalId &&
+                              focusSource.bucketId === task.bucketId &&
+                              candidateLower === currentTaskLower
+                            : !isDefaultTask && candidateLower === currentTaskLower
+                          const diffClass =
+                            task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : ''
+                          const isLifePriority =
+                            (task.goalName ?? '').trim().toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
+                          const lifeRowClasses =
+                            isLifePriority && task.bucketSurface
+                              ? ['surface-life-routine', `surface-life-routine--${task.bucketSurface}`]
+                              : []
+                          const rowClassName = [
+                            'task-selector__task',
+                            'goal-task-row',
+                            diffClass,
+                            task.priority ? 'goal-task-row--priority' : '',
+                            ...lifeRowClasses,
+                            matches ? 'task-selector__task--active' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')
+                          const diffBadgeClass =
+                            task.difficulty && task.difficulty !== 'none'
+                              ? ['goal-task-diff', `goal-task-diff--${task.difficulty}`, 'task-selector__diff', 'task-selector__diff-chip']
+                                  .filter(Boolean)
+                                  .join(' ')
+                              : ['goal-task-diff', 'goal-task-diff--none', 'task-selector__diff', 'task-selector__diff-chip']
+                                  .join(' ')
+                          return (
+                            <li key={task.taskId || task.taskName} className="task-selector__item">
+                              <button
+                                type="button"
+                                className={rowClassName}
+                                onClick={() =>
+                                  handleSelectTask(task.taskName, {
+                                    goalId: task.goalId,
+                                    bucketId: task.bucketId,
+                                    goalName: task.goalName,
+                                    bucketName: task.bucketName,
+                                    taskId: task.taskId,
+                                    taskDifficulty: task.difficulty,
+                                    priority: true,
+                                    goalSurface: task.goalSurface,
+                                    bucketSurface: task.bucketSurface,
+                                    notes: task.notes,
+                                    subtasks: task.subtasks,
+                                  })
+                                }
+                              >
+                                <div className="task-selector__task-main">
+                                  <div className="task-selector__task-content">
+                                    <span className="goal-task-text">
+                                      <span className="goal-task-text__inner">{task.taskName}</span>
+                                    </span>
+                                    <span className="task-selector__origin task-selector__origin--dropdown">
+                                      {`${task.goalName} → ${task.bucketName}`}
+                                    </span>
+                                  </div>
+                                  <span className={diffBadgeClass} aria-hidden="true" />
+                                </div>
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="task-selector__empty">No priority tasks.</p>
+                    )}
+                  </div>
+
+                  <div className="task-selector__section">
+                    <h2 className="task-selector__section-title">{LIFE_ROUTINES_NAME}</h2>
+                    <button
+                      type="button"
+                      className={`task-selector__goal-toggle surface-goal surface-goal--${LIFE_ROUTINES_SURFACE}`}
+                      onClick={() => setLifeRoutinesExpanded((value) => !value)}
+                      aria-expanded={lifeRoutinesExpanded}
+                    >
+                      <span className="task-selector__goal-info">
+                        <span className="task-selector__goal-badge" aria-hidden="true">
+                          System
+                        </span>
+                        <span className="task-selector__goal-name">{LIFE_ROUTINES_NAME}</span>
+                      </span>
+                      <span className="task-selector__chevron" aria-hidden="true">
+                        {lifeRoutinesExpanded ? '−' : '+'}
+                      </span>
+                    </button>
+                    {lifeRoutinesExpanded ? (
+                      <ul className="task-selector__list">
+                        {lifeRoutineTasks.map((task) => {
+                          const taskLower = task.title.trim().toLocaleLowerCase()
+                          const matches = focusSource
+                            ? focusSource.goalId === LIFE_ROUTINES_GOAL_ID &&
+                              focusSource.bucketId === task.bucketId &&
+                              currentTaskLower === taskLower
+                            : !isDefaultTask && currentTaskLower === taskLower
+                          const surfaceClass = `surface-life-routine surface-life-routine--${task.surfaceStyle}`
+                          const rowClassName = [
+                            'task-selector__task',
+                            'goal-task-row',
+                            'task-selector__task--life-routine',
+                            surfaceClass,
+                            matches ? 'task-selector__task--active' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')
+                          return (
+                            <li key={task.id} className="task-selector__item">
+                              <button
+                                type="button"
+                                className={rowClassName}
+                                onClick={() =>
+                                  handleSelectTask(task.title, {
+                                    goalId: LIFE_ROUTINES_GOAL_ID,
+                                    bucketId: task.bucketId,
+                                    goalName: LIFE_ROUTINES_NAME,
+                                    bucketName: task.title,
+                                    taskId: task.id,
+                                    taskDifficulty: 'none',
+                                    priority: false,
+                                    goalSurface: LIFE_ROUTINES_SURFACE,
+                                    bucketSurface: task.surfaceStyle,
+                                    notes: '',
+                                    subtasks: [],
+                                  })
+                                }
+                              >
+                                <div className="task-selector__task-main">
+                                  <div className="task-selector__task-content">
+                                    <span className="goal-task-text">
+                                      <span className="goal-task-text__inner">{task.title}</span>
+                                    </span>
+                                    <span className="task-selector__origin task-selector__origin--dropdown">{task.blurb}</span>
+                                  </div>
+                                </div>
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    ) : null}
                   </div>
 
                   <div className="task-selector__section">
@@ -4740,11 +5250,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             aria-label="Select focus task"
             ref={selectorPopoverRef}
           >
-            {scheduledNowSuggestions.length > 0 ? (
+            {combinedNowSuggestions.length > 0 ? (
               <div className="task-selector__section">
-                <h2 className="task-selector__section-title">Scheduled now</h2>
+              <h2 className="task-selector__section-title">Scheduled now</h2>
                 <ul className="task-selector__list">
-                  {scheduledNowSuggestions.map((task) => {
+                  {combinedNowSuggestions.map((task) => {
                     const candidateLower = task.taskName.trim().toLocaleLowerCase()
                     const matches = focusSource
                       ? focusSource.goalId === task.goalId &&
