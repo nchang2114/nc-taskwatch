@@ -120,6 +120,18 @@ html[data-theme='light'] .goal-tile--life {
   background: linear-gradient(135deg, rgba(255, 220, 170, 0.2), rgba(255, 235, 194, 0.12));
 }
 
+/* Quick List tile (frost style) */
+.goal-tile--frost {
+  border-color: rgba(124, 222, 255, 0.24);
+  background: linear-gradient(135deg, rgba(174, 233, 255, 0.24), rgba(142, 210, 255, 0.14));
+  box-shadow: 0 18px 34px -24px rgba(38, 124, 162, 0.22);
+}
+html[data-theme='light'] .goal-tile--frost {
+  border-color: rgba(124, 222, 255, 0.28);
+  background: linear-gradient(135deg, rgba(232, 249, 255, 0.96), rgba(216, 240, 255, 0.94));
+  box-shadow: 0 18px 34px -24px rgba(38, 124, 162, 0.18);
+}
+
 .goals-heading {
   font-size: clamp(2.35rem, 4vw, 3.1rem);
   font-weight: 700;
@@ -831,6 +843,33 @@ html[data-theme='light'] .life-routines-card.quick-list-card {
 /* Open: point down */
 .life-routines-card--open .life-routines-card__chevron { transform: rotate(0deg); }
 .quick-list-card--open .life-routines-card__chevron { transform: rotate(0deg); }
+
+/* Quick List embedded in dashboard details (frost variables) */
+.quick-list-embed {
+  --lr-bg: linear-gradient(135deg, rgba(174, 233, 255, 0.24), rgba(142, 210, 255, 0.14));
+  --lr-border: rgba(124, 222, 255, 0.24);
+  --lr-text: rgba(224, 248, 255, 0.96);
+  --lr-muted: rgba(184, 230, 255, 0.76);
+}
+/* Ensure overrides win even against later life-routines-card theme rules */
+.life-routines-card.quick-list-embed {
+  --lr-bg: linear-gradient(135deg, rgba(174, 233, 255, 0.24), rgba(142, 210, 255, 0.14));
+  --lr-border: rgba(124, 222, 255, 0.24);
+  --lr-text: rgba(224, 248, 255, 0.96);
+  --lr-muted: rgba(184, 230, 255, 0.76);
+}
+html[data-theme='light'] .quick-list-embed {
+  --lr-bg: linear-gradient(135deg, rgba(232, 249, 255, 0.96), rgba(216, 240, 255, 0.94));
+  --lr-border: rgba(124, 222, 255, 0.32);
+  --lr-text: rgba(24, 68, 92, 0.94);
+  --lr-muted: rgba(32, 92, 132, 0.7);
+}
+html[data-theme='light'] .life-routines-card.quick-list-embed {
+  --lr-bg: linear-gradient(135deg, rgba(232, 249, 255, 0.96), rgba(216, 240, 255, 0.94));
+  --lr-border: rgba(124, 222, 255, 0.32);
+  --lr-text: rgba(24, 68, 92, 0.94);
+  --lr-muted: rgba(32, 92, 132, 0.7);
+}
 
 .life-routines-card__tasks {
   list-style: none;

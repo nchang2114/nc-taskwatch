@@ -8470,6 +8470,17 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     })
   }, [lifeRoutineTasks, normalizedSearch])
 
+  const quickListMatchesSearch = useMemo(() => {
+    if (!normalizedSearch) {
+      return true
+    }
+    const needle = normalizedSearch
+    if ('quick list'.includes(needle) || 'quick tasks'.includes(needle)) {
+      return true
+    }
+    return quickListItems.some((item) => item.text.toLowerCase().includes(needle))
+  }, [quickListItems, normalizedSearch])
+
   const filteredGoals = useMemo(() => {
     if (!normalizedSearch) {
       return goals
@@ -8508,6 +8519,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
   const showNoActiveGoalsNotice =
     visibleActiveGoals.length === 0 && (normalizedSearch ? !hasLifeRoutineMatch : true)
   const shouldShowLifeRoutinesCard = !normalizedSearch || lifeRoutineMatchesSearch
+  const shouldShowQuickListTile = !normalizedSearch || quickListMatchesSearch
 
   useEffect(() => {
     if (normalizedSearch && visibleArchivedGoals.length > 0) {
@@ -8548,6 +8560,18 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
         } else {
           setTimeout(scrollToDetails, 0)
         }
+      }
+    } catch {}
+  }, [dashboardLayout])
+
+  const openQuickList = useCallback(() => {
+    try {
+      setDashboardSelectedGoalId('quick-list')
+      setQuickListExpanded(true)
+      // In standard layout, scroll to section; in dashboard, the tile highlights like others
+      if (!dashboardLayout && typeof document !== 'undefined') {
+        const scrollTarget = document.querySelector('.quick-list-card') as HTMLElement | null
+        scrollTarget?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }
     } catch {}
   }, [dashboardLayout])
@@ -9702,6 +9726,18 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   <h3 className="goal-tile__name">{LIFE_ROUTINES_NAME}</h3>
                 </article>
               )}
+              {shouldShowQuickListTile && (
+                <article
+                  className={classNames('goal-tile', 'goal-tile--frost', dashboardSelectedGoalId === 'quick-list' && 'goal-tile--active')}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openQuickList()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openQuickList() } }}
+                >
+                  <p className="goal-tile__eyebrow">Quick Tasks</p>
+                  <h3 className="goal-tile__name">Quick List</h3>
+                </article>
+              )}
               {visibleActiveGoals.map((g) => {
                 // Compute next milestone from local cache when available
                 const activeBuckets = g.buckets.filter((b) => !b.archived)
@@ -10071,7 +10107,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
             </section>
           ) : null}
 
-          {/* Quick List: simple tasks (no buckets), under Daily Life in standard layout */}
+          {/* Quick List: simple tasks (no buckets), standard layout only */}
           {!dashboardLayout ? (
             <section className={classNames('quick-list-card', quickListExpanded && 'quick-list-card--open', quickListCustomizing && 'quick-list-card--customizing')} aria-label="Quick List">
               <div className="life-routines-card__header-wrapper">
@@ -11352,9 +11388,118 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                       </>
                     ) : null}
                   </section>
+                ) : dashboardSelectedGoalId === 'quick-list' ? (
+                  <section
+                    className={classNames('life-routines-card', 'quick-list-embed', quickListExpanded && 'life-routines-card--open')}
+                    aria-label="Quick List"
+                  >
+                    <div className="life-routines-card__header-wrapper">
+                      <div className="life-routines-card__header-left">
+                        <button
+                          type="button"
+                          className="life-routines-card__header"
+                          onClick={() => setQuickListExpanded((v) => !v)}
+                          aria-expanded={quickListExpanded}
+                          aria-controls="quick-list-body"
+                        >
+                          <div className="life-routines-card__header-content">
+                            <div className="life-routines-card__meta">
+                              <p className="life-routines-card__eyebrow">Quick Tasks</p>
+                              <h2 className="life-routines-card__title">Quick List</h2>
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                      <div className="relative flex items-center gap-2 flex-none whitespace-nowrap">
+                        <button
+                          type="button"
+                          className="life-routines-card__toggle"
+                          onClick={() => setQuickListExpanded((v) => !v)}
+                          aria-expanded={quickListExpanded}
+                          aria-controls="quick-list-body"
+                          aria-label={`${quickListExpanded ? 'Collapse' : 'Expand'} quick list`}
+                        >
+                          <svg className="life-routines-card__chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    {quickListExpanded ? (
+                      <div id="quick-list-body" className="goal-bucket-body px-3 md:px-4 pb-3 md:pb-4">
+                        <div className="goal-bucket-body-header">
+                          <div className="goal-section-header">
+                            <p className="goal-section-title">Tasks ({quickListItems.filter((it) => !it.completed).length})</p>
+                          </div>
+                          <button type="button" className="goal-task-add" onClick={(e) => { e.stopPropagation(); setQuickDraftActive(true) }}>+ Task</button>
+                        </div>
+                        {(() => {
+                          const activeItems = quickListItems.filter((it) => !it.completed)
+                          const completedItems = quickListItems.filter((it) => it.completed)
+                          return (
+                            <>
+                              {quickDraftActive ? (
+                                <div className="goal-task-row goal-task-row--draft">
+                                  <span className="goal-task-marker" aria-hidden="true" />
+                                  <input
+                                    ref={quickDraftInputRef}
+                                    value={quickDraft}
+                                    onChange={(e) => setQuickDraft(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addQuickItem(true) } if (e.key === 'Escape') { e.preventDefault(); setQuickDraft(''); setQuickDraftActive(false) } }}
+                                    onBlur={() => { const text = quickDraft.trim(); if (text.length > 0) { addQuickItem(false) } else { setQuickDraft(''); setQuickDraftActive(false) } }}
+                                    placeholder="New task"
+                                    className="goal-task-input"
+                                  />
+                                </div>
+                              ) : null}
+                              {activeItems.length === 0 && !quickDraftActive ? (
+                                <p className="goal-task-empty">No tasks yet.</p>
+                              ) : (
+                                <ul className="mt-2 space-y-2">
+                                  {activeItems.map((item) => (
+                                    <li key={item.id} className={classNames('goal-task-row', (item.difficulty === 'green') && 'goal-task-row--diff-green', (item.difficulty === 'yellow') && 'goal-task-row--diff-yellow', (item.difficulty === 'red') && 'goal-task-row--diff-red', item.priority && 'goal-task-row--priority')}>
+                                      <div className="goal-task-row__content">
+                                        <button type="button" className="goal-task-marker goal-task-marker--action" onClick={(e) => { e.stopPropagation(); toggleQuickCompleteWithAnimation(item.id) }} aria-pressed={item.completed} aria-label={item.completed ? 'Mark as incomplete' : 'Mark as complete'}>
+                                          <svg viewBox="0 0 24 24" width="20" height="20" className="goal-task-check" aria-hidden="true"><path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                        </button>
+                                        <button type="button" className="goal-task-text goal-task-text--button" onClick={(e) => { e.stopPropagation(); toggleQuickItemDetails(item.id) }} aria-label="Toggle task details"><span className="goal-task-text__inner">{item.text}</span></button>
+                                        <button type="button" className={classNames('goal-task-diff', (item.difficulty ?? 'none') === 'green' && 'goal-task-diff--green', (item.difficulty ?? 'none') === 'yellow' && 'goal-task-diff--yellow', (item.difficulty ?? 'none') === 'red' && 'goal-task-diff--red')} onClick={(e) => { e.stopPropagation(); cycleQuickDifficulty(item.id) }} aria-label="Set task difficulty" />
+                                        <button type="button" className="goal-task-row__delete" onClick={(e) => { e.stopPropagation(); deleteQuickItem(item.id) }} aria-label="Delete task permanently" title="Delete task"><svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-row__delete-icon"><path d="M9 4h6l1 2h4v2H4V6h4l1-2Zm1 5v9m4-9v9m-6 0h8a1 1 0 0 0 1-1V8H7v9a1 1 0 0 0 1 1Z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              {completedItems.length > 0 ? (
+                                <div className="goal-completed">
+                                  <button type="button" className="goal-completed__title" onClick={() => setQuickCompletedCollapsed((v) => !v)} aria-expanded={!quickCompletedCollapsed}>
+                                    <span>Completed ({completedItems.length})</span>
+                                    <svg className={classNames('goal-completed__chevron', !quickCompletedCollapsed && 'goal-completed__chevron--open')} viewBox="0 0 24 24" aria-hidden="true"><path d="M8.12 9.29a1 1 0 011.41-.17L12 11.18l2.47-2.06a1 1 0 111.24 1.58l-3.07 2.56a1 1 0 01-1.24 0l-3.07-2.56a1 1 0 01-.17-1.41z" fill="currentColor" /></svg>
+                                  </button>
+                                  {!quickCompletedCollapsed && (
+                                    <ul className="goal-completed__list">
+                                      {completedItems.map((item) => (
+                                        <li key={item.id} className={classNames('goal-task-row', 'goal-task-row--completed')}>
+                                          <button type="button" className="goal-task-marker goal-task-marker--action" onClick={() => toggleQuickCompleteWithAnimation(item.id)} aria-pressed={item.completed} aria-label="Mark task incomplete"><svg viewBox="0 0 24 24" width="20" height="20" className="goal-task-check" aria-hidden="true"><path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+                                          <div className="goal-task-row__content">
+                                            <button type="button" className="goal-task-text goal-task-text--button" onClick={(e) => { e.stopPropagation(); toggleQuickItemDetails(item.id) }} aria-label="Toggle task details"><span className="goal-task-text__inner" style={{ textDecoration: 'line-through' }}>{item.text}</span></button>
+                                          </div>
+                                          <button type="button" className="goal-task-row__delete" onClick={(e) => { e.stopPropagation(); setRevealedDeleteTaskKey(null); deleteQuickItem(item.id) }} aria-label="Delete task permanently" title="Delete task"><svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-row__delete-icon"><path d="M9 4h6l1 2h4v2H4V6h4l1-2Zm1 5v9m4-9v9m-6 0h8a1 1 0 0 0 1-1V8H7v9a1 1 0 0 0 1 1Z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              ) : null}
+                            </>
+                          )
+                        })()}
+                      </div>
+                    ) : null}
+                  </section>
                 ) : (
-                <ul
-                  className="goal-list space-y-3 md:space-y-4"
+                  <ul
+                    className="goal-list space-y-3 md:space-y-4"
                   onDragOver={(e) => {
                     const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean } | null
                     if (!info) return
