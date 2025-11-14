@@ -9178,6 +9178,17 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     <div className={classNames('goals-layer text-white', dashboardLayout && 'goals-layer--dashboard')}>
       <div className="goals-content site-main__inner">
         <div className="goals-main">
+          <div className="goals-page-actions">
+            <button
+              type="button"
+              className={classNames('goals-layout-toggle', dashboardLayout && 'goals-layout-toggle--active')}
+              aria-pressed={dashboardLayout}
+              onClick={() => setDashboardLayout((v) => !v)}
+              title="Toggle dashboard layout"
+            >
+              {dashboardLayout ? 'Standard' : 'Dashboard'}
+            </button>
+          </div>
           <section className="goals-intro">
             <h1 className="goals-heading">Goals</h1>
             <div className="goals-toolbar">
@@ -9197,16 +9208,6 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
               <div className="goals-actions">
                 <button type="button" className="goal-new-button" onClick={openCreateGoal}>
                   + New Goal
-                </button>
-                
-                <button
-                  type="button"
-                  className={classNames('goals-layout-toggle', dashboardLayout && 'goals-layout-toggle--active')}
-                  aria-pressed={dashboardLayout}
-                  onClick={() => setDashboardLayout((v) => !v)}
-                  title="Toggle dashboard layout"
-                >
-                  {dashboardLayout ? 'Standard' : 'Dashboard'}
                 </button>
               </div>
             </div>

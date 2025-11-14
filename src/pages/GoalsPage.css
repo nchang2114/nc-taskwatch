@@ -38,10 +38,20 @@
   flex-direction: column;
   gap: clamp(1.75rem, 4vw, 2.75rem);
   padding-inline: clamp(1rem, 4vw, 1.75rem);
+  position: relative; /* anchor page actions without affecting flow */
 }
 
 .goals-intro {
   max-width: 36rem;
+}
+
+/* Top-right page actions (Dashboard toggle) — absolute so it doesn't affect layout/alignment */
+.goals-page-actions {
+  position: absolute;
+  top: clamp(0.6rem, 2.2vw, 1rem);
+  right: clamp(0.6rem, 2.2vw, 1rem);
+  z-index: 2;
+  pointer-events: auto;
 }
 
 /* Goals overview grid */

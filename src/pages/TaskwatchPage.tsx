@@ -2861,6 +2861,185 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     ],
   )
 
+  const subtasksCard = useMemo(
+    () => (
+      <section className="taskwatch-notes taskwatch-subtasks-card" aria-label="Subtasks">
+        <div className="taskwatch-notes__header">
+          <div className="taskwatch-notes__heading">
+            <h2 className="taskwatch-notes__title">Subtasks</h2>
+            <p className="taskwatch-notes__subtitle">
+              <span className="taskwatch-notes__task">{safeTaskName}</span>
+              <span className="taskwatch-notes__context">{focusContextLabel}</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="taskwatch-notes__subtasks">
+          <div className="taskwatch-notes__subtasks-row">
+            <div className="taskwatch-notes__subtasks-header">
+              <p className="taskwatch-notes__label">Subtasks</p>
+              {subtaskProgressLabel ? (
+                <span className="taskwatch-notes__progress" aria-label={`Completed ${subtaskProgressLabel} subtasks`}>
+                  {subtaskProgressLabel}
+                </span>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="taskwatch-notes__add"
+              onClick={() => handleAddNotebookSubtask()}
+            >
+              + Subtask
+            </button>
+          </div>
+          {notebookSubtasks.length === 0 ? (
+            <p className="goal-task-details__empty-text">No subtasks yet</p>
+          ) : (
+            <ul className="goal-task-details__subtask-list">
+              {notebookSubtasks.map((subtask) => {
+                const subDeleteKey = `${notebookKey}__subtask__${subtask.id}`
+                const isSubDeleteRevealed = revealedNotebookDeleteKey === subDeleteKey
+                return (
+                  <li
+                    key={subtask.id}
+                    data-delete-key={subDeleteKey}
+                    className={classNames(
+                      'goal-task-details__subtask',
+                      subtask.completed && 'goal-task-details__subtask--completed',
+                      isSubDeleteRevealed && 'goal-task-details__subtask--delete-revealed',
+                    )}
+                    onClick={(event) => { event.stopPropagation() }}
+                    onContextMenu={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      setRevealedNotebookDeleteKey(isSubDeleteRevealed ? null : subDeleteKey)
+                    }}
+                    onDoubleClick={(event) => { event.stopPropagation(); setRevealedNotebookDeleteKey(null) }}
+                  >
+                    <label className="goal-task-details__subtask-item">
+                      <div className="goal-subtask-field">
+                        <input
+                          type="checkbox"
+                          className="goal-task-details__checkbox"
+                          checked={subtask.completed}
+                          onChange={() => handleNotebookSubtaskToggle(subtask.id)}
+                          onClick={(event) => event.stopPropagation()}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          aria-label={subtask.text.trim().length > 0 ? `Mark "${subtask.text}" complete` : 'Toggle subtask'}
+                        />
+                        <textarea
+                          id={makeNotebookSubtaskInputId(notebookKey, subtask.id)}
+                          className="goal-task-details__subtask-input"
+                          rows={1}
+                          ref={(el) => autosizeTextArea(el)}
+                          value={subtask.text}
+                          onChange={(event) => {
+                            const el = event.currentTarget
+                            el.style.height = 'auto'
+                            el.style.height = `${el.scrollHeight}px`
+                            handleNotebookSubtaskTextChange(subtask.id, event.target.value)
+                          }}
+                          onClick={(event) => event.stopPropagation()}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' && !event.shiftKey) {
+                              event.preventDefault()
+                              handleAddNotebookSubtask({ focus: true })
+                            }
+                            if (event.key === 'Escape') {
+                              const value = event.currentTarget.value
+                              if (value.trim().length === 0) {
+                                event.preventDefault()
+                                event.currentTarget.blur()
+                              }
+                            }
+                          }}
+                          onFocus={(event) => {
+                            const el = event.currentTarget
+                            el.style.height = 'auto'
+                            el.style.height = `${el.scrollHeight}px`
+                          }}
+                          onBlur={() => handleNotebookSubtaskBlur(subtask.id)}
+                          placeholder="Describe subtask"
+                        />
+                      </div>
+                    </label>
+                    <button
+                      type="button"
+                      className="goal-task-details__remove"
+                      onClick={() => { setRevealedNotebookDeleteKey(null); handleNotebookSubtaskRemove(subtask.id) }}
+                      aria-label="Remove subtask"
+                    >
+                      ×
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      </section>
+    ),
+    [
+      focusContextLabel,
+      handleAddNotebookSubtask,
+      handleNotebookSubtaskBlur,
+      handleNotebookSubtaskRemove,
+      handleNotebookSubtaskTextChange,
+      handleNotebookSubtaskToggle,
+      notebookKey,
+      notebookSubtasks,
+      revealedNotebookDeleteKey,
+      safeTaskName,
+      subtaskProgressLabel,
+    ],
+  )
+
+  const notesCard = useMemo(
+    () => (
+      <section className="taskwatch-notes taskwatch-notes-card" aria-label="Notes">
+        <div className="taskwatch-notes__header">
+          <div className="taskwatch-notes__heading">
+            <h2 className="taskwatch-notes__title">Notes</h2>
+            <p className="taskwatch-notes__subtitle">
+              <span className="taskwatch-notes__task">{safeTaskName}</span>
+              <span className="taskwatch-notes__context">{focusContextLabel}</span>
+            </p>
+          </div>
+        </div>
+        <div className="taskwatch-notes__notes">
+          <label className="taskwatch-notes__label" htmlFor={notesFieldId}>
+            Notes
+          </label>
+          <textarea
+            id={notesFieldId}
+            className="goal-task-details__textarea"
+            value={notebookNotes}
+            onChange={handleNotebookNotesChange}
+            onBlur={() => {
+              const linkedTaskId = getStableLinkedTaskId()
+              if (linkedTaskId) {
+                flushNotebookNotesSnapshotPublish(linkedTaskId, activeNotebookEntry, 'notes-blur')
+              }
+            }}
+            placeholder="Capture quick ideas, wins, or blockers while you work..."
+            rows={4}
+          />
+        </div>
+      </section>
+    ),
+    [
+      activeNotebookEntry,
+      focusContextLabel,
+      flushNotebookNotesSnapshotPublish,
+      getStableLinkedTaskId,
+      handleNotebookNotesChange,
+      notebookNotes,
+      notesFieldId,
+      safeTaskName,
+    ],
+  )
+
   // Close revealed delete affordance when clicking elsewhere or pressing Escape
   useEffect(() => {
     if (!revealedNotebookDeleteKey || typeof window === 'undefined') {
@@ -4010,9 +4189,40 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const statusText = isRunning ? 'running' : elapsed > 0 ? 'paused' : 'idle'
   const primaryLabel = isRunning ? 'Pause' : elapsed > 0 ? 'Resume' : 'Start'
 
+  // Keep standard view as default; dashboard toggles on demand
+  const [dashboardLayout, setDashboardLayout] = useState(false)
+
   return (
-    <div className="site-main__inner">
-      <h1 className="stopwatch-heading">Taskwatch</h1>
+    <div className={classNames('site-main__inner', 'taskwatch-page', dashboardLayout && 'taskwatch--dashboard')}>
+      {dashboardLayout ? (
+        <div className="taskwatch-header">
+          <h1 className="stopwatch-heading">Taskwatch</h1>
+          <button
+            type="button"
+            className={classNames('taskwatch-layout-toggle', dashboardLayout && 'taskwatch-layout-toggle--active')}
+            aria-pressed={dashboardLayout}
+            onClick={() => setDashboardLayout((v) => !v)}
+            title="Toggle dashboard layout"
+          >
+            {dashboardLayout ? 'Standard' : 'Dashboard'}
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="taskwatch-page-actions">
+            <button
+              type="button"
+              className={classNames('taskwatch-layout-toggle', dashboardLayout && 'taskwatch-layout-toggle--active')}
+              aria-pressed={dashboardLayout}
+              onClick={() => setDashboardLayout((v) => !v)}
+              title="Toggle dashboard layout"
+            >
+              {dashboardLayout ? 'Standard' : 'Dashboard'}
+            </button>
+          </div>
+          <h1 className="stopwatch-heading">Taskwatch</h1>
+        </>
+      )}
       <div className="task-selector-container">
         <div
           className={[
@@ -4571,7 +4781,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         </button>
       </section>
 
-      {notebookSection}
+      {dashboardLayout ? notebookSection : notebookSection}
 
       {isSnapbackOpen ? (
         <div className="snapback-overlay" role="dialog" aria-modal="true" aria-labelledby="snapback-title" onClick={handleCloseSnapback}>

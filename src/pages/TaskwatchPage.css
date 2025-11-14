@@ -260,6 +260,84 @@
 .snapback-option:focus-visible { outline: 2px solid rgba(172, 186, 255, 0.7); outline-offset: 2px; }
 
 /* Taskwatch: Focus selector, focus card, stopwatch, notes */
+/* Page-level positioning for actions */
+.taskwatch-page { position: relative; }
+/* Allow Taskwatch dashboard to span a wider canvas than the default site width */
+.taskwatch-page.taskwatch--dashboard.site-main__inner { width: min(1160px, 100%); }
+/* Remove top/bottom padding in dashboard view */
+.taskwatch-page.taskwatch--dashboard.site-main__inner { padding-block: 0; }
+.taskwatch-page-actions { position: absolute; top: clamp(0.6rem, 2.2vw, 1rem); right: clamp(0.6rem, 2.2vw, 1rem); z-index: 2; }
+
+/* Dashboard toggle styles (match Goals) */
+.taskwatch-layout-toggle {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(114, 138, 255, 0.38);
+  background: rgba(24, 34, 84, 0.68);
+  color: rgba(230, 238, 255, 0.94);
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+.taskwatch-layout-toggle:hover,
+.taskwatch-layout-toggle:focus-visible { background: rgba(30, 44, 112, 0.82); border-color: rgba(139, 132, 255, 0.5); color: #35d4ff; transform: translateY(-1px); outline: none; }
+.taskwatch-layout-toggle--active { background: rgba(31, 200, 255, 0.16); border-color: rgba(31, 200, 255, 0.4); color: #35d4ff; }
+html[data-theme='light'] .taskwatch-layout-toggle { background: rgba(92, 91, 255, 0.16); border-color: rgba(92, 91, 255, 0.3); color: rgba(24, 30, 86, 0.94); }
+html[data-theme='light'] .taskwatch-layout-toggle--active { background: rgba(31, 200, 255, 0.18); border-color: rgba(31, 200, 255, 0.32); color: rgba(20, 26, 78, 0.96); }
+
+/* Dashboard layout: two columns with cards */
+.taskwatch--dashboard { display: grid; grid-template-columns: minmax(0,1fr); row-gap: clamp(0.02rem, 0.2vw, 0.12rem); column-gap: clamp(1.4rem, 3.8vw, 2rem); align-items: start; grid-template-areas: 
+  'heading'
+  'selector'
+  'stopwatch'
+  'snapback'
+  'subtasks'
+  'notes'; }
+@media (min-width: 980px) {
+  .taskwatch--dashboard { grid-template-columns: minmax(0,1fr) minmax(0,1fr); column-gap: clamp(1.4rem, 3.8vw, 2rem); row-gap: clamp(0.02rem, 0.2vw, 0.12rem); grid-template-areas:
+    'heading  heading'
+    'selector subtasks'
+    'stopwatch subtasks'
+    'snapback notes'; }
+}
+.taskwatch--dashboard .taskwatch-header { grid-area: heading; }
+.taskwatch-header { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.taskwatch--dashboard .task-selector-container { grid-area: selector; justify-self: stretch; }
+.taskwatch--dashboard .stopwatch-card { grid-area: stopwatch; justify-self: stretch; }
+.taskwatch--dashboard .snapback-tool { grid-area: snapback; justify-self: stretch; }
+.taskwatch--dashboard .taskwatch-subtasks-card { grid-area: subtasks; justify-self: stretch; }
+.taskwatch--dashboard .taskwatch-notes-card { grid-area: notes; justify-self: stretch; }
+/* Ensure right column cards fill the track */
+.taskwatch--dashboard .taskwatch-notes,
+.taskwatch--dashboard .taskwatch-subtasks-card,
+.taskwatch--dashboard .taskwatch-notes-card { max-width: none !important; width: 100% !important; }
+/* Ensure left-column cards fill their tracks for equal visual width (layout only) */
+.taskwatch--dashboard .stopwatch-card,
+.taskwatch--dashboard .snapback-tool { max-width: none; width: 100%; }
+
+/* Snapback respects default internal sizing to preserve standard styles */
+/* (No dashboard-specific snapback button sizing) */
+
+/* Use standard card paddings and internal spacing in dashboard */
+/* (no overrides here; base .stopwatch-card/.focus-task styles apply) */
+
+/* Notes card keeps its standard padding/gaps in dashboard */
+
+/* Eliminate any margins that could add extra vertical space between rows */
+.taskwatch--dashboard .task-selector-container,
+.taskwatch--dashboard .stopwatch-card,
+.taskwatch--dashboard .snapback-tool,
+.taskwatch--dashboard .taskwatch-notes { margin-top: 0 !important; margin-bottom: 0 !important; }
+
+/* Ensure the dashboard container's gap wins over global site gap */
+.taskwatch-page.taskwatch--dashboard { row-gap: clamp(0.02rem, 0.2vw, 0.12rem) !important; column-gap: clamp(1.4rem, 3.8vw, 2rem) !important; }
+
+/* Use standard focus-task surface and spacing in dashboard */
+
+/* Align right column to top and remove extra top margin so it sits level with the selector */
+.taskwatch--dashboard .taskwatch-notes { grid-area: subtasks; align-self: start; justify-self: stretch; margin-top: 0; }
 
 /* Selector trigger + popover */
 .task-selector-container {
@@ -546,6 +624,8 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible { backgroun
 
 /* Page heading */
 .stopwatch-heading { margin: 0; align-self: center; font-family: var(--font-display); font-weight: 600; letter-spacing: 0.06em; font-size: clamp(2.2rem, 6vw, 3.8rem); color: var(--text-primary); }
+/* Dashboard header scales a touch differently without affecting standard layout */
+.taskwatch--dashboard .stopwatch-heading { letter-spacing: 0.05em; font-size: clamp(1.9rem, 5vw, 3rem); }
 
 /* Stopwatch card */
 .stopwatch-card { position: relative; display: flex; flex-direction: column; gap: clamp(1.25rem, 3vw, 2rem); padding: clamp(1.8rem, 4.8vw, 2.6rem); padding-top: clamp(2.4rem, 5.4vw, 3.1rem); width: 100%; max-width: min(720px, 100%); border-radius: clamp(18px, 4vw, 28px); border: 1px solid rgba(128, 152, 236, 0.4); background: linear-gradient(155deg, rgba(34, 42, 86, 0.9) 0%, rgba(20, 28, 60, 0.92) 60%, rgba(12, 18, 40, 0.95) 100%); box-shadow: 0 28px 60px -26px rgba(6, 12, 36, 0.85), inset 0 0 0 1px rgba(255, 255, 255, 0.05); overflow: hidden; backdrop-filter: blur(18px); }
@@ -809,3 +889,5 @@ html[data-theme='light'] .snapback-panel__textarea::placeholder { color: rgba(11
 html[data-theme='light'] .snapback-panel__button--ghost { border-color: rgba(120, 134, 214, 0.45); color: rgba(42, 56, 112, 0.82); }
 html[data-theme='light'] .snapback-panel__button--ghost:hover, html[data-theme='light'] .snapback-panel__button--ghost:focus-visible { background: rgba(214, 222, 255, 0.7); }
 html[data-theme='light'] .snapback-panel__button--primary { background: linear-gradient(135deg, rgba(120, 134, 230, 0.98) 0%, rgba(86, 106, 224, 0.95) 90%); border-color: rgba(134, 150, 230, 0.82); }
+
+/* (dashboard-specific compaction overrides removed to restore standard card styles) */
