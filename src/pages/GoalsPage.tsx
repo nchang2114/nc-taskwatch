@@ -6411,11 +6411,107 @@ export default function GoalsPage(): ReactElement {
   const [gridDragHoverIndex, setGridDragHoverIndex] = useState<number | null>(null)
   const [gridDragStartIndex, setGridDragStartIndex] = useState<number | null>(null)
   const gridDragCloneRef = useRef<HTMLElement | null>(null)
+  const gridDragShimRef = useRef<HTMLElement | null>(null)
+  const gridDragMoveHandlerRef = useRef<((ev: DragEvent) => void) | null>(null)
   const gridPointerDraggingRef = useRef<boolean>(false)
   const gridPointerStartRef = useRef<{ x: number; y: number } | null>(null)
   const gridPointerIdRef = useRef<number | null>(null)
   const gridPointerCloneRef = useRef<HTMLElement | null>(null)
   const gridPointerCloneOffsetRef = useRef<{ dx: number; dy: number } | null>(null)
+  const gridPointerJustDraggedRef = useRef<boolean>(false)
+
+  // Safety net: ensure any collapsed/ghosted drag state is cleared even if a drag ends outside targets
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
+    const cleanupGridDrag = () => {
+      // Clear any collapsed tiles leftover
+      try {
+        const els = Array.from(document.querySelectorAll<HTMLElement>('.goals-grid .goal-tile.goal-tile--collapsed, .goals-grid .goal-tile.dragging'))
+        els.forEach((el) => {
+          el.classList.remove('goal-tile--collapsed')
+          el.classList.remove('dragging')
+        })
+      } catch {}
+      // Remove any floating drag images
+      try {
+        const ghost = gridDragCloneRef.current
+        if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost)
+      } catch {}
+      gridDragCloneRef.current = null
+      try {
+        const ghost2 = gridPointerCloneRef.current
+        if (ghost2 && ghost2.parentNode) ghost2.parentNode.removeChild(ghost2)
+      } catch {}
+      gridPointerCloneRef.current = null
+      gridPointerCloneOffsetRef.current = null
+      // Reset indices
+      setGridDragGoalId(null)
+      setGridDragHoverIndex(null)
+      setGridDragStartIndex(null)
+    }
+    const cleanupListDrag = () => {
+      try {
+        const els = Array.from(document.querySelectorAll<HTMLElement>('li.goal-entry.goal-entry--collapsed, li.goal-entry.dragging'))
+        els.forEach((el) => {
+          el.classList.remove('goal-entry--collapsed')
+          el.classList.remove('dragging')
+        })
+      } catch {}
+      // Reset insertion UI
+      setGoalHoverIndex(null)
+      setGoalLineTop(null)
+    }
+    const handleGlobalDragEnd = () => {
+      // Defer cleanup until after app-level drop handlers run
+      setTimeout(() => {
+        // If any grid drag was in progress, clear it
+        if ((window as any).__dragGoalGridInfo || gridDragGoalId != null) {
+          cleanupGridDrag()
+          ;(window as any).__dragGoalGridInfo = null
+        }
+        // Also recover any standard goal-list row that stayed collapsed
+        if ((window as any).__dragGoalInfo) {
+          cleanupListDrag()
+          ;(window as any).__dragGoalInfo = null
+        }
+      }, 0)
+    }
+    window.addEventListener('dragend', handleGlobalDragEnd)
+    window.addEventListener('drop', handleGlobalDragEnd)
+    return () => {
+      window.removeEventListener('dragend', handleGlobalDragEnd)
+      window.removeEventListener('drop', handleGlobalDragEnd)
+    }
+  }, [gridDragGoalId])
+
+  // While grid drag is active, ensure we never end up with a collapsed source and no visible placeholder
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
+    if (!gridDragGoalId) return
+    let active = true
+    let raf = 0
+    const tick = () => {
+      if (!active) return
+      try {
+        const grid = document.querySelector('.goals-grid') as HTMLElement | null
+        if (grid) {
+          const hasPlaceholder = Boolean(grid.querySelector('.goal-tile--placeholder'))
+          const source = grid.querySelector<HTMLElement>(`article.goal-tile[data-goal-id="${gridDragGoalId}"]`)
+          const isCollapsed = Boolean(source && source.classList.contains('goal-tile--collapsed'))
+          if (source && isCollapsed && !hasPlaceholder) {
+            // Recover the source tile if the placeholder isn't present for any reason
+            source.classList.remove('goal-tile--collapsed')
+          }
+        }
+      } catch {}
+      raf = window.requestAnimationFrame(tick)
+    }
+    raf = window.requestAnimationFrame(tick)
+    return () => {
+      active = false
+      try { window.cancelAnimationFrame(raf) } catch {}
+    }
+  }, [gridDragGoalId])
   const [managingArchivedGoalId, setManagingArchivedGoalId] = useState<string | null>(null)
   useEffect(() => {
     if (!revealedDeleteTaskKey || typeof window === 'undefined') {
@@ -9553,7 +9649,9 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     }
     setGoals((gs) => {
       const next = gs.slice()
-      const [moved] = next.splice(fromGlobalIndex, 1)
+      const fromIdx = next.findIndex((g) => g.id === goalId)
+      if (fromIdx === -1) return gs
+      const [moved] = next.splice(fromIdx, 1)
       next.splice(adjustedTo, 0, moved)
       return next
     })
@@ -9911,7 +10009,14 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                       data-goal-id={g.id}
                       role="button"
                       tabIndex={0}
-                      onClick={(e) => { if (gridPointerDraggingRef.current) { e.preventDefault(); return } openGoalExclusive(g.id) }}
+                      onClick={(e) => {
+                        if (gridPointerDraggingRef.current || gridPointerJustDraggedRef.current) {
+                          e.preventDefault()
+                          gridPointerJustDraggedRef.current = false
+                          return
+                        }
+                        openGoalExclusive(g.id)
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
@@ -9928,23 +10033,46 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                         setGridDragGoalId(g.id)
                         setGridDragHoverIndex(index)
                         setGridDragStartIndex(index)
-                        // Create drag image so the tile follows the pointer
+                        // Create a follower clone and hide the default OS ghost via a transparent shim
                         try {
                           const rect = srcEl.getBoundingClientRect()
                           const clone = srcEl.cloneNode(true) as HTMLElement
                           clone.style.position = 'fixed'
-                          clone.style.top = '-10000px'
-                          clone.style.left = '-10000px'
+                          clone.style.top = '0px'
+                          clone.style.left = '0px'
                           clone.style.width = `${Math.floor(rect.width)}px`
                           clone.style.pointerEvents = 'none'
-                          clone.style.opacity = '0.95'
+                          clone.style.opacity = '0.98'
+                          clone.style.zIndex = '9999'
                           clone.className = srcEl.className + ' goal-tile--drag-image'
                           copyVisualStyles(srcEl, clone)
+                          // Initial position under the pointer
+                          clone.style.transform = `translate(${Math.round(rect.left)}px, ${Math.round(rect.top)}px)`
                           document.body.appendChild(clone)
                           gridDragCloneRef.current = clone
-                          const offsetX = Math.min(Math.max(0, e.clientX - rect.left), rect.width)
-                          const offsetY = Math.min(Math.max(0, e.clientY - rect.top), rect.height)
-                          e.dataTransfer.setDragImage(clone, offsetX, offsetY)
+                          // Transparent shim to suppress OS drag image
+                          const shim = document.createElement('div')
+                          shim.style.position = 'fixed'
+                          shim.style.left = '-9999px'
+                          shim.style.top = '-9999px'
+                          shim.style.width = '1px'
+                          shim.style.height = '1px'
+                          shim.style.opacity = '0'
+                          document.body.appendChild(shim)
+                          gridDragShimRef.current = shim
+                          try { e.dataTransfer.setDragImage(shim, 0, 0) } catch {}
+                          // Move follower with pointer during dragover
+                          const dx = Math.min(Math.max(0, e.clientX - rect.left), rect.width)
+                          const dy = Math.min(Math.max(0, e.clientY - rect.top), rect.height)
+                          const handleMove = (ev: DragEvent) => {
+                            const x = (ev.clientX || 0) - dx
+                            const y = (ev.clientY || 0) - dy
+                            if (gridDragCloneRef.current) {
+                              gridDragCloneRef.current.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
+                            }
+                          }
+                          gridDragMoveHandlerRef.current = handleMove
+                          document.addEventListener('dragover', handleMove)
                         } catch {}
                         // Collapse origin after drag image capture so layout uses placeholder
                         const collapse = () => { try { srcEl.classList.add('goal-tile--collapsed') } catch {} }
@@ -9976,6 +10104,26 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                         const toIndex = Math.max(0, Math.min(idx + (after ? 1 : 0), candidates.length))
                         setGridDragHoverIndex((cur) => (cur === toIndex ? cur : toIndex))
                         try { (e as any).dataTransfer.dropEffect = 'move' } catch {}
+                      }}
+                      onDragEnd={(e) => {
+                        const srcEl = e.currentTarget as HTMLElement
+                        srcEl.classList.remove('dragging')
+                        srcEl.classList.remove('goal-tile--collapsed')
+                        ;(window as any).__dragGoalGridInfo = null
+                        setGridDragGoalId(null)
+                        setGridDragHoverIndex(null)
+                        setGridDragStartIndex(null)
+                        const ghost = gridDragCloneRef.current
+                        if (ghost && ghost.parentNode) {
+                          try { ghost.parentNode.removeChild(ghost) } catch {}
+                        }
+                        gridDragCloneRef.current = null
+                        const shim = gridDragShimRef.current
+                        if (shim && shim.parentNode) { try { shim.parentNode.removeChild(shim) } catch {} }
+                        gridDragShimRef.current = null
+                        const move = gridDragMoveHandlerRef.current
+                        if (move) { try { document.removeEventListener('dragover', move) } catch {} }
+                        gridDragMoveHandlerRef.current = null
                       }}
                       onPointerDown={(e) => {
                         // Pointer-based drag fallback for touch devices only; avoid conflicting with HTML5 DnD
@@ -10051,35 +10199,24 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           }
                           gridPointerCloneRef.current = null
                           gridPointerCloneOffsetRef.current = null
-                          if (wasDragging) {
-                            const grid = document.querySelector('.goals-grid') as HTMLElement | null
-                            if (grid) {
-                              const tiles = Array.from(grid.querySelectorAll<HTMLElement>('article.goal-tile[data-goal-id]')).filter((el) => !el.classList.contains('dragging'))
-                              let toIndex = gridDragHoverIndex ?? tiles.length
-                              toIndex = Math.max(0, Math.min(toIndex, tiles.length))
-                              reorderGoalsByVisibleInsert(g.id, toIndex)
-                            }
-                          }
+                           if (wasDragging) {
+                             const grid = document.querySelector('.goals-grid') as HTMLElement | null
+                             if (grid) {
+                               const tiles = Array.from(grid.querySelectorAll<HTMLElement>('article.goal-tile[data-goal-id]')).filter((el) => !el.classList.contains('dragging'))
+                               let toIndex = gridDragHoverIndex ?? tiles.length
+                               toIndex = Math.max(0, Math.min(toIndex, tiles.length))
+                               reorderGoalsByVisibleInsert(g.id, toIndex)
+                             }
+                             // suppress click after a drag completes
+                             gridPointerJustDraggedRef.current = true
+                             setTimeout(() => { gridPointerJustDraggedRef.current = false }, 250)
+                           }
                           setGridDragGoalId(null)
                           setGridDragHoverIndex(null)
                           setGridDragStartIndex(null)
                         }
                         window.addEventListener('pointermove', handleMove)
                         window.addEventListener('pointerup', handleUp)
-                      }}
-                      onDragEnd={(e) => {
-                        const srcEl = e.currentTarget as HTMLElement
-                        srcEl.classList.remove('dragging')
-                        srcEl.classList.remove('goal-tile--collapsed')
-                        ;(window as any).__dragGoalGridInfo = null
-                        setGridDragGoalId(null)
-                        setGridDragHoverIndex(null)
-                        setGridDragStartIndex(null)
-                        const ghost = gridDragCloneRef.current
-                        if (ghost && ghost.parentNode) {
-                          try { ghost.parentNode.removeChild(ghost) } catch {}
-                        }
-                        gridDragCloneRef.current = null
                       }}
                     >
                       <h3 className="goal-tile__name">{g.name}</h3>
