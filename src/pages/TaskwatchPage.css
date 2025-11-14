@@ -379,6 +379,22 @@ html[data-theme='light'] .taskwatch-layout-toggle--active { background: rgba(31,
   box-shadow: 0 24px 48px var(--glow);
 }
 
+/* Dashboard: remove any shadow from selector trigger/panel */
+.taskwatch--dashboard .task-selector { box-shadow: none !important; }
+.taskwatch--dashboard .task-selector:hover,
+.taskwatch--dashboard .task-selector:focus-visible,
+.taskwatch--dashboard .task-selector--open { box-shadow: none !important; }
+.taskwatch--dashboard .task-selector-popover { box-shadow: none !important; }
+.taskwatch--dashboard .focus-task { box-shadow: none !important; }
+
+/* Standard view (Taskwatch page): remove selector/focus shadows as well */
+.taskwatch-page .task-selector { box-shadow: none !important; }
+.taskwatch-page .task-selector:hover,
+.taskwatch-page .task-selector:focus-visible,
+.taskwatch-page .task-selector--open { box-shadow: none !important; }
+.taskwatch-page .task-selector-popover { box-shadow: none !important; }
+.taskwatch-page .focus-task { box-shadow: none !important; }
+
 .task-selector__text {
   display: flex;
   flex-direction: column;
@@ -616,17 +632,16 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible { backgroun
 
 /* Dashboard: ensure focus card fully fills the column and content can shrink/wrap */
 .taskwatch--dashboard .task-selector-container { width: 100% !important; max-width: none !important; }
-.taskwatch--dashboard .focus-task { width: 100%; max-width: none; display: grid; grid-template-columns: min-content 1fr min-content; align-items: center; }
-.taskwatch--dashboard .focus-task__body { width: 100%; min-width: 0; }
-.taskwatch--dashboard .focus-task__content { width: 100%; }
+.taskwatch--dashboard .focus-task { width: 100%; max-width: none; display: flex; align-items: center; /* keep side widths symmetric so center aligns with full card */ --focus-side-width: clamp(0.8rem, 2.8vw, 1.2rem); }
+.taskwatch--dashboard .focus-task__body { width: auto; max-width: 100%; min-width: 0; flex: 0 1 auto; margin-inline: auto; display: flex; align-items: center; justify-content: center; }
+.taskwatch--dashboard .focus-task__content { width: auto; max-width: 100%; }
 .taskwatch--dashboard .focus-task__main { width: 100%; }
 .taskwatch--dashboard .focus-task__main .goal-task-text { width: 100%; }
 .taskwatch--dashboard .focus-task__main .goal-task-text__inner { max-width: 100%; width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
 .taskwatch--dashboard .focus-task__origin { max-width: 100%; width: 100%; }
-/* Place side controls and center main button within the middle track */
-.taskwatch--dashboard .goal-task-marker { grid-column: 1; align-self: center; justify-self: start; }
-.taskwatch--dashboard .focus-task__indicators { grid-column: 3; align-self: center; justify-self: end; margin-left: 0; }
-.taskwatch--dashboard .focus-task__body { grid-column: 2; justify-self: stretch; }
+/* Flex placement for side controls */
+.taskwatch--dashboard .goal-task-marker { flex: 0 0 var(--focus-side-width); width: var(--focus-side-width); height: var(--focus-side-width); display: flex; align-items: center; justify-content: center; }
+.taskwatch--dashboard .focus-task__indicators { flex: 0 0 var(--focus-side-width); width: var(--focus-side-width); display: flex; align-items: center; justify-content: flex-end; margin-left: 0; }
 
 /* Dashboard: hard-center the focus entry text blocks and allow wrapping */
 .taskwatch--dashboard .focus-task__label,
@@ -642,6 +657,34 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible { backgroun
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+
+/* Use flex for the internal content stack so it's truly centered within the flexbox */
+.taskwatch--dashboard .focus-task__content { display: flex !important; flex-direction: column; align-items: center; justify-content: center; }
+.taskwatch--dashboard .focus-task__main { display: flex; flex-direction: column; align-items: center; }
+
+/* Force the left action marker to remain a square in dashboard */
+.taskwatch--dashboard .goal-task-marker,
+.taskwatch--dashboard .goal-task-marker--action {
+  width: var(--focus-side-width) !important;
+  height: var(--focus-side-width) !important;
+  border-radius: 0.35rem !important;
+}
+
+/* Apply the same centering and symmetric side sizing in standard view (Taskwatch page only) */
+.taskwatch-page .focus-task { --focus-side-width: clamp(0.8rem, 2.8vw, 1.2rem); }
+.taskwatch-page .goal-task-marker { flex: 0 0 var(--focus-side-width); width: var(--focus-side-width); height: var(--focus-side-width); display: flex; align-items: center; justify-content: center; }
+.taskwatch-page .goal-task-marker--action { width: var(--focus-side-width); height: var(--focus-side-width); border-radius: 0.35rem; }
+.taskwatch-page .focus-task__indicators { flex: 0 0 var(--focus-side-width); width: var(--focus-side-width); display: flex; align-items: center; justify-content: flex-end; margin-left: 0; }
+.taskwatch-page .focus-task__body { flex: 0 1 auto; margin-inline: auto; max-width: 100%; display: flex; align-items: center; justify-content: center; }
+.taskwatch-page .focus-task__content { display: flex; flex-direction: column; align-items: center; justify-content: center; max-width: 100%; }
+.taskwatch-page .focus-task__main { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.taskwatch-page .focus-task__label,
+.taskwatch-page .focus-task__name,
+.taskwatch-page .goal-task-text__inner,
+.taskwatch-page .focus-task__origin { display: block; width: 100%; text-align: center; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+
+/* Snapback button width relative to stopwatch card/column */
+.taskwatch--dashboard .snapback-tool__button { width: 80%; max-width: 100%; margin-inline: auto; }
 @media (max-width: 640px) {
   .task-selector-container { width: 100%; }
   .task-selector-popover { position: fixed; left: max(0.5rem, env(safe-area-inset-left)); right: max(0.5rem, env(safe-area-inset-right)); top: clamp(4.5rem, 12vh, 6.5rem); bottom: max(1rem, env(safe-area-inset-bottom)); width: auto; max-height: none; border-radius: 0.9rem; padding: clamp(0.8rem, 4vw, 1.1rem); box-shadow: 0 18px 46px rgba(12, 20, 43, 0.55); }
