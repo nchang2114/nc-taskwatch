@@ -3224,6 +3224,12 @@ html[data-theme='light'] .history-timeline__block--future {
 }
 
 /* Compact toolbar adjustments for narrow viewports */
+/* Earlier label swap for view toggles (without aggressive size changes) */
+@media (max-width: 720px) {
+  /* Prefer short labels for VIEW TOGGLES at this width */
+  .calendar-toggle-group .calendar-toggle__label--full { display: none; }
+  .calendar-toggle-group .calendar-toggle__label--short { display: inline; }
+}
 @media (max-width: 560px) {
   .calendar-title {
     font-size: clamp(0.95rem, 3.8vw, 1.05rem);
@@ -3251,11 +3257,11 @@ html[data-theme='light'] .history-timeline__block--future {
     padding: 0.26rem 0.46rem;
     font-size: 0.82rem;
   }
-  /* Swap toggle labels to compact form */
-  .calendar-toggle__label--full {
+  /* Swap labels for VIEW TOGGLES first (keep Today full for now) */
+  .calendar-toggle-group .calendar-toggle__label--full {
     display: none;
   }
-  .calendar-toggle__label--short {
+  .calendar-toggle-group .calendar-toggle__label--short {
     display: inline;
   }
 }
@@ -3287,6 +3293,13 @@ html[data-theme='light'] .history-timeline__block--future {
   .calendar-toggle {
     padding: 0.24rem 0.44rem;
     font-size: 0.8rem;
+  }
+  /* At narrower widths, now also compact the Today button label */
+  .calendar-today-button .calendar-toggle__label--full {
+    display: none;
+  }
+  .calendar-today-button .calendar-toggle__label--short {
+    display: inline;
   }
 }
 

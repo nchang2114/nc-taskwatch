@@ -27,7 +27,8 @@
 }
 
 :root {
-  --site-header-height: clamp(4rem, 6vw, 4.95rem);
+  /* Slightly shorter global header height */
+  --site-header-height: clamp(3.5rem, 5.2vw, 4.4rem);
 }
 
 .navbar {
@@ -49,7 +50,8 @@
 .navbar__inner {
   width: 100%;
   margin: 0;
-  padding-block: clamp(0.6rem, 1.9vw, 1.1rem);
+  /* Trim vertical padding to reduce overall navbar height */
+  padding-block: clamp(0.4rem, 1.6vw, 0.85rem);
   padding-inline: 0;
   display: flex;
   align-items: center;
