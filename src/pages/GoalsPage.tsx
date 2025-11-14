@@ -10074,13 +10074,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           gridDragMoveHandlerRef.current = handleMove
                           document.addEventListener('dragover', handleMove)
                         } catch {}
-                        // Collapse origin after drag image capture so layout uses placeholder
-                        const collapse = () => { try { srcEl.classList.add('goal-tile--collapsed') } catch {} }
-                        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-                          window.requestAnimationFrame(() => window.requestAnimationFrame(collapse))
-                        } else {
-                          setTimeout(collapse, 0)
-                        }
+                        // Do not collapse source in the grid; keep it visible while dragging
                         try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.dropEffect = 'move' } catch {}
                       }}
                       onDragEnter={() => {
@@ -10142,7 +10136,6 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                             gridPointerDraggingRef.current = true
                             const tile = e.currentTarget as HTMLElement
                             tile.classList.add('dragging')
-                            tile.classList.add('goal-tile--collapsed')
                             setGridDragGoalId(g.id)
                             setGridDragHoverIndex(index)
                             setGridDragStartIndex(index)
@@ -10191,7 +10184,6 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           gridPointerIdRef.current = null
                           const tile = e.currentTarget as HTMLElement
                           tile.classList.remove('dragging')
-                          tile.classList.remove('goal-tile--collapsed')
                           // Remove floating clone
                           const ghost = gridPointerCloneRef.current
                           if (ghost && ghost.parentNode) {
