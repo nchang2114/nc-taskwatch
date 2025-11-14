@@ -8558,8 +8558,11 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
   const openDailyLife = useCallback(() => {
     try {
       setDashboardSelectedGoalId(LIFE_ROUTINES_GOAL_ID)
-      setLifeRoutinesExpanded(true)
-      // Dashboard: do not auto-scroll on open
+      // In dashboard: toggle when re-clicking the same tile; otherwise open
+      setLifeRoutinesExpanded((cur) =>
+        dashboardLayout && dashboardSelectedGoalId === LIFE_ROUTINES_GOAL_ID ? !cur : true,
+      )
+      // Standard: scroll into view when opening
       if (!dashboardLayout && typeof window !== 'undefined') {
         const scrollToDetails = () => {
           const el = document.querySelector('.goal-details-anchor') as HTMLElement | null
@@ -8572,19 +8575,20 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
         }
       }
     } catch {}
-  }, [dashboardLayout])
+  }, [dashboardLayout, dashboardSelectedGoalId])
 
   const openQuickList = useCallback(() => {
     try {
       setDashboardSelectedGoalId('quick-list')
-      setQuickListExpanded(true)
-      // In standard layout, scroll to section; in dashboard, the tile highlights like others
+      // In dashboard: toggle when re-clicking same tile; otherwise open
+      setQuickListExpanded((cur) => (dashboardLayout && dashboardSelectedGoalId === 'quick-list' ? !cur : true))
+      // In standard layout, scroll to the section when opening
       if (!dashboardLayout && typeof document !== 'undefined') {
         const scrollTarget = document.querySelector('.quick-list-card') as HTMLElement | null
         scrollTarget?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }
     } catch {}
-  }, [dashboardLayout])
+  }, [dashboardLayout, dashboardSelectedGoalId])
 
   useEffect(() => {
     if (normalizedSearch && lifeRoutineMatchesSearch) {
@@ -9723,7 +9727,47 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
 
           {/* Dashboard: show overview grid at top; Standard: skip grid */}
           {dashboardLayout && visibleActiveGoals.length > 0 && (
-            <section className="goals-grid" aria-label="Goals overview">
+            <section
+              className="goals-grid"
+              aria-label="Goals overview"
+              onDragOver={(e) => {
+                const info = (window as any).__dragGoalGridInfo as { goalId: string; index: number } | null
+                if (!info) return
+                e.preventDefault()
+              }}
+              onDrop={(e) => {
+                const info = (window as any).__dragGoalGridInfo as { goalId: string; index: number } | null
+                if (!info) return
+                e.preventDefault()
+                const grid = e.currentTarget as HTMLElement
+                const tiles = Array.from(grid.querySelectorAll<HTMLElement>('article.goal-tile[data-goal-id]')).filter((el) => !el.classList.contains('dragging'))
+                if (tiles.length === 0) { (window as any).__dragGoalGridInfo = null; return }
+                const pointer = { x: e.clientX, y: e.clientY }
+                // Find nearest tile center
+                let nearestIndex = 0
+                let best = Infinity
+                tiles.forEach((el, idx) => {
+                  const r = el.getBoundingClientRect()
+                  const cx = r.left + r.width / 2
+                  const cy = r.top + r.height / 2
+                  const dx = pointer.x - cx
+                  const dy = pointer.y - cy
+                  const d2 = dx * dx + dy * dy
+                  if (d2 < best) { best = d2; nearestIndex = idx }
+                })
+                let toIndex = nearestIndex
+                const tr = tiles[nearestIndex].getBoundingClientRect()
+                if (pointer.y > tr.top + tr.height / 2 || pointer.x > tr.left + tr.width / 2) {
+                  toIndex = nearestIndex + 1
+                }
+                const clamped = Math.max(0, Math.min(toIndex, tiles.length))
+                reorderGoalsByVisibleInsert(info.goalId, clamped)
+                ;(window as any).__dragGoalGridInfo = null
+              }}
+              onDragLeave={() => {
+                // no-op placeholder (kept for symmetry)
+              }}
+            >
               {shouldShowLifeRoutinesCard && (
                 <article
                   className={classNames('goal-tile goal-tile--life', dashboardSelectedGoalId === LIFE_ROUTINES_GOAL_ID && 'goal-tile--active')}
@@ -9748,7 +9792,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   <h3 className="goal-tile__name">Quick List</h3>
                 </article>
               )}
-              {visibleActiveGoals.map((g) => {
+              {visibleActiveGoals.map((g, index) => {
                 // Compute next milestone from local cache when available
                 const activeBuckets = g.buckets.filter((b) => !b.archived)
                 const total = activeBuckets.reduce((acc, b) => acc + b.tasks.length, 0)
@@ -9758,10 +9802,22 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   <article
                     key={g.id}
                     className={classNames('goal-tile', (dashboardSelectedGoalId === g.id) && 'goal-tile--active')}
+                    data-goal-id={g.id}
                     role="button"
                     tabIndex={0}
                     onClick={() => openGoalExclusive(g.id)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openGoalExclusive(g.id) } }}
+                    draggable
+                    onDragStart={(e) => {
+                      try { e.dataTransfer.setData('text/plain', g.id) } catch {}
+                      ;(e.currentTarget as HTMLElement).classList.add('dragging')
+                      ;(window as any).__dragGoalGridInfo = { goalId: g.id, index }
+                      try { e.dataTransfer.effectAllowed = 'move' } catch {}
+                    }}
+                    onDragEnd={(e) => {
+                      ;(e.currentTarget as HTMLElement).classList.remove('dragging')
+                      ;(window as any).__dragGoalGridInfo = null
+                    }}
                   >
                     <h3 className="goal-tile__name">{g.name}</h3>
                     <div className="goal-tile__progress-row">
