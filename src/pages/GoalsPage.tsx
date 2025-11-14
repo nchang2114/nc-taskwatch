@@ -5749,6 +5749,78 @@ export default function GoalsPage(): ReactElement {
   const [quickDraftActive, setQuickDraftActive] = useState(false)
   const quickDraftInputRef = useRef<HTMLInputElement | null>(null)
   const [quickCompletedCollapsed, setQuickCompletedCollapsed] = useState(true)
+  // Quick List: inline edit mechanics to match bucket tasks
+  const [quickEdits, setQuickEdits] = useState<Record<string, string>>({})
+  const quickEditRefs = useRef(new Map<string, HTMLSpanElement>())
+  const registerQuickEditRef = (taskId: string, el: HTMLSpanElement | null) => {
+    if (el) quickEditRefs.current.set(taskId, el)
+    else quickEditRefs.current.delete(taskId)
+  }
+  const quickPendingCaretRef = useRef<null | { taskId: string; caretOffset: number | null }>(null)
+  const startQuickEdit = useCallback((taskId: string, initial: string, options?: { caretOffset?: number | null }) => {
+    setQuickEdits((cur) => ({ ...cur, [taskId]: initial }))
+    quickPendingCaretRef.current = { taskId, caretOffset: options?.caretOffset ?? null }
+  }, [])
+  const handleQuickEditChange = useCallback((taskId: string, value: string) => {
+    setQuickEdits((cur) => (cur[taskId] === value ? cur : { ...cur, [taskId]: value }))
+  }, [])
+  const commitQuickEdit = useCallback((taskId: string) => {
+    const nextValue = (quickEdits[taskId] ?? '').trim()
+    const stored = writeStoredQuickList(
+      quickListItems.map((it) => (it.id === taskId ? { ...it, text: nextValue, updatedAt: new Date().toISOString() } : it)),
+    )
+    setQuickListItems(stored)
+    setQuickEdits((cur) => {
+      const copy = { ...cur }
+      delete copy[taskId]
+      return copy
+    })
+  }, [quickEdits, quickListItems])
+  useEffect(() => {
+    const pending = quickPendingCaretRef.current
+    if (!pending) return
+    const el = quickEditRefs.current.get(pending.taskId)
+    if (!el) return
+    try {
+      // focus and place caret at requested offset
+      const focusOpts: any = { preventScroll: true }
+      el.focus?.(focusOpts)
+      const offset = pending.caretOffset
+      if (typeof window !== 'undefined') {
+        const selection = window.getSelection()
+        if (selection) {
+          const range = document.createRange()
+          if (offset === null) {
+            range.selectNodeContents(el)
+            range.collapse(false)
+          } else {
+            const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+            let remaining = Math.max(0, offset)
+            let node: Node | null = null
+            let positioned = false
+            while ((node = walker.nextNode())) {
+              const len = node.textContent?.length ?? 0
+              if (remaining <= len) {
+                range.setStart(node, Math.max(0, remaining))
+                positioned = true
+                break
+              }
+              remaining -= len
+            }
+            if (!positioned) {
+              range.selectNodeContents(el)
+              range.collapse(false)
+            } else {
+              range.collapse(true)
+            }
+          }
+          selection.removeAllRanges()
+          selection.addRange(range)
+        }
+      }
+    } catch {}
+    quickPendingCaretRef.current = null
+  }, [quickEdits])
   // Quick row refs + FLIP animation for priority toggle
   const quickTaskRowRefs = useRef(new Map<string, HTMLLIElement>())
   const registerQuickTaskRowRef = (taskId: string, el: HTMLLIElement | null) => {
@@ -5791,6 +5863,7 @@ export default function GoalsPage(): ReactElement {
   const [quickDragHover, setQuickDragHover] = useState<{ section: 'active' | 'completed'; index: number } | null>(null)
   const [quickDragLine, setQuickDragLine] = useState<{ section: 'active' | 'completed'; top: number } | null>(null)
   const quickDragCloneRef = useRef<HTMLElement | null>(null)
+  const quickSuppressDeleteRevealRef = useRef<{ key: string; until: number } | null>(null)
   useEffect(() => {
     const unsub = subscribeQuickList((items) => setQuickListItems(items))
     return () => { try { unsub?.() } catch {} }
@@ -5961,6 +6034,8 @@ export default function GoalsPage(): ReactElement {
         }, rowTotalMs + 80)
       }
     } catch {}
+    // Suppress delete reveal shortly after marking complete (avoid contextmenu flicker)
+    quickSuppressDeleteRevealRef.current = { key: `quick__${id}`, until: Date.now() + 3000 }
     setQuickCompletingMap((cur) => ({ ...cur, [id]: true }))
     window.setTimeout(() => {
       const stored = writeStoredQuickList(
@@ -10093,6 +10168,10 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                       const row = e.currentTarget as HTMLElement
                                       row.classList.add('dragging')
                                       ;(window as any).__quickDragInfo = { section: 'active', index }
+                                      try {
+                                        e.dataTransfer.setData('text/plain', item.id)
+                                        e.dataTransfer.effectAllowed = 'move'
+                                      } catch {}
                                       const clone = row.cloneNode(true) as HTMLElement
                                       clone.className = `${row.className} goal-drag-clone`
                                       clone.classList.remove('dragging', 'goal-task-row--collapsed', 'goal-task-row--expanded')
@@ -10108,9 +10187,11 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                         window.requestAnimationFrame(() => row.classList.add('goal-task-row--collapsed'))
                                       })
                                     }}
-                                    onDragEnd={() => {
-                                      const row = document.querySelector(`li.goal-task-row.dragging`) as HTMLElement | null
-                                      row?.classList.remove('dragging')
+                                    onDragEnd={(e) => {
+                                      const row = e.currentTarget as HTMLElement
+                                      row.classList.remove('dragging')
+                                      row.classList.remove('goal-task-row--collapsed')
+                                      ;(window as any).__quickDragInfo = null
                                       if (quickDragCloneRef.current) {
                                         try { quickDragCloneRef.current.parentNode?.removeChild(quickDragCloneRef.current) } catch {}
                                         quickDragCloneRef.current = null
@@ -10130,15 +10211,73 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                         <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                       </svg>
                                     </button>
-                                    <div className="goal-task-row__content">
-                                      <button
-                                        type="button"
-                                        className="goal-task-text goal-task-text--button"
-                                        onClick={(e) => { e.stopPropagation(); toggleQuickItemDetails(item.id) }}
-                                      >
-                                        <span className="goal-task-text__inner" style={{ textDecoration: item.completed ? 'line-through' : undefined }}>{item.text}</span>
-                                      </button>
-                                    </div>
+                              <div className="goal-task-row__content">
+                                {quickEdits[item.id] !== undefined ? (
+                                  <span
+                                    className="goal-task-input"
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    ref={(el) => registerQuickEditRef(item.id, el)}
+                                    onInput={(event) => {
+                                      const node = event.currentTarget as HTMLSpanElement
+                                      const raw = node.textContent ?? ''
+                                      const { value } = sanitizeEditableValue(node, raw, MAX_TASK_TEXT_LENGTH)
+                                      handleQuickEditChange(item.id, value)
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === 'Escape') {
+                                        e.preventDefault()
+                                        ;(e.currentTarget as HTMLSpanElement).blur()
+                                      }
+                                    }}
+                                    onPaste={(event) => {
+                                      event.preventDefault()
+                                      const node = event.currentTarget as HTMLSpanElement
+                                      const text = event.clipboardData?.getData('text/plain') ?? ''
+                                      const sanitized = text.replace(/\n+/g, ' ')
+                                      const current = node.textContent ?? ''
+                                      const selection = typeof window !== 'undefined' ? window.getSelection() : null
+                                      let next = current
+                                      if (selection && selection.rangeCount > 0) {
+                                        const range = selection.getRangeAt(0)
+                                        if (node.contains(range.endContainer)) {
+                                          const prefix = current.slice(0, range.startOffset)
+                                          const suffix = current.slice(range.endOffset)
+                                          next = `${prefix}${sanitized}${suffix}`
+                                        }
+                                      } else {
+                                        next = current + sanitized
+                                      }
+                                      const { value } = sanitizeEditableValue(node, next, MAX_TASK_TEXT_LENGTH)
+                                      handleQuickEditChange(item.id, value)
+                                    }}
+                                    onBlur={() => commitQuickEdit(item.id)}
+                                    role="textbox"
+                                    tabIndex={0}
+                                    aria-label="Edit task text"
+                                    spellCheck={false}
+                                  >
+                                    {quickEdits[item.id]}
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="goal-task-text goal-task-text--button"
+                                    onClick={(e) => { e.stopPropagation(); toggleQuickItemDetails(item.id) }}
+                                    onPointerDown={(e) => { if (e.pointerType === 'touch') { e.preventDefault() } }}
+                                    onDoubleClick={(e) => {
+                                      e.preventDefault()
+                                      e.stopPropagation()
+                                      const container = e.currentTarget.querySelector('.goal-task-text__inner') as HTMLElement | null
+                                      const caretOffset = findActivationCaretOffset(container, e.clientX, e.clientY)
+                                      startQuickEdit(item.id, item.text, { caretOffset })
+                                    }}
+                                    aria-label="Toggle task details"
+                                  >
+                                    <span className="goal-task-text__inner" style={{ textDecoration: item.completed ? 'line-through' : undefined }}>{item.text}</span>
+                                  </button>
+                                )}
+                              </div>
                                     <button
                                       type="button"
                                       className={classNames(
@@ -10376,6 +10515,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                   const subtaskListId = `goal-task-subtasks-${item.id}`
                                   const notesBodyId = `goal-task-notes-${item.id}`
                                   const notesFieldId = `task-notes-${item.id}`
+                                  const deleteKey = `quick__${item.id}`
+                                  const isDeleteRevealed = revealedDeleteTaskKey === deleteKey
                                   return (
                                     <React.Fragment key={`${item.id}-cwrap`}>
                                       <li
@@ -10390,12 +10531,28 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                           quickCompletingMap[item.id] && 'goal-task-row--completing',
                                           isDetailsOpen && 'goal-task-row--expanded',
                                           hasDetailsContent && 'goal-task-row--has-details',
+                                          isDeleteRevealed && 'goal-task-row--delete-revealed',
                                         )}
+                                        data-delete-key={deleteKey}
                                         draggable
+                                        onContextMenu={(e) => {
+                                          e.preventDefault()
+                                          e.stopPropagation()
+                                          const sup = quickSuppressDeleteRevealRef.current
+                                          if (sup && sup.key === deleteKey && Date.now() < sup.until) {
+                                            return
+                                          }
+                                          setRevealedDeleteTaskKey(isDeleteRevealed ? null : deleteKey)
+                                        }}
                                         onDragStart={(e) => {
                                           const row = e.currentTarget as HTMLElement
                                           row.classList.add('dragging')
+                                          setRevealedDeleteTaskKey(null)
                                           ;(window as any).__quickDragInfo = { section: 'completed', index }
+                                          try {
+                                            e.dataTransfer.setData('text/plain', item.id)
+                                            e.dataTransfer.effectAllowed = 'move'
+                                          } catch {}
                                           const clone = row.cloneNode(true) as HTMLElement
                                           clone.className = `${row.className} goal-drag-clone`
                                           clone.classList.remove('dragging', 'goal-task-row--collapsed', 'goal-task-row--expanded')
@@ -10410,9 +10567,11 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                             window.requestAnimationFrame(() => row.classList.add('goal-task-row--collapsed'))
                                           })
                                         }}
-                                        onDragEnd={() => {
-                                          const row = document.querySelector(`li.goal-task-row.dragging`) as HTMLElement | null
-                                          row?.classList.remove('dragging')
+                                        onDragEnd={(e) => {
+                                          const row = e.currentTarget as HTMLElement
+                                          row.classList.remove('dragging')
+                                          row.classList.remove('goal-task-row--collapsed')
+                                          ;(window as any).__quickDragInfo = null
                                           if (quickDragCloneRef.current) {
                                             try { quickDragCloneRef.current.parentNode?.removeChild(quickDragCloneRef.current) } catch {}
                                             quickDragCloneRef.current = null
@@ -10433,13 +10592,71 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                           </svg>
                                         </button>
                                         <div className="goal-task-row__content">
-                                          <button
-                                            type="button"
-                                            className="goal-task-text goal-task-text--button"
-                                            onClick={(e) => { e.stopPropagation(); toggleQuickItemDetails(item.id) }}
-                                          >
-                                            <span className="goal-task-text__inner" style={{ textDecoration: item.completed ? 'line-through' : undefined }}>{item.text}</span>
-                                          </button>
+                                          {quickEdits[item.id] !== undefined ? (
+                                            <span
+                                              className="goal-task-input"
+                                              contentEditable
+                                              suppressContentEditableWarning
+                                              ref={(el) => registerQuickEditRef(item.id, el)}
+                                              onInput={(event) => {
+                                                const node = event.currentTarget as HTMLSpanElement
+                                                const raw = node.textContent ?? ''
+                                                const { value } = sanitizeEditableValue(node, raw, MAX_TASK_TEXT_LENGTH)
+                                                handleQuickEditChange(item.id, value)
+                                              }}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === 'Escape') {
+                                                  e.preventDefault()
+                                                  ;(e.currentTarget as HTMLSpanElement).blur()
+                                                }
+                                              }}
+                                              onPaste={(event) => {
+                                                event.preventDefault()
+                                                const node = event.currentTarget as HTMLSpanElement
+                                                const text = event.clipboardData?.getData('text/plain') ?? ''
+                                                const sanitized = text.replace(/\n+/g, ' ')
+                                                const current = node.textContent ?? ''
+                                                const selection = typeof window !== 'undefined' ? window.getSelection() : null
+                                                let next = current
+                                                if (selection && selection.rangeCount > 0) {
+                                                  const range = selection.getRangeAt(0)
+                                                  if (node.contains(range.endContainer)) {
+                                                    const prefix = current.slice(0, range.startOffset)
+                                                    const suffix = current.slice(range.endOffset)
+                                                    next = `${prefix}${sanitized}${suffix}`
+                                                  }
+                                                } else {
+                                                  next = current + sanitized
+                                                }
+                                                const { value } = sanitizeEditableValue(node, next, MAX_TASK_TEXT_LENGTH)
+                                                handleQuickEditChange(item.id, value)
+                                              }}
+                                              onBlur={() => commitQuickEdit(item.id)}
+                                              role="textbox"
+                                              tabIndex={0}
+                                              aria-label="Edit task text"
+                                              spellCheck={false}
+                                            >
+                                              {quickEdits[item.id]}
+                                            </span>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              className="goal-task-text goal-task-text--button"
+                                              onClick={(e) => { e.stopPropagation(); toggleQuickItemDetails(item.id) }}
+                                              onPointerDown={(e) => { if (e.pointerType === 'touch') { e.preventDefault() } }}
+                                              onDoubleClick={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                const container = e.currentTarget.querySelector('.goal-task-text__inner') as HTMLElement | null
+                                                const caretOffset = findActivationCaretOffset(container, e.clientX, e.clientY)
+                                                startQuickEdit(item.id, item.text, { caretOffset })
+                                              }}
+                                              aria-label="Toggle task details"
+                                            >
+                                              <span className="goal-task-text__inner" style={{ textDecoration: item.completed ? 'line-through' : undefined }}>{item.text}</span>
+                                            </button>
+                                          )}
                                         </div>
                                         <button
                                           type="button"
@@ -10486,8 +10703,14 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                         <button
                                           type="button"
                                           className="goal-task-row__delete"
-                                          aria-label="Delete task"
-                                          onClick={(e) => { e.stopPropagation(); deleteQuickItem(item.id) }}
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setRevealedDeleteTaskKey(null)
+                                            deleteQuickItem(item.id)
+                                          }}
+                                          onPointerDown={(e) => e.stopPropagation()}
+                                          aria-label="Delete task permanently"
+                                          title="Delete task"
                                         >
                                           <svg viewBox="0 0 24 24" aria-hidden="true" className="goal-task-row__delete-icon">
                                             <path d="M3 6h18" />
