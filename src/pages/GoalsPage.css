@@ -484,8 +484,13 @@ html[data-theme='light'] .goals-layout-toggle--active { background: rgba(31, 200
   margin-top: clamp(0.12rem, 0.8vw, 0.35rem);
 }
 
-/* Ensure details list sits closer to the grid in dashboard */
-.goals-layer--dashboard .goal-details-anchor { margin-top: 0; }
+/* Anchor inside wrapper should not add extra height */
+.goals-layer--dashboard .dashboard-details .goal-details-anchor { height: 0; margin: 0; }
+
+/* Normalize spacing above details for both Daily Life card and goal list */
+.goals-layer--dashboard .dashboard-details .life-routines-card { margin-block: 0; }
+/* Match goal list spacing to Daily Life by removing internal padding */
+.goals-layer--dashboard .dashboard-details .goal-list { padding-top: 0; padding-bottom: 0; }
 
 /* Goals settings overlay + panel */
 .goals-settings-overlay {

@@ -8050,18 +8050,21 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
       })
       return next
     })
-    // Optionally scroll to the details area
-    try {
-      const el = document.querySelector('.goal-details-anchor') as HTMLElement | null
-      el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    } catch {}
-  }, [goals])
+    // Dashboard: do not auto-scroll on open
+    if (!dashboardLayout) {
+      try {
+        const el = document.querySelector('.goal-details-anchor') as HTMLElement | null
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      } catch {}
+    }
+  }, [goals, dashboardLayout])
 
   const openDailyLife = useCallback(() => {
     try {
       setDashboardSelectedGoalId(LIFE_ROUTINES_GOAL_ID)
       setLifeRoutinesExpanded(true)
-      if (typeof window !== 'undefined') {
+      // Dashboard: do not auto-scroll on open
+      if (!dashboardLayout && typeof window !== 'undefined') {
         const scrollToDetails = () => {
           const el = document.querySelector('.goal-details-anchor') as HTMLElement | null
           el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -8073,7 +8076,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
         }
       }
     } catch {}
-  }, [])
+  }, [dashboardLayout])
 
   useEffect(() => {
     if (normalizedSearch && lifeRoutineMatchesSearch) {
@@ -9611,8 +9614,9 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
           ) : (
             dashboardLayout ? (
               <>
-                <div className="goal-details-anchor" />
-                {dashboardSelectedGoalId === LIFE_ROUTINES_GOAL_ID ? (
+                <div className="dashboard-details">
+                  <div className="goal-details-anchor" />
+                  {dashboardSelectedGoalId === LIFE_ROUTINES_GOAL_ID ? (
                   <section
                     className={classNames('life-routines-card', lifeRoutinesExpanded && 'life-routines-card--open')}
                     aria-label={LIFE_ROUTINES_NAME}
@@ -9872,6 +9876,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   ) : null}
                 </ul>
                 )}
+                </div>
               </>
             ) : (
             <ul
