@@ -5453,6 +5453,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
           </div>
         </div>
       )}
+
       {menuPortal}
       {bucketMenuPortal}
       {bucketCustomizerPortal}
@@ -5461,6 +5462,8 @@ const GoalRow: React.FC<GoalRowProps> = ({
 }
 
 export default function GoalsPage(): ReactElement {
+  const [dashboardLayout, setDashboardLayout] = useState(false)
+  const [dashboardSelectedGoalId, setDashboardSelectedGoalId] = useState<string | null>(null)
   const [goals, setGoals] = useState<Goal[]>(() => {
     const stored = readStoredGoalsSnapshot()
     if (stored.length > 0) {
@@ -5502,6 +5505,16 @@ export default function GoalsPage(): ReactElement {
     window.addEventListener('resize', handle)
     return () => window.removeEventListener('resize', handle)
   }, [])
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  useEffect(() => {
+    if (!isSettingsOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsSettingsOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isSettingsOpen])
   const toggleGoalStarred = useCallback((goalId: string) => {
     setGoals((current) => {
       const target = current.find((goal) => goal.id === goalId)
@@ -8004,6 +8017,14 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     () => filteredGoals.filter((goal) => !goal.archived),
     [filteredGoals],
   )
+  const openActiveGoals = useMemo(
+    () => visibleActiveGoals.filter((g) => expanded[g.id]),
+    [visibleActiveGoals, expanded],
+  )
+  const dashboardSelectedGoal = useMemo(
+    () => (dashboardSelectedGoalId ? visibleActiveGoals.find((g) => g.id === dashboardSelectedGoalId) ?? null : null),
+    [visibleActiveGoals, dashboardSelectedGoalId],
+  )
   const visibleArchivedGoals = useMemo(
     () => filteredGoals.filter((goal) => goal.archived),
     [filteredGoals],
@@ -8023,6 +8044,40 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
       setShowArchivedGoals((current) => (current ? current : true))
     }
   }, [normalizedSearch, visibleArchivedGoals])
+
+  const openGoalExclusive = useCallback((goalId: string) => {
+    setDashboardSelectedGoalId(goalId)
+    setExpanded(() => {
+      const next: Record<string, boolean> = {}
+      goals.forEach((g) => {
+        next[g.id] = g.id === goalId
+      })
+      return next
+    })
+    // Optionally scroll to the details area
+    try {
+      const el = document.querySelector('.goal-details-anchor') as HTMLElement | null
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    } catch {}
+  }, [goals])
+
+  const openDailyLife = useCallback(() => {
+    try {
+      setDashboardSelectedGoalId(LIFE_ROUTINES_GOAL_ID)
+      setLifeRoutinesExpanded(true)
+      if (typeof window !== 'undefined') {
+        const scrollToDetails = () => {
+          const el = document.querySelector('.goal-details-anchor') as HTMLElement | null
+          el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+        if (typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(() => window.requestAnimationFrame(scrollToDetails))
+        } else {
+          setTimeout(scrollToDetails, 0)
+        }
+      }
+    } catch {}
+  }, [])
 
   useEffect(() => {
     if (normalizedSearch && lifeRoutineMatchesSearch) {
@@ -9121,7 +9176,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
         )
       : null
   return (
-    <div className="goals-layer text-white">
+    <div className={classNames('goals-layer text-white', dashboardLayout && 'goals-layer--dashboard')}>
       <div className="goals-content site-main__inner">
         <div className="goals-main">
           <section className="goals-intro">
@@ -9140,13 +9195,66 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   aria-label="Search goals"
                 />
               </div>
-              <button type="button" className="goal-new-button" onClick={openCreateGoal}>
-                + New Goal
-              </button>
+              <div className="goals-actions">
+                <button type="button" className="goal-new-button" onClick={openCreateGoal}>
+                  + New Goal
+                </button>
+                
+                <button
+                  type="button"
+                  className={classNames('goals-layout-toggle', dashboardLayout && 'goals-layout-toggle--active')}
+                  aria-pressed={dashboardLayout}
+                  onClick={() => setDashboardLayout((v) => !v)}
+                  title="Toggle dashboard layout"
+                >
+                  {dashboardLayout ? 'Standard' : 'Dashboard'}
+                </button>
+              </div>
             </div>
           </section>
 
-          {shouldShowLifeRoutinesCard ? (
+          {/* Dashboard: show overview grid at top; Standard: skip grid */}
+          {dashboardLayout && visibleActiveGoals.length > 0 && (
+            <section className="goals-grid" aria-label="Goals overview">
+              {shouldShowLifeRoutinesCard && (
+                <article
+                  className={classNames('goal-tile goal-tile--life', dashboardSelectedGoalId === LIFE_ROUTINES_GOAL_ID && 'goal-tile--active')}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openDailyLife()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDailyLife() } }}
+                >
+                  <p className="goal-tile__eyebrow">System Layer</p>
+                  <h3 className="goal-tile__name">{LIFE_ROUTINES_NAME}</h3>
+                </article>
+              )}
+              {visibleActiveGoals.map((g) => {
+                // Compute next milestone from local cache when available
+                const activeBuckets = g.buckets.filter((b) => !b.archived)
+                const total = activeBuckets.reduce((acc, b) => acc + b.tasks.length, 0)
+                const done = activeBuckets.reduce((acc, b) => acc + b.tasks.filter((t) => t.completed).length, 0)
+                const pct = total === 0 ? 0 : Math.round((done / total) * 100)
+                return (
+                  <article
+                    key={g.id}
+                    className={classNames('goal-tile', (dashboardSelectedGoalId === g.id) && 'goal-tile--active')}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openGoalExclusive(g.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openGoalExclusive(g.id) } }}
+                  >
+                    <h3 className="goal-tile__name">{g.name}</h3>
+                    <div className="goal-tile__progress-row">
+                      <ThinProgress value={pct} gradient={g.color} className="goal-tile__progress" />
+                      <span className="goal-tile__counts">{done} / {total} tasks</span>
+                    </div>
+                  </article>
+                )
+              })}
+            </section>
+          )}
+
+          {!dashboardLayout && shouldShowLifeRoutinesCard ? (
             <section
               className={classNames('life-routines-card', lifeRoutinesExpanded && 'life-routines-card--open')}
               aria-label={LIFE_ROUTINES_NAME}
@@ -9489,6 +9597,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
             </section>
           ) : null}
 
+          {/* End dashboard overview grid move */}
+
           {hasNoGoals ? (
             <p className="text-white/70 text-sm">No goals yet.</p>
           ) : showNoActiveGoalsNotice ? (
@@ -9503,6 +9613,271 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
               <p className="text-white/70 text-sm">No active goals right now.</p>
             )
           ) : (
+            dashboardLayout ? (
+              <>
+                <div className="goal-details-anchor" />
+                {dashboardSelectedGoalId === LIFE_ROUTINES_GOAL_ID ? (
+                  <section
+                    className={classNames('life-routines-card', lifeRoutinesExpanded && 'life-routines-card--open')}
+                    aria-label={LIFE_ROUTINES_NAME}
+                  >
+                    <div className="life-routines-card__header-wrapper">
+                      <div className="life-routines-card__header-left">
+                        <button
+                          type="button"
+                          className="life-routines-card__header"
+                          onClick={() => setLifeRoutinesExpanded((value) => !value)}
+                          aria-expanded={lifeRoutinesExpanded}
+                          aria-controls="life-routines-body"
+                        >
+                          <div className="life-routines-card__header-content">
+                            <div className="life-routines-card__meta">
+                              <p className="life-routines-card__eyebrow">System Layer</p>
+                              <h2 className="life-routines-card__title">
+                                {highlightText(LIFE_ROUTINES_NAME, normalizedSearch)}
+                              </h2>
+                            </div>
+                          </div>
+                        </button>
+                        {lifeRoutinesExpanded && (
+                          <button
+                            type="button"
+                            className="life-routines-card__add-inline-button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              handleAddLifeRoutine()
+                            }}
+                            aria-label="Add routine"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                              <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            <span>Add routine</span>
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="life-routines-card__toggle"
+                        onClick={() => setLifeRoutinesExpanded((value) => !value)}
+                        aria-expanded={lifeRoutinesExpanded}
+                        aria-controls="life-routines-body"
+                        aria-label={`${lifeRoutinesExpanded ? 'Collapse' : 'Expand'} daily life`}
+                      >
+                        <span className="life-routines-card__indicator" aria-hidden="true">
+                          <svg className="life-routines-card__chevron" viewBox="0 0 24 24" fill="none">
+                            <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                      </button>
+                    </div>
+                    {lifeRoutinesExpanded ? (
+                      <>
+                        {/* Reuse existing body list */}
+                        <ul
+                          id="life-routines-body"
+                          className="life-routines-card__tasks"
+                          onDragOver={(event) => {
+                            const info = (window as any).__dragLifeRoutineInfo as { routineId: string; index: number } | null
+                            if (!info) return
+                            event.preventDefault()
+                            const list = event.currentTarget as HTMLElement
+                            const { index, top } = computeLifeRoutineInsertMetrics(list, event.clientY)
+                            setLifeRoutineHoverIndex((current) => (current === index ? current : index))
+                            setLifeRoutineLineTop(top)
+                          }}
+                          onDrop={(event) => {
+                            const info = (window as any).__dragLifeRoutineInfo as { routineId: string; index: number } | null
+                            if (!info) return
+                            event.preventDefault()
+                            const targetIndex = lifeRoutineHoverIndex ?? lifeRoutineTasks.length
+                            if (info.index !== targetIndex) {
+                              reorderLifeRoutines(info.routineId, targetIndex)
+                            }
+                            setLifeRoutineHoverIndex(null)
+                            setLifeRoutineLineTop(null)
+                            const ghost = lifeRoutineDragCloneRef.current
+                            if (ghost && ghost.parentNode) {
+                              ghost.parentNode.removeChild(ghost)
+                            }
+                            lifeRoutineDragCloneRef.current = null
+                            ;(window as any).__dragLifeRoutineInfo = null
+                          }}
+                          onDragLeave={(event) => {
+                            if (event.currentTarget.contains(event.relatedTarget as Node)) {
+                              return
+                            }
+                            setLifeRoutineHoverIndex(null)
+                            setLifeRoutineLineTop(null)
+                          }}
+                        >
+                          {lifeRoutineLineTop !== null ? (
+                            <div className="goal-insert-line" style={{ top: `${lifeRoutineLineTop}px` }} aria-hidden />
+                          ) : null}
+                          {lifeRoutineTasks.map((task, index) => {
+                            const isRenamingRoutine = renamingLifeRoutineId === task.id
+                            const isEditingRoutineDescription = editingLifeRoutineDescriptionId === task.id
+                            const isRoutineEditorOpen = isRenamingRoutine || isEditingRoutineDescription
+                            const taskSurfaceClass = classNames(
+                              'life-routines-card__task',
+                              `life-routines-card__task--surface-${task.surfaceStyle}`,
+                            )
+                            return (
+                              <React.Fragment key={task.id}>
+                                <li className={taskSurfaceClass}>
+                                  <div className="life-routines-card__task-inner" draggable={!isRoutineEditorOpen}>
+                                    <button
+                                      type="button"
+                                      className="life-routines-card__task-button"
+                                      onClick={() => toggleLifeRoutineFocusPrompt(task)}
+                                    >
+                                      <span className="life-routines-card__task-title">{task.title}</span>
+                                      {task.blurb ? (
+                                        <span className="life-routines-card__task-blurb">{task.blurb}</span>
+                                      ) : null}
+                                    </button>
+                                  </div>
+                                </li>
+                              </React.Fragment>
+                            )
+                          })}
+                        </ul>
+                      </>
+                    ) : null}
+                  </section>
+                ) : (
+                <ul
+                  className="goal-list space-y-3 md:space-y-4"
+                  onDragOver={(e) => {
+                    const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean } | null
+                    if (!info) return
+                    e.preventDefault()
+                    try { e.dataTransfer.dropEffect = 'move' } catch {}
+                    const list = e.currentTarget as HTMLElement
+                    const { index, top } = computeGoalInsertMetrics(list, e.clientY)
+                    setGoalHoverIndex((cur) => (cur === index ? cur : index))
+                    setGoalLineTop(top)
+                  }}
+                  onDrop={(e) => {
+                    const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean; openIds?: string[] } | null
+                    if (!info) return
+                    e.preventDefault()
+                    const toIndex = goalHoverIndex ?? visibleActiveGoals.length
+                    reorderGoalsByVisibleInsert(info.goalId, toIndex)
+                    if (info.openIds && info.openIds.length > 0) {
+                      restoreGoalsOpenState(info.openIds)
+                    }
+                    if (info.wasOpen) {
+                      restoreGoalsOpenState([info.goalId])
+                    }
+                    setGoalHoverIndex(null)
+                    setGoalLineTop(null)
+                    ;(window as any).__dragGoalInfo = null
+                  }}
+                  onDragLeave={(e) => {
+                    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                    setGoalHoverIndex(null)
+                    setGoalLineTop(null)
+                  }}
+                >
+                  {goalLineTop !== null ? (
+                    <div className="goal-insert-line" style={{ top: `${goalLineTop}px` }} aria-hidden />
+                  ) : null}
+                  {dashboardSelectedGoal ? (
+                    <li key={dashboardSelectedGoal.id} className="goal-entry" data-goal-id={dashboardSelectedGoal.id}>
+                      <GoalRow
+                        goal={dashboardSelectedGoal}
+                        isOpen={true}
+                        onToggle={() => toggleExpand(dashboardSelectedGoal.id)}
+                        onSetGoalMilestonesShown={(goalId, shown) => setGoalMilestonesShown(goalId, shown)}
+                        onDeleteGoal={(goalId) => deleteGoal(goalId)}
+                        onCollapseOtherGoalsForDrag={collapseOtherGoalsForDrag}
+                        onRestoreGoalsOpenState={restoreGoalsOpenState}
+                        isRenaming={renamingGoalId === dashboardSelectedGoal.id}
+                        goalRenameValue={renamingGoalId === dashboardSelectedGoal.id ? goalRenameDraft : undefined}
+                        onStartGoalRename={(goalId, initial) => startGoalRename(goalId, initial)}
+                        onGoalRenameChange={(value) => handleGoalRenameChange(value)}
+                        onGoalRenameSubmit={() => submitGoalRename()}
+                        onGoalRenameCancel={() => cancelGoalRename()}
+                        renamingBucketId={renamingBucketId}
+                        bucketRenameValue={bucketRenameDraft}
+                        onStartBucketRename={(goalId, bucketId, initial) => startBucketRename(goalId, bucketId, initial)}
+                        onBucketRenameChange={(value) => handleBucketRenameChange(value)}
+                        onBucketRenameSubmit={() => submitBucketRename()}
+                        onBucketRenameCancel={() => cancelBucketRename()}
+                        onDeleteBucket={(bucketId) => deleteBucket(dashboardSelectedGoal.id, bucketId)}
+                        onArchiveBucket={(bucketId) => archiveBucket(dashboardSelectedGoal.id, bucketId)}
+                        archivedBucketCount={dashboardSelectedGoal.buckets.filter((bucket) => bucket.archived).length}
+                        onManageArchivedBuckets={() => openArchivedManager(dashboardSelectedGoal.id)}
+                        onDeleteCompletedTasks={(bucketId) => deleteCompletedTasks(dashboardSelectedGoal.id, bucketId)}
+                        onToggleBucketFavorite={(bucketId) => toggleBucketFavorite(dashboardSelectedGoal.id, bucketId)}
+                        onUpdateBucketSurface={(goalId, bucketId, surface) => updateBucketSurface(goalId, bucketId, surface)}
+                        bucketExpanded={bucketExpanded}
+                        onToggleBucketExpanded={toggleBucketExpanded}
+                        completedCollapsed={completedCollapsed}
+                        onToggleCompletedCollapsed={toggleCompletedSection}
+                        taskDetails={taskDetails}
+                        handleToggleTaskDetails={handleToggleTaskDetails}
+                        handleTaskNotesChange={handleTaskNotesChange}
+                        handleAddSubtask={handleAddSubtask}
+                        handleSubtaskTextChange={handleSubtaskTextChange}
+                        handleSubtaskBlur={handleSubtaskBlur}
+                        handleToggleSubtaskSection={handleToggleSubtaskSection}
+                        handleToggleNotesSection={handleToggleNotesSection}
+                        handleToggleSubtaskCompleted={handleToggleSubtaskCompleted}
+                        handleRemoveSubtask={handleRemoveSubtask}
+                        onCollapseTaskDetailsForDrag={collapseAllTaskDetailsForDrag}
+                        onRestoreTaskDetailsAfterDrag={restoreTaskDetailsAfterDrag}
+                        taskDrafts={taskDrafts}
+                        onStartTaskDraft={startTaskDraft}
+                        onTaskDraftChange={handleTaskDraftChange}
+                        onTaskDraftSubmit={handleTaskDraftSubmit}
+                        onTaskDraftBlur={handleTaskDraftBlur}
+                        onTaskDraftCancel={handleTaskDraftCancel}
+                        registerTaskDraftRef={registerTaskDraftRef}
+                        bucketDraftValue={bucketDrafts[dashboardSelectedGoal.id]}
+                        onStartBucketDraft={startBucketDraft}
+                        onBucketDraftChange={handleBucketDraftChange}
+                        onBucketDraftSubmit={handleBucketDraftSubmit}
+                        onBucketDraftBlur={handleBucketDraftBlur}
+                        onBucketDraftCancel={handleBucketDraftCancel}
+                        registerBucketDraftRef={registerBucketDraftRef}
+                        highlightTerm={normalizedSearch}
+                        onToggleTaskComplete={(bucketId, taskId) => toggleTaskCompletion(dashboardSelectedGoal.id, bucketId, taskId)}
+                        onCycleTaskDifficulty={(bucketId, taskId) => cycleTaskDifficulty(dashboardSelectedGoal.id, bucketId, taskId)}
+                        onToggleTaskPriority={(bucketId, taskId) => toggleTaskPriority(dashboardSelectedGoal.id, bucketId, taskId)}
+                        revealedDeleteTaskKey={revealedDeleteTaskKey}
+                        onRevealDeleteTask={setRevealedDeleteTaskKey}
+                        onDeleteCompletedTask={deleteCompletedTask}
+                        editingTasks={taskEdits}
+                        onStartTaskEdit={(goalId, bucketId, taskId, initial, options) =>
+                          startTaskEdit(goalId, bucketId, taskId, initial, options)
+                        }
+                        onTaskEditChange={handleTaskEditChange}
+                        onTaskEditSubmit={(goalId, bucketId, taskId) => handleTaskEditSubmit(goalId, bucketId, taskId)}
+                        onTaskEditBlur={(goalId, bucketId, taskId) => handleTaskEditBlur(goalId, bucketId, taskId)}
+                        onTaskEditCancel={(taskId) => handleTaskEditCancel(taskId)}
+                        registerTaskEditRef={registerTaskEditRef}
+                        onDismissFocusPrompt={dismissFocusPrompt}
+                        onStartFocusTask={handleStartFocusTask}
+                        onReorderTasks={(goalId, bucketId, section, fromIndex, toIndex) =>
+                          reorderTasks(goalId, bucketId, section, fromIndex, toIndex)
+                        }
+                        onReorderBuckets={(bucketId, toIndex) => reorderBuckets(dashboardSelectedGoal.id, bucketId, toIndex)}
+                        onOpenCustomizer={(goalId) => setActiveCustomizerGoalId(goalId)}
+                        activeCustomizerGoalId={activeCustomizerGoalId}
+                        isStarred={Boolean(dashboardSelectedGoal.starred)}
+                        onToggleStarred={() => toggleGoalStarred(dashboardSelectedGoal.id)}
+                        isArchived={dashboardSelectedGoal.archived}
+                        onArchiveGoal={() => archiveGoal(dashboardSelectedGoal.id)}
+                        onRestoreGoal={() => restoreGoal(dashboardSelectedGoal.id)}
+                      />
+                    </li>
+                  ) : null}
+                </ul>
+                )}
+              </>
+            ) : (
             <ul
               className="goal-list space-y-3 md:space-y-4"
               onDragOver={(e) => {
@@ -9635,6 +10010,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                 </li>
               ))}
             </ul>
+            )
           )}
 
           <section className="goal-archived-section">
@@ -9781,6 +10157,56 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
       {lifeRoutineMenuPortal}
       {lifeRoutineCustomizerPortal}
       {customizerPortal}
+
+      {isSettingsOpen && (
+        <div
+          className="goals-settings-overlay"
+          role="presentation"
+          onClick={() => setIsSettingsOpen(false)}
+        >
+          <div
+            className="goals-settings-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="goals-settings-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="goals-settings__header">
+              <div className="goals-settings__heading">
+                <h2 id="goals-settings-title" className="goals-settings__title">Goals Settings</h2>
+                <p className="goals-settings__subtitle">Page-level preferences for how goals appear.</p>
+              </div>
+              <button
+                type="button"
+                className="goals-settings__close"
+                aria-label="Close settings"
+                onClick={() => setIsSettingsOpen(false)}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </header>
+            <div className="goals-settings__body">
+              <section className="goals-settings__section">
+                <div className="goals-settings__row">
+                  <div className="goals-settings__text">
+                    <p className="goals-settings__label">Show archived goals</p>
+                    <p className="goals-settings__hint">Include archived goals in this view.</p>
+                  </div>
+                  <label className="goals-settings__toggle">
+                    <input
+                      type="checkbox"
+                      checked={showArchivedGoals}
+                      onChange={(e) => setShowArchivedGoals(e.target.checked)}
+                      aria-label="Show archived goals"
+                    />
+                    <span className="goals-settings__toggle-ui" aria-hidden />
+                  </label>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
 
       {archivedManagerGoal && (
         <div className="goal-modal-backdrop" role="presentation" onClick={closeArchivedManager}>
