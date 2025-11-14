@@ -5727,6 +5727,37 @@ useEffect(() => {
     track.style.transform = `translate3d(${base}px, 0, 0)`
     requestAnimationFrame(() => { track.style.transition = '' })
   }, [calendarView, anchorDate])
+
+  // Keep month/year carousel centered on the middle panel when the viewport resizes
+  useEffect(() => {
+    if (!(calendarView === 'month' || calendarView === 'year')) return
+    const container = monthYearCarouselRef.current
+    if (!container || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      const track = container.querySelector('.calendar-carousel__track') as HTMLDivElement | null
+      if (!track) return
+      if ((container as any).dataset.animating === '1') return
+      const base = -container.clientWidth
+      track.style.transition = 'none'
+      track.style.transform = `translate3d(${base}px, 0, 0)`
+      requestAnimationFrame(() => { track.style.transition = '' })
+    })
+    ro.observe(container)
+    // Also recenter on orientation change (mobile browsers)
+    const handleOrientation = () => {
+      const track = container.querySelector('.calendar-carousel__track') as HTMLDivElement | null
+      if (!track) return
+      const base = -container.clientWidth
+      track.style.transition = 'none'
+      track.style.transform = `translate3d(${base}px, 0, 0)`
+      requestAnimationFrame(() => { track.style.transition = '' })
+    }
+    window.addEventListener('orientationchange', handleOrientation)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('orientationchange', handleOrientation)
+    }
+  }, [calendarView])
   const dayLabel = useMemo(() => {
     const date = new Date(dayStart)
     const weekday = date.toLocaleDateString(undefined, { weekday: 'long' })
@@ -8289,7 +8320,7 @@ useEffect(() => {
                   }
                 } : undefined}
               >
-                {inMonth ? d.getDate() : ''}
+                {d.getDate()}
               </div>
             )
             cells.push(cell)
@@ -8307,6 +8338,12 @@ useEffect(() => {
                 title={`Open ${label} ${yr}`}
               >
                 {label}
+              </div>
+              {/* Mini month weekday headers for clarity */}
+              <div className="calendar-month-headers" aria-hidden>
+                {['S','M','T','W','T','F','S'].map((ch) => (
+                  <div key={`hdr-${label}-${ch}`} className="calendar-month-header">{ch}</div>
+                ))}
               </div>
               <div className="calendar-month-grid" role="grid" aria-label={`Calendar for ${label} ${yr}`}>
                 {cells}

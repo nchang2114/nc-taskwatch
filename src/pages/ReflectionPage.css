@@ -2309,6 +2309,15 @@ html[data-theme='light'] .calendar-toggle--active {
   height: auto !important; /* override inline px height */
 }
 
+/* Month view: make rows share space evenly and shrink with viewport */
+.history-calendar .calendar-grid--month {
+  grid-auto-rows: 1fr; /* 5–6 even rows fill remaining height */
+}
+.history-calendar .calendar-grid--month > .calendar-cell {
+  height: 100%;
+  min-height: 0; /* allow shrinking inside flex parent */
+}
+
 html[data-theme='light'] .history-calendar {
   border-color: rgba(176, 186, 240, 0.35);
   background: rgba(248, 250, 255, 0.9);
@@ -2470,20 +2479,53 @@ html[data-theme='light'] .calendar-cell--today .calendar-day-number::after {
   gap: 2px;
 }
 
+/* In year view, let the mini-month days shrink to fit the cell vertically */
+.calendar-year-cell .calendar-month-headers { flex: 0 0 auto; }
+.calendar-year-cell .calendar-month-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-auto-rows: 1fr; /* 6 even rows fill the remaining height */
+}
+.calendar-year-cell .calendar-month-day {
+  height: 100%;
+  aspect-ratio: auto; /* override square to allow vertical fit */
+}
+
+/* Mini month weekday headers (year view) */
+.calendar-month-headers {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 2px;
+}
+.calendar-month-header {
+  text-align: center;
+  font-size: 0.6rem;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  opacity: 0.86;
+}
+
 .calendar-month-day {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   aspect-ratio: 1 / 1;
-  font-size: 0.7rem;
+  /* Let date numbers scale with the month cell; never below 4px */
+  font-size: clamp(8px, 2cqh, 0.72rem);
   line-height: 1;
   border-radius: 4px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   z-index: 0; /* allow pseudo background to sit behind text */
   cursor: pointer;
 }
-.calendar-month-day--muted { opacity: 0.35; cursor: default; }
+.calendar-month-day--muted {
+  color: var(--text-secondary);
+  opacity: 0.42;
+  cursor: default;
+}
 
 /* Today badge in year grid */
 .calendar-month-day--today::before {
