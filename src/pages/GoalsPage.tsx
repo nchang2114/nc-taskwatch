@@ -2645,6 +2645,7 @@ interface GoalRowProps {
   isArchived: boolean
   onArchiveGoal: () => void
   onRestoreGoal: () => void
+  allowGoalDrag?: boolean
 }
 
 // Copy key visual styles so the drag clone matches layered backgrounds and borders
@@ -2818,6 +2819,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
   revealedDeleteTaskKey,
   onRevealDeleteTask,
   onDeleteCompletedTask,
+  allowGoalDrag = true,
   editingTasks,
   onStartTaskEdit,
   onTaskEditChange,
@@ -3523,9 +3525,9 @@ const GoalRow: React.FC<GoalRowProps> = ({
           }
         }}
         className="goal-header-toggle w-full text-left p-4 md:p-5"
-        draggable={!isArchived}
+        draggable={allowGoalDrag && !isArchived}
         onDragStart={(e) => {
-          if (isArchived) {
+          if (!allowGoalDrag || isArchived) {
             e.preventDefault()
             return
           }
@@ -3570,7 +3572,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
           try { e.dataTransfer.effectAllowed = 'move' } catch {}
         }}
         onDragEnd={(e) => {
-          if (isArchived) {
+          if (!allowGoalDrag || isArchived) {
             return
           }
           const headerEl = e.currentTarget as HTMLElement
@@ -8527,23 +8529,31 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     }
   }, [normalizedSearch, visibleArchivedGoals])
 
-  const openGoalExclusive = useCallback((goalId: string) => {
-    setDashboardSelectedGoalId(goalId)
-    setExpanded(() => {
-      const next: Record<string, boolean> = {}
-      goals.forEach((g) => {
-        next[g.id] = g.id === goalId
+  const openGoalExclusive = useCallback(
+    (goalId: string) => {
+      setExpanded((current) => {
+        const next: Record<string, boolean> = {}
+        goals.forEach((g) => {
+          if (g.id === goalId) {
+            const targetOpen = dashboardSelectedGoalId === goalId ? !Boolean(current[goalId]) : true
+            next[g.id] = targetOpen
+          } else {
+            next[g.id] = false
+          }
+        })
+        return next
       })
-      return next
-    })
-    // Dashboard: do not auto-scroll on open
-    if (!dashboardLayout) {
-      try {
-        const el = document.querySelector('.goal-details-anchor') as HTMLElement | null
-        el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      } catch {}
-    }
-  }, [goals, dashboardLayout])
+      setDashboardSelectedGoalId(goalId)
+      // Standard layout: scroll to details when opening
+      if (!dashboardLayout) {
+        try {
+          const el = document.querySelector('.goal-details-anchor') as HTMLElement | null
+          el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        } catch {}
+      }
+    },
+    [goals, dashboardLayout, dashboardSelectedGoalId],
+  )
 
   const openDailyLife = useCallback(() => {
     try {
@@ -11498,40 +11508,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     ) : null}
                   </section>
                 ) : (
-                  <ul
-                    className="goal-list space-y-3 md:space-y-4"
-                  onDragOver={(e) => {
-                    const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean } | null
-                    if (!info) return
-                    e.preventDefault()
-                    try { e.dataTransfer.dropEffect = 'move' } catch {}
-                    const list = e.currentTarget as HTMLElement
-                    const { index, top } = computeGoalInsertMetrics(list, e.clientY)
-                    setGoalHoverIndex((cur) => (cur === index ? cur : index))
-                    setGoalLineTop(top)
-                  }}
-                  onDrop={(e) => {
-                    const info = (window as any).__dragGoalInfo as | { goalId: string; wasOpen?: boolean; openIds?: string[] } | null
-                    if (!info) return
-                    e.preventDefault()
-                    const toIndex = goalHoverIndex ?? visibleActiveGoals.length
-                    reorderGoalsByVisibleInsert(info.goalId, toIndex)
-                    if (info.openIds && info.openIds.length > 0) {
-                      restoreGoalsOpenState(info.openIds)
-                    }
-                    if (info.wasOpen) {
-                      restoreGoalsOpenState([info.goalId])
-                    }
-                    setGoalHoverIndex(null)
-                    setGoalLineTop(null)
-                    ;(window as any).__dragGoalInfo = null
-                  }}
-                  onDragLeave={(e) => {
-                    if (e.currentTarget.contains(e.relatedTarget as Node)) return
-                    setGoalHoverIndex(null)
-                    setGoalLineTop(null)
-                  }}
-                >
+                <ul className="goal-list space-y-3 md:space-y-4">
                   {goalLineTop !== null ? (
                     <div className="goal-insert-line" style={{ top: `${goalLineTop}px` }} aria-hidden />
                   ) : null}
@@ -11539,7 +11516,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     <li key={dashboardSelectedGoal.id} className="goal-entry" data-goal-id={dashboardSelectedGoal.id}>
                       <GoalRow
                         goal={dashboardSelectedGoal}
-                        isOpen={true}
+                        isOpen={expanded[dashboardSelectedGoal.id] ?? false}
+                        allowGoalDrag={false}
                         onToggle={() => toggleExpand(dashboardSelectedGoal.id)}
                         onSetGoalMilestonesShown={(goalId, shown) => setGoalMilestonesShown(goalId, shown)}
                         onDeleteGoal={(goalId) => deleteGoal(goalId)}
@@ -11674,6 +11652,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   <GoalRow
                     goal={g}
                     isOpen={expanded[g.id] ?? false}
+                    allowGoalDrag={true}
                     onToggle={() => toggleExpand(g.id)}
                     onSetGoalMilestonesShown={(goalId, shown) => setGoalMilestonesShown(goalId, shown)}
                     onDeleteGoal={(goalId) => deleteGoal(goalId)}
@@ -11806,6 +11785,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                       <GoalRow
                         goal={g}
                         isOpen={expanded[g.id] ?? false}
+                        allowGoalDrag={true}
                         onToggle={() => toggleExpand(g.id)}
                         onSetGoalMilestonesShown={(goalId, shown) => setGoalMilestonesShown(goalId, shown)}
                         onDeleteGoal={(goalId) => deleteGoal(goalId)}
