@@ -683,6 +683,10 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible { backgroun
 .taskwatch-page .goal-task-text__inner,
 .taskwatch-page .focus-task__origin { display: block; width: 100%; text-align: center; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
 
+/* Ensure dropdown list entries are left-aligned, not centered like the focus card */
+.task-selector-popover .goal-task-text__inner { text-align: left; }
+.task-selector-popover .task-selector__task-content { align-items: flex-start; }
+
 /* Snapback button width relative to stopwatch card/column */
 .taskwatch--dashboard .snapback-tool__button { width: 80%; max-width: 100%; margin-inline: auto; }
 @media (max-width: 640px) {
