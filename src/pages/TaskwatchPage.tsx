@@ -4223,6 +4223,421 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           <h1 className="stopwatch-heading">Taskwatch</h1>
         </>
       )}
+      {dashboardLayout ? (
+        <div className="taskwatch-columns">
+          <div className="taskwatch-col taskwatch-col--left">
+            <div className="task-selector-container">
+              <div
+                className={[
+                  'focus-task',
+                  'goal-task-row',
+                  ...focusSurfaceClasses,
+                  focusDiffClass,
+                  focusPriority ? 'goal-task-row--priority' : '',
+                  isCompletingFocus ? 'goal-task-row--completing' : '',
+                  isSelectorOpen ? 'focus-task--open' : '',
+                  isDefaultTask ? 'focus-task--empty' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                ref={focusTaskContainerRef}
+              >
+                <button
+                  type="button"
+                  className={[
+                    'goal-task-marker',
+                    'goal-task-marker--action',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={handleCompleteFocus}
+                  onPointerDown={(event) => {
+                    if (canCompleteFocus) {
+                      prepareFocusCheckAnimation(event.currentTarget)
+                    }
+                  }}
+                  onTouchStart={(event) => {
+                    if (canCompleteFocus) {
+                      prepareFocusCheckAnimation(event.currentTarget)
+                    }
+                  }}
+                  aria-disabled={!canCompleteFocus}
+                  aria-label="Mark focus task complete"
+                  ref={focusCompleteButtonRef}
+                >
+                  <svg viewBox="0 0 24 24" width="24" height="24" className="goal-task-check" aria-hidden="true">
+                    <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="focus-task__body"
+                  onClick={handleToggleSelector}
+                  aria-haspopup="dialog"
+                  aria-expanded={isSelectorOpen}
+                  ref={selectorButtonRef}
+                >
+                  <div className="focus-task__content">
+                    <div className="focus-task__main">
+                      <span className="focus-task__label">What am I doing now?</span>
+                      <span className="goal-task-text">
+                        <span
+                          className={[
+                            'goal-task-text__inner',
+                            'focus-task__name',
+                            isDefaultTask ? 'focus-task__name--placeholder' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                        >
+                          {isDefaultTask ? 'Choose a focus task' : safeTaskName}
+                        </span>
+                      </span>
+                      {focusGoalName && focusBucketName ? (
+                        <span className="focus-task__origin">{`${focusGoalName} → ${focusBucketName}`}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </button>
+                <div className="focus-task__indicators">
+                  <button
+                    type="button"
+                    className={focusDiffButtonClass}
+                    onPointerDown={handleDifficultyPointerDown}
+                    onPointerUp={handleDifficultyPointerUp}
+                    onPointerLeave={handleDifficultyPointerLeave}
+                    onPointerCancel={handleDifficultyPointerCancel}
+                    onKeyDown={handleDifficultyKeyDown}
+                    disabled={!canCycleFocusDifficulty}
+                    aria-label={focusDiffButtonTitle}
+                    title={focusDiffButtonTitle}
+                  >
+                    <span className="sr-only">{focusDiffButtonTitle}</span>
+                  </button>
+                  <span className={`focus-task__chevron${isSelectorOpen ? ' focus-task__chevron--open' : ''}`}>
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M5.293 7.293a1 1 0 0 1 1.414 0L10 10.586l3.293-3.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 0-1.414z" />
+                    </svg>
+                  </span>
+                </div>
+              </div>
+              {isSelectorOpen ? (
+                <div
+                  className="task-selector-popover"
+                  role="dialog"
+                  aria-label="Select focus task"
+                  ref={selectorPopoverRef}
+                >
+                  {scheduledNowSuggestions.length > 0 ? (
+                    <div className="task-selector__section">
+                      <h2 className="task-selector__section-title">Scheduled now</h2>
+                      <ul className="task-selector__list">
+                        {scheduledNowSuggestions.map((task) => {
+                          const candidateLower = task.taskName.trim().toLocaleLowerCase()
+                          const matches = focusSource
+                            ? focusSource.goalId === task.goalId &&
+                              focusSource.bucketId === task.bucketId &&
+                              candidateLower === currentTaskLower
+                            : !isDefaultTask && candidateLower === currentTaskLower
+                          const diffClass =
+                            task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : ''
+                          const isLifeSuggestion =
+                            (task.goalName ?? '').trim().toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
+                          const lifeSurfaceClasses =
+                            isLifeSuggestion && task.bucketSurface
+                              ? ['surface-life-routine', `surface-life-routine--${task.bucketSurface}`]
+                              : []
+                          const rowClassName = [
+                            'task-selector__task',
+                            'goal-task-row',
+                            diffClass,
+                            'goal-task-row--priority',
+                            ...lifeSurfaceClasses,
+                            matches ? 'task-selector__task--active' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')
+                          const diffBadgeClass =
+                            task.difficulty && task.difficulty !== 'none'
+                              ? ['goal-task-diff', `goal-task-diff--${task.difficulty}`, 'task-selector__diff', 'task-selector__diff-chip']
+                                  .filter(Boolean)
+                                  .join(' ')
+                              : ['goal-task-diff', 'goal-task-diff--none', 'task-selector__diff', 'task-selector__diff-chip']
+                                  .join(' ')
+                          return (
+                            <li key={`sched-${task.taskId || task.taskName}`} className="task-selector__item">
+                              <button
+                                type="button"
+                                className={rowClassName}
+                                onClick={() =>
+                                  handleSelectTask(task.taskName, {
+                                    goalId: task.goalId,
+                                    bucketId: task.bucketId,
+                                    goalName: task.goalName,
+                                    bucketName: task.bucketName,
+                                    taskId: task.taskId,
+                                    taskDifficulty: task.difficulty,
+                                    priority: true,
+                                    goalSurface: task.goalSurface,
+                                    bucketSurface: task.bucketSurface,
+                                    notes: task.notes,
+                                    subtasks: task.subtasks,
+                                  })
+                                }
+                              >
+                                <div className="task-selector__task-main">
+                                  <div className="task-selector__task-content">
+                                    <span className="goal-task-text">
+                                      <span className="goal-task-text__inner">{task.taskName}</span>
+                                    </span>
+                                    <span className="task-selector__origin task-selector__origin--dropdown">
+                                      {`${task.goalName} → ${task.bucketName}`}
+                                    </span>
+                                  </div>
+                                  <span className={diffBadgeClass} aria-hidden="true" />
+                                </div>
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
+                  <div className="task-selector__section">
+                    <h2 className="task-selector__section-title">Custom focus</h2>
+                    <form className="task-selector__custom-form" onSubmit={handleCustomSubmit}>
+                      <label htmlFor="taskwatch-custom-focus" className="sr-only">
+                        Custom focus task
+                      </label>
+                      <input
+                        id="taskwatch-custom-focus"
+                        type="text"
+                        value={customTaskDraft}
+                        onChange={handleCustomDraftChange}
+                        placeholder="Type a task name"
+                        className="task-selector__input"
+                        maxLength={MAX_TASK_STORAGE_LENGTH}
+                      />
+                      <button type="submit" className="task-selector__set-button">
+                        Set
+                      </button>
+                    </form>
+                    <button
+                      type="button"
+                      className="task-selector__clear-button"
+                      onClick={handleClearFocus}
+                      disabled={isDefaultTask && !focusSource}
+                    >
+                      Clear focus
+                    </button>
+                  </div>
+
+                  <div className="task-selector__section">
+                    <h2 className="task-selector__section-title">Goals</h2>
+                    {activeGoalSnapshots.length > 0 ? (
+                      <ul className="task-selector__goals">
+                        {activeGoalSnapshots.map((goal) => {
+                          const goalExpanded = expandedGoals.has(goal.id)
+                          const goalSurface = goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE
+                          const goalToggleClass = `task-selector__goal-toggle surface-goal surface-goal--${goalSurface}`
+                          return (
+                            <li key={goal.id} className="task-selector__goal">
+                              <button
+                                type="button"
+                                className={goalToggleClass}
+                                onClick={() => toggleGoalExpansion(goal.id)}
+                                aria-expanded={goalExpanded}
+                              >
+                                <span className="task-selector__goal-info">
+                                  <span className="task-selector__goal-badge" aria-hidden="true">
+                                    Goal
+                                  </span>
+                                  <span className="task-selector__goal-name">{goal.name}</span>
+                                </span>
+                                <span className="task-selector__chevron" aria-hidden="true">
+                                  {goalExpanded ? '−' : '+'}
+                                </span>
+                              </button>
+                              {goalExpanded ? (
+                                <ul className="task-selector__buckets">
+                                  {goal.buckets
+                                    .filter((bucket) => !bucket.archived)
+                                    .map((bucket) => {
+                                    const bucketExpanded = expandedBuckets.has(bucket.id)
+                                    const activeTasks = bucket.tasks.filter((task) => !task.completed)
+                                    const completedTasks = bucket.tasks.filter((task) => task.completed)
+                                    if (activeTasks.length === 0 && completedTasks.length === 0) {
+                                      return null
+                                    }
+                                    const bucketSurface = bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE
+                                    const diffClsForTask = (diff?: FocusCandidate['difficulty']) =>
+                                      diff && diff !== 'none' ? `goal-task-row--diff-${diff}` : ''
+
+                                    return (
+                                      <li key={bucket.id} className="task-selector__bucket">
+                                        <button
+                                          type="button"
+                                          className="task-selector__bucket-toggle"
+                                          onClick={() => toggleBucketExpansion(bucket.id)}
+                                          aria-expanded={bucketExpanded}
+                                        >
+                                          <span className="task-selector__bucket-info">
+                                            <span className="task-selector__bucket-badge" aria-hidden="true">
+                                              Bucket
+                                            </span>
+                                            <span className="task-selector__bucket-name">{bucket.name}</span>
+                                          </span>
+                                          <span className="task-selector__chevron" aria-hidden="true">
+                                            {bucketExpanded ? '−' : '+'}
+                                          </span>
+                                        </button>
+                                        {bucketExpanded ? (
+                                          <div className="task-selector__bucket-content">
+                                            {activeTasks.length > 0 ? (
+                                              <ul className="task-selector__tasks">
+                                                {activeTasks.map((task) => {
+                                                  const candidateLower = task.text.trim().toLocaleLowerCase()
+                                                  const matches = focusSource
+                                                    ? focusSource.goalId === goal.id &&
+                                                      focusSource.bucketId === bucket.id &&
+                                                      candidateLower === currentTaskLower
+                                                    : !isDefaultTask && candidateLower === currentTaskLower
+                                                  const diffClass = diffClsForTask(task.difficulty as any)
+                                                  const taskClassName = [
+                                                    'task-selector__task',
+                                                    'goal-task-row',
+                                                    diffClass,
+                                                    task.priority ? 'goal-task-row--priority' : '',
+                                                    matches ? 'task-selector__task--active' : '',
+                                                  ]
+                                                    .filter(Boolean)
+                                                    .join(' ')
+                                                  const diffBadgeClass =
+                                                    task.difficulty && task.difficulty !== 'none'
+                                                      ? ['goal-task-diff', `goal-task-diff--${task.difficulty}`, 'task-selector__diff', 'task-selector__diff-chip']
+                                                          .filter(Boolean)
+                                                          .join(' ')
+                                                      : ['goal-task-diff', 'goal-task-diff--none', 'task-selector__diff', 'task-selector__diff-chip']
+                                                          .join(' ')
+                                                  return (
+                                                    <li key={task.id}>
+                                                      <button
+                                                        type="button"
+                                                        className={taskClassName}
+                                                        onClick={() =>
+                                                          handleSelectTask(task.text, {
+                                                            goalId: goal.id,
+                                                            bucketId: bucket.id,
+                                                            goalName: goal.name,
+                                                            bucketName: bucket.name,
+                                                            taskId: task.id,
+                                                            taskDifficulty: task.difficulty ?? 'none',
+                                                            priority: task.priority ?? false,
+                                                            goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
+                                                            bucketSurface,
+                                                            notes: task.notes,
+                                                            subtasks: task.subtasks,
+                                                          })
+                                                        }
+                                                      >
+                                                        <div className="task-selector__task-main">
+                                                          <div className="task-selector__task-content">
+                                                            <span className="goal-task-text">
+                                                              <span className="goal-task-text__inner">{task.text}</span>
+                                                            </span>
+                                                            <span className="task-selector__origin task-selector__origin--dropdown">
+                                                              {`${goal.name} → ${bucket.name}`}
+                                                            </span>
+                                                          </div>
+                                                          <span className={diffBadgeClass} aria-hidden="true" />
+                                                        </div>
+                                                      </button>
+                                                    </li>
+                                                  )
+                                                })}
+                                              </ul>
+                                            ) : (
+                                              <p className="task-selector__empty-sub">No active tasks.</p>
+                                            )}
+                                        </div>
+                                      ) : null}
+                                      </li>
+                                    )
+                                  })}
+                                </ul>
+                              ) : null}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <section className="stopwatch-card" role="region" aria-live="polite">
+              <button
+                type="button"
+                className="card-clock-toggle"
+                onClick={handleToggleTimeVisibility}
+                aria-pressed={isTimeHidden}
+                aria-label={timeToggleTitle}
+              >
+                {timeToggleLabel}
+              </button>
+              <time className="card-clock" dateTime={clockDateTime} aria-label="Current time">
+                {formattedClock}
+              </time>
+              <div className="time-display">
+                <span className="time-label">elapsed</span>
+                <span className={timeValueClassName} aria-hidden={isTimeHidden}>
+                  {formattedTime}
+                </span>
+              </div>
+              {isTimeHidden ? (
+                <span className="sr-only" role="status">
+                  Stopwatch time hidden
+                </span>
+              ) : null}
+
+              <div className="status-row" aria-live="polite">
+                <span className={`status-dot status-${statusText}`} aria-hidden="true" />
+                <span className="status-text">{statusText}</span>
+              </div>
+
+              <div className="controls">
+                <button
+                  className="control control-primary"
+                  type="button"
+                  onClick={handleStartStop}
+                >
+                  {primaryLabel}
+                </button>
+                <button
+                  className="control control-secondary"
+                  type="button"
+                  onClick={handleReset}
+                  disabled={elapsed === 0}
+                >
+                  Reset
+                </button>
+              </div>
+            </section>
+
+            <section className="snapback-tool" aria-label="Snap back momentum">
+              <button type="button" className="snapback-tool__button" onClick={handleOpenSnapback}>
+                Snap Back
+              </button>
+            </section>
+          </div>
+          <div className="taskwatch-col taskwatch-col--right">
+            {notebookSection}
+          </div>
+        </div>
+      ) : null}
+      {!dashboardLayout && (
+        <>
       <div className="task-selector-container">
         <div
           className={[
@@ -4781,8 +5196,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         </button>
       </section>
 
-      {dashboardLayout ? notebookSection : notebookSection}
+      {notebookSection}
 
+      </>
+      )}
+
+      {/* keep prebuilt cards referenced to avoid unused locals */}
+      {false && subtasksCard}
+      {false && notesCard}
       {isSnapbackOpen ? (
         <div className="snapback-overlay" role="dialog" aria-modal="true" aria-labelledby="snapback-title" onClick={handleCloseSnapback}>
           <div

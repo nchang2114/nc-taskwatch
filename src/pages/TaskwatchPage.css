@@ -287,35 +287,37 @@
 html[data-theme='light'] .taskwatch-layout-toggle { background: rgba(92, 91, 255, 0.16); border-color: rgba(92, 91, 255, 0.3); color: rgba(24, 30, 86, 0.94); }
 html[data-theme='light'] .taskwatch-layout-toggle--active { background: rgba(31, 200, 255, 0.18); border-color: rgba(31, 200, 255, 0.32); color: rgba(20, 26, 78, 0.96); }
 
-/* Dashboard layout: two columns with cards */
-.taskwatch--dashboard { display: grid; grid-template-columns: minmax(0,1fr); row-gap: clamp(0.02rem, 0.2vw, 0.12rem); column-gap: clamp(1.4rem, 3.8vw, 2rem); align-items: start; grid-template-areas: 
-  'heading'
-  'selector'
-  'stopwatch'
-  'snapback'
-  'subtasks'
-  'notes'; }
-@media (min-width: 980px) {
-  .taskwatch--dashboard { grid-template-columns: minmax(0,1fr) minmax(0,1fr); column-gap: clamp(1.4rem, 3.8vw, 2rem); row-gap: clamp(0.02rem, 0.2vw, 0.12rem); grid-template-areas:
-    'heading  heading'
-    'selector subtasks'
-    'stopwatch subtasks'
-    'snapback notes'; }
-}
-.taskwatch--dashboard .taskwatch-header { grid-area: heading; }
+/* Dashboard layout: two columns (no grid) */
+/* Container remains standard block; columns wrapper handles layout */
+.taskwatch--dashboard { display: block; }
 .taskwatch-header { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
-.taskwatch--dashboard .task-selector-container { grid-area: selector; justify-self: stretch; }
-.taskwatch--dashboard .stopwatch-card { grid-area: stopwatch; justify-self: stretch; }
-.taskwatch--dashboard .snapback-tool { grid-area: snapback; justify-self: stretch; }
-.taskwatch--dashboard .taskwatch-subtasks-card { grid-area: subtasks; justify-self: stretch; }
-.taskwatch--dashboard .taskwatch-notes-card { grid-area: notes; justify-self: stretch; }
-/* Ensure right column cards fill the track */
+
+/* Columns wrapper */
+.taskwatch-columns {
+  --col-gap: clamp(1.4rem, 3.8vw, 2rem);
+  --row-gap: clamp(0.02rem, 0.2vw, 0.12rem);
+  display: flex;
+  align-items: stretch;
+  gap: var(--col-gap);
+}
+.taskwatch-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: var(--row-gap); }
+.taskwatch-col--left { padding-right: 0; gap: clamp(0.6rem, 2.2vw, 1.2rem); }
+.taskwatch-col--right { padding-left: 0; border-left: none; }
+
+/* Make cards fill column width */
+.taskwatch--dashboard .task-selector-container,
+.taskwatch--dashboard .stopwatch-card,
+.taskwatch--dashboard .snapback-tool,
 .taskwatch--dashboard .taskwatch-notes,
 .taskwatch--dashboard .taskwatch-subtasks-card,
 .taskwatch--dashboard .taskwatch-notes-card { max-width: none !important; width: 100% !important; }
-/* Ensure left-column cards fill their tracks for equal visual width (layout only) */
-.taskwatch--dashboard .stopwatch-card,
-.taskwatch--dashboard .snapback-tool { max-width: none; width: 100%; }
+
+/* Stack on small screens; hide vertical separator */
+@media (max-width: 979px) {
+  .taskwatch-columns { flex-direction: column; }
+  .taskwatch-col--left { padding-right: 0; }
+  .taskwatch-col--right { padding-left: 0; }
+}
 
 /* Snapback respects default internal sizing to preserve standard styles */
 /* (No dashboard-specific snapback button sizing) */
@@ -325,19 +327,16 @@ html[data-theme='light'] .taskwatch-layout-toggle--active { background: rgba(31,
 
 /* Notes card keeps its standard padding/gaps in dashboard */
 
-/* Eliminate any margins that could add extra vertical space between rows */
+/* Remove extra vertical margins; rely on column gap */
 .taskwatch--dashboard .task-selector-container,
 .taskwatch--dashboard .stopwatch-card,
 .taskwatch--dashboard .snapback-tool,
 .taskwatch--dashboard .taskwatch-notes { margin-top: 0 !important; margin-bottom: 0 !important; }
 
-/* Ensure the dashboard container's gap wins over global site gap */
-.taskwatch-page.taskwatch--dashboard { row-gap: clamp(0.02rem, 0.2vw, 0.12rem) !important; column-gap: clamp(1.4rem, 3.8vw, 2rem) !important; }
-
 /* Use standard focus-task surface and spacing in dashboard */
 
 /* Align right column to top and remove extra top margin so it sits level with the selector */
-.taskwatch--dashboard .taskwatch-notes { grid-area: subtasks; align-self: start; justify-self: stretch; margin-top: 0; }
+.taskwatch--dashboard .taskwatch-notes { align-self: start; justify-self: stretch; margin-top: 0; }
 
 /* Selector trigger + popover */
 .task-selector-container {
