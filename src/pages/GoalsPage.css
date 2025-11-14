@@ -627,6 +627,73 @@ html[data-theme='light'] .goals-settings__toggle input:checked + .goals-settings
   /* Create breathing room above to avoid visual overlap with the Life Routines card,
      but do NOT modify inner paddings/margins so bucket body spacing stays identical. */
   margin-top: clamp(0.6rem, 1.8vw, 0.9rem);
+  /* Reduce extra space beneath before the goals list by offsetting the page gap */
+  margin-bottom: calc(-1 * clamp(1.75rem, 4vw, 2.75rem) + clamp(0.6rem, 1.6vw, 0.8rem));
+  /* Give Quick List a distinct, cool indigo tone so it’s visually separate
+     from the warm Daily Life layer while keeping the same component styles. */
+  /* Frost-styled palette (cool, airy blues) */
+  --lr-bg: linear-gradient(135deg, rgba(174, 233, 255, 0.24), rgba(142, 210, 255, 0.14));
+  --lr-border: rgba(124, 222, 255, 0.24);
+  --lr-text: rgba(224, 248, 255, 0.96);
+  --lr-muted: rgba(184, 230, 255, 0.76);
+  --lr-pill-bg: linear-gradient(135deg, rgba(142, 210, 255, 0.22), rgba(120, 186, 252, 0.16));
+  --lr-pill-border: rgba(124, 222, 255, 0.36);
+  --lr-pill-text: rgba(234, 250, 255, 0.98);
+  --lr-pill-muted: rgba(180, 230, 255, 0.76);
+  --lr-pill-marker: linear-gradient(135deg, rgba(124, 222, 255, 0.9), rgba(59, 130, 246, 0.86));
+  /* Provide the same base structure as the life routines card */
+  padding: clamp(0.7rem, 2vw, 0.95rem) clamp(1rem, 2.5vw, 1.35rem)
+           clamp(1.25rem, 2.8vw, 1.6rem) clamp(0.85rem, 2.2vw, 1.1rem);
+  border-radius: 0.75rem;
+  border: 1px solid var(--lr-border);
+  background: var(--lr-bg);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.42rem, 1.5vw, 0.6rem);
+}
+
+/* Light theme: keep Quick List cool/indigo to contrast the warm Daily Life card */
+html[data-theme='light'] .quick-list-card {
+  /* Frost style, slightly whiter for light theme */
+  --lr-bg: linear-gradient(135deg, rgba(232, 249, 255, 0.96), rgba(216, 240, 255, 0.94));
+  --lr-border: rgba(124, 222, 255, 0.32);
+  --lr-text: rgba(24, 68, 92, 0.94);
+  --lr-muted: rgba(32, 92, 132, 0.7);
+  --lr-pill-bg: rgba(235, 248, 255, 0.98);
+  --lr-pill-border: rgba(124, 222, 255, 0.36);
+  --lr-pill-text: rgba(22, 62, 90, 0.94);
+  --lr-pill-muted: rgba(44, 108, 140, 0.68);
+  --lr-pill-marker: linear-gradient(135deg, rgba(59, 191, 255, 0.95), rgba(2, 132, 199, 0.9));
+}
+
+/* Ensure Quick List color overrides win over later light-theme defaults */
+.life-routines-card.quick-list-card {
+  --lr-bg: linear-gradient(135deg, rgba(30, 42, 112, 0.22), rgba(18, 28, 72, 0.18));
+  --lr-border: rgba(118, 142, 255, 0.34);
+  --lr-text: rgba(228, 234, 255, 0.92);
+  --lr-muted: rgba(190, 202, 255, 0.72);
+  --lr-pill-bg: linear-gradient(135deg, rgba(76, 118, 255, 0.28), rgba(28, 54, 156, 0.2));
+  --lr-pill-border: rgba(126, 156, 255, 0.42);
+  --lr-pill-text: rgba(232, 238, 255, 0.94);
+  --lr-pill-muted: rgba(198, 210, 255, 0.72);
+  --lr-pill-marker: linear-gradient(135deg, rgba(160, 166, 255, 0.9), rgba(99, 102, 241, 0.86));
+}
+
+html[data-theme='light'] .life-routines-card.quick-list-card {
+  --lr-bg: linear-gradient(135deg, rgba(232, 249, 255, 0.96), rgba(216, 240, 255, 0.94));
+  --lr-border: rgba(124, 222, 255, 0.32);
+  --lr-text: rgba(24, 68, 92, 0.94);
+  --lr-muted: rgba(32, 92, 132, 0.7);
+  --lr-pill-bg: rgba(235, 248, 255, 0.98);
+  --lr-pill-border: rgba(124, 222, 255, 0.36);
+  --lr-pill-text: rgba(22, 62, 90, 0.94);
+  --lr-pill-muted: rgba(44, 108, 140, 0.68);
+  --lr-pill-marker: linear-gradient(135deg, rgba(59, 191, 255, 0.95), rgba(2, 132, 199, 0.9));
+}
+
+/* Open state chevron rotation for Quick List */
+.quick-list-card--open .life-routines-card__indicator {
+  transform: rotate(180deg);
 }
 
 .life-routines-card__header-wrapper {
@@ -732,6 +799,22 @@ html[data-theme='light'] .goals-settings__toggle input:checked + .goals-settings
 
 /* .life-routines-card__subtitle removed */
 
+/* Indicator removed; rotate the chevron directly */
+
+.life-routines-card__chevron {
+  width: 0.75rem;
+  height: 0.75rem;
+  transition: transform 0.18s ease;
+  /* Default: point right */
+  transform: rotate(-90deg);
+}
+/* Make the Quick List chevron match goal entry size */
+.quick-list-card .life-routines-card__chevron {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+/* Daily Life header: bring back the indicator pill */
 .life-routines-card__indicator {
   flex: none;
   display: inline-flex;
@@ -743,18 +826,11 @@ html[data-theme='light'] .goals-settings__toggle input:checked + .goals-settings
   border: 1px solid rgba(255, 205, 168, 0.28);
   background: rgba(255, 205, 168, 0.14);
   color: var(--lr-text);
-  transition: transform 0.18s ease;
 }
 
-.life-routines-card__chevron {
-  width: 0.75rem;
-  height: 0.75rem;
-  transition: transform 0.18s ease;
-}
-
-.life-routines-card--open .life-routines-card__indicator {
-  transform: rotate(180deg);
-}
+/* Open: point down */
+.life-routines-card--open .life-routines-card__chevron { transform: rotate(0deg); }
+.quick-list-card--open .life-routines-card__chevron { transform: rotate(0deg); }
 
 .life-routines-card__tasks {
   list-style: none;
@@ -5105,4 +5181,8 @@ html[data-theme='light'] .goal-card--favorite::after {
   background: radial-gradient(ellipse at center, rgba(252, 211, 77, 0.24) 0%, rgba(252, 211, 77, 0.1) 45%, rgba(252, 211, 77, 0) 75%);
   filter: blur(10px);
   opacity: 0.45;
+}
+.quick-list-card--customizing {
+  outline: 2px dashed rgba(124, 222, 255, 0.6);
+  outline-offset: 4px;
 }

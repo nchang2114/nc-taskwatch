@@ -5749,6 +5749,49 @@ export default function GoalsPage(): ReactElement {
   const [quickDraftActive, setQuickDraftActive] = useState(false)
   const quickDraftInputRef = useRef<HTMLInputElement | null>(null)
   const [quickCompletedCollapsed, setQuickCompletedCollapsed] = useState(true)
+  // Quick List header menu
+  const [quickListMenuOpen, setQuickListMenuOpen] = useState(false)
+  const quickListMenuRef = useRef<HTMLDivElement | null>(null)
+  const quickListMenuButtonRef = useRef<HTMLButtonElement | null>(null)
+  const [quickListMenuPosition, setQuickListMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
+  const [quickListMenuPositionReady, setQuickListMenuPositionReady] = useState(false)
+  const updateQuickListMenuPosition = useCallback(() => {
+    const trigger = quickListMenuButtonRef.current
+    const menuEl = quickListMenuRef.current
+    if (!trigger || !menuEl) return
+    const spacing = 8
+    const rect = trigger.getBoundingClientRect()
+    const menuRect = menuEl.getBoundingClientRect()
+    let top = rect.bottom + spacing
+    let left = rect.right - menuRect.width
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 0
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 0
+    if (left + menuRect.width > vw - spacing) left = Math.max(spacing, vw - spacing - menuRect.width)
+    if (top + menuRect.height > vh - spacing) top = Math.max(spacing, rect.top - spacing - menuRect.height)
+    setQuickListMenuPosition({ top, left })
+    setQuickListMenuPositionReady(true)
+  }, [])
+  useEffect(() => {
+    if (!quickListMenuOpen) return
+    setQuickListMenuPositionReady(false)
+    const id = window.requestAnimationFrame(() => updateQuickListMenuPosition())
+    const onResize = () => updateQuickListMenuPosition()
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onResize, true)
+    const onDocDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (quickListMenuRef.current && quickListMenuRef.current.contains(target)) return
+      if (quickListMenuButtonRef.current && quickListMenuButtonRef.current.contains(target)) return
+      setQuickListMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocDown)
+    return () => {
+      window.cancelAnimationFrame(id)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onResize, true)
+      document.removeEventListener('mousedown', onDocDown)
+    }
+  }, [quickListMenuOpen, updateQuickListMenuPosition])
   // Quick List: inline edit mechanics to match bucket tasks
   const [quickEdits, setQuickEdits] = useState<Record<string, string>>({})
   const quickEditRefs = useRef(new Map<string, HTMLSpanElement>())
@@ -6151,6 +6194,10 @@ export default function GoalsPage(): ReactElement {
     )
     setQuickListItems(stored)
   }, [quickListItems])
+  const deleteAllCompletedQuickItems = useCallback(() => {
+    const stored = writeStoredQuickList(quickListItems.filter((it) => !it.completed).map((it, i) => ({ ...it, sortIndex: i })))
+    setQuickListItems(stored)
+  }, [quickListItems])
   useEffect(() => {
     const pending = pendingQuickSubtaskFocusRef.current
     if (!pending) return
@@ -6355,6 +6402,8 @@ export default function GoalsPage(): ReactElement {
 
   const [focusPromptTarget, setFocusPromptTarget] = useState<FocusPromptTarget | null>(null)
   const [revealedDeleteTaskKey, setRevealedDeleteTaskKey] = useState<string | null>(null)
+  // Quick List appearance toggle (placeholder for customise)
+  const [quickListCustomizing, setQuickListCustomizing] = useState(false)
   const [managingArchivedGoalId, setManagingArchivedGoalId] = useState<string | null>(null)
   useEffect(() => {
     if (!revealedDeleteTaskKey || typeof window === 'undefined') {
@@ -10024,7 +10073,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
 
           {/* Quick List: simple tasks (no buckets), under Daily Life in standard layout */}
           {!dashboardLayout ? (
-            <section className={classNames('life-routines-card', 'quick-list-card', quickListExpanded && 'life-routines-card--open')} aria-label="Quick List">
+            <section className={classNames('quick-list-card', quickListExpanded && 'quick-list-card--open', quickListCustomizing && 'quick-list-card--customizing')} aria-label="Quick List">
               <div className="life-routines-card__header-wrapper">
                 <div className="life-routines-card__header-left">
                   <button
@@ -10042,23 +10091,53 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     </div>
                   </button>
                 </div>
-                <button
-                  type="button"
-                  className="life-routines-card__toggle"
-                  onClick={() => setQuickListExpanded((v) => !v)}
-                  aria-expanded={quickListExpanded}
-                  aria-controls="quick-list-body"
-                  aria-label={`${quickListExpanded ? 'Collapse' : 'Expand'} quick list`}
-                >
-                  <span className="life-routines-card__indicator" aria-hidden="true">
-                    <svg className="life-routines-card__chevron" viewBox="0 0 24 24" fill="none">
+                <div className="relative flex items-center gap-2 flex-none whitespace-nowrap">
+                  <button
+                    type="button"
+                    className="life-routines-card__toggle"
+                    onClick={() => setQuickListExpanded((v) => !v)}
+                    aria-expanded={quickListExpanded}
+                    aria-controls="quick-list-body"
+                    aria-label={`${quickListExpanded ? 'Collapse' : 'Expand'} quick list`}
+                  >
+                    <svg className="life-routines-card__chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                  </span>
-                </button>
+                  </button>
+                  <button
+                    ref={quickListMenuButtonRef}
+                    type="button"
+                    className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40 transition life-routines-card__task-menu-button"
+                    aria-haspopup="menu"
+                    aria-expanded={quickListMenuOpen}
+                    onClick={(e) => { e.stopPropagation(); setQuickListMenuOpen((v) => !v) }}
+                    title="Quick List menu"
+                  >
+                    <svg className="w-4.5 h-4.5 goal-kebab-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <circle cx="12" cy="6" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="12" cy="18" r="1.6" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               {quickListExpanded ? (
                 <div id="quick-list-body" className="goal-bucket-body px-3 md:px-4 pb-3 md:pb-4">
+                  {/* Quick List menu portal */}
+                  {quickListMenuOpen && typeof document !== 'undefined' ? createPortal(
+                    <div className="goal-menu-overlay" role="presentation" onMouseDown={() => setQuickListMenuOpen(false)}>
+                      <div
+                        ref={quickListMenuRef}
+                        className="goal-menu goal-menu--floating min-w-[180px] rounded-md border p-1 shadow-lg"
+                        style={{ top: `${quickListMenuPosition.top}px`, left: `${quickListMenuPosition.left}px`, visibility: quickListMenuPositionReady ? 'visible' : 'hidden' }}
+                        role="menu"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <button type="button" className="goal-menu__item" onClick={() => { setQuickListMenuOpen(false); setQuickListCustomizing((v) => !v) }}>Customise appearance</button>
+                        <div className="goal-menu__divider" />
+                        <button type="button" className="goal-menu__item goal-menu__item--danger" onClick={() => { setQuickListMenuOpen(false); deleteAllCompletedQuickItems() }}>Delete all completed tasks</button>
+                      </div>
+                    </div>, document.body) : null}
                     <div className="goal-bucket-body-header">
                     <div className="goal-section-header">
                       <p className="goal-section-title">Tasks ({quickListItems.filter((it) => !it.completed).length})</p>
