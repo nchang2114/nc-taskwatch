@@ -97,7 +97,7 @@ const SNAP_RANGE_DEFS: Record<SnapRangeKey, RangeDefinition> = {
   ...RANGE_DEFS,
   all: { label: 'All Time', shortLabel: 'All', durationMs: Number.POSITIVE_INFINITY },
 }
-const SNAP_RANGE_KEYS: SnapRangeKey[] = ['all', '24h', '48h', '7d']
+// snap-tabs removed; keep range fixed to 'all'
 
 const PAN_SNAP_THRESHOLD = 0.35
 const PAN_FLICK_VELOCITY_PX_PER_MS = 0.6
@@ -2710,7 +2710,7 @@ export default function ReflectionPage() {
   )
   const [activeRange, setActiveRange] = useState<ReflectionRangeKey>('24h')
   // Snapback overview uses its own range and defaults to All Time
-  const [snapActiveRange, setSnapActiveRange] = useState<SnapRangeKey>('all')
+  const [snapActiveRange] = useState<SnapRangeKey>('all')
   const [history, setHistory] = useState<HistoryEntry[]>(() => readPersistedHistory())
   const [repeatingExceptions, setRepeatingExceptions] = useState<RepeatingException[]>(() => readRepeatingExceptions())
   const latestHistoryRef = useRef(history)
@@ -5079,6 +5079,73 @@ useEffect(() => {
   }, [snapActiveRange, combinedLegend.map((i) => i.id).join('|')])
 
   const selectedItem = useMemo(() => combinedLegend.find((i) => i.id === selectedTriggerKey) ?? combinedLegend[0] ?? null, [selectedTriggerKey, combinedLegend])
+
+  // Compute last time the selected Snapback trigger was recorded (across all time)
+  const selectedTriggerLastAtLabel = useMemo(() => {
+    if (!selectedItem) return 'Never'
+    const baseKey = selectedItem.id.startsWith('snap-') ? selectedItem.id.slice(5) : selectedItem.id
+    // Build alias -> base_key map from DB so we interpret historical aliases consistently
+    const aliasToBase = new Map<string, string>()
+    const baseToLabel = new Map<string, string>()
+    snapDbRows.forEach((row) => {
+      const base = (row.base_key ?? '').trim().toLowerCase()
+      if (!base) return
+      const alias = (row.trigger_name ?? '').trim()
+      if (alias) aliasToBase.set(alias.toLowerCase(), base)
+      if (alias) baseToLabel.set(base, alias)
+    })
+    const parseReason = (taskName: string): string | null => {
+      const prefix = 'Snapback • '
+      if (!taskName || !taskName.startsWith(prefix)) return null
+      const rest = taskName.slice(prefix.length)
+      const enDash = ' – '
+      let reason: string | null = null
+      if (rest.includes(enDash)) {
+        reason = rest.split(enDash).slice(1).join(enDash).trim()
+      } else if (rest.includes(' - ')) {
+        reason = rest.split(' - ').slice(1).join(' - ').trim()
+      }
+      if (reason && reason.length > 0) return reason.slice(0, 120)
+      return 'Snapback'
+    }
+    let lastAt: number | null = null
+    const targetBase = baseKey.toLowerCase()
+    for (const entry of effectiveHistory) {
+      const goalLower = (entry.goalName ?? '').trim().toLowerCase()
+      let key: string | null = null
+      if (goalLower === SNAPBACK_NAME.toLowerCase()) {
+        const bucket = (entry.bucketName ?? '').trim()
+        if (bucket) {
+          const aliasLower = bucket.toLowerCase()
+          key = aliasToBase.get(aliasLower) ?? aliasLower
+        }
+      }
+      if (!key) {
+        const reason = parseReason(entry.taskName)
+        if (reason) {
+          const aliasLower = reason.trim().toLowerCase()
+          key = aliasToBase.get(aliasLower) ?? aliasLower
+        }
+      }
+      if (!key) continue
+      if (key === targetBase) {
+        const when = Math.max(entry.startedAt, entry.endedAt)
+        if (lastAt === null || when > lastAt) lastAt = when
+      }
+    }
+    if (!lastAt) return 'Never'
+    const now = Date.now()
+    const diff = Math.max(0, now - lastAt)
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000))
+    if (days <= 0) return 'Today'
+    if (days < 7) return days === 1 ? '1 day ago' : `${days} days ago`
+    const weeks = Math.floor(days / 7)
+    if (weeks < 8) return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`
+    const months = Math.floor(days / 30)
+    if (months < 24) return months === 1 ? '1 month ago' : `${months} months ago`
+    const years = Math.floor(days / 365)
+    return years === 1 ? '1 year ago' : `${years} years ago`
+  }, [selectedItem, effectiveHistory, snapDbRows])
   const selectedPlan = useMemo(() => {
     if (!selectedItem) return { cue: '', deconstruction: '', plan: '' }
     const key = selectedItem.id
@@ -11219,28 +11286,7 @@ useEffect(() => {
             <h2 className="reflection-section__title">Snap Back Overview</h2>
             {/* Overview description removed */}
           </div>
-          <div className="snap-tabs" role="tablist" aria-label="Snap back time ranges">
-            {SNAP_RANGE_KEYS.map((key) => {
-              const config = SNAP_RANGE_DEFS[key]
-              const isActive = key === snapActiveRange
-              return (
-                <button
-                  key={`snap-${key}`}
-                  type="button"
-                  role="tab"
-                  tabIndex={isActive ? 0 : -1}
-                  aria-selected={isActive}
-                  aria-controls={snapbackPanelId}
-                  className={`snap-tab${isActive ? ' snap-tab--active' : ''}`}
-                  aria-label={config.label}
-                  onClick={() => setSnapActiveRange(key)}
-                >
-                  <span className="snap-tab__label snap-tab__label--full">{config.label}</span>
-                  <span className="snap-tab__label snap-tab__label--short">{key === 'all' ? config.shortLabel : `Last ${config.shortLabel}`}</span>
-                </button>
-              )
-            })}
-          </div>
+          {/* snap-tabs removed: always showing all-time triggers */}
         </div>
 
         <div className="snapback-overview" role="tabpanel" id={snapbackPanelId} aria-live="polite" aria-label={`${snapActiveRangeConfig.label} snap backs`}>
@@ -11362,11 +11408,11 @@ useEffect(() => {
                   }}
                 />
                 {selectedItem ? (
-                  <p className="snapback-drawer__subtitle">Occurred {selectedItem.count}× ({formatDuration(selectedItem.durationMs)}) in this range.</p>
+                  <p className="snapback-drawer__subtitle">Occurred {selectedItem.count}× ({formatDuration(selectedItem.durationMs)}) total.</p>
                 ) : null}
                 {/* privacy note removed per request */}
               </div>
-              <div className="snapback-drawer__badge">Range: {snapActiveRangeConfig.label}</div>
+              <div className="snapback-drawer__badge">Last recorded: {selectedTriggerLastAtLabel}</div>
             </div>
             {selectedItem ? (
               <SnapbackPlanForm
