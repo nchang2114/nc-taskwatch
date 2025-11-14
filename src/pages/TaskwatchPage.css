@@ -688,6 +688,16 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible { backgroun
 /* Ensure dropdown list entries are left-aligned, not centered like the focus card */
 .task-selector-popover .goal-task-text__inner { text-align: left; }
 .task-selector-popover .task-selector__task-content { align-items: flex-start; }
+/* Ensure the difficulty chip stays right-aligned in the selector */
+.task-selector-popover .task-selector__task-main { grid-template-columns: 1fr auto; }
+.task-selector-popover .task-selector__task.goal-task-row .goal-task-text { white-space: normal; }
+.task-selector-popover .task-selector__task.goal-task-row .goal-task-text__inner { overflow-wrap: anywhere; word-break: break-word; }
+.task-selector-popover .task-selector__diff,
+.task-selector-popover .task-selector__diff-chip {
+  justify-self: end !important;
+  align-self: center !important;
+  margin-left: auto; /* defensive: if layout falls back to flex */
+}
 
 /* Snapback button width relative to stopwatch card/column */
 .taskwatch--dashboard .snapback-tool__button { width: 80%; max-width: 100%; margin-inline: auto; }
