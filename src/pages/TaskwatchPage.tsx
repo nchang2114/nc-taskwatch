@@ -40,7 +40,7 @@ import {
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
 import { fetchRepeatingSessionRules, type RepeatingSessionRule } from '../lib/repeatingSessions'
-import { readRepeatingExceptions } from '../lib/repeatingExceptions'
+import { readRepeatingExceptions, subscribeRepeatingExceptions, type RepeatingException } from '../lib/repeatingExceptions'
 import {
   LIFE_ROUTINE_STORAGE_KEY,
   LIFE_ROUTINE_UPDATE_EVENT,
@@ -669,6 +669,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const [customTaskDraft, setCustomTaskDraft] = useState('')
   const [isCompletingFocus, setIsCompletingFocus] = useState(false)
   void _viewportWidth
+  // Track repeating exceptions so guide suppression follows skips/reschedules immediately
+  const [repeatingExceptions, setRepeatingExceptions] = useState<RepeatingException[]>(() => {
+    try { return readRepeatingExceptions() } catch { return [] }
+  })
+  useEffect(() => {
+    const unsub = subscribeRepeatingExceptions((rows) => setRepeatingExceptions(rows))
+    return () => { try { unsub?.() } catch {} }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -1322,7 +1330,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       unique.push(s)
     }
     return unique
-  }, [history, activeGoalSnapshots, lifeRoutineSurfaceLookup])
+  }, [history, activeGoalSnapshots, lifeRoutineSurfaceLookup, currentTime])
 
   // Fetch repeating rules to surface guide tasks that overlap 'now'
   const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
@@ -1341,14 +1349,12 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     if (repeatingRules.length === 0) return []
     const MINUTE_MS = 60 * 1000
     const now = Date.now()
-    const nowDate = new Date(now)
-    const dow = nowDate.getDay()
     const toDayStart = (t: number) => { const x = new Date(t); x.setHours(0,0,0,0); return x.getTime() }
     const todayStart = toDayStart(now)
     const yesterdayStart = todayStart - 24 * 60 * 60 * 1000
     const formatYmd = (ms: number) => { const d = new Date(ms); const y = d.getFullYear(); const m = String(d.getMonth()+1).padStart(2,'0'); const da = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${da}` }
-    // Read local exceptions to avoid showing skipped occurrences
-    const exc = readRepeatingExceptions()
+    // Use subscribed exceptions to avoid stale reads
+    const exc = repeatingExceptions
     const skippedSet = new Set<string>()
     const rescheduledByOcc = new Map<string, { start: number; end: number }>()
     exc.forEach((e) => {
@@ -1365,6 +1371,15 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         const rid = (h as any).repeatingSessionId as string | undefined | null
         const ot = (h as any).originalTime as number | undefined | null
         if (rid && Number.isFinite(ot as number)) set.add(`${rid}:${ot as number}`)
+      })
+      return set
+    })()
+    const coveredOccurrenceSet = (() => {
+      const set = new Set<string>()
+      history.forEach((h) => {
+        const rid = (h as any).repeatingSessionId as string | undefined | null
+        const occ = (h as any).occurrenceDate as string | undefined | null
+        if (rid && typeof occ === 'string' && occ) set.add(`${rid}:${occ}`)
       })
       return set
     })()
@@ -1391,9 +1406,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       if (Number.isFinite(startAtMs as number) && startedAt < (startAtMs as number)) return
       if (!Number.isFinite(startAtMs as number) && Number.isFinite(createdAtMs as number) && startedAt <= (createdAtMs as number)) return
       if (Number.isFinite(endAtMs as number) && startedAt > (endAtMs as number)) return
-      // Skip if explicitly skipped or already transformed
+      // Skip if explicitly skipped, rescheduled for this occurrence, or already transformed
       const occKey = `${rule.id}:${formatYmd(baseStart)}`
-      if (skippedSet.has(occKey) || coveredOriginalSet.has(`${rule.id}:${startedAt}`)) return
+      if (skippedSet.has(occKey) || rescheduledByOcc.has(occKey) || coveredOriginalSet.has(`${rule.id}:${startedAt}`) || coveredOccurrenceSet.has(occKey)) return
       // Overlap check with tolerance for minute rounding/DST
       const TOL = MINUTE_MS
       if (now < startedAt - TOL || now > endedAt + TOL) return
@@ -1534,12 +1549,13 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       list.push({ ...candidate, startedAt: window.start, endedAt: window.end, isGuide: true })
     })
     return list
-  }, [repeatingRules, activeGoalSnapshots, lifeRoutineSurfaceLookup, history])
+  }, [repeatingRules, repeatingExceptions, activeGoalSnapshots, lifeRoutineSurfaceLookup, history, currentTime])
 
   // Combine planned and guide suggestions for the "now" section, de-duplicated by names
   const combinedNowSuggestions = useMemo<ScheduledSuggestion[]>(() => {
     if (scheduledNowSuggestions.length === 0 && guideNowSuggestions.length === 0) return []
-    const merged = [...scheduledNowSuggestions, ...guideNowSuggestions]
+    // Guides (from repeating rules/exceptions) first, then union with history/planned
+    const merged = [...guideNowSuggestions, ...scheduledNowSuggestions]
     const seen = new Set<string>()
     const norm = (s?: string | null) => (s ?? '').trim().toLowerCase()
     return merged.filter((t) => {
@@ -1548,7 +1564,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       seen.add(key)
       return true
     })
-  }, [scheduledNowSuggestions, guideNowSuggestions])
+  }, [scheduledNowSuggestions, guideNowSuggestions, currentTime])
 
   const activeFocusCandidate = useMemo(() => {
     if (!focusSource) {
