@@ -266,6 +266,8 @@
 .taskwatch-page.taskwatch--dashboard.site-main__inner { width: min(1160px, 100%); }
 /* Remove top/bottom padding in dashboard view */
 .taskwatch-page.taskwatch--dashboard.site-main__inner { padding-block: 0; }
+/* Add some breathing room at the bottom in dashboard view */
+.taskwatch-page.taskwatch--dashboard.site-main__inner { padding-bottom: clamp(2.5rem, 7vw, 4.5rem); }
 .taskwatch-page-actions { position: absolute; top: clamp(0.6rem, 2.2vw, 1rem); right: clamp(0.6rem, 2.2vw, 1rem); z-index: 2; }
 
 /* Dashboard toggle styles (match Goals) */
