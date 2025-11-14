@@ -9942,7 +9942,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                 setGridDragHoverIndex(null)
                 setGridDragStartIndex(null)
               }}
-              onDragLeave={(e) => {
+              onDragLeave={() => {
                 // Keep the last hover index so the placeholder doesn't vanish when briefly leaving the grid
               }}
             >
@@ -10181,7 +10181,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                             }
                           }
                         }
-                        const handleUp = (ev: PointerEvent) => {
+                        const handleUp = () => {
                           try { (e.currentTarget as any)?.releasePointerCapture?.(gridPointerIdRef.current as number) } catch {}
                           window.removeEventListener('pointermove', handleMove)
                           window.removeEventListener('pointerup', handleUp)
