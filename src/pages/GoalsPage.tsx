@@ -9906,81 +9906,144 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
   }
 
   const computeGridInsertIndex = useCallback((grid: HTMLElement, clientX: number, clientY: number): number => {
-    // Build candidates from visible goal tiles only (exclude the actively dragging or collapsed source)
-    const tiles = Array.from(
-      grid.querySelectorAll<HTMLElement>('article.goal-tile[data-goal-id]'),
-    ).filter((el) => !el.classList.contains('dragging') && !el.classList.contains('goal-tile--collapsed'))
-    const N = tiles.length
-    if (N === 0) return 0
+    // Build arrays for all grid tiles (including Life/Quick) and for goal tiles only.
+    const allTiles = Array.from(
+      grid.querySelectorAll<HTMLElement>('article.goal-tile'),
+    ).filter(
+      (el) =>
+        !el.classList.contains('goal-tile--drag-image') &&
+        !el.classList.contains('goal-tile--placeholder') &&
+        !el.classList.contains('dragging') &&
+        !el.classList.contains('goal-tile--collapsed'),
+    )
+    if (allTiles.length === 0) return 0
 
-    // Snap top/bottom to start/end
+    const goalTiles = allTiles.filter((el) => el.hasAttribute('data-goal-id'))
+    const goalCount = goalTiles.length
+    if (goalCount === 0) return 0
+
+    // Snap above/below grid to first/last goal position
     try {
       const gr = grid.getBoundingClientRect()
       const edge = 10
       if (clientY <= gr.top + edge) return 0
-      if (clientY >= gr.bottom - edge) return N
+      if (clientY >= gr.bottom - edge) return goalCount
     } catch {}
 
-    // Measure tile rects
-    const rects = tiles.map((el) => el.getBoundingClientRect())
+    // Helper: map an index in allTiles + before/after to a goal insert index
+    const goalIndicesInAll = allTiles
+      .map((el, i) => (el.hasAttribute('data-goal-id') ? i : -1))
+      .filter((i) => i >= 0)
+    const mapAllToGoalIndex = (allIdx: number, after: boolean): number => {
+      const posInGoals = goalIndicesInAll.indexOf(allIdx)
+      if (posInGoals >= 0) {
+        return Math.max(0, Math.min(posInGoals + (after ? 1 : 0), goalCount))
+      }
+      // If the anchor is a non-goal tile (e.g., Life/Quick), insert before the first goal that comes after it.
+      for (let k = 0; k < goalIndicesInAll.length; k += 1) {
+        if (goalIndicesInAll[k] > allIdx) {
+          return Math.max(0, Math.min(k, goalCount))
+        }
+      }
+      return goalCount
+    }
 
-    // Group into rows (DOM order), computing row bounds
+    // 0) If the pointer is over the placeholder, keep the current insertion (prevents flicker)
+    try {
+      const withPlaceholder = Array.from(
+        grid.querySelectorAll<HTMLElement>('article.goal-tile, article.goal-tile--placeholder'),
+      )
+      const ph = withPlaceholder.find((el) => el.classList.contains('goal-tile--placeholder'))
+      if (ph) {
+        const r = ph.getBoundingClientRect()
+        const margin = 6
+        if (
+          clientX >= r.left - margin &&
+          clientX <= r.right + margin &&
+          clientY >= r.top - margin &&
+          clientY <= r.bottom + margin
+        ) {
+          // Count goal tiles before the placeholder in DOM order
+          let beforeGoals = 0
+          for (const el of withPlaceholder) {
+            if (el === ph) break
+            if (el.hasAttribute('data-goal-id')) beforeGoals += 1
+          }
+          return Math.max(0, Math.min(beforeGoals, goalCount))
+        }
+      }
+    } catch {}
+
+    // 1) If the pointer is over any grid tile, use that tile directly for before/after semantics
+    try {
+      const hit = document.elementFromPoint(clientX, clientY) as HTMLElement | null
+      const tile = hit ? (hit.closest('article.goal-tile') as HTMLElement | null) : null
+      if (tile && allTiles.includes(tile)) {
+        const idxAll = allTiles.indexOf(tile)
+        const r = tile.getBoundingClientRect()
+        const after = clientY > r.top + r.height / 2 || clientX > r.left + r.width / 2
+        return mapAllToGoalIndex(idxAll, after)
+      }
+    } catch {}
+
+    // 2) Otherwise, compute using row/column splits based on all tiles
+    const rectsAll = allTiles.map((el) => el.getBoundingClientRect())
     type Row = { idxs: number[]; top: number; bottom: number }
     const rows: Row[] = []
     const xTol = 6
-    let currentIdxs: number[] = []
-    for (let i = 0; i < N; i += 1) {
-      const r = rects[i]
+    let cur: number[] = []
+    for (let i = 0; i < allTiles.length; i += 1) {
+      const r = rectsAll[i]
       if (i === 0) {
-        currentIdxs.push(i)
+        cur.push(i)
         continue
       }
-      const prev = rects[i - 1]
+      const prev = rectsAll[i - 1]
       const newRow = r.left < prev.left - xTol || r.top >= prev.bottom - Math.min(8, prev.height * 0.25)
       if (newRow) {
-        const rowRects = currentIdxs.map((j) => rects[j])
-        rows.push({ idxs: currentIdxs, top: Math.min(...rowRects.map((rr) => rr.top)), bottom: Math.max(...rowRects.map((rr) => rr.bottom)) })
-        currentIdxs = [i]
+        const rr = cur.map((j) => rectsAll[j])
+        rows.push({ idxs: cur, top: Math.min(...rr.map((q) => q.top)), bottom: Math.max(...rr.map((q) => q.bottom)) })
+        cur = [i]
       } else {
-        currentIdxs.push(i)
+        cur.push(i)
       }
     }
-    if (currentIdxs.length > 0) {
-      const rowRects = currentIdxs.map((j) => rects[j])
-      rows.push({ idxs: currentIdxs, top: Math.min(...rowRects.map((rr) => rr.top)), bottom: Math.max(...rowRects.map((rr) => rr.bottom)) })
+    if (cur.length > 0) {
+      const rr = cur.map((j) => rectsAll[j])
+      rows.push({ idxs: cur, top: Math.min(...rr.map((q) => q.top)), bottom: Math.max(...rr.map((q) => q.bottom)) })
     }
 
-    // Pick the row that contains the cursor Y (with tolerance), otherwise nearest
-    const rowTol = 6
-    let rowIndex = -1
-    for (let ri = 0; ri < rows.length; ri += 1) {
-      const rTop = rows[ri].top - rowTol
-      const rBot = rows[ri].bottom + rowTol
-      if (clientY >= rTop && clientY <= rBot) { rowIndex = ri; break }
+    // Vertical segments top..row..gap..row..bottom
+    const vSplits: number[] = []
+    vSplits.push(rows[0].top)
+    for (let ri = 0; ri < rows.length - 1; ri += 1) {
+      vSplits.push((rows[ri].bottom + rows[ri + 1].top) / 2)
     }
-    if (rowIndex === -1) {
-      let best = Infinity
-      for (let ri = 0; ri < rows.length; ri += 1) {
-        const rTop = rows[ri].top - rowTol
-        const rBot = rows[ri].bottom + rowTol
-        const dy = clientY < rTop ? rTop - clientY : clientY > rBot ? clientY - rBot : 0
-        if (dy < best) { best = dy; rowIndex = ri }
-      }
-      if (rowIndex === -1) rowIndex = 0
+    vSplits.push(rows[rows.length - 1].bottom)
+    let seg = 0
+    for (let i = 0; i < vSplits.length - 1; i += 1) {
+      if (clientY >= vSplits[i] && clientY <= vSplits[i + 1]) { seg = i; break }
     }
+    let rowIndex: number
+    let betweenBelow = false
+    if (seg % 2 === 0) rowIndex = seg / 2
+    else { rowIndex = (seg - 1) / 2; betweenBelow = true }
+    rowIndex = Math.max(0, Math.min(rowIndex, rows.length - 1))
 
     const idxs = rows[rowIndex].idxs
-    const rowStart = rows.slice(0, rowIndex).reduce((acc, r) => acc + r.idxs.length, 0)
-    const hx = Math.min(24, Math.max(8, rects[idxs[0]].width * 0.08))
-
-    // Within-row slot selection – before first, between, after last
-    for (let k = 0; k < idxs.length; k += 1) {
-      const r = rects[idxs[k]]
-      const cx = r.left + r.width / 2
-      if (clientX < cx - hx) return Math.max(0, Math.min(rowStart + k, N))
-      if (Math.abs(clientX - cx) <= hx) return Math.max(0, Math.min(rowStart + (clientX > cx ? k + 1 : k), N))
+    if (betweenBelow) {
+      const lastAll = idxs[idxs.length - 1]
+      return mapAllToGoalIndex(lastAll, true)
     }
-    return Math.max(0, Math.min(rowStart + idxs.length, N))
+    // inside row – walk centers
+    const centers = idxs.map((j) => rectsAll[j].left + rectsAll[j].width / 2)
+    const firstAll = idxs[0]
+    if (clientX <= centers[0]) return mapAllToGoalIndex(firstAll, false)
+    for (let k = 1; k < centers.length; k += 1) {
+      if (clientX <= centers[k]) return mapAllToGoalIndex(idxs[k], false)
+    }
+    const lastAll = idxs[idxs.length - 1]
+    return mapAllToGoalIndex(lastAll, true)
   }, [])
 
   const lifeRoutineMenuPortal =
@@ -10170,8 +10233,9 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                 try { e.dataTransfer.dropEffect = 'move' } catch {}
                 // Compute live hover insert index via shared helper (with hysteresis)
                 const grid = e.currentTarget as HTMLElement
-                let x = e.clientX
-                let y = e.clientY
+                const ne = e.nativeEvent as DragEvent
+                let x = (e.clientX || (ne && ne.clientX) || 0)
+                let y = (e.clientY || (ne && ne.clientY) || 0)
                 if ((x === 0 && y === 0) || Number.isNaN(x) || Number.isNaN(y)) {
                   const last = gridDragLastXYRef.current
                   if (last) { x = last.x; y = last.y }
@@ -10198,8 +10262,9 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                 // Prefer the live hover index if available, otherwise compute
                 let toIndex = gridDragHoverIndex
                 if (toIndex == null) {
-                  let x = e.clientX
-                  let y = e.clientY
+                  const ne = e.nativeEvent as DragEvent
+                  let x = (e.clientX || (ne && ne.clientX) || 0)
+                  let y = (e.clientY || (ne && ne.clientY) || 0)
                   if ((x === 0 && y === 0) || Number.isNaN(x) || Number.isNaN(y)) {
                     const last = gridDragLastXYRef.current
                     if (last) { x = last.x; y = last.y }
@@ -10350,6 +10415,14 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                             if (gridDragCloneRef.current) {
                               gridDragCloneRef.current.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
                             }
+                            // Also drive hover index from global dragover so preview updates even in gaps
+                            try {
+                              const gridEl = document.querySelector('.goals-grid') as HTMLElement | null
+                              if (gridEl && (xClient || yClient)) {
+                                const toIndex = computeGridInsertIndex(gridEl, xClient || 0, yClient || 0)
+                                setGridDragHoverIndex((cur) => (cur === toIndex ? cur : toIndex))
+                              }
+                            } catch {}
                           }
                           gridDragMoveHandlerRef.current = handleMove
                           document.addEventListener('dragover', handleMove)
@@ -10369,8 +10442,9 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                         e.preventDefault()
                         const grid = (e.currentTarget as HTMLElement).closest('.goals-grid') as HTMLElement | null
                         if (!grid) return
-                        let x = e.clientX
-                        let y = e.clientY
+                        const ne = e.nativeEvent as DragEvent
+                        let x = (e.clientX || (ne && ne.clientX) || 0)
+                        let y = (e.clientY || (ne && ne.clientY) || 0)
                         if ((x === 0 && y === 0) || Number.isNaN(x) || Number.isNaN(y)) {
                           const last = gridDragLastXYRef.current
                           if (last) { x = last.x; y = last.y }
