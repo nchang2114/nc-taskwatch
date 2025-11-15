@@ -7933,6 +7933,7 @@ export default function GoalsPage(): ReactElement {
   // Goal-level DnD hover state and ghost
   const [goalHoverIndex, setGoalHoverIndex] = useState<number | null>(null)
   const [goalTileDragging, setGoalTileDragging] = useState(false)
+  const [goalGridDraggingId, setGoalGridDraggingId] = useState<string | null>(null)
   const [goalLineTop, setGoalLineTop] = useState<number | null>(null)
   const [showArchivedGoals, setShowArchivedGoals] = useState(false)
 
@@ -8752,9 +8753,10 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     [visibleActiveGoals, dashboardSelectedGoalId],
   )
   const goalGridPlaceholderIndex =
-    dashboardLayout && goalTileDragging && goalHoverIndex !== null
-      ? Math.max(0, Math.min(goalHoverIndex, visibleActiveGoals.length))
+    dashboardLayout && goalTileDragging && goalGridDraggingId !== null && goalHoverIndex !== null
+      ? Math.max(0, Math.min(goalHoverIndex, Math.max(visibleActiveGoals.length - 1, 0)))
       : null
+  let dashboardGridInsertCursor = 0
   const visibleArchivedGoals = useMemo(
     () => filteredGoals.filter((goal) => goal.archived),
     [filteredGoals],
@@ -9750,79 +9752,55 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
   }
 
   const computeGoalGridInsertIndex = (gridEl: HTMLElement, clientX: number, clientY: number): number => {
-    const tiles = Array.from(gridEl.querySelectorAll<HTMLElement>('[data-grid-tile="goal"]')).filter(
+    const goalTiles = Array.from(gridEl.querySelectorAll<HTMLElement>('[data-grid-tile="goal"]')).filter(
       (el) => !el.classList.contains('goal-tile--collapsed'),
     )
-    if (tiles.length === 0) {
+    const goalCount = goalTiles.length
+    if (goalCount === 0) {
       return 0
     }
-    const rects = tiles.map((el) => ({ el, rect: el.getBoundingClientRect() }))
-    const rowTolerance = 16
-    const colTolerance = 12
-    const rows: Array<{ top: number; bottom: number; tiles: typeof rects }> = []
-    for (const entry of rects) {
-      const previous = rows[rows.length - 1]
-      if (previous && Math.abs(previous.top - entry.rect.top) <= rowTolerance / 2) {
-        previous.top = Math.min(previous.top, entry.rect.top)
-        previous.bottom = Math.max(previous.bottom, entry.rect.bottom)
-        previous.tiles.push(entry)
-      } else {
-        rows.push({ top: entry.rect.top, bottom: entry.rect.bottom, tiles: [entry] })
-      }
-    }
-    const prefix: number[] = []
-    let count = 0
-    rows.forEach((row, index) => {
-      prefix[index] = count
-      count += row.tiles.length
-    })
-    const total = count
-    const clampIndex = (value: number) => Math.max(0, Math.min(value, total))
-
-    let rowIndex = rows.length
-    let targetRow: (typeof rows)[number] | null = null
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i]
-      if (clientY < row.top - rowTolerance) {
-        rowIndex = i
-        targetRow = null
+    const allTiles = Array.from(gridEl.querySelectorAll<HTMLElement>('[data-grid-tile]')).filter(
+      (el) => !el.classList.contains('goal-tile--collapsed'),
+    )
+    let goalOffset = 0
+    for (const tile of allTiles) {
+      if (tile.dataset.gridTile === 'goal') {
         break
       }
-      if (clientY <= row.bottom + rowTolerance) {
-        rowIndex = i
-        targetRow = row
-        break
+      goalOffset += 1
+    }
+    const gridRect = gridEl.getBoundingClientRect()
+    const style = window.getComputedStyle(gridEl)
+    const columnGap = parseFloat(style.columnGap || '0') || 0
+    const rowGap = parseFloat(style.rowGap || '0') || 0
+    const referenceTile = goalTiles[0] ?? allTiles[0]
+    const referenceRect = referenceTile?.getBoundingClientRect()
+    const tileWidth =
+      referenceRect && referenceRect.width > 0 ? referenceRect.width : Math.max(1, gridRect.width || 1)
+    const tileHeight =
+      referenceRect && referenceRect.height > 0 ? referenceRect.height : Math.max(80, gridRect.height || 1)
+    const approxColumns = Math.round((gridRect.width + columnGap) / (tileWidth + columnGap))
+    const columnCount = Math.max(1, approxColumns || 1)
+    const strideX = tileWidth + columnGap
+    const strideY = tileHeight + rowGap
+    const slotCount = goalCount + 1
+    let bestIndex = slotCount - 1
+    let bestDist = Number.POSITIVE_INFINITY
+    for (let slot = 0; slot < slotCount; slot++) {
+      const cellIndex = goalOffset + slot
+      const row = Math.floor(cellIndex / columnCount)
+      const col = cellIndex % columnCount
+      const centerX = gridRect.left + col * strideX + tileWidth / 2
+      const centerY = gridRect.top + row * strideY + tileHeight / 2
+      const dx = clientX - centerX
+      const dy = clientY - centerY
+      const dist = dx * dx + dy * dy
+      if (dist < bestDist) {
+        bestDist = dist
+        bestIndex = slot
       }
     }
-    if (!targetRow) {
-      if (clientY > rows[rows.length - 1].bottom + rowTolerance) {
-        rowIndex = rows.length
-      }
-      const baseIndex = rowIndex >= rows.length ? total : prefix[rowIndex]
-      return clampIndex(baseIndex)
-    }
-    const baseIndex = prefix[rowIndex] ?? 0
-    const columns = targetRow.tiles
-    let insertCol = columns.length
-    for (let i = 0; i < columns.length; i++) {
-      const rect = columns[i].rect
-      if (clientX < rect.left - colTolerance) {
-        insertCol = i
-        break
-      }
-      if (clientX <= rect.right + colTolerance) {
-        const midX = rect.left + rect.width / 2
-        insertCol = clientX < midX ? i : i + 1
-        break
-      }
-    }
-    if (insertCol === columns.length && clientX < columns[0].rect.left - colTolerance) {
-      insertCol = 0
-    }
-    if (insertCol === columns.length && clientX > columns[columns.length - 1].rect.right + colTolerance) {
-      insertCol = columns.length
-    }
-    return clampIndex(baseIndex + insertCol)
+    return Math.max(0, Math.min(bestIndex, goalCount))
   }
 
 // Reorder goals across the top-level list using a visible→global mapping
@@ -9892,6 +9870,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     } catch {}
     tile.classList.add('dragging')
     setGoalTileDragging(true)
+    setGoalGridDraggingId(goalId)
     setGoalHoverIndex(null)
     setGoalLineTop(null)
     const tileRect = tile.getBoundingClientRect()
@@ -9923,6 +9902,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     tile?.classList.remove('dragging')
     tile?.classList.remove('goal-tile--collapsed')
     setGoalTileDragging(false)
+    setGoalGridDraggingId(null)
     setGoalHoverIndex(null)
     setGoalLineTop(null)
     const ghost = (window as any).__goalDragCloneRef as HTMLElement | null
@@ -10146,6 +10126,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                 setGoalHoverIndex(null)
                 setGoalLineTop(null)
                 setGoalTileDragging(false)
+                setGoalGridDraggingId(null)
                 ;(window as any).__dragGoalInfo = null
               }}
               onDragLeave={(event) => {
@@ -10183,20 +10164,19 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   <h3 className="goal-tile__name">Quick List</h3>
                 </article>
               )}
-              {visibleActiveGoals.map((g, index) => {
+              {visibleActiveGoals.map((g) => {
                 const activeBuckets = g.buckets.filter((b) => !b.archived)
                 const total = activeBuckets.reduce((acc, b) => acc + b.tasks.length, 0)
                 const done = activeBuckets.reduce((acc, b) => acc + b.tasks.filter((t) => t.completed).length, 0)
                 const pct = total === 0 ? 0 : Math.round((done / total) * 100)
-                return (
+                const isDraggingTile = goalTileDragging && goalGridDraggingId === g.id
+                const shouldShowPlaceholderBefore =
+                  goalGridPlaceholderIndex !== null && !isDraggingTile && goalGridPlaceholderIndex === dashboardGridInsertCursor
+                const node = (
                   <React.Fragment key={g.id}>
-                    {goalGridPlaceholderIndex !== null && goalGridPlaceholderIndex === index ? (
-                      <article
-                        key={`goal-drop-placeholder-${g.id}`}
-                        className="goal-tile goal-tile--placeholder"
-                        aria-hidden="true"
-                      />
-                    ) : null}
+                    {shouldShowPlaceholderBefore && (
+                      <article key={`goal-drop-placeholder-${g.id}`} className="goal-tile goal-tile--placeholder" aria-hidden="true" />
+                    )}
                     <article
                       className={classNames('goal-tile', dashboardSelectedGoalId === g.id && 'goal-tile--active')}
                       data-goal-id={g.id}
@@ -10224,8 +10204,12 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     </article>
                   </React.Fragment>
                 )
+                if (!isDraggingTile) {
+                  dashboardGridInsertCursor += 1
+                }
+                return node
               })}
-              {goalGridPlaceholderIndex !== null && goalGridPlaceholderIndex >= visibleActiveGoals.length ? (
+              {goalGridPlaceholderIndex !== null && goalGridPlaceholderIndex === dashboardGridInsertCursor ? (
                 <article key="goal-drop-placeholder-end" className="goal-tile goal-tile--placeholder" aria-hidden="true" />
               ) : null}
             </section>
