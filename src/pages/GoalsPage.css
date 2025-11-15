@@ -62,7 +62,7 @@
   /* Tighter spacing under toolbar in dashboard */
   margin-top: clamp(0.2rem, 1.2vw, 0.6rem);
   /* Unify tile heights across all variants (life/quick/goal/placeholder) */
-  --goal-tile-min-h: clamp(5.25rem, 7vw, 5.75rem);
+  --goal-tile-min-h: clamp(4.5rem, 5vw, 4.7rem);
 }
 @media (min-width: 560px) { .goals-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 900px) { .goals-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -73,10 +73,10 @@
   border: 1px solid rgba(148, 163, 255, 0.26);
   background: linear-gradient(145deg, rgba(18, 26, 72, 0.5), rgba(12, 18, 56, 0.42));
   box-shadow: 0 12px 24px -20px rgba(2, 6, 28, 0.6);
-  padding: clamp(0.6rem, 2vw, 0.8rem);
+  padding: clamp(0.55rem, 1.8vw, 0.75rem) clamp(0.6rem, 2vw, 0.8rem) clamp(0.1rem, 0.6vw, 0.25rem);
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.2rem;
   min-height: var(--goal-tile-min-h);
 }
 .goal-tile--active { border-color: rgba(99, 102, 241, 0.55); box-shadow: 0 24px 42px -24px rgba(63,81,181,0.45); }
@@ -84,7 +84,12 @@
 .goal-tile__header { display: flex; align-items: center; gap: 0.35rem; }
 .goal-tile__star { width: 0.95rem; height: 0.95rem; color: #facc15; flex: 0 0 auto; filter: drop-shadow(0 2px 4px rgba(250, 204, 21, 0.35)); }
 .goal-tile--active .goal-tile__star { filter: drop-shadow(0 3px 6px rgba(250, 204, 21, 0.5)); }
-.goal-tile__progress-row { display: flex; align-items: center; gap: 0.5rem; }
+.goal-tile__progress-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0; /* tighten space below */
+}
 .goal-tile__progress { height: 0.35rem; flex: 1 1 auto; }
 .goal-tile__counts { font-size: 0.74rem; color: var(--text-secondary); white-space: nowrap; }
 .goal-tile__eyebrow { margin: 0; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }

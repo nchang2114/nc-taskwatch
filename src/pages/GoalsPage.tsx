@@ -10013,37 +10013,83 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
       rows.push({ idxs: cur, top: Math.min(...rr.map((q) => q.top)), bottom: Math.max(...rr.map((q) => q.bottom)) })
     }
 
-    // Vertical segments top..row..gap..row..bottom
-    const vSplits: number[] = []
-    vSplits.push(rows[0].top)
-    for (let ri = 0; ri < rows.length - 1; ri += 1) {
-      vSplits.push((rows[ri].bottom + rows[ri + 1].top) / 2)
-    }
-    vSplits.push(rows[rows.length - 1].bottom)
-    let seg = 0
-    for (let i = 0; i < vSplits.length - 1; i += 1) {
-      if (clientY >= vSplits[i] && clientY <= vSplits[i + 1]) { seg = i; break }
-    }
-    let rowIndex: number
+    // Choose row with better Y handling: treat a padded band near each gap as "inside" the nearest row;
+    // only when clearly between rows do we return an after-the-row insertion.
+    let rowIndex = 0
     let betweenBelow = false
-    if (seg % 2 === 0) rowIndex = seg / 2
-    else { rowIndex = (seg - 1) / 2; betweenBelow = true }
-    rowIndex = Math.max(0, Math.min(rowIndex, rows.length - 1))
+    // Quick checks for before first/after last row bands
+    const first = rows[0]
+    const last = rows[rows.length - 1]
+    if (clientY <= first.top) {
+      rowIndex = 0
+    } else if (clientY >= last.bottom) {
+      rowIndex = rows.length - 1
+      betweenBelow = true
+    } else {
+      // Walk gaps between rows
+      for (let ri = 0; ri < rows.length - 1; ri += 1) {
+        const a = rows[ri]
+        const b = rows[ri + 1]
+        const gapTop = a.bottom
+        const gapBot = b.top
+        const gapMid = (gapTop + gapBot) / 2
+        const bandPad = Math.max(8, Math.min(20, (a.bottom - a.top) * 0.08))
+        if (clientY < gapMid - bandPad) {
+          rowIndex = ri
+          betweenBelow = false
+          break
+        }
+        if (clientY <= gapMid + bandPad) {
+          // Ambiguous band around the split: choose nearest row by vertical center
+          const cyA = (a.top + a.bottom) / 2
+          const cyB = (b.top + b.bottom) / 2
+          rowIndex = Math.abs(clientY - cyA) <= Math.abs(clientY - cyB) ? ri : ri + 1
+          betweenBelow = false
+          break
+        }
+        // Clearly below the split: if we're still above next row's center, treat as after row ri
+        if (clientY < gapBot - bandPad) {
+          rowIndex = ri
+          betweenBelow = true
+          break
+        }
+        // Else progress to next gap
+        if (ri === rows.length - 2) {
+          // If none matched, we are inside the last row
+          rowIndex = rows.length - 1
+          betweenBelow = false
+        }
+      }
+    }
 
     const idxs = rows[rowIndex].idxs
     if (betweenBelow) {
       const lastAll = idxs[idxs.length - 1]
       return mapAllToGoalIndex(lastAll, true)
     }
-    // inside row – walk centers
-    const centers = idxs.map((j) => rectsAll[j].left + rectsAll[j].width / 2)
+    // inside row – choose nearest tile using 2D distance (use Y as well), then decide before/after by X
     const firstAll = idxs[0]
-    if (clientX <= centers[0]) return mapAllToGoalIndex(firstAll, false)
-    for (let k = 1; k < centers.length; k += 1) {
-      if (clientX <= centers[k]) return mapAllToGoalIndex(idxs[k], false)
+    if (idxs.length === 1) {
+      const r = rectsAll[firstAll]
+      const cx = r.left + r.width / 2
+      const after = clientX > cx
+      return mapAllToGoalIndex(firstAll, after)
     }
-    const lastAll = idxs[idxs.length - 1]
-    return mapAllToGoalIndex(lastAll, true)
+    let nearestK = 0
+    let best = Infinity
+    for (let k = 0; k < idxs.length; k += 1) {
+      const r = rectsAll[idxs[k]]
+      const cx = r.left + r.width / 2
+      const cy = r.top + r.height / 2
+      const dx = clientX - cx
+      const dy = clientY - cy
+      const d2 = dx * dx + dy * dy
+      if (d2 < best) { best = d2; nearestK = k }
+    }
+    const rN = rectsAll[idxs[nearestK]]
+    const cxN = rN.left + rN.width / 2
+    const after = clientX > cxN
+    return mapAllToGoalIndex(idxs[nearestK], after)
   }, [])
 
   const lifeRoutineMenuPortal =
@@ -10385,7 +10431,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           copyVisualStyles(srcEl, clone)
                           // Anchor follower to a fixed hotspot near the top-left of the tile (consistent with list drag)
                           const ANCHOR_X = 16
-                          const ANCHOR_Y = 0
+                          const ANCHOR_Y = 6
                           clone.style.transform = `translate(${Math.round(e.clientX - ANCHOR_X)}px, ${Math.round(e.clientY - ANCHOR_Y)}px)`
                           document.body.appendChild(clone)
                           gridDragCloneRef.current = clone
@@ -10438,21 +10484,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                       }}
                       // Intentionally avoid onDragEnter index nudges; rely on computeGridInsertIndex for stability
                       onDragOver={(e) => {
-                        // Accept and compute precise before/after using shared helper
+                        // Minimal tile-level handler: allow drop, let grid/document handlers drive preview
                         e.preventDefault()
-                        const grid = (e.currentTarget as HTMLElement).closest('.goals-grid') as HTMLElement | null
-                        if (!grid) return
-                        const ne = e.nativeEvent as DragEvent
-                        let x = (e.clientX || (ne && ne.clientX) || 0)
-                        let y = (e.clientY || (ne && ne.clientY) || 0)
-                        if ((x === 0 && y === 0) || Number.isNaN(x) || Number.isNaN(y)) {
-                          const last = gridDragLastXYRef.current
-                          if (last) { x = last.x; y = last.y }
-                        } else {
-                          gridDragLastXYRef.current = { x, y }
-                        }
-                        const toIndex = computeGridInsertIndex(grid, x, y)
-                        setGridDragHoverIndex((cur) => (cur === toIndex ? cur : toIndex))
                         try { (e as any).dataTransfer.dropEffect = 'move' } catch {}
                       }}
                       onDragEnd={(e) => {
@@ -10511,7 +10544,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                               copyVisualStyles(tile, clone)
                               // place under pointer with fixed top-left anchor
                               const ANCHOR_X = 16
-                              const ANCHOR_Y = 0
+                              const ANCHOR_Y = 6
                               clone.style.transform = `translate(${Math.round(ev.clientX - ANCHOR_X)}px, ${Math.round(ev.clientY - ANCHOR_Y)}px)`
                               document.body.appendChild(clone)
                               gridPointerCloneRef.current = clone
