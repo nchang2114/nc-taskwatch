@@ -10411,6 +10411,30 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                       }}
                       draggable={true}
                       style={{ WebkitUserDrag: 'element' } as React.CSSProperties}
+                      onDragOver={(e) => {
+                        // Allow dropping when pointer is over a tile; do not stop propagation so grid can compute index
+                        e.preventDefault()
+                        try { (e as any).dataTransfer.dropEffect = 'move' } catch {}
+                      }}
+                      onDrop={(e) => {
+                        // Delegate drop to the grid logic to compute the correct insertion index under the pointer
+                        e.preventDefault()
+                        const grid = (e.currentTarget as HTMLElement).closest('.goals-grid') as HTMLElement | null
+                        const info = (window as any).__dragGoalGridInfo as { goalId: string; index: number } | null
+                        if (!grid || !info) return
+                        let x = (e.clientX || (e.nativeEvent as any)?.clientX || 0) as number
+                        let y = (e.clientY || (e.nativeEvent as any)?.clientY || 0) as number
+                        if ((x === 0 && y === 0) || Number.isNaN(x) || Number.isNaN(y)) {
+                          const last = gridDragLastXYRef.current
+                          if (last) { x = last.x; y = last.y }
+                        }
+                        const toIndex = computeGridInsertIndex(grid, x, y)
+                        reorderGoalsByVisibleInsert(info.goalId, toIndex)
+                        ;(window as any).__dragGoalGridInfo = null
+                        setGridDragGoalId(null)
+                        setGridDragHoverIndex(null)
+                        setGridDragStartIndex(null)
+                      }}
                       onDragStart={(e) => {
                         try { e.dataTransfer.setData('text/plain', g.id) } catch {}
                         const srcEl = e.currentTarget as HTMLElement
@@ -10477,20 +10501,18 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           document.addEventListener('dragover', handleMove)
                         } catch {}
                         // Collapse the source tile after the drag image snapshot so layout reflows with a placeholder
-                        const scheduleCollapse = () => { srcEl.classList.add('goal-tile--collapsed') }
-                        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-                          window.requestAnimationFrame(() => { window.requestAnimationFrame(scheduleCollapse) })
-                        } else {
-                          setTimeout(scheduleCollapse, 0)
-                        }
+                        try {
+                          const scheduleCollapse = () => { srcEl.classList.add('goal-tile--collapsed') }
+                          if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                            window.requestAnimationFrame(() => { window.requestAnimationFrame(scheduleCollapse) })
+                          } else {
+                            setTimeout(scheduleCollapse, 0)
+                          }
+                        } catch {}
                         try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.dropEffect = 'move' } catch {}
                       }}
                       // Intentionally avoid onDragEnter index nudges; rely on computeGridInsertIndex for stability
-                      onDragOver={(e) => {
-                        // Minimal tile-level handler: allow drop, let grid/document handlers drive preview
-                        e.preventDefault()
-                        try { (e as any).dataTransfer.dropEffect = 'move' } catch {}
-                      }}
+                      
                       onDragEnd={(e) => {
                         const srcEl = e.currentTarget as HTMLElement
                         srcEl.classList.remove('dragging')
@@ -10553,7 +10575,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                               gridPointerCloneRef.current = clone
                               gridPointerCloneOffsetRef.current = { dx: ANCHOR_X, dy: ANCHOR_Y }
                             } catch {}
-                            // Collapse the source tile so it visually leaves the grid while dragging (touch fallback)
+                            // Collapse the source tile for touch fallback as well
                             try {
                               const scheduleCollapse = () => { tile.classList.add('goal-tile--collapsed') }
                               if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
