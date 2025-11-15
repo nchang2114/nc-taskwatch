@@ -63,6 +63,7 @@
   margin-top: clamp(0.2rem, 1.2vw, 0.6rem);
   /* Unify tile heights across all variants (life/quick/goal/placeholder) */
   --goal-tile-min-h: clamp(4.5rem, 5vw, 4.7rem);
+  position: relative; /* allow absolute overlay for insert preview */
 }
 @media (min-width: 560px) { .goals-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 900px) { .goals-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -110,23 +111,48 @@
 .goals-grid .goal-tile { cursor: grab; user-select: none; -webkit-user-drag: element; touch-action: manipulation; }
 .goals-grid .goal-tile:active { cursor: grabbing; }
 .goals-grid .goal-tile:focus-visible { outline: 2px solid rgba(139,132,255,0.5); outline-offset: 2px; }
-.goals-grid .goal-tile.dragging { opacity: 0.6; filter: none; }
+.goals-grid .goal-tile.dragging { opacity: 0.6; filter: none; cursor: grabbing; }
 .goals-grid .goal-tile.goal-tile--collapsed {
-  visibility: hidden !important;
+  /* Remove the source tile from the grid flow without removing it from the DOM.
+     Using absolute positioning avoids reserving a grid cell (which caused gaps
+     and “disappearing” tiles), while keeping the HTML5 DnD lifecycle intact. */
+  position: absolute !important;
+  top: -9999px !important;
+  left: -9999px !important;
+  width: 0 !important;
   height: 0 !important;
   min-height: 0 !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
   overflow: hidden !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 .goals-grid .goal-tile--placeholder {
-  border: 2px dashed rgba(118, 142, 255, 0.35);
+  border: 2px dotted rgba(118, 142, 255, 0.55);
   background: transparent;
+  border-radius: 1rem;
   min-height: var(--goal-tile-min-h);
+  box-shadow: inset 0 0 0 1px rgba(118, 142, 255, 0.28);
+  pointer-events: none;
 }
 html[data-theme='light'] .goals-grid .goal-tile--placeholder {
-  border-color: rgba(118, 142, 255, 0.4);
+  border-color: rgba(118, 142, 255, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(118, 142, 255, 0.32);
+}
+
+/* Grid overlay preview box (standard view uses a line; grid uses a box) */
+.goal-grid-placeholder {
+  position: absolute;
+  border: 2px dotted rgba(118, 142, 255, 0.7);
+  border-radius: 1rem;
+  box-shadow: inset 0 0 0 1px rgba(118, 142, 255, 0.32);
+  pointer-events: none;
+}
+html[data-theme='light'] .goal-grid-placeholder {
+  border-color: rgba(118, 142, 255, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(118, 142, 255, 0.4);
 }
 
 html[data-theme='light'] .goal-tile {
@@ -5251,4 +5277,19 @@ html[data-theme='light'] .goal-card--favorite::after {
 .quick-list-card--customizing {
   outline: 2px dashed rgba(124, 222, 255, 0.6);
   outline-offset: 4px;
+}
+/* Fallback follower ghost for Safari (when OS drag image is hidden) */
+.goals-grid-drag-follower {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.98;
+  border-radius: 1rem;
+  /* ensure the inner layout appears like the tile */
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  box-shadow: 0 12px 24px -20px rgba(2, 6, 28, 0.6);
 }
