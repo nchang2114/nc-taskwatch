@@ -2842,6 +2842,13 @@ const GoalRow: React.FC<GoalRowProps> = ({
     | null
   >(null)
   const dragCloneRef = useRef<HTMLElement | null>(null)
+  // Pointer-based task row drag (mouse) – custom follower + index by cursor Y
+  const taskPtrDraggingRef = useRef<boolean>(false)
+  const taskPtrStartRef = useRef<{ x: number; y: number } | null>(null)
+  const taskPtrIdRef = useRef<number | null>(null)
+  const taskPtrCloneOffsetRef = useRef<{ dx: number; dy: number } | null>(null)
+  const taskPtrToIndexRef = useRef<number | null>(null)
+  const taskPtrJustDraggedRef = useRef<boolean>(false)
   // UI-only: single vs double click handling for subtask rows, and edit mode toggle
   const subtaskClickTimersRef = useRef<Map<string, number>>(new Map())
   const [editingSubtaskKey, setEditingSubtaskKey] = useState<string | null>(null)
@@ -4107,6 +4114,129 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       showDetails && hasDetailsContent && 'goal-task-row--has-details',
                                     )}
                                     draggable
+                                    onPointerDown={(e) => {
+                                      // Mouse-based custom drag: ignore if editing or interacting with controls
+                                      if ((e as any).pointerType && (e as any).pointerType !== 'mouse') return
+                                      if (isEditing) return
+                                      const t = e.target as HTMLElement
+                                      if (
+                                        t.closest('button, input, textarea, [contenteditable], a, .goal-task-marker, .goal-task-diff, .goal-task-row__delete')
+                                      ) {
+                                        return
+                                      }
+                                      const row = e.currentTarget as HTMLElement
+                                      const list = row.closest('ul') as HTMLElement | null
+                                      if (!list) return
+                                      taskPtrStartRef.current = { x: e.clientX, y: e.clientY }
+                                      taskPtrIdRef.current = e.pointerId
+                                      taskPtrToIndexRef.current = index
+                                      try { row.setPointerCapture(e.pointerId) } catch {}
+                                      // Temporarily disable native DnD while pointer-dragging
+                                      try { row.setAttribute('draggable', 'false') } catch {}
+                                      const startIndex = index
+                                      const section: 'active' = 'active'
+                                      const begin = (startEvent: PointerEvent) => {
+                                        onRevealDeleteTask(null)
+                                        onCollapseTaskDetailsForDrag(task.id)
+                                        // Create follower clone
+                                        try {
+                                          const rect = row.getBoundingClientRect()
+                                          const clone = row.cloneNode(true) as HTMLElement
+                                          clone.className = `${row.className} goal-drag-clone`
+                                          clone.classList.remove('dragging', 'goal-task-row--collapsed', 'goal-task-row--expanded')
+                                          clone.style.position = 'fixed'
+                                          clone.style.top = '0px'
+                                          clone.style.left = '0px'
+                                          clone.style.width = `${Math.floor(rect.width)}px`
+                                          clone.style.minHeight = `${Math.max(1, Math.round(rect.height))}px`
+                                          clone.style.pointerEvents = 'none'
+                                          clone.style.zIndex = '9999'
+                                          copyVisualStyles(row, clone)
+                                          // Single-line text inside clone
+                                          const textNodes = clone.querySelectorAll('.goal-task-text, .goal-task-input, .goal-task-text--button')
+                                          textNodes.forEach((node) => {
+                                            const el = node as HTMLElement
+                                            el.querySelectorAll('br').forEach((br) => br.parentNode?.removeChild(br))
+                                            const oneLine = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim()
+                                            el.textContent = oneLine
+                                          })
+                                          clone.querySelectorAll('.goal-task-details').forEach((node) => node.parentNode?.removeChild(node))
+                                          document.body.appendChild(clone)
+                                          dragCloneRef.current = clone
+                                          // Position at start point
+                                          taskPtrCloneOffsetRef.current = { dx: startEvent.clientX - rect.left, dy: startEvent.clientY - rect.top }
+                                          const x = startEvent.clientX - (taskPtrCloneOffsetRef.current?.dx || 0)
+                                          const y = startEvent.clientY - (taskPtrCloneOffsetRef.current?.dy || 0)
+                                          clone.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
+                                        } catch {}
+                                        // Collapse source row
+                                        const collapse = () => row.classList.add('goal-task-row--collapsed')
+                                        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                                          window.requestAnimationFrame(() => { window.requestAnimationFrame(collapse) })
+                                        } else { setTimeout(collapse, 0) }
+                                        taskPtrDraggingRef.current = true
+                                        ;(window as any).__dragTaskInfo = { goalId: goal.id, bucketId: b.id, section: 'active', index: startIndex }
+                                      }
+                                      const handleMove = (ev: PointerEvent) => {
+                                        const start = taskPtrStartRef.current
+                                        if (!start) return
+                                        const dx = ev.clientX - start.x
+                                        const dy = ev.clientY - start.y
+                                        const dist2 = dx * dx + dy * dy
+                                        if (!taskPtrDraggingRef.current && dist2 > 9) {
+                                          begin(ev)
+                                        }
+                                        if (taskPtrDraggingRef.current) {
+                                          // Move clone
+                                          const off = taskPtrCloneOffsetRef.current
+                                          const clone = dragCloneRef.current
+                                          if (clone && off) {
+                                            const x = ev.clientX - off.dx
+                                            const y = ev.clientY - off.dy
+                                            clone.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
+                                          }
+                                          // Update insert UI by cursor Y
+                                          const { index: toIndex, top } = computeInsertMetrics(list, ev.clientY)
+                                          taskPtrToIndexRef.current = toIndex
+                                          setDragHover((cur) => {
+                                            if (cur && cur.bucketId === b.id && cur.section === section && cur.index === toIndex) return cur
+                                            return { bucketId: b.id, section, index: toIndex }
+                                          })
+                                          setDragLine({ bucketId: b.id, section, top })
+                                        }
+                                      }
+                                      const handleUp = () => {
+                                        try { (row as any)?.releasePointerCapture?.(taskPtrIdRef.current as number) } catch {}
+                                        window.removeEventListener('pointermove', handleMove)
+                                        window.removeEventListener('pointerup', handleUp)
+                                        const wasDragging = taskPtrDraggingRef.current
+                                        // Restore row
+                                        row.classList.remove('goal-task-row--collapsed')
+                                        try { row.setAttribute('draggable', 'true') } catch {}
+                                        taskPtrDraggingRef.current = false
+                                        taskPtrStartRef.current = null
+                                        taskPtrIdRef.current = null
+                                        taskPtrCloneOffsetRef.current = null
+                                        const ghost = dragCloneRef.current
+                                        if (ghost && ghost.parentNode) { try { ghost.parentNode.removeChild(ghost) } catch {} }
+                                        dragCloneRef.current = null
+                                        if (wasDragging) {
+                                          const toIndex = taskPtrToIndexRef.current ?? index
+                                          if (toIndex !== startIndex) {
+                                            onReorderTasks(goal.id, b.id, section, startIndex, Math.max(0, toIndex))
+                                          }
+                                          setDragHover(null)
+                                          setDragLine(null)
+                                          onRestoreTaskDetailsAfterDrag(task.id)
+                                          taskPtrJustDraggedRef.current = true
+                                          setTimeout(() => { taskPtrJustDraggedRef.current = false }, 200)
+                                        }
+                                        taskPtrToIndexRef.current = null
+                                        ;(window as any).__dragTaskInfo = null
+                                      }
+                                      window.addEventListener('pointermove', handleMove)
+                                      window.addEventListener('pointerup', handleUp)
+                                    }}
                                   onDragStart={(e) => {
                                     onRevealDeleteTask(null)
                                     onCollapseTaskDetailsForDrag(task.id)
@@ -4877,6 +5007,118 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                           isDeleteRevealed && 'goal-task-row--delete-revealed',
                                         )}
                                         draggable
+                                        onPointerDown={(e) => {
+                                          if ((e as any).pointerType && (e as any).pointerType !== 'mouse') return
+                                          if (isEditing) return
+                                          const t = e.target as HTMLElement
+                                          if (t.closest('button, input, textarea, [contenteditable], a, .goal-task-marker, .goal-task-diff, .goal-task-row__delete')) {
+                                            return
+                                          }
+                                          const row = e.currentTarget as HTMLElement
+                                          const list = row.closest('ul') as HTMLElement | null
+                                          if (!list) return
+                                          taskPtrStartRef.current = { x: e.clientX, y: e.clientY }
+                                          taskPtrIdRef.current = e.pointerId
+                                          taskPtrToIndexRef.current = cIndex
+                                          try { row.setPointerCapture(e.pointerId) } catch {}
+                                          try { row.setAttribute('draggable', 'false') } catch {}
+                                          const startIndex = cIndex
+                                          const section: 'completed' = 'completed'
+                                          const begin = (startEvent: PointerEvent) => {
+                                            onRevealDeleteTask(null)
+                                            onCollapseTaskDetailsForDrag(task.id)
+                                            try {
+                                              const rect = row.getBoundingClientRect()
+                                              const clone = row.cloneNode(true) as HTMLElement
+                                              clone.className = `${row.className} goal-drag-clone`
+                                              clone.classList.remove('dragging', 'goal-task-row--collapsed', 'goal-task-row--expanded')
+                                              clone.style.position = 'fixed'
+                                              clone.style.top = '0px'
+                                              clone.style.left = '0px'
+                                              clone.style.width = `${Math.floor(rect.width)}px`
+                                              clone.style.minHeight = `${Math.max(1, Math.round(rect.height))}px`
+                                              clone.style.pointerEvents = 'none'
+                                              clone.style.zIndex = '9999'
+                                              copyVisualStyles(row, clone)
+                                              const textNodes = clone.querySelectorAll('.goal-task-text, .goal-task-input, .goal-task-text--button')
+                                              textNodes.forEach((node) => {
+                                                const el = node as HTMLElement
+                                                el.querySelectorAll('br').forEach((br) => br.parentNode?.removeChild(br))
+                                                const oneLine = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim()
+                                                el.textContent = oneLine
+                                              })
+                                              clone.querySelectorAll('.goal-task-details').forEach((node) => node.parentNode?.removeChild(node))
+                                              document.body.appendChild(clone)
+                                              dragCloneRef.current = clone
+                                              taskPtrCloneOffsetRef.current = { dx: startEvent.clientX - rect.left, dy: startEvent.clientY - rect.top }
+                                              const x = startEvent.clientX - (taskPtrCloneOffsetRef.current?.dx || 0)
+                                              const y = startEvent.clientY - (taskPtrCloneOffsetRef.current?.dy || 0)
+                                              clone.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
+                                            } catch {}
+                                            const collapse = () => row.classList.add('goal-task-row--collapsed')
+                                            if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                                              window.requestAnimationFrame(() => { window.requestAnimationFrame(collapse) })
+                                            } else { setTimeout(collapse, 0) }
+                                            taskPtrDraggingRef.current = true
+                                            ;(window as any).__dragTaskInfo = { goalId: goal.id, bucketId: b.id, section: 'completed', index: startIndex }
+                                          }
+                                          const handleMove = (ev: PointerEvent) => {
+                                            const start = taskPtrStartRef.current
+                                            if (!start) return
+                                            const dx = ev.clientX - start.x
+                                            const dy = ev.clientY - start.y
+                                            const dist2 = dx * dx + dy * dy
+                                            if (!taskPtrDraggingRef.current && dist2 > 9) {
+                                              begin(ev)
+                                            }
+                                            if (taskPtrDraggingRef.current) {
+                                              const off = taskPtrCloneOffsetRef.current
+                                              const clone = dragCloneRef.current
+                                              if (clone && off) {
+                                                const x = ev.clientX - off.dx
+                                                const y = ev.clientY - off.dy
+                                                clone.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
+                                              }
+                                              const { index: toIndex, top } = computeInsertMetrics(list, ev.clientY)
+                                              taskPtrToIndexRef.current = toIndex
+                                              setDragHover((cur) => {
+                                                if (cur && cur.bucketId === b.id && cur.section === section && cur.index === toIndex) return cur
+                                                return { bucketId: b.id, section, index: toIndex }
+                                              })
+                                              setDragLine({ bucketId: b.id, section, top })
+                                            }
+                                          }
+                                          const handleUp = () => {
+                                            try { (row as any)?.releasePointerCapture?.(taskPtrIdRef.current as number) } catch {}
+                                            window.removeEventListener('pointermove', handleMove)
+                                            window.removeEventListener('pointerup', handleUp)
+                                            const wasDragging = taskPtrDraggingRef.current
+                                            row.classList.remove('goal-task-row--collapsed')
+                                            try { row.setAttribute('draggable', 'true') } catch {}
+                                            taskPtrDraggingRef.current = false
+                                            taskPtrStartRef.current = null
+                                            taskPtrIdRef.current = null
+                                            taskPtrCloneOffsetRef.current = null
+                                            const ghost = dragCloneRef.current
+                                            if (ghost && ghost.parentNode) { try { ghost.parentNode.removeChild(ghost) } catch {} }
+                                            dragCloneRef.current = null
+                                            if (wasDragging) {
+                                              const toIndex = taskPtrToIndexRef.current ?? cIndex
+                                              if (toIndex !== startIndex) {
+                                                onReorderTasks(goal.id, b.id, section, startIndex, Math.max(0, toIndex))
+                                              }
+                                              setDragHover(null)
+                                              setDragLine(null)
+                                              onRestoreTaskDetailsAfterDrag(task.id)
+                                              taskPtrJustDraggedRef.current = true
+                                              setTimeout(() => { taskPtrJustDraggedRef.current = false }, 200)
+                                            }
+                                            taskPtrToIndexRef.current = null
+                                            ;(window as any).__dragTaskInfo = null
+                                          }
+                                          window.addEventListener('pointermove', handleMove)
+                                          window.addEventListener('pointerup', handleUp)
+                                        }}
                                         onContextMenu={(event) => {
                                           event.preventDefault()
                                           event.stopPropagation()
@@ -9674,62 +9916,71 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     // Snap top/bottom to start/end
     try {
       const gr = grid.getBoundingClientRect()
-      const edge = 8
+      const edge = 10
       if (clientY <= gr.top + edge) return 0
       if (clientY >= gr.bottom - edge) return N
     } catch {}
 
-    // Measure tile rects once
+    // Measure tile rects
     const rects = tiles.map((el) => el.getBoundingClientRect())
 
-    // Group into rows while preserving DOM order (row break when x decreases significantly or y jumps)
-    const rows: number[][] = []
-    let current: number[] = []
-    const xTol = 4
+    // Group into rows (DOM order), computing row bounds
+    type Row = { idxs: number[]; top: number; bottom: number }
+    const rows: Row[] = []
+    const xTol = 6
+    let currentIdxs: number[] = []
     for (let i = 0; i < N; i += 1) {
       const r = rects[i]
       if (i === 0) {
-        current.push(i)
+        currentIdxs.push(i)
         continue
       }
       const prev = rects[i - 1]
-      const newRow = r.left < prev.left - xTol || r.top >= prev.top + prev.height * 0.5
+      const newRow = r.left < prev.left - xTol || r.top >= prev.bottom - Math.min(8, prev.height * 0.25)
       if (newRow) {
-        rows.push(current)
-        current = [i]
+        const rowRects = currentIdxs.map((j) => rects[j])
+        rows.push({ idxs: currentIdxs, top: Math.min(...rowRects.map((rr) => rr.top)), bottom: Math.max(...rowRects.map((rr) => rr.bottom)) })
+        currentIdxs = [i]
       } else {
-        current.push(i)
+        currentIdxs.push(i)
       }
     }
-    rows.push(current)
-
-    // Choose nearest row by vertical center
-    let rowIndex = 0
-    let bestDy = Infinity
-    for (let ri = 0; ri < rows.length; ri += 1) {
-      const idxs = rows[ri]
-      const cy = idxs.reduce((acc, j) => acc + (rects[j].top + rects[j].height / 2), 0) / Math.max(1, idxs.length)
-      const dy = Math.abs(clientY - cy)
-      if (dy < bestDy) { bestDy = dy; rowIndex = ri }
+    if (currentIdxs.length > 0) {
+      const rowRects = currentIdxs.map((j) => rects[j])
+      rows.push({ idxs: currentIdxs, top: Math.min(...rowRects.map((rr) => rr.top)), bottom: Math.max(...rowRects.map((rr) => rr.bottom)) })
     }
 
-    const idxs = rows[rowIndex]
-    const hx = Math.min(28, Math.max(8, rects[idxs[0]].width * 0.10))
+    // Pick the row that contains the cursor Y (with tolerance), otherwise nearest
+    const rowTol = 6
+    let rowIndex = -1
+    for (let ri = 0; ri < rows.length; ri += 1) {
+      const rTop = rows[ri].top - rowTol
+      const rBot = rows[ri].bottom + rowTol
+      if (clientY >= rTop && clientY <= rBot) { rowIndex = ri; break }
+    }
+    if (rowIndex === -1) {
+      let best = Infinity
+      for (let ri = 0; ri < rows.length; ri += 1) {
+        const rTop = rows[ri].top - rowTol
+        const rBot = rows[ri].bottom + rowTol
+        const dy = clientY < rTop ? rTop - clientY : clientY > rBot ? clientY - rBot : 0
+        if (dy < best) { best = dy; rowIndex = ri }
+      }
+      if (rowIndex === -1) rowIndex = 0
+    }
 
-    // Compute within-row position using tile center X with a small dead-zone
-    let within = idxs.length // default to append after last in row
+    const idxs = rows[rowIndex].idxs
+    const rowStart = rows.slice(0, rowIndex).reduce((acc, r) => acc + r.idxs.length, 0)
+    const hx = Math.min(24, Math.max(8, rects[idxs[0]].width * 0.08))
+
+    // Within-row slot selection – before first, between, after last
     for (let k = 0; k < idxs.length; k += 1) {
       const r = rects[idxs[k]]
       const cx = r.left + r.width / 2
-      if (clientX < cx - hx) { within = k; break }
-      if (Math.abs(clientX - cx) <= hx) { within = clientX > cx ? k + 1 : k; break }
-      // else keep scanning; if we never break, we append
+      if (clientX < cx - hx) return Math.max(0, Math.min(rowStart + k, N))
+      if (Math.abs(clientX - cx) <= hx) return Math.max(0, Math.min(rowStart + (clientX > cx ? k + 1 : k), N))
     }
-
-    // Convert row-local index to global candidate index (tiles order is DOM order)
-    const rowStart = rows.slice(0, rowIndex).reduce((acc, arr) => acc + arr.length, 0)
-    const toIndex = rowStart + within
-    return Math.max(0, Math.min(toIndex, N))
+    return Math.max(0, Math.min(rowStart + idxs.length, N))
   }, [])
 
   const lifeRoutineMenuPortal =
@@ -10067,8 +10318,10 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           clone.style.zIndex = '9999'
                           clone.className = srcEl.className + ' goal-tile--drag-image'
                           copyVisualStyles(srcEl, clone)
-                          // Initial position under the pointer
-                          clone.style.transform = `translate(${Math.round(rect.left)}px, ${Math.round(rect.top)}px)`
+                          // Anchor follower to a fixed hotspot near the top-left of the tile (consistent with list drag)
+                          const ANCHOR_X = 16
+                          const ANCHOR_Y = 0
+                          clone.style.transform = `translate(${Math.round(e.clientX - ANCHOR_X)}px, ${Math.round(e.clientY - ANCHOR_Y)}px)`
                           document.body.appendChild(clone)
                           gridDragCloneRef.current = clone
                           // Transparent shim to suppress OS drag image
@@ -10082,9 +10335,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           document.body.appendChild(shim)
                           gridDragShimRef.current = shim
                           try { e.dataTransfer.setDragImage(shim, 0, 0) } catch {}
-                          // Move follower with pointer during dragover
-                          const dx = Math.min(Math.max(0, e.clientX - rect.left), rect.width)
-                          const dy = Math.min(Math.max(0, e.clientY - rect.top), rect.height)
+                          // Move follower with pointer during dragover (keep anchored to fixed top-left hotspot)
                           const handleMove = (ev: DragEvent) => {
                             let xClient = ev.clientX
                             let yClient = ev.clientY
@@ -10094,8 +10345,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                             } else {
                               gridDragLastXYRef.current = { x: xClient, y: yClient }
                             }
-                            const x = (xClient || 0) - dx
-                            const y = (yClient || 0) - dy
+                            const x = (xClient || 0) - ANCHOR_X
+                            const y = (yClient || 0) - ANCHOR_Y
                             if (gridDragCloneRef.current) {
                               gridDragCloneRef.current.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
                             }
@@ -10184,11 +10435,13 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                               clone.style.zIndex = '9999'
                               clone.className = tile.className + ' goal-tile--drag-image'
                               copyVisualStyles(tile, clone)
-                              // place at initial position via transform
-                              clone.style.transform = `translate(${Math.round(rect.left)}px, ${Math.round(rect.top)}px)`
+                              // place under pointer with fixed top-left anchor
+                              const ANCHOR_X = 16
+                              const ANCHOR_Y = 0
+                              clone.style.transform = `translate(${Math.round(ev.clientX - ANCHOR_X)}px, ${Math.round(ev.clientY - ANCHOR_Y)}px)`
                               document.body.appendChild(clone)
                               gridPointerCloneRef.current = clone
-                              gridPointerCloneOffsetRef.current = { dx: start.x - rect.left, dy: start.y - rect.top }
+                              gridPointerCloneOffsetRef.current = { dx: ANCHOR_X, dy: ANCHOR_Y }
                             } catch {}
                             // Collapse the source tile so it visually leaves the grid while dragging (touch fallback)
                             try {
