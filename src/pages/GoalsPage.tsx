@@ -10067,29 +10067,32 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
       const lastAll = idxs[idxs.length - 1]
       return mapAllToGoalIndex(lastAll, true)
     }
-    // inside row – choose nearest tile using 2D distance (use Y as well), then decide before/after by X
+    // inside the chosen row
     const firstAll = idxs[0]
     if (idxs.length === 1) {
-      const r = rectsAll[firstAll]
-      const cx = r.left + r.width / 2
-      const after = clientX > cx
-      return mapAllToGoalIndex(firstAll, after)
+      // Single cell row: drop into that cell regardless of X
+      return mapAllToGoalIndex(firstAll, false)
     }
-    let nearestK = 0
-    let best = Infinity
+    // If pointer is horizontally within a tile rect, select that tile's cell directly
     for (let k = 0; k < idxs.length; k += 1) {
       const r = rectsAll[idxs[k]]
-      const cx = r.left + r.width / 2
-      const cy = r.top + r.height / 2
-      const dx = clientX - cx
-      const dy = clientY - cy
-      const d2 = dx * dx + dy * dy
-      if (d2 < best) { best = d2; nearestK = k }
+      if (clientX >= r.left && clientX <= r.right) {
+        return mapAllToGoalIndex(idxs[k], false)
+      }
     }
-    const rN = rectsAll[idxs[nearestK]]
-    const cxN = rN.left + rN.width / 2
-    const after = clientX > cxN
-    return mapAllToGoalIndex(idxs[nearestK], after)
+    // Otherwise choose the nearest gap between tiles using midpoints
+    const splits: number[] = []
+    for (let k = 1; k < idxs.length; k += 1) {
+      const a = rectsAll[idxs[k - 1]]
+      const b = rectsAll[idxs[k]]
+      splits.push((a.right + b.left) / 2)
+    }
+    if (clientX < splits[0]) return mapAllToGoalIndex(firstAll, false)
+    for (let k = 1; k < splits.length; k += 1) {
+      if (clientX < splits[k]) return mapAllToGoalIndex(idxs[k], false)
+    }
+    const lastAll = idxs[idxs.length - 1]
+    return mapAllToGoalIndex(lastAll, true)
   }, [])
 
   const lifeRoutineMenuPortal =
