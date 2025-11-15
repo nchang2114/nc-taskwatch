@@ -301,7 +301,11 @@ html[data-theme='light'] .taskwatch-layout-toggle--active { background: rgba(31,
   display: flex;
   align-items: stretch;
   gap: var(--col-gap);
+  /* Add breathing room below the columns so the meta note doesn't butt up against them */
+  margin-bottom: clamp(1.2rem, 4.5vw, 2.6rem);
 }
+/* In dashboard view, push columns further from the meta note */
+.taskwatch--dashboard .taskwatch-columns { margin-bottom: clamp(2rem, 6vw, 3.6rem); }
 .taskwatch-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: var(--row-gap); }
 .taskwatch-col--left { padding-right: 0; gap: clamp(0.6rem, 2.2vw, 1.2rem); }
 .taskwatch-col--right { padding-left: 0; border-left: none; }
@@ -314,8 +318,9 @@ html[data-theme='light'] .taskwatch-layout-toggle--active { background: rgba(31,
 .taskwatch--dashboard .taskwatch-subtasks-card,
 .taskwatch--dashboard .taskwatch-notes-card { max-width: none !important; width: 100% !important; }
 
-/* Stack on small screens; hide vertical separator */
-@media (max-width: 979px) {
+/* Stack on small screens; hide vertical separator
+   Keep two columns until the viewport is quite small */
+@media (max-width: 840px) {
   .taskwatch-columns { flex-direction: column; }
   .taskwatch-col--left { padding-right: 0; }
   .taskwatch-col--right { padding-left: 0; }
@@ -764,7 +769,9 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible { backgroun
 
 /* Footer meta */
 .meta { text-align: center; color: var(--text-secondary); font-family: var(--font-display); font-size: clamp(0.76rem, 1.4vw, 0.86rem); letter-spacing: 0.14em; text-transform: uppercase; margin: 0; }
-.meta-note { margin-top: clamp(0.4rem, 1.6vw, 1rem); }
+.meta-note { margin-top: clamp(0.6rem, 2vw, 1.25rem); }
+/* In dashboard, give the meta note extra distance from the columns */
+.taskwatch--dashboard .meta-note { margin-top: clamp(2rem, 6vw, 3.6rem); }
 
 /* Notes card */
 .taskwatch-notes { width: 100%; max-width: min(720px, 100%); display: flex; flex-direction: column; gap: clamp(0.85rem, 2.2vw, 1.4rem); /* expose padding as a var so children can align/clip to the section edge */ --notes-pad: clamp(1.5rem, 3.8vw, 2.2rem); padding: var(--notes-pad); border-radius: clamp(16px, 3.4vw, 22px); border: 1px solid rgba(118, 142, 255, 0.36); background: linear-gradient(155deg, rgba(14, 18, 48, 0.9) 0%, rgba(10, 16, 40, 0.9) 58%, rgba(8, 14, 36, 0.92) 100%); box-shadow: 0 32px 72px -36px rgba(2, 6, 24, 0.85); backdrop-filter: blur(16px); }
