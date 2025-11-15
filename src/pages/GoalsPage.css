@@ -823,6 +823,15 @@ html[data-theme='light'] .life-routines-card.quick-list-card {
   text-transform: uppercase;
   color: rgba(255, 233, 210, 0.8);
 }
+.quick-list-card .life-routines-card__eyebrow,
+.quick-list-embed .life-routines-card__eyebrow {
+  color: rgba(190, 236, 255, 0.85);
+}
+
+html[data-theme='light'] .quick-list-card .life-routines-card__eyebrow,
+html[data-theme='light'] .quick-list-embed .life-routines-card__eyebrow {
+  color: rgba(2, 132, 199, 0.78);
+}
 
 .life-routines-card__title {
   margin: 0;
