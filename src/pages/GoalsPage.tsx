@@ -4306,7 +4306,10 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       e.dataTransfer.dropEffect = 'move'
                                     }}
                                   >
-                                  <div className="goal-task-row__content">
+                    <div
+                      className="goal-task-row__content"
+                      onDoubleClick={(event) => handleQuickRowDoubleClick(event, item)}
+                    >
                                   
                                   <button
                                     type="button"
@@ -6043,6 +6046,8 @@ export default function GoalsPage(): ReactElement {
     if (el) quickEditRefs.current.set(taskId, el)
     else quickEditRefs.current.delete(taskId)
   }
+  const quickEditDoubleClickGuardRef = useRef<{ taskId: string; until: number } | null>(null)
+  const quickTogglePendingRef = useRef<{ taskId: string; timer: number } | null>(null)
   const queueQuickCaretSync = useCallback((taskId: string, element: HTMLSpanElement | null) => {
     if (!element) return
     const caretOffset = computeSelectionOffsetWithin(element, 'end')
@@ -8770,6 +8775,72 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     if (!quickListExpanded) {
       return null
     }
+    const shouldSuppressQuickToggle = (taskId: string) => {
+      const guard = quickEditDoubleClickGuardRef.current
+      if (!guard) {
+        return false
+      }
+      if (guard.taskId !== taskId) {
+        return false
+      }
+      if (Date.now() > guard.until) {
+        quickEditDoubleClickGuardRef.current = null
+        return false
+      }
+      return true
+    }
+    const scheduleQuickToggle = (taskId: string) => {
+      const pending = quickTogglePendingRef.current
+      if (pending && typeof window !== 'undefined') {
+        window.clearTimeout(pending.timer)
+      }
+      if (typeof window === 'undefined') {
+        toggleQuickItemDetails(taskId)
+        quickTogglePendingRef.current = null
+        return
+      }
+      const timer = window.setTimeout(() => {
+        toggleQuickItemDetails(taskId)
+        if (quickTogglePendingRef.current && quickTogglePendingRef.current.taskId === taskId) {
+          quickTogglePendingRef.current = null
+        }
+      }, 160)
+      quickTogglePendingRef.current = { taskId, timer }
+    }
+    const cancelQuickToggle = (taskId: string) => {
+      const pending = quickTogglePendingRef.current
+      if (!pending || pending.taskId !== taskId) {
+        return
+      }
+      if (typeof window !== 'undefined') {
+        window.clearTimeout(pending.timer)
+      }
+      quickTogglePendingRef.current = null
+    }
+    const handleQuickRowDoubleClick = (
+      event: React.MouseEvent<HTMLElement>,
+      item: QuickItem,
+    ) => {
+      if (quickEdits[item.id] !== undefined) {
+        return
+      }
+      const target = event.target as HTMLElement
+      if (
+        target.closest('.goal-task-marker') ||
+        target.closest('.goal-task-diff') ||
+        target.closest('.goal-task-row__delete')
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      cancelQuickToggle(item.id)
+      const textInner = (event.currentTarget.querySelector('.goal-task-text__inner') ??
+        target.closest('.goal-task-text')?.querySelector('.goal-task-text__inner')) as HTMLElement | null
+      const caretOffset = findActivationCaretOffset(textInner, event.clientX, event.clientY)
+      startQuickEdit(item.id, item.text, { caretOffset })
+      quickEditDoubleClickGuardRef.current = { taskId: item.id, until: Date.now() + 300 }
+    }
     return (
                 <div id="quick-list-body" className="goal-bucket-body px-3 md:px-4 pb-3 md:pb-4">
                   {/* Quick List menu portal */}
@@ -8895,6 +8966,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                       hasDetailsContent && 'goal-task-row--has-details',
                                     )}
                                     draggable
+                                    onDoubleClick={(event) => handleQuickRowDoubleClick(event, item)}
                                     onDragStart={(e) => {
                                       const row = e.currentTarget as HTMLElement
                                       row.classList.add('dragging')
@@ -8931,7 +9003,10 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                       setQuickDragLine(null)
                                     }}
                                   >
-                              <div className="goal-task-row__content">
+                              <div
+                                className="goal-task-row__content"
+                                onDoubleClick={(event) => handleQuickRowDoubleClick(event, item)}
+                              >
                                 <button
                                   type="button"
                                   className="goal-task-marker goal-task-marker--action"
@@ -8996,14 +9071,22 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                   <button
                                     type="button"
                                     className="goal-task-text goal-task-text--button"
-                                    onClick={(e) => { e.stopPropagation(); toggleQuickItemDetails(item.id) }}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      if (shouldSuppressQuickToggle(item.id)) {
+                                        return
+                                      }
+                                      scheduleQuickToggle(item.id)
+                                    }}
                                     onPointerDown={(e) => { if (e.pointerType === 'touch') { e.preventDefault() } }}
                                     onDoubleClick={(e) => {
                                       e.preventDefault()
                                       e.stopPropagation()
+                                      cancelQuickToggle(item.id)
                                       const container = e.currentTarget.querySelector('.goal-task-text__inner') as HTMLElement | null
                                       const caretOffset = findActivationCaretOffset(container, e.clientX, e.clientY)
                                       startQuickEdit(item.id, item.text, { caretOffset })
+                                      quickEditDoubleClickGuardRef.current = { taskId: item.id, until: Date.now() + 300 }
                                     }}
                                     aria-label="Toggle task details"
                                   >
@@ -9400,6 +9483,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                         )}
                                         data-delete-key={deleteKey}
                                         draggable
+                                        onDoubleClick={(event) => handleQuickRowDoubleClick(event, item)}
                                         onContextMenu={(e) => {
                                           e.preventDefault()
                                           e.stopPropagation()
@@ -9445,7 +9529,10 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                           setQuickDragLine(null)
                                         }}
                                       >
-                                        <div className="goal-task-row__content">
+                                        <div
+                                          className="goal-task-row__content"
+                                          onDoubleClick={(event) => handleQuickRowDoubleClick(event, item)}
+                                        >
                                           <button
                                             type="button"
                                             className="goal-task-marker goal-task-marker--action"
@@ -9510,14 +9597,22 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                                             <button
                                               type="button"
                                               className="goal-task-text goal-task-text--button"
-                                              onClick={(e) => { e.stopPropagation(); toggleQuickItemDetails(item.id) }}
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                if (shouldSuppressQuickToggle(item.id)) {
+                                                  return
+                                                }
+                                                scheduleQuickToggle(item.id)
+                                              }}
                                               onPointerDown={(e) => { if (e.pointerType === 'touch') { e.preventDefault() } }}
                                               onDoubleClick={(e) => {
                                                 e.preventDefault()
                                                 e.stopPropagation()
+                                                cancelQuickToggle(item.id)
                                                 const container = e.currentTarget.querySelector('.goal-task-text__inner') as HTMLElement | null
                                                 const caretOffset = findActivationCaretOffset(container, e.clientX, e.clientY)
                                                 startQuickEdit(item.id, item.text, { caretOffset })
+                                                quickEditDoubleClickGuardRef.current = { taskId: item.id, until: Date.now() + 300 }
                                               }}
                                               aria-label="Toggle task details"
                                             >
