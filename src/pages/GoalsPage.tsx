@@ -9902,12 +9902,8 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     copyVisualStyles(tile, clone)
     document.body.appendChild(clone)
     ;(window as any).__goalDragCloneRef = clone
-    const pointerX = (event.clientX ?? tileRect.left) - tileRect.left
-    const pointerY = (event.clientY ?? tileRect.top) - tileRect.top
-    const hotspotX = Math.max(0, Math.min(pointerX, tileRect.width))
-    const hotspotY = Math.max(0, Math.min(pointerY, tileRect.height))
     try {
-      event.dataTransfer.setDragImage(clone, hotspotX, hotspotY)
+      event.dataTransfer.setDragImage(clone, 16, 10)
     } catch {}
     ;(window as any).__dragGoalInfo = { goalId }
     const collapseSource = () => {

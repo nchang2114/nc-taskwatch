@@ -114,16 +114,16 @@
 .goal-tile.dragging { opacity: 1; }
 .goal-tile--collapsed { display: none !important; }
 .goal-tile--placeholder {
-  border-style: dotted;
-  border-width: 2px;
-  border-color: rgba(148, 163, 255, 0.68);
-  background: transparent;
+  --placeholder-border-color: rgba(148, 163, 255, 0.68);
+  border: 1px dashed var(--placeholder-border-color);
+  border-radius: inherit;
+  background: rgba(148, 163, 255, 0.05);
   box-shadow: none;
   pointer-events: none;
 }
 html[data-theme='light'] .goal-tile--placeholder {
-  border-color: rgba(99, 102, 241, 0.55);
-  background: rgba(99, 102, 241, 0.04);
+  --placeholder-border-color: rgba(99, 102, 241, 0.55);
+  background: rgba(99, 102, 241, 0.06);
 }
 html[data-theme='light'] .goal-tile {
   background: linear-gradient(145deg, rgba(248, 250, 255, 0.98), rgba(238, 244, 255, 0.95));
