@@ -6419,6 +6419,8 @@ export default function GoalsPage(): ReactElement {
   const gridPointerCloneRef = useRef<HTMLElement | null>(null)
   const gridPointerCloneOffsetRef = useRef<{ dx: number; dy: number } | null>(null)
   const gridPointerJustDraggedRef = useRef<boolean>(false)
+  // Track last non-zero pointer coords during HTML5 DnD to avoid 0,0 spikes
+  const gridDragLastXYRef = useRef<{ x: number; y: number } | null>(null)
 
   // Safety net: ensure any collapsed/ghosted drag state is cleared even if a drag ends outside targets
   useEffect(() => {
@@ -6474,6 +6476,8 @@ export default function GoalsPage(): ReactElement {
           cleanupListDrag()
           ;(window as any).__dragGoalInfo = null
         }
+        // Reset last pointer cache for HTML5 DnD
+        gridDragLastXYRef.current = null
       }, 0)
     }
     window.addEventListener('dragend', handleGlobalDragEnd)
@@ -9660,31 +9664,72 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
   }
 
   const computeGridInsertIndex = useCallback((grid: HTMLElement, clientX: number, clientY: number): number => {
+    // Build candidates from visible goal tiles only (exclude the actively dragging or collapsed source)
     const tiles = Array.from(
       grid.querySelectorAll<HTMLElement>('article.goal-tile[data-goal-id]'),
-    ).filter((el) => !el.classList.contains('dragging'))
-    if (tiles.length === 0) return 0
-    const pointer = { x: clientX, y: clientY }
-    let nearestIndex = 0
-    let best = Infinity
-    tiles.forEach((el, idx) => {
-      const r = el.getBoundingClientRect()
-      const cx = r.left + r.width / 2
-      const cy = r.top + r.height / 2
-      const dx = pointer.x - cx
-      const dy = pointer.y - cy
-      const d2 = dx * dx + dy * dy
-      if (d2 < best) {
-        best = d2
-        nearestIndex = idx
+    ).filter((el) => !el.classList.contains('dragging') && !el.classList.contains('goal-tile--collapsed'))
+    const N = tiles.length
+    if (N === 0) return 0
+
+    // Snap top/bottom to start/end
+    try {
+      const gr = grid.getBoundingClientRect()
+      const edge = 8
+      if (clientY <= gr.top + edge) return 0
+      if (clientY >= gr.bottom - edge) return N
+    } catch {}
+
+    // Measure tile rects once
+    const rects = tiles.map((el) => el.getBoundingClientRect())
+
+    // Group into rows while preserving DOM order (row break when x decreases significantly or y jumps)
+    const rows: number[][] = []
+    let current: number[] = []
+    const xTol = 4
+    for (let i = 0; i < N; i += 1) {
+      const r = rects[i]
+      if (i === 0) {
+        current.push(i)
+        continue
       }
-    })
-    let toIndex = nearestIndex
-    const tr = tiles[nearestIndex].getBoundingClientRect()
-    if (pointer.y > tr.top + tr.height / 2 || pointer.x > tr.left + tr.width / 2) {
-      toIndex = nearestIndex + 1
+      const prev = rects[i - 1]
+      const newRow = r.left < prev.left - xTol || r.top >= prev.top + prev.height * 0.5
+      if (newRow) {
+        rows.push(current)
+        current = [i]
+      } else {
+        current.push(i)
+      }
     }
-    return Math.max(0, Math.min(toIndex, tiles.length))
+    rows.push(current)
+
+    // Choose nearest row by vertical center
+    let rowIndex = 0
+    let bestDy = Infinity
+    for (let ri = 0; ri < rows.length; ri += 1) {
+      const idxs = rows[ri]
+      const cy = idxs.reduce((acc, j) => acc + (rects[j].top + rects[j].height / 2), 0) / Math.max(1, idxs.length)
+      const dy = Math.abs(clientY - cy)
+      if (dy < bestDy) { bestDy = dy; rowIndex = ri }
+    }
+
+    const idxs = rows[rowIndex]
+    const hx = Math.min(28, Math.max(8, rects[idxs[0]].width * 0.10))
+
+    // Compute within-row position using tile center X with a small dead-zone
+    let within = idxs.length // default to append after last in row
+    for (let k = 0; k < idxs.length; k += 1) {
+      const r = rects[idxs[k]]
+      const cx = r.left + r.width / 2
+      if (clientX < cx - hx) { within = k; break }
+      if (Math.abs(clientX - cx) <= hx) { within = clientX > cx ? k + 1 : k; break }
+      // else keep scanning; if we never break, we append
+    }
+
+    // Convert row-local index to global candidate index (tiles order is DOM order)
+    const rowStart = rows.slice(0, rowIndex).reduce((acc, arr) => acc + arr.length, 0)
+    const toIndex = rowStart + within
+    return Math.max(0, Math.min(toIndex, N))
   }, [])
 
   const lifeRoutineMenuPortal =
@@ -9872,34 +9917,18 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                 const info = (window as any).__dragGoalGridInfo as { goalId: string; index: number } | null
                 if (!info) return
                 try { e.dataTransfer.dropEffect = 'move' } catch {}
-                // Compute live hover insert index relative to visible tiles (excluding the dragged tile)
+                // Compute live hover insert index via shared helper (with hysteresis)
                 const grid = e.currentTarget as HTMLElement
-                const tiles = Array.from(
-                  grid.querySelectorAll<HTMLElement>('article.goal-tile[data-goal-id]'),
-                ).filter((el) => !el.classList.contains('dragging'))
-                if (tiles.length === 0) return
-                const pointer = { x: e.clientX, y: e.clientY }
-                let nearestIndex = 0
-                let best = Infinity
-                tiles.forEach((el, idx) => {
-                  const r = el.getBoundingClientRect()
-                  const cx = r.left + r.width / 2
-                  const cy = r.top + r.height / 2
-                  const dx = pointer.x - cx
-                  const dy = pointer.y - cy
-                  const d2 = dx * dx + dy * dy
-                  if (d2 < best) {
-                    best = d2
-                    nearestIndex = idx
-                  }
-                })
-                let toIndex = nearestIndex
-                const tr = tiles[nearestIndex].getBoundingClientRect()
-                if (pointer.y > tr.top + tr.height / 2 || pointer.x > tr.left + tr.width / 2) {
-                  toIndex = nearestIndex + 1
+                let x = e.clientX
+                let y = e.clientY
+                if ((x === 0 && y === 0) || Number.isNaN(x) || Number.isNaN(y)) {
+                  const last = gridDragLastXYRef.current
+                  if (last) { x = last.x; y = last.y }
+                } else {
+                  gridDragLastXYRef.current = { x, y }
                 }
-                const clamped = Math.max(0, Math.min(toIndex, tiles.length))
-                setGridDragHoverIndex((cur) => (cur === clamped ? cur : clamped))
+                const toIndex = computeGridInsertIndex(grid, x, y)
+                setGridDragHoverIndex((cur) => (cur === toIndex ? cur : toIndex))
               }}
               onDrop={(e) => {
                 const info = (window as any).__dragGoalGridInfo as { goalId: string; index: number } | null
@@ -9908,7 +9937,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                 const grid = e.currentTarget as HTMLElement
                 const tiles = Array.from(
                   grid.querySelectorAll<HTMLElement>('article.goal-tile[data-goal-id]'),
-                ).filter((el) => !el.classList.contains('dragging'))
+                ).filter((el) => !el.classList.contains('dragging') && !el.classList.contains('goal-tile--collapsed'))
                 if (tiles.length === 0) {
                   ;(window as any).__dragGoalGridInfo = null
                   setGridDragGoalId(null)
@@ -9918,23 +9947,15 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                 // Prefer the live hover index if available, otherwise compute
                 let toIndex = gridDragHoverIndex
                 if (toIndex == null) {
-                  const pointer = { x: e.clientX, y: e.clientY }
-                  let nearestIndex = 0
-                  let best = Infinity
-                  tiles.forEach((el, idx) => {
-                    const r = el.getBoundingClientRect()
-                    const cx = r.left + r.width / 2
-                    const cy = r.top + r.height / 2
-                    const dx = pointer.x - cx
-                    const dy = pointer.y - cy
-                    const d2 = dx * dx + dy * dy
-                    if (d2 < best) { best = d2; nearestIndex = idx }
-                  })
-                  const tr = tiles[nearestIndex].getBoundingClientRect()
-                  toIndex = (pointer.y > tr.top + tr.height / 2 || pointer.x > tr.left + tr.width / 2)
-                    ? nearestIndex + 1
-                    : nearestIndex
-                  toIndex = Math.max(0, Math.min(toIndex, tiles.length))
+                  let x = e.clientX
+                  let y = e.clientY
+                  if ((x === 0 && y === 0) || Number.isNaN(x) || Number.isNaN(y)) {
+                    const last = gridDragLastXYRef.current
+                    if (last) { x = last.x; y = last.y }
+                  } else {
+                    gridDragLastXYRef.current = { x, y }
+                  }
+                  toIndex = computeGridInsertIndex(grid, x, y)
                 }
                 reorderGoalsByVisibleInsert(info.goalId, toIndex)
                 ;(window as any).__dragGoalGridInfo = null
@@ -10065,8 +10086,16 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           const dx = Math.min(Math.max(0, e.clientX - rect.left), rect.width)
                           const dy = Math.min(Math.max(0, e.clientY - rect.top), rect.height)
                           const handleMove = (ev: DragEvent) => {
-                            const x = (ev.clientX || 0) - dx
-                            const y = (ev.clientY || 0) - dy
+                            let xClient = ev.clientX
+                            let yClient = ev.clientY
+                            if ((xClient === 0 && yClient === 0) || Number.isNaN(xClient) || Number.isNaN(yClient)) {
+                              const last = gridDragLastXYRef.current
+                              if (last) { xClient = last.x; yClient = last.y }
+                            } else {
+                              gridDragLastXYRef.current = { x: xClient, y: yClient }
+                            }
+                            const x = (xClient || 0) - dx
+                            const y = (yClient || 0) - dy
                             if (gridDragCloneRef.current) {
                               gridDragCloneRef.current.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
                             }
@@ -10074,28 +10103,30 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           gridDragMoveHandlerRef.current = handleMove
                           document.addEventListener('dragover', handleMove)
                         } catch {}
-                        // Do not collapse source in the grid; keep it visible while dragging
+                        // Collapse the source tile after the drag image snapshot so layout reflows with a placeholder
+                        const scheduleCollapse = () => { srcEl.classList.add('goal-tile--collapsed') }
+                        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                          window.requestAnimationFrame(() => { window.requestAnimationFrame(scheduleCollapse) })
+                        } else {
+                          setTimeout(scheduleCollapse, 0)
+                        }
                         try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.dropEffect = 'move' } catch {}
                       }}
-                      onDragEnter={() => {
-                        if (gridDragGoalId && gridDragGoalId !== g.id) {
-                          setGridDragHoverIndex(index)
-                        }
-                      }}
+                      // Intentionally avoid onDragEnter index nudges; rely on computeGridInsertIndex for stability
                       onDragOver={(e) => {
-                        // Accept and compute precise before/after for this tile
+                        // Accept and compute precise before/after using shared helper
                         e.preventDefault()
                         const grid = (e.currentTarget as HTMLElement).closest('.goals-grid') as HTMLElement | null
                         if (!grid) return
-                        const candidates = Array.from(
-                          grid.querySelectorAll<HTMLElement>('article.goal-tile[data-goal-id]'),
-                        ).filter((el) => !el.classList.contains('dragging'))
-                        const me = e.currentTarget as HTMLElement
-                        const idx = candidates.indexOf(me)
-                        if (idx === -1) return
-                        const r = me.getBoundingClientRect()
-                        const after = (e.clientY > r.top + r.height / 2) || (e.clientX > r.left + r.width / 2)
-                        const toIndex = Math.max(0, Math.min(idx + (after ? 1 : 0), candidates.length))
+                        let x = e.clientX
+                        let y = e.clientY
+                        if ((x === 0 && y === 0) || Number.isNaN(x) || Number.isNaN(y)) {
+                          const last = gridDragLastXYRef.current
+                          if (last) { x = last.x; y = last.y }
+                        } else {
+                          gridDragLastXYRef.current = { x, y }
+                        }
+                        const toIndex = computeGridInsertIndex(grid, x, y)
                         setGridDragHoverIndex((cur) => (cur === toIndex ? cur : toIndex))
                         try { (e as any).dataTransfer.dropEffect = 'move' } catch {}
                       }}
@@ -10107,6 +10138,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                         setGridDragGoalId(null)
                         setGridDragHoverIndex(null)
                         setGridDragStartIndex(null)
+                        gridDragLastXYRef.current = null
                         const ghost = gridDragCloneRef.current
                         if (ghost && ghost.parentNode) {
                           try { ghost.parentNode.removeChild(ghost) } catch {}
@@ -10158,6 +10190,15 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                               gridPointerCloneRef.current = clone
                               gridPointerCloneOffsetRef.current = { dx: start.x - rect.left, dy: start.y - rect.top }
                             } catch {}
+                            // Collapse the source tile so it visually leaves the grid while dragging (touch fallback)
+                            try {
+                              const scheduleCollapse = () => { tile.classList.add('goal-tile--collapsed') }
+                              if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                                window.requestAnimationFrame(() => { window.requestAnimationFrame(scheduleCollapse) })
+                              } else {
+                                setTimeout(scheduleCollapse, 0)
+                              }
+                            } catch {}
                           }
                           if (gridPointerDraggingRef.current) {
                             const grid = document.querySelector('.goals-grid') as HTMLElement | null
@@ -10184,6 +10225,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                           gridPointerIdRef.current = null
                           const tile = e.currentTarget as HTMLElement
                           tile.classList.remove('dragging')
+                          tile.classList.remove('goal-tile--collapsed')
                           // Remove floating clone
                           const ghost = gridPointerCloneRef.current
                           if (ghost && ghost.parentNode) {
@@ -10194,7 +10236,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                            if (wasDragging) {
                              const grid = document.querySelector('.goals-grid') as HTMLElement | null
                              if (grid) {
-                               const tiles = Array.from(grid.querySelectorAll<HTMLElement>('article.goal-tile[data-goal-id]')).filter((el) => !el.classList.contains('dragging'))
+                               const tiles = Array.from(grid.querySelectorAll<HTMLElement>('article.goal-tile[data-goal-id]')).filter((el) => !el.classList.contains('dragging') && !el.classList.contains('goal-tile--collapsed'))
                                let toIndex = gridDragHoverIndex ?? tiles.length
                                toIndex = Math.max(0, Math.min(toIndex, tiles.length))
                                reorderGoalsByVisibleInsert(g.id, toIndex)
