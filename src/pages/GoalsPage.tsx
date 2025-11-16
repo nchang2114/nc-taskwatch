@@ -6633,9 +6633,9 @@ export default function GoalsPage(): ReactElement {
       const stored = writeStoredQuickList(
         quickListItems.map((it) => {
           if (it.id !== taskId) return it
-          const subs = Array.isArray(it.subtasks) ? it.subtasks.slice() : []
-        const newSub: QuickSubtask = {
-          id: createUuid(),
+          const subs: QuickSubtask[] = Array.isArray(it.subtasks) ? it.subtasks.slice() : []
+          const newSub: QuickSubtask = {
+            id: createUuid(),
             text: '',
             completed: false,
             sortIndex: (subs[0]?.sortIndex ?? 0) - 1,
@@ -6675,13 +6675,14 @@ export default function GoalsPage(): ReactElement {
       const stored = writeStoredQuickList(
         quickListItems.map((it) => {
           if (it.id !== taskId) return it
-          const subs = (it.subtasks ?? []).map((s) => {
+          const subs: QuickSubtask[] = Array.isArray(it.subtasks) ? it.subtasks.slice() : []
+          const nextSubs = subs.map((s) => {
             if (s.id !== subtaskId) return s
-            const next = { ...s, text: value, updatedAt: new Date().toISOString() }
+            const next: QuickSubtask = { ...s, text: value, updatedAt: new Date().toISOString() }
             updated = next
             return next
           })
-          return { ...it, subtasks: subs, updatedAt: new Date().toISOString() }
+          return { ...it, subtasks: nextSubs, updatedAt: new Date().toISOString() }
         }),
       )
       setQuickListItems(stored)
@@ -6712,13 +6713,14 @@ export default function GoalsPage(): ReactElement {
       const stored = writeStoredQuickList(
         quickListItems.map((it) => {
           if (it.id !== taskId) return it
-          const subs = (it.subtasks ?? []).map((s) => {
+          const subs: QuickSubtask[] = Array.isArray(it.subtasks) ? it.subtasks.slice() : []
+          const nextSubs = subs.map((s) => {
             if (s.id !== subtaskId) return s
-            const next = { ...s, completed: !s.completed, updatedAt: new Date().toISOString() }
+            const next: QuickSubtask = { ...s, completed: !s.completed, updatedAt: new Date().toISOString() }
             updated = next
             return next
           })
-          return { ...it, subtasks: subs, updatedAt: new Date().toISOString() }
+          return { ...it, subtasks: nextSubs, updatedAt: new Date().toISOString() }
         }),
       )
       setQuickListItems(stored)
@@ -6748,8 +6750,9 @@ export default function GoalsPage(): ReactElement {
       const stored = writeStoredQuickList(
         quickListItems.map((it) => {
           if (it.id !== taskId) return it
-          const subs = (it.subtasks ?? []).filter((s) => s.id !== subtaskId).map((s, i) => ({ ...s, sortIndex: i }))
-          return { ...it, subtasks: subs, updatedAt: new Date().toISOString() }
+          const subs: QuickSubtask[] = Array.isArray(it.subtasks) ? it.subtasks.slice() : []
+          const nextSubs = subs.filter((s) => s.id !== subtaskId).map((s, i) => ({ ...s, sortIndex: i }))
+          return { ...it, subtasks: nextSubs, updatedAt: new Date().toISOString() }
         }),
       )
       setQuickListItems(stored)
