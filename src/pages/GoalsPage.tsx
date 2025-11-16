@@ -8771,7 +8771,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
       : null
   let dashboardGridInsertCursor = 0
 
-  const QuickListBody = () => {
+  const renderQuickListBody = () => {
     if (!quickListExpanded) {
       return null
     }
@@ -11801,7 +11801,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   </button>
                 </div>
               </div>
-              <QuickListBody />
+              {renderQuickListBody()}
             </section>
           ) : null}
 
@@ -11991,7 +11991,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                         </button>
                       </div>
                     </div>
-                    <QuickListBody />
+                    {renderQuickListBody()}
                   </section>
                 ) : (
                 <ul className="goal-list space-y-3 md:space-y-4">
