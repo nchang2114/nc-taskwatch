@@ -6648,24 +6648,25 @@ export default function GoalsPage(): ReactElement {
         }),
       )
       setQuickListItems(stored)
-      if (created && isUuid(taskId) && isUuid(created.id)) {
-        const payload = created
-        void (async () => {
-          quickListDebug('creating remote subtask', { taskId, subtaskId: payload.id })
-          try {
-            await apiUpsertTaskSubtask(taskId, {
-              id: payload.id,
-              text: payload.text,
-              completed: payload.completed,
-              sort_index: payload.sortIndex,
-              updated_at: payload.updatedAt,
-            })
-          } catch (error) {
-            console.warn('[QuickList] Failed to create remote subtask:', error)
-            refreshQuickListFromSupabase('subtask-create')
-          }
-        })()
+      if (!created || !isUuid(taskId) || !isUuid(created.id)) {
+        return
       }
+      const payload: QuickSubtask = created
+      void (async () => {
+        quickListDebug('creating remote subtask', { taskId, subtaskId: payload.id })
+        try {
+          await apiUpsertTaskSubtask(taskId, {
+            id: payload.id,
+            text: payload.text,
+            completed: payload.completed,
+            sort_index: payload.sortIndex,
+            updated_at: payload.updatedAt,
+          })
+        } catch (error) {
+          console.warn('[QuickList] Failed to create remote subtask:', error)
+          refreshQuickListFromSupabase('subtask-create')
+        }
+      })()
     },
     [quickListItems, refreshQuickListFromSupabase],
   )
@@ -6686,24 +6687,25 @@ export default function GoalsPage(): ReactElement {
         }),
       )
       setQuickListItems(stored)
-      if (updated && isUuid(taskId) && isUuid(updated.id)) {
-        const payload = updated
-        void (async () => {
-          quickListDebug('updating remote subtask text', { taskId, subtaskId, text: payload.text })
-          try {
-            await apiUpsertTaskSubtask(taskId, {
-              id: payload.id,
-              text: payload.text,
-              completed: payload.completed,
-              sort_index: payload.sortIndex,
-              updated_at: payload.updatedAt,
-            })
-          } catch (error) {
-            console.warn('[QuickList] Failed to update remote subtask text:', error)
-            refreshQuickListFromSupabase('subtask-text')
-          }
-        })()
+      if (!updated || !isUuid(taskId) || !isUuid(updated.id)) {
+        return
       }
+      const payload: QuickSubtask = updated
+      void (async () => {
+        quickListDebug('updating remote subtask text', { taskId, subtaskId, text: payload.text })
+        try {
+          await apiUpsertTaskSubtask(taskId, {
+            id: payload.id,
+            text: payload.text,
+            completed: payload.completed,
+            sort_index: payload.sortIndex,
+            updated_at: payload.updatedAt,
+          })
+        } catch (error) {
+          console.warn('[QuickList] Failed to update remote subtask text:', error)
+          refreshQuickListFromSupabase('subtask-text')
+        }
+      })()
     },
     [quickListItems, refreshQuickListFromSupabase],
   )
@@ -6724,24 +6726,25 @@ export default function GoalsPage(): ReactElement {
         }),
       )
       setQuickListItems(stored)
-      if (updated && isUuid(taskId) && isUuid(updated.id)) {
-        const payload = updated
-        void (async () => {
-          quickListDebug('updating remote subtask completion', { taskId, subtaskId, completed: payload.completed })
-          try {
-            await apiUpsertTaskSubtask(taskId, {
-              id: payload.id,
-              text: payload.text,
-              completed: payload.completed,
-              sort_index: payload.sortIndex,
-              updated_at: payload.updatedAt,
-            })
-          } catch (error) {
-            console.warn('[QuickList] Failed to update remote subtask completion:', error)
-            refreshQuickListFromSupabase('subtask-complete')
-          }
-        })()
+      if (!updated || !isUuid(taskId) || !isUuid(updated.id)) {
+        return
       }
+      const payload: QuickSubtask = updated
+      void (async () => {
+        quickListDebug('updating remote subtask completion', { taskId, subtaskId, completed: payload.completed })
+        try {
+          await apiUpsertTaskSubtask(taskId, {
+            id: payload.id,
+            text: payload.text,
+            completed: payload.completed,
+            sort_index: payload.sortIndex,
+            updated_at: payload.updatedAt,
+          })
+        } catch (error) {
+          console.warn('[QuickList] Failed to update remote subtask completion:', error)
+          refreshQuickListFromSupabase('subtask-complete')
+        }
+      })()
     },
     [quickListItems, refreshQuickListFromSupabase],
   )
