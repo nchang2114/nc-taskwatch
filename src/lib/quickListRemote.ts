@@ -18,21 +18,6 @@ const normalizeDifficulty = (
   return 'none'
 }
 
-const mapSubtasks = (subtasks: Array<any> | null | undefined): QuickSubtask[] => {
-  if (!Array.isArray(subtasks) || subtasks.length === 0) {
-    return []
-  }
-  return subtasks
-    .map((subtask) => ({
-      id: subtask.id,
-      text: typeof subtask.text === 'string' ? subtask.text : '',
-      completed: Boolean(subtask.completed),
-      sortIndex: typeof subtask.sort_index === 'number' ? subtask.sort_index : 0,
-      updatedAt: typeof subtask.updated_at === 'string' ? subtask.updated_at : undefined,
-    }))
-    .sort((a, b) => a.sortIndex - b.sortIndex)
-}
-
 const mapTasksToQuickItems = (tasks: any[], subtasksByTaskId: Map<string, QuickSubtask[]>): QuickItem[] => {
   return tasks.map((task, index) => {
     const subs = subtasksByTaskId.get(task.id) ?? []
