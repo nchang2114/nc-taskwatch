@@ -4306,10 +4306,7 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                       e.dataTransfer.dropEffect = 'move'
                                     }}
                                   >
-                    <div
-                      className="goal-task-row__content"
-                      onDoubleClick={(event) => handleQuickRowDoubleClick(event, item)}
-                    >
+                    <div className="goal-task-row__content">
                                   
                                   <button
                                     type="button"
