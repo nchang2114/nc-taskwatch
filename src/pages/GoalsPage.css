@@ -3778,6 +3778,11 @@ html[data-theme='light'] .goal-bucket-item--surface-neutral-grey-blue {
   border-style: dashed;
 }
 
+/* Leave breathing room between the header controls and the inline draft row */
+.goal-bucket-body-header + .goal-task-row--draft {
+  margin-top: 0.65rem;
+}
+
 /* Drag and drop affordances */
 .goal-task-row[draggable='true'] {
   cursor: grab;
