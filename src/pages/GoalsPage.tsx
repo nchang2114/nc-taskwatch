@@ -6629,7 +6629,7 @@ export default function GoalsPage(): ReactElement {
   }, [quickListItems])
   const addQuickSubtask = useCallback(
     (taskId: string) => {
-      let created: QuickSubtask | null = null
+      let created: QuickSubtask | undefined
       const stored = writeStoredQuickList(
         quickListItems.map((it): QuickItem => {
           if (it.id !== taskId) return it
@@ -6672,7 +6672,7 @@ export default function GoalsPage(): ReactElement {
   )
   const updateQuickSubtaskText = useCallback(
     (taskId: string, subtaskId: string, value: string) => {
-      let updated: QuickSubtask | null = null
+      let updated: QuickSubtask | undefined
       const stored = writeStoredQuickList(
         quickListItems.map((it): QuickItem => {
           if (it.id !== taskId) return it
@@ -6711,7 +6711,7 @@ export default function GoalsPage(): ReactElement {
   )
   const toggleQuickSubtaskCompleted = useCallback(
     (taskId: string, subtaskId: string) => {
-      let updated: QuickSubtask | null = null
+      let updated: QuickSubtask | undefined
       const stored = writeStoredQuickList(
         quickListItems.map((it): QuickItem => {
           if (it.id !== taskId) return it
