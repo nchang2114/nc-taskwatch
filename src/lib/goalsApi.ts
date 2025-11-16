@@ -714,19 +714,26 @@ export async function deleteTaskById(taskId: string, bucketId: string) {
 }
 
 // ---------- Tasks ----------
-export async function createTask(bucketId: string, text: string) {
+export async function createTask(
+  bucketId: string,
+  text: string,
+  options?: { clientId?: string; insertAtTop?: boolean },
+) {
   if (!supabase) throw new Error('Supabase client unavailable')
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) {
     console.warn('[goalsApi] Unable to create task without an authenticated session.')
     throw new Error('Missing Supabase session')
   }
-  // Insert new active tasks at the END of the non-priority region by default
-  const sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed: false })
+  const insertAtTop = Boolean(options?.insertAtTop)
+  const sort_index = insertAtTop
+    ? await prependSortIndexForTasks(bucketId, false)
+    : await nextSortIndex('tasks', { bucket_id: bucketId, completed: false })
   const { data, error } = await supabase
     .from('tasks')
     .insert([
       {
+        ...(options?.clientId ? { id: options.clientId } : null),
         user_id: session.user.id,
         bucket_id: bucketId,
         text,
