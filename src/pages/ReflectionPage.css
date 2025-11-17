@@ -2731,10 +2731,20 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
 }
 .calendar-allday-event--planned .calendar-allday-event__background {
   opacity: 1;
-  background: transparent !important;
   border: 1.5px dashed currentColor;
 }
 .calendar-allday-event--planned .calendar-allday-event__content {
+  color: currentColor;
+}
+.calendar-allday-event--guide {
+  box-shadow: none;
+}
+.calendar-allday-event--guide .calendar-allday-event__background {
+  opacity: 1;
+  background: transparent !important;
+  border: 1.5px dashed currentColor;
+}
+.calendar-allday-event--guide .calendar-allday-event__content {
   color: currentColor;
 }
 

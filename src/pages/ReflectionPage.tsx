@@ -6594,6 +6594,7 @@ useEffect(() => {
         colorCss: string
         baseColor: string
         isPlanned?: boolean
+        isGuide?: boolean
       }
 
       const computeAllDayBars = (): AllDayBar[] => {
@@ -6608,6 +6609,7 @@ useEffect(() => {
           colorCss: string
           baseColor: string
           isPlanned?: boolean
+          isGuide?: boolean
         }
 
         const raws: Raw[] = []
@@ -6638,8 +6640,125 @@ useEffect(() => {
             colorCss,
             baseColor,
             isPlanned: !!entry.futureSession,
+            isGuide: false,
           })
         }
+        if (Array.isArray(repeatingRules) && repeatingRules.length > 0) {
+          const confirmedKeySet = (() => {
+            const set = new Set<string>()
+            effectiveHistory.forEach((h) => {
+              const rid = (h as any).routineId as string | undefined | null
+              const od = (h as any).occurrenceDate as string | undefined | null
+              if (rid && od) set.add(`${rid}:${od}`)
+            })
+            return set
+          })()
+          const excKeySet = (() => {
+            const set = new Set<string>()
+            repeatingExceptions.forEach((r) => {
+              if ((r as any).action === 'skipped') {
+                set.add(`${r.routineId}:${r.occurrenceDate}`)
+              }
+            })
+            return set
+          })()
+          const coveredOriginalSet = (() => {
+            const set = new Set<string>()
+            effectiveHistory.forEach((h) => {
+              const rid = (h as any).repeatingSessionId as string | undefined | null
+              const ot = (h as any).originalTime as number | undefined | null
+              if (rid && Number.isFinite(ot as number)) {
+                set.add(`${rid}:${ot as number}`)
+              }
+            })
+            return set
+          })()
+          const makeOccurrenceKey = (ruleId: string, baseMs: number) => `${ruleId}:${formatLocalYmd(baseMs)}`
+          const isRuleScheduledForDay = (rule: RepeatingSessionRule, dayStart: number) => {
+            if (!rule.isActive) return false
+            if (rule.frequency === 'daily') return true
+            if (rule.frequency === 'weekly') {
+              const d = new Date(dayStart)
+              return rule.dayOfWeek === d.getDay()
+            }
+            return false
+          }
+          const isWithinBoundaries = (rule: RepeatingSessionRule, baseDayStart: number) => {
+            const timeOfDayMin = Math.max(0, Math.min(1439, rule.timeOfDayMinutes))
+            const scheduledStart = baseDayStart + timeOfDayMin * MINUTE_MS
+            const startAtMs = (rule as any).startAtMs as number | undefined
+            if (Number.isFinite(startAtMs as number)) {
+              if (scheduledStart < (startAtMs as number)) return false
+            } else {
+              const createdMs = (rule as any).createdAtMs as number | undefined
+              if (Number.isFinite(createdMs as number)) {
+                if (scheduledStart <= (createdMs as number)) return false
+              }
+            }
+            const endAtMs = (rule as any).endAtMs as number | undefined
+            if (Number.isFinite(endAtMs as number)) {
+              if (scheduledStart > (endAtMs as number)) return false
+            }
+            return true
+          }
+          const isAllDayRule = (rule: RepeatingSessionRule) => {
+            const timeOfDayMin = Math.max(0, Math.min(1439, rule.timeOfDayMinutes))
+            const durationMinutes = Math.max(1, rule.durationMinutes ?? 60)
+            return timeOfDayMin === 0 && durationMinutes >= 1440
+          }
+          const TOL = 60 * 1000
+          repeatingRules.forEach((rule) => {
+            if (!isAllDayRule(rule)) return
+            dayStarts.forEach((dayStart, columnIndex) => {
+              if (!isRuleScheduledForDay(rule, dayStart)) return
+              if (!isWithinBoundaries(rule, dayStart)) return
+              const occKey = makeOccurrenceKey(rule.id, dayStart)
+              if (confirmedKeySet.has(occKey) || excKeySet.has(occKey)) return
+              const startedAt = dayStart
+              const endedAt = dayStart + DAY_DURATION_MS
+              if (coveredOriginalSet.has(`${rule.id}:${startedAt}`)) return
+              const duplicateReal = effectiveHistory.some((h) => {
+                const startMatch = Math.abs(h.startedAt - startedAt) <= TOL
+                const endMatch = Math.abs(h.endedAt - endedAt) <= TOL
+                return startMatch && endMatch
+              })
+              if (duplicateReal) return
+              const taskName = rule.taskName?.trim() || 'Session'
+              const goalName = rule.goalName?.trim() || null
+              const bucketName = rule.bucketName?.trim() || null
+              const entry: HistoryEntry = {
+                id: `repeat:${rule.id}:${dayStart}:allday`,
+                taskName,
+                elapsed: Math.max(endedAt - startedAt, 1),
+                startedAt,
+                endedAt,
+                goalName,
+                bucketName,
+                goalId: null,
+                bucketId: null,
+                taskId: null,
+                goalSurface: DEFAULT_SURFACE_STYLE,
+                bucketSurface: null,
+                notes: '',
+                subtasks: [],
+              }
+              const meta = resolveGoalMetadata(entry, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup)
+              const label = deriveEntryTaskName(entry)
+              const colorCss = meta.colorInfo?.gradient?.css ?? meta.colorInfo?.solidColor ?? getPaletteColorForLabel(label)
+              const baseColor = meta.colorInfo?.solidColor ?? meta.colorInfo?.gradient?.start ?? getPaletteColorForLabel(label)
+              raws.push({
+                entry,
+                colStart: columnIndex,
+                colEnd: Math.min(dayStarts.length, columnIndex + 1),
+                label,
+                colorCss,
+                baseColor,
+                isGuide: true,
+              })
+            })
+          })
+        }
+
         // Lane assignment: greedy place into first lane that doesn't collide
         const occupancy: boolean[][] = []
         const bars: AllDayBar[] = []
@@ -6668,6 +6787,7 @@ useEffect(() => {
                 colorCss: r.colorCss,
                 baseColor: r.baseColor,
                 isPlanned: r.isPlanned,
+                isGuide: r.isGuide,
               })
               break
             }
@@ -6830,6 +6950,9 @@ useEffect(() => {
             const durationMs = Math.max(1, (rule.durationMinutes ?? 60) * MINUTE_MS)
             // Allow crossing midnight: DO NOT clamp to end of day here
             const endedAt = startedAt + durationMs
+            if (isAllDayRange(startedAt, endedAt)) {
+              return null
+            }
             const task = (rule.taskName?.trim() || 'Session')
             const goal = rule.goalName?.trim() || null
             const bucket = rule.bucketName?.trim() || null
@@ -7528,14 +7651,22 @@ useEffect(() => {
                   <div key={`adgl-${i}`} className={`calendar-allday-gridline${i === 0 ? ' is-first' : ''}`} />)
                 )}
               </div>
-              {allDayBars.map((bar, i) => (
+              {allDayBars.map((bar, i) => {
+                const backgroundStyle: React.CSSProperties = bar.isGuide
+                  ? { background: 'transparent' }
+                  : bar.isPlanned
+                    ? {
+                        background: `color-mix(in srgb, ${bar.baseColor || '#6ee7b7'} 16%, transparent)`,
+                      }
+                    : { background: bar.colorCss }
+                return (
                 <div
                   key={`adb-${i}-${bar.entry.id}`}
-                  className={`calendar-allday-event${bar.isPlanned ? ' calendar-allday-event--planned' : ''}`}
+                  className={`calendar-allday-event${bar.isPlanned ? ' calendar-allday-event--planned' : ''}${bar.isGuide ? ' calendar-allday-event--guide' : ''}`}
                   style={{
                     gridColumn: `${bar.colStart + 1} / ${bar.colEnd + 1}`,
                     gridRow: `${bar.lane + 1}`,
-                    ...(bar.isPlanned ? { color: bar.baseColor, boxShadow: 'none' } : {}),
+                    ...(bar.isPlanned || bar.isGuide ? { color: bar.baseColor, boxShadow: 'none' } : {}),
                   }}
                   data-entry-id={bar.entry.id}
                   role={'button'}
@@ -7618,12 +7749,12 @@ useEffect(() => {
                     window.addEventListener('pointercancel', onUp)
                   }}
                 >
-                  <div className="calendar-allday-event__background" style={{ background: bar.colorCss }} aria-hidden />
+                  <div className="calendar-allday-event__background" style={backgroundStyle} aria-hidden />
                   <div className="calendar-allday-event__content">
                     <div className="calendar-allday-event__title">{bar.label}</div>
                   </div>
                 </div>
-              ))}
+              )})}
               {/* Click/creation hit areas per day (span all rows) */}
               {dayStarts.map((start, i) => (
                 <button
