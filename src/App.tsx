@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react'
+import type { ReactNode } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import './App.css'
 import GoalsPage from './pages/GoalsPage'
@@ -89,6 +90,92 @@ const SYNC_STATUS_COPY: Record<SyncStatus, { icon: string; label: string }> = {
   pending: { icon: '⛁', label: 'Local changes pending upload (3)' },
 }
 
+const createHelpIcon = (children: ReactNode): ReactNode => (
+  <svg
+    className="profile-help-menu__item-icon-svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    {children}
+  </svg>
+)
+
+const HELP_MENU_ITEMS: Array<{ id: string; label: string; icon: ReactNode }> = [
+  {
+    id: 'help-center',
+    label: 'Help center',
+    icon: createHelpIcon(
+      <>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M12 7.6a3 3 0 0 1 3 3c0 2-2.7 2.1-2.7 4v0.4" />
+        <circle cx="12" cy="17.4" r="0.9" fill="currentColor" stroke="none" />
+      </>,
+    ),
+  },
+  {
+    id: 'release-notes',
+    label: 'Release notes',
+    icon: createHelpIcon(
+      <>
+        <path d="M8 4.5h8l3 3.2v11.3a1.5 1.5 0 0 1-1.5 1.5H8.5A1.5 1.5 0 0 1 7 18.5V6a1.5 1.5 0 0 1 1.5-1.5Z" />
+        <path d="M16 4.5V8H19.5" />
+        <path d="M10 11h5" />
+        <path d="M10 14h7" />
+      </>,
+    ),
+  },
+  {
+    id: 'terms',
+    label: 'Terms & policies',
+    icon: createHelpIcon(
+      <>
+        <rect x="7" y="5.5" width="10" height="13" rx="1.6" />
+        <path d="M10 9.5h6" />
+        <path d="M10 12.5h4.5" />
+        <path d="M10 15.5h5.5" />
+      </>,
+    ),
+  },
+  {
+    id: 'report-bug',
+    label: 'Report bug',
+    icon: createHelpIcon(
+      <>
+        <path d="M7 6v12" />
+        <path d="M7 7.5h8l-1.4 2L15 11H7" />
+      </>,
+    ),
+  },
+  {
+    id: 'download-apps',
+    label: 'Download apps',
+    icon: createHelpIcon(
+      <>
+        <path d="M12 5v8.5" />
+        <path d="M9.5 10.5 12 13l2.5-2.5" />
+        <path d="M7 16h10" />
+        <path d="M6 19h12" />
+      </>,
+    ),
+  },
+  {
+    id: 'shortcuts',
+    label: 'Keyboard shortcuts',
+    icon: createHelpIcon(
+      <>
+        <rect x="5.5" y="7.5" width="13" height="9" rx="1.6" />
+        <path d="M9 11.5h6" />
+        <path d="M7.5 14h9" />
+      </>,
+    ),
+  },
+]
+
 
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
@@ -101,6 +188,7 @@ function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(() => readStoredProfile())
   const [syncStatus] = useState<SyncStatus>('synced')
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [profileHelpMenuOpen, setProfileHelpMenuOpen] = useState(false)
 
   const navContainerRef = useRef<HTMLElement | null>(null)
   const navBrandRef = useRef<HTMLButtonElement | null>(null)
@@ -108,8 +196,11 @@ function App() {
   const navMeasureRef = useRef<HTMLDivElement | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
   const profileButtonRef = useRef<HTMLButtonElement | null>(null)
+  const profileHelpMenuRef = useRef<HTMLDivElement | null>(null)
+  const profileHelpButtonRef = useRef<HTMLButtonElement | null>(null)
   const profileMenuId = useId()
   const profileButtonId = useId()
+  const profileHelpMenuId = useId()
   const isSignedIn = Boolean(userProfile)
   const userInitials = useMemo(() => {
     if (!userProfile?.name) {
@@ -135,6 +226,7 @@ function App() {
 
   const closeProfileMenu = useCallback(() => {
     setProfileMenuOpen(false)
+    setProfileHelpMenuOpen(false)
   }, [])
 
   useEffect(() => {
@@ -178,6 +270,34 @@ function App() {
     }
   }, [profileMenuOpen, closeProfileMenu])
 
+  useEffect(() => {
+    if (!profileHelpMenuOpen) {
+      return
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (profileHelpMenuRef.current?.contains(target)) {
+        return
+      }
+      if (profileHelpButtonRef.current?.contains(target)) {
+        return
+      }
+      setProfileHelpMenuOpen(false)
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setProfileHelpMenuOpen(false)
+        window.setTimeout(() => profileHelpButtonRef.current?.focus(), 0)
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [profileHelpMenuOpen])
+
   const handleMockSignIn = useCallback(() => {
     setUserProfile(createDemoProfile())
     closeProfileMenu()
@@ -192,6 +312,10 @@ function App() {
     setUserProfile(null)
     closeProfileMenu()
   }, [closeProfileMenu])
+
+  const handleHelpMenuItemSelect = useCallback(() => {
+    setProfileHelpMenuOpen(false)
+  }, [])
 
   const isCompactBrand = viewportWidth <= COMPACT_BRAND_BREAKPOINT
 
@@ -626,7 +750,6 @@ function App() {
         <hr className="profile-menu__divider" />
         <div className="profile-menu__section profile-menu__section--sync">
           <div className="profile-menu__section-label">Sync status</div>
-          <p className="profile-menu__section-hint">Unique to Taskwatch</p>
           <div className={`profile-menu__status profile-menu__status--${syncStatus}`} role="status" aria-live="polite">
             <span className="profile-menu__status-icon" aria-hidden="true">
               {syncStatusCopy.icon}
@@ -664,10 +787,57 @@ function App() {
         <hr className="profile-menu__divider" />
         <div className="profile-menu__section profile-menu__section--help">
           <div className="profile-menu__section-label">Help</div>
-          <div className="profile-menu__actions">
-            <button type="button" className="profile-menu__action" role="menuitem" onClick={closeProfileMenu}>
-              <span className="profile-menu__action-title">Help</span>
+          <div className="profile-help">
+            <button
+              type="button"
+              className="profile-help-button"
+              aria-haspopup="menu"
+              aria-expanded={profileHelpMenuOpen}
+              aria-controls={profileHelpMenuId}
+              onClick={() => setProfileHelpMenuOpen((open) => !open)}
+              ref={profileHelpButtonRef}
+            >
+              <span className="profile-help-button__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="8" />
+                  <path d="M12 8a2.3 2.3 0 0 1 2.3 2.3c0 1.6-2.2 1.7-2.2 3.2v0.3" />
+                  <circle cx="12" cy="16.9" r="0.8" fill="currentColor" stroke="none" />
+                </svg>
+              </span>
+              <span className="profile-help-button__label">Help</span>
+              <svg
+                className="profile-help-button__chevron"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M10 8l4 4-4 4" />
+              </svg>
             </button>
+            {profileHelpMenuOpen ? (
+              <div className="profile-help-menu" role="menu" id={profileHelpMenuId} ref={profileHelpMenuRef}>
+                {HELP_MENU_ITEMS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="menuitem"
+                    className="profile-help-menu__item"
+                    onClick={handleHelpMenuItemSelect}
+                  >
+                    <span className="profile-help-menu__item-icon" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                    <span className="profile-help-menu__item-label">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="profile-menu__actions">
             <button
               type="button"
               className="profile-menu__action profile-menu__action--danger"
@@ -794,16 +964,22 @@ function App() {
                     id={profileButtonId}
                     ref={profileButtonRef}
                   >
-                    <svg viewBox="0 0 24 24" className="profile-button__icon" aria-hidden="true">
-                      <circle cx="12" cy="9" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
-                      <path
-                        d="M5 19.2c.68-3.8 3.6-5.9 7-5.9s6.32 2.1 7 5.9"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                      />
-                    </svg>
+                    {isSignedIn ? (
+                      <span className="profile-button__avatar" aria-hidden="true">
+                        {userInitials}
+                      </span>
+                    ) : (
+                      <svg viewBox="0 0 24 24" className="profile-button__icon" aria-hidden="true">
+                        <circle cx="12" cy="9" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                        <path
+                          d="M5 19.2c.68-3.8 3.6-5.9 7-5.9s6.32 2.1 7 5.9"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    )}
                     <span className="sr-only">{isSignedIn ? 'Account menu' : 'Guest menu'}</span>
                   </button>
                   {profileMenuOpen ? (

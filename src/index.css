@@ -89,6 +89,7 @@ html[data-theme='dark'] {
   --toggle-inset-highlight: inset -4px -4px 9px rgba(80, 96, 178, 0.28);
   --toggle-sheen: linear-gradient(150deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 70%);
   --toggle-sheen-opacity: 0.75;
+  --profile-menu-bg: #070c1f;
   color-scheme: dark;
 }
 
@@ -126,6 +127,7 @@ html[data-theme='light'] {
   --toggle-inset-highlight: inset -3px -3px 8px rgba(255, 255, 255, 0.92);
   --toggle-sheen: linear-gradient(150deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.52) 48%, rgba(255, 255, 255, 0.1) 100%);
   --toggle-sheen-opacity: 0.88;
+  --profile-menu-bg: #ffffff;
   color-scheme: light;
 }
 
