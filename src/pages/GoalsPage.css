@@ -91,7 +91,28 @@
   gap: 0.5rem;
   margin-bottom: 0; /* tighten space below */
 }
-.goal-tile__progress { height: 0.35rem; flex: 1 1 auto; }
+.goal-tile__progress {
+  height: 0.45rem;
+  flex: 1 1 auto;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(124, 144, 210, 0.18);
+  padding: 0;
+}
+.goal-tile__progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(128, 149, 255, 0.85), rgba(86, 200, 255, 0.78));
+}
+.goals-layer--dashboard .goal-tile__progress {
+  height: 0.55rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(150, 164, 236, 0.2);
+}
+.goals-layer--dashboard .goal-tile__progress > span {
+  background: linear-gradient(90deg, rgba(180, 194, 255, 0.9), rgba(120, 206, 255, 0.8));
+}
 .goal-tile__counts { font-size: 0.74rem; color: var(--text-secondary); white-space: nowrap; }
 .goal-tile__eyebrow { margin: 0; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
 .goal-tile__actions { margin-top: 0.2rem; }
