@@ -764,6 +764,7 @@ html[data-theme='light'] .legacy-editor-panel__empty {
   line-height: 1.2;
   font-family: var(--font-numeric);
   vertical-align: middle;
+  white-space: nowrap;
 }
 html[data-theme='light'] .duration-badge {
   border-color: rgba(160, 172, 236, 0.45);
