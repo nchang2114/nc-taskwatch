@@ -3,12 +3,12 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import './App.css'
 import GoalsPage from './pages/GoalsPage'
 import ReflectionPage from './pages/ReflectionPage'
-import TaskwatchPage from './pages/TaskwatchPage'
+import FocusPage from './pages/FocusPage'
 import { FOCUS_EVENT_TYPE } from './lib/focusChannel'
 import { SCHEDULE_EVENT_TYPE } from './lib/scheduleChannel'
 
 type Theme = 'light' | 'dark'
-type TabKey = 'goals' | 'taskwatch' | 'reflection'
+type TabKey = 'goals' | 'focus' | 'reflection'
 
 const THEME_STORAGE_KEY = 'nc-taskwatch-theme'
 const getInitialTheme = (): Theme => {
@@ -31,18 +31,18 @@ const COMPACT_NAV_BUFFER = 24
 
 const TAB_PANEL_IDS: Record<TabKey, string> = {
   goals: 'tab-panel-goals',
-  taskwatch: 'tab-panel-taskwatch',
+  focus: 'tab-panel-focus',
   reflection: 'tab-panel-reflection',
 }
 
 const ENABLE_TAB_SWIPE = false
 
-const SWIPE_SEQUENCE: TabKey[] = ['reflection', 'taskwatch', 'goals']
+const SWIPE_SEQUENCE: TabKey[] = ['reflection', 'focus', 'goals']
 
 
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
-  const [activeTab, setActiveTab] = useState<TabKey>('taskwatch')
+  const [activeTab, setActiveTab] = useState<TabKey>('focus')
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1280,
   )
@@ -225,7 +225,7 @@ function App() {
     setIsNavOpen((current) => !current)
   }, [isNavCollapsed])
 
-  // Keyboard shortcuts: 1/2/3 or g/f/r → Goals/Taskwatch/Reflection (f = Focus/Taskwatch)
+  // Keyboard shortcuts: 1/2/3 or g/f/r → Goals/Focus/Reflection
   useEffect(() => {
     if (typeof window === 'undefined') return
     const isEditableTarget = (el: EventTarget | null): boolean => {
@@ -247,7 +247,7 @@ function App() {
       const k = e.key.toLowerCase()
       let target: TabKey | null = null
   if (k === '1' || k === 'g') target = 'goals'
-  else if (k === '2' || k === 'f') target = 'taskwatch'
+  else if (k === '2' || k === 'f') target = 'focus'
   else if (k === '3' || k === 'r') target = 'reflection'
       if (target) {
         e.preventDefault()
@@ -264,7 +264,7 @@ function App() {
       return
     }
     const handleFocusSwitch = () => {
-      setActiveTab('taskwatch')
+      setActiveTab('focus')
       setIsNavOpen(false)
     }
     const handleScheduleSwitch = () => {
@@ -286,7 +286,7 @@ function App() {
   )
   const navItems: Array<{ key: TabKey; label: string }> = [
     { key: 'goals', label: 'Goals' },
-    { key: 'taskwatch', label: 'Taskwatch' },
+    { key: 'focus', label: 'Focus' },
     { key: 'reflection', label: 'Reflection' },
   ]
   const swipeStateRef = useRef<{
@@ -560,13 +560,13 @@ function App() {
         </section>
 
         <section
-          id={TAB_PANEL_IDS.taskwatch}
+          id={TAB_PANEL_IDS.focus}
           role="tabpanel"
-          aria-hidden={activeTab !== 'taskwatch'}
+          aria-hidden={activeTab !== 'focus'}
           className="tab-panel"
-          hidden={activeTab !== 'taskwatch'}
+          hidden={activeTab !== 'focus'}
         >
-          <TaskwatchPage viewportWidth={viewportWidth} />
+          <FocusPage viewportWidth={viewportWidth} />
         </section>
 
         <section

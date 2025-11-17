@@ -630,10 +630,10 @@ export function setTextareaCaretFromPoint(field: HTMLTextAreaElement, clientX: n
   }
 }
 
-// Limit for inline task text editing (mirrors Taskwatch behavior)
+// Limit for inline task text editing (mirrors Focus page behavior)
 const MAX_TASK_TEXT_LENGTH = 256
 
-// Borrowed approach from Taskwatch: sanitize contentEditable text and preserve caret when possible
+// Borrowed approach from the Focus page: sanitize contentEditable text and preserve caret when possible
 const sanitizeEditableValue = (
   element: HTMLSpanElement,
   rawValue: string,
@@ -7020,8 +7020,6 @@ export default function GoalsPage(): ReactElement {
 
   const [focusPromptTarget, setFocusPromptTarget] = useState<FocusPromptTarget | null>(null)
   const [revealedDeleteTaskKey, setRevealedDeleteTaskKey] = useState<string | null>(null)
-  // Quick List appearance toggle (placeholder for customise)
-  const [quickListCustomizing, setQuickListCustomizing] = useState(false)
   const [managingArchivedGoalId, setManagingArchivedGoalId] = useState<string | null>(null)
   useEffect(() => {
     if (!revealedDeleteTaskKey || typeof window === 'undefined') {
@@ -7284,7 +7282,7 @@ export default function GoalsPage(): ReactElement {
   )
 
   // One-time: hydrate task details from the stored snapshot on mount so
-  // just-navigated subtasks from Taskwatch don't get overridden by stale
+  // just-navigated subtasks from the Focus page don't get overridden by stale
   // details state when the Goals page first renders.
   useEffect(() => {
     try {
@@ -9211,21 +9209,6 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     }
     return (
                 <div id="quick-list-body" className="goal-bucket-body px-3 md:px-4 pb-3 md:pb-4">
-                  {/* Quick List menu portal */}
-                  {quickListMenuOpen && typeof document !== 'undefined' ? createPortal(
-                    <div className="goal-menu-overlay" role="presentation" onMouseDown={() => setQuickListMenuOpen(false)}>
-                      <div
-                        ref={quickListMenuRef}
-                        className="goal-menu goal-menu--floating min-w-[180px] rounded-md border p-1 shadow-lg"
-                        style={{ top: `${quickListMenuPosition.top}px`, left: `${quickListMenuPosition.left}px`, visibility: quickListMenuPositionReady ? 'visible' : 'hidden' }}
-                        role="menu"
-                        onMouseDown={(e) => e.stopPropagation()}
-                      >
-                        <button type="button" className="goal-menu__item" onClick={() => { setQuickListMenuOpen(false); setQuickListCustomizing((v) => !v) }}>Customise appearance</button>
-                        <div className="goal-menu__divider" />
-                        <button type="button" className="goal-menu__item goal-menu__item--danger" onClick={() => { setQuickListMenuOpen(false); deleteAllCompletedQuickItems() }}>Delete all completed tasks</button>
-                      </div>
-                    </div>, document.body) : null}
                     <div className="goal-bucket-body-header">
                     <div className="goal-section-header">
                       <p className="goal-section-title">Tasks ({quickListItems.filter((it) => !it.completed).length})</p>
@@ -12121,7 +12104,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
 
           {/* Quick List: simple tasks (no buckets), standard layout only */}
           {!dashboardLayout ? (
-            <section className={classNames('quick-list-card', quickListExpanded && 'quick-list-card--open', quickListCustomizing && 'quick-list-card--customizing')} aria-label="Quick List">
+            <section className={classNames('quick-list-card', quickListExpanded && 'quick-list-card--open')} aria-label="Quick List">
               <div className="life-routines-card__header-wrapper">
                 <div className="life-routines-card__header-left">
                   <button
@@ -12169,6 +12152,18 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   </button>
                 </div>
               </div>
+              {quickListMenuOpen && typeof document !== 'undefined' ? createPortal(
+                <div className="goal-menu-overlay" role="presentation" onMouseDown={() => setQuickListMenuOpen(false)}>
+                  <div
+                    ref={quickListMenuRef}
+                    className="goal-menu goal-menu--floating min-w-[180px] rounded-md border p-1 shadow-lg"
+                    style={{ top: `${quickListMenuPosition.top}px`, left: `${quickListMenuPosition.left}px`, visibility: quickListMenuPositionReady ? 'visible' : 'hidden' }}
+                    role="menu"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <button type="button" className="goal-menu__item goal-menu__item--danger" onClick={() => { setQuickListMenuOpen(false); deleteAllCompletedQuickItems() }}>Delete all completed tasks</button>
+                  </div>
+                </div>, document.body) : null}
               {renderQuickListBody()}
             </section>
           ) : null}

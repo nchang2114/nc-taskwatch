@@ -1,4 +1,4 @@
-/* Taskwatch: Snap Back card + panel */
+/* Focus: Snap Back card + panel */
 
 .snapback-tool {
   width: 100%;
@@ -259,10 +259,10 @@
 
 .snapback-option:focus-visible { outline: 2px solid rgba(172, 186, 255, 0.7); outline-offset: 2px; }
 
-/* Taskwatch: Focus selector, focus card, stopwatch, notes */
+/* Focus: Focus selector, focus card, stopwatch, notes */
 /* Page-level positioning for actions */
 .taskwatch-page { position: relative; }
-/* Allow Taskwatch dashboard to span a wider canvas than the default site width */
+/* Allow Focus dashboard to span a wider canvas than the default site width */
 .taskwatch-page.taskwatch--dashboard.site-main__inner { width: min(1160px, 100%); }
 /* Remove top/bottom padding in dashboard view */
 .taskwatch-page.taskwatch--dashboard.site-main__inner { padding-block: 0; }
@@ -394,7 +394,7 @@ html[data-theme='light'] .taskwatch-layout-toggle--active { background: rgba(31,
 .taskwatch--dashboard .task-selector-popover { box-shadow: none !important; }
 .taskwatch--dashboard .focus-task { box-shadow: none !important; }
 
-/* Standard view (Taskwatch page): remove selector/focus shadows as well */
+/* Standard view (Focus page): remove selector/focus shadows as well */
 .taskwatch-page .task-selector { box-shadow: none !important; }
 .taskwatch-page .task-selector:hover,
 .taskwatch-page .task-selector:focus-visible,
@@ -677,7 +677,7 @@ html[data-theme='light'] .task-selector__bucket-toggle:focus-visible { backgroun
   border-radius: 0.35rem !important;
 }
 
-/* Apply the same centering and symmetric side sizing in standard view (Taskwatch page only) */
+/* Apply the same centering and symmetric side sizing in standard view (Focus page only) */
 .taskwatch-page .focus-task { --focus-side-width: clamp(0.8rem, 2.8vw, 1.2rem); }
 .taskwatch-page .goal-task-marker { flex: 0 0 var(--focus-side-width); width: var(--focus-side-width); height: var(--focus-side-width); display: flex; align-items: center; justify-content: center; }
 .taskwatch-page .goal-task-marker--action { width: var(--focus-side-width); height: var(--focus-side-width); border-radius: 0.35rem; }
@@ -823,7 +823,7 @@ html[data-theme='light'] .taskwatch-notes__empty-text { color: rgba(72, 84, 138,
 .taskwatch-notes__remove:focus-visible { background: rgba(255, 82, 118, 0.22); color: rgba(255, 158, 178, 0.95); transform: translateY(-1px); }
 .taskwatch-notes__remove:focus-visible { outline: 2px solid rgba(255, 158, 178, 0.6); outline-offset: 2px; }
 
-/* Light theme adjustments (Taskwatch only) */
+/* Light theme adjustments (Focus only) */
 html[data-theme='light'] .card-clock { border-color: rgba(132, 150, 238, 0.48); background: rgba(245, 248, 255, 0.94); box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.75); color: rgba(38, 48, 102, 0.85); }
 html[data-theme='light'] .card-clock-toggle { border-color: rgba(132, 150, 238, 0.48); background: rgba(245, 248, 255, 0.94); box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.75); color: rgba(38, 48, 102, 0.85); }
 html[data-theme='light'] .card-clock-toggle:hover,

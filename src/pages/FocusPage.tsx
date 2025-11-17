@@ -11,7 +11,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import './TaskwatchPage.css'
+import './FocusPage.css'
 import './GoalsPage.css'
 import {
   fetchGoalsHierarchy,
@@ -175,7 +175,7 @@ const autosizeTextArea = (el: HTMLTextAreaElement | null) => {
 
 // removed unused helper
 
-// (hook moved into TaskwatchPage component body)
+// (hook moved into FocusPage component body)
 
 const createEmptySessionMetadata = (taskLabel: string): SessionMetadata => ({
   goalId: null,
@@ -481,11 +481,11 @@ const formatClockTime = (timestamp: number) => {
 
 // (removed: snapback reason parser; panel mirrors Overview triggers instead)
 
-export type TaskwatchPageProps = {
+export type FocusPageProps = {
   viewportWidth: number
 }
 
-export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPageProps) {
+export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
   // Re-autosize notebook subtask inputs on viewport resize so wrapping updates container height
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -651,7 +651,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           }
         } catch (error) {
           console.warn(
-            `[Taskwatch] Failed to refresh goals from Supabase${reason ? ` (${reason})` : ''}:`,
+            `[Focus] Failed to refresh goals from Supabase${reason ? ` (${reason})` : ''}:`,
             error,
           )
         } finally {
@@ -827,7 +827,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       try {
         window.localStorage.setItem(NOTEBOOK_STORAGE_KEY, JSON.stringify(notebookState))
       } catch (error) {
-        console.warn('Failed to persist Taskwatch notebook state', error)
+        console.warn('Failed to persist Focus notebook state', error)
       }
       notebookPersistTimerRef.current = null
     }, 300)
@@ -857,11 +857,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           window.localStorage.setItem(NOTEBOOK_STORAGE_KEY, JSON.stringify(notebookState))
         }
       } catch (error) {
-        console.warn('Failed to persist Taskwatch notebook state on unload', error)
+        console.warn('Failed to persist Focus notebook state on unload', error)
       }
       notebookNotesLatestRef.current.forEach((notes, taskId) => {
         void apiUpdateTaskNotes(taskId, notes).catch((error) =>
-          console.warn('[Taskwatch] Failed to flush pending notes on unload:', error),
+          console.warn('[Focus] Failed to flush pending notes on unload:', error),
         )
       })
       notebookNotesLatestRef.current.clear()
@@ -876,7 +876,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           completed: subtask.completed,
           sort_index: subtask.sortIndex,
           updated_at: subtask.updatedAt ?? new Date().toISOString(),
-        }).catch((error) => console.warn('[Taskwatch] Failed to flush pending subtask on unload:', error))
+        }).catch((error) => console.warn('[Focus] Failed to flush pending subtask on unload:', error))
       })
       notebookSubtaskLatestRef.current.clear()
     }
@@ -977,7 +977,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     const unsubscribe = subscribeToGoalsSnapshot((snapshot) => {
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch] snapshot received', { goals: snapshot.length })
+          console.debug('[Sync][Focus] snapshot received', { goals: snapshot.length })
         } catch {}
       }
       setGoalsSnapshot(snapshot)
@@ -1708,7 +1708,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   const blockNotebookHydration = useCallback((durationMs = 4000) => {
     notebookHydrationBlockRef.current = Date.now() + durationMs
   }, [])
-  const scrollTaskwatchToTop = useCallback(() => {
+  const scrollFocusToTop = useCallback(() => {
     if (typeof window === 'undefined') {
       return
     }
@@ -1726,17 +1726,17 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       notebookNotesLatestRef.current.set(taskId, notes)
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch][Notes] schedule persist', { taskId, len: notes.length })
+          console.debug('[Sync][Focus][Notes] schedule persist', { taskId, len: notes.length })
         } catch {}
       }
       if (typeof window === 'undefined') {
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch][Notes] flush (immediate, no-window)', { taskId })
+            console.debug('[Sync][Focus][Notes] flush (immediate, no-window)', { taskId })
           } catch {}
         }
         void apiUpdateTaskNotes(taskId, notes).catch((error) =>
-          console.warn('[Taskwatch] Failed to persist notes for task:', error),
+          console.warn('[Focus] Failed to persist notes for task:', error),
         )
         return
       }
@@ -1750,11 +1750,11 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         const latest = notebookNotesLatestRef.current.get(taskId) ?? ''
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch][Notes] flush (timer)', { taskId, len: latest.length })
+            console.debug('[Sync][Focus][Notes] flush (timer)', { taskId, len: latest.length })
           } catch {}
         }
         void apiUpdateTaskNotes(taskId, latest).catch((error) =>
-          console.warn('[Taskwatch] Failed to persist notes for task:', error),
+          console.warn('[Focus] Failed to persist notes for task:', error),
         )
       }, 500)
       timers.set(taskId, handle)
@@ -1792,7 +1792,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           completed: stamped.completed,
           sort_index: stamped.sortIndex,
           updated_at: stamped.updatedAt,
-        }).catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
+        }).catch((error) => console.warn('[Focus] Failed to persist subtask:', error))
         return
       }
       const timers = notebookSubtaskSaveTimersRef.current
@@ -1812,7 +1812,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           completed: latest.completed,
           sort_index: latest.sortIndex,
           updated_at: latest.updatedAt ?? new Date().toISOString(),
-        }).catch((error) => console.warn('[Taskwatch] Failed to persist subtask:', error))
+        }).catch((error) => console.warn('[Focus] Failed to persist subtask:', error))
       }, 400)
       timers.set(key, handle)
     },
@@ -1831,7 +1831,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         updated_at: subtask.updatedAt ?? new Date().toISOString(),
       }
       void apiUpsertTaskSubtask(taskId, payload).catch((error) =>
-        console.warn('[Taskwatch] Failed to flush subtask on blur:', error),
+        console.warn('[Focus] Failed to flush subtask on blur:', error),
       )
     },
     [apiUpsertTaskSubtask, cancelNotebookSubtaskPersist],
@@ -1920,7 +1920,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         }
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch] publish snapshot', {
+            console.debug('[Sync][Focus] publish snapshot', {
               taskId,
               subtasks: entry.subtasks.length,
               notesLen: typeof entry.notes === 'string' ? entry.notes.length : 0,
@@ -1955,7 +1955,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         updateGoalSnapshotTask(taskId, entry, true)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch] publish (in-memory snapshot)', { taskId, reason })
+            console.debug('[Sync][Focus] publish (in-memory snapshot)', { taskId, reason })
           } catch {}
         }
         return
@@ -1989,7 +1989,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             setGoalsSnapshot(next)
             if (DEBUG_SYNC) {
               try {
-                console.debug('[Sync][Taskwatch] publish (stored snapshot)', { taskId, reason })
+                console.debug('[Sync][Focus] publish (stored snapshot)', { taskId, reason })
               } catch {}
             }
             return
@@ -1999,7 +1999,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       // Fallback path: refresh then retry publish once.
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch] publish fallback: refresh+subscribe', { taskId, reason })
+          console.debug('[Sync][Focus] publish fallback: refresh+subscribe', { taskId, reason })
         } catch {}
       }
       try {
@@ -2017,7 +2017,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           updateGoalSnapshotTask(taskId, entry, true)
           if (DEBUG_SYNC) {
             try {
-              console.debug('[Sync][Taskwatch] publish (after refresh)', { taskId, reason })
+              console.debug('[Sync][Focus] publish (after refresh)', { taskId, reason })
             } catch {}
           }
           tryUnsub()
@@ -2063,7 +2063,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         publishTaskEntry(taskId, entry, reason)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch][Notes] snapshot publish (immediate)', { taskId, len: entry.notes.length, reason })
+            console.debug('[Sync][Focus][Notes] snapshot publish (immediate)', { taskId, len: entry.notes.length, reason })
           } catch {}
         }
         return
@@ -2079,14 +2079,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         publishTaskEntry(taskId, latest, reason)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch][Notes] snapshot publish (timer)', { taskId, len: latest.notes.length, reason })
+            console.debug('[Sync][Focus][Notes] snapshot publish (timer)', { taskId, len: latest.notes.length, reason })
           } catch {}
         }
       }, 200)
       timers.set(taskId, handle)
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch][Notes] snapshot schedule', { taskId, len: entry.notes.length, reason })
+          console.debug('[Sync][Focus][Notes] snapshot schedule', { taskId, len: entry.notes.length, reason })
         } catch {}
       }
     },
@@ -2106,7 +2106,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         publishTaskEntry(taskId, latest, reason)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch][Notes] snapshot publish (flush)', { taskId, len: latest.notes.length, reason })
+            console.debug('[Sync][Focus][Notes] snapshot publish (flush)', { taskId, len: latest.notes.length, reason })
           } catch {}
         }
       }
@@ -2161,13 +2161,13 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       const ids = Array.from(queue)
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch] subtask delete batch flush begin', { taskId, count: ids.length })
+          console.debug('[Sync][Focus] subtask delete batch flush begin', { taskId, count: ids.length })
         } catch {}
       }
       // Fire API deletes in parallel; tolerate partial failures
       await Promise.allSettled(
         ids.map((id) => apiDeleteTaskSubtask(taskId, id).catch((err) => {
-          console.warn('[Taskwatch] Failed batched subtask delete:', err)
+          console.warn('[Focus] Failed batched subtask delete:', err)
         })),
       )
       // Compute authoritative next entry and publish once
@@ -2180,7 +2180,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         updateNotebookForKey(notebookKey, () => nextEntry)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch] subtask delete batch publish', { taskId, count: ids.length })
+            console.debug('[Sync][Focus] subtask delete batch publish', { taskId, count: ids.length })
           } catch {}
         }
       }
@@ -2204,7 +2204,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       map.set(taskId, set)
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch] subtask delete queued', { taskId, subtaskId, queuedCount: set.size })
+          console.debug('[Sync][Focus] subtask delete queued', { taskId, subtaskId, queuedCount: set.size })
         } catch {}
       }
       // Debounce per task
@@ -2302,7 +2302,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           if (queued && queued.has(subtask.id)) {
             if (DEBUG_SYNC) {
               try {
-                console.debug('[Sync][Taskwatch] subtask delete skip immediate (queued)', {
+                console.debug('[Sync][Focus] subtask delete skip immediate (queued)', {
                   taskId: linkedTaskId,
                   subtaskId: subtask.id,
                 })
@@ -2312,7 +2312,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           }
           cancelNotebookSubtaskPersist(linkedTaskId, subtask.id)
           void apiDeleteTaskSubtask(linkedTaskId, subtask.id).catch((error) =>
-            console.warn('[Taskwatch] Failed to remove subtask during sync:', error),
+            console.warn('[Focus] Failed to remove subtask during sync:', error),
           )
         }
       }
@@ -2453,7 +2453,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       blockNotebookHydration()
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch][Notes] change (enter)', { taskId: getStableLinkedTaskId(), len: value.length })
+          console.debug('[Sync][Focus][Notes] change (enter)', { taskId: getStableLinkedTaskId(), len: value.length })
         } catch {}
       }
       const result = updateNotebookForKey(notebookKey, (entry) =>
@@ -2469,7 +2469,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         scheduleNotebookNotesSnapshotPublish(linkedTaskId, entry, 'notes-change')
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch][Notes] skip publish (no linked task id)')
+          console.debug('[Sync][Focus][Notes] skip publish (no linked task id)')
         } catch {}
       }
       updateFocusSourceFromEntry(entry)
@@ -2576,7 +2576,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       if (linkedTaskId && createdSubtask.text.trim().length > 0) {
         updateGoalSnapshotTask(linkedTaskId, result.entry)
         if (DEBUG_SYNC) {
-          console.debug('[Sync][Taskwatch] subtask add publish', {
+          console.debug('[Sync][Focus] subtask add publish', {
             taskId: linkedTaskId,
             subtaskId: createdSubtask.id,
             total: result.entry.subtasks.length,
@@ -2584,7 +2584,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         }
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch] subtask add skip publish', {
+          console.debug('[Sync][Focus] subtask add skip publish', {
             reason: linkedTaskId ? 'blank-new-entry' : 'no linked task id',
             subtaskId: createdSubtask.id,
             total: result.entry.subtasks.length,
@@ -2729,7 +2729,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         // Debounce snapshot publish to avoid per-keystroke churn
         scheduleNotebookNotesSnapshotPublish(linkedTaskId, result.entry, 'subtasks-change')
         if (DEBUG_SYNC) {
-          console.debug('[Sync][Taskwatch] subtask text schedule publish', {
+          console.debug('[Sync][Focus] subtask text schedule publish', {
             taskId: linkedTaskId,
             subtaskId,
             textLen: updatedSubtask.text.length,
@@ -2737,7 +2737,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         }
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch] subtask text skip publish (no linked task id)', {
+          console.debug('[Sync][Focus] subtask text skip publish (no linked task id)', {
             subtaskId,
             textLen: updatedSubtask.text.length,
           })
@@ -2787,14 +2787,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             flushNotebookSubtaskPersist(linkedTaskId, updated)
           }
           if (DEBUG_SYNC) {
-            console.debug('[Sync][Taskwatch] subtask blur publish (no structural change)', {
+            console.debug('[Sync][Focus] subtask blur publish (no structural change)', {
               taskId: linkedTaskId,
               subtaskId,
             })
           }
         } else if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch] subtask blur skip publish (no linked task id, no change)', {
+            console.debug('[Sync][Focus] subtask blur skip publish (no linked task id, no change)', {
               subtaskId,
             })
           } catch {}
@@ -2810,9 +2810,9 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
           .then(() => {
             publishTaskEntry(linkedTaskId, entryToPublish, 'subtask-delete-blur')
           })
-          .catch((error) => console.warn('[Taskwatch] Failed to remove subtask on blur:', error))
+          .catch((error) => console.warn('[Focus] Failed to remove subtask on blur:', error))
         if (DEBUG_SYNC) {
-          console.debug('[Sync][Taskwatch] subtask blur/remove publish', {
+          console.debug('[Sync][Focus] subtask blur/remove publish', {
             taskId: linkedTaskId,
             subtaskId,
             removed: removedSubtask.text.trim().length === 0,
@@ -2820,7 +2820,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         }
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch] subtask blur/remove skip publish (no linked task id)', {
+          console.debug('[Sync][Focus] subtask blur/remove skip publish (no linked task id)', {
             subtaskId,
             removed: removedSubtask.text.trim().length === 0,
           })
@@ -2845,7 +2845,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     (subtaskId: string) => {
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch] toggle (enter)', { subtaskId, taskId: getStableLinkedTaskId() })
+          console.debug('[Sync][Focus] toggle (enter)', { subtaskId, taskId: getStableLinkedTaskId() })
         } catch {}
       }
       let toggled: NotebookSubtask | null = null
@@ -2868,7 +2868,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       if (!result || !result.changed || !toggled) {
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch] toggle (no change)', { subtaskId, changed: Boolean(result?.changed) })
+            console.debug('[Sync][Focus] toggle (no change)', { subtaskId, changed: Boolean(result?.changed) })
           } catch {}
         }
         // Fallback: compute from authoritative UI entry
@@ -2891,14 +2891,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         // isn't in the local snapshot yet.
         publishTaskEntry(linkedTaskId, result.entry, 'subtask-toggle')
         if (DEBUG_SYNC) {
-          console.debug('[Sync][Taskwatch] subtask toggle publish', {
+          console.debug('[Sync][Focus] subtask toggle publish', {
             taskId: linkedTaskId,
             subtaskId,
           })
         }
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch] subtask toggle skip publish (no linked task id)', {
+          console.debug('[Sync][Focus] subtask toggle skip publish (no linked task id)', {
             subtaskId,
           })
         } catch {}
@@ -2921,7 +2921,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
     (subtaskId: string) => {
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch] remove (enter)', { subtaskId, taskId: getStableLinkedTaskId() })
+          console.debug('[Sync][Focus] remove (enter)', { subtaskId, taskId: getStableLinkedTaskId() })
         } catch {}
       }
       let removed: NotebookSubtask | null = null
@@ -2938,7 +2938,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       if (!result || !result.changed || !removed) {
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch] remove (no change)', { subtaskId, changed: Boolean(result?.changed) })
+            console.debug('[Sync][Focus] remove (no change)', { subtaskId, changed: Boolean(result?.changed) })
           } catch {}
         }
         // Fallback: compute the next entry from the authoritative UI entry
@@ -2956,7 +2956,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
             queueSubtaskDelete(linkedTaskId, subtaskId)
             if (DEBUG_SYNC) {
               try {
-                console.debug('[Sync][Taskwatch] subtask delete queued (fallback)', {
+                console.debug('[Sync][Focus] subtask delete queued (fallback)', {
                   taskId: linkedTaskId,
                   subtaskId,
                 })
@@ -2975,7 +2975,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         queueSubtaskDelete(linkedTaskId, removedSubtask.id)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Taskwatch] subtask delete queued', {
+            console.debug('[Sync][Focus] subtask delete queued', {
               taskId: linkedTaskId,
               subtaskId,
             })
@@ -2983,7 +2983,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         }
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Taskwatch] subtask remove skip publish (no linked task id)', {
+          console.debug('[Sync][Focus] subtask remove skip publish (no linked task id)', {
             subtaskId,
           })
         } catch {}
@@ -4024,7 +4024,7 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
       try {
         await setTaskCompletedAndResort(taskId, bucketId, true)
       } catch (error) {
-        console.warn('Failed to mark task complete from Taskwatch', error)
+        console.warn('Failed to mark task complete from Focus', error)
       }
     }
 
@@ -4471,14 +4471,14 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
         }
         currentSessionKeyRef.current = autoSessionKey
         lastLoggedSessionKeyRef.current = null
-        scrollTaskwatchToTop()
+        scrollFocusToTop()
       }
     }
     window.addEventListener(FOCUS_EVENT_TYPE, handleFocusBroadcast as EventListener)
     return () => {
       window.removeEventListener(FOCUS_EVENT_TYPE, handleFocusBroadcast as EventListener)
     }
-  }, [elapsed, normalizedCurrentTask, registerNewHistoryEntry, scrollTaskwatchToTop, updateNotebookForKey])
+  }, [elapsed, normalizedCurrentTask, registerNewHistoryEntry, scrollFocusToTop, updateNotebookForKey])
 
   const formattedTime = useMemo(() => formatTime(elapsed), [elapsed])
   const formattedClock = useMemo(() => formatClockTime(currentTime), [currentTime])
@@ -5843,4 +5843,4 @@ export function TaskwatchPage({ viewportWidth: _viewportWidth }: TaskwatchPagePr
   )
 }
 
-export default TaskwatchPage
+export default FocusPage

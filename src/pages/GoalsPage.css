@@ -5258,7 +5258,3 @@ html[data-theme='light'] .goal-card--favorite::after {
   filter: blur(10px);
   opacity: 0.45;
 }
-.quick-list-card--customizing {
-  outline: 2px dashed rgba(124, 222, 255, 0.6);
-  outline-offset: 4px;
-}

@@ -9070,7 +9070,7 @@ useEffect(() => {
                   type="button"
                   className="history-timeline__action-button history-timeline__action-button--primary"
                   onClick={() => {
-                    // Start now: launch as focus task and switch to Taskwatch (App listens to focus events).
+                    // Start now: launch as focus task and switch to the Focus page (App listens to focus events).
                     const taskLabel = deriveEntryTaskName(entry)
                     const broadcastSubtasks = (entry.subtasks || []).map((s) => ({
                       id: s.id,
