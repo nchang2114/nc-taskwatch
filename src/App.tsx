@@ -20,6 +20,7 @@ type UserProfile = {
 type SyncStatus = 'synced' | 'syncing' | 'offline' | 'pending'
 
 const THEME_STORAGE_KEY = 'nc-taskwatch-theme'
+const QUICK_LIST_EXPANDED_STORAGE_KEY = 'nc-taskwatch-quick-list-expanded-v1'
 const getInitialTheme = (): Theme => {
   if (typeof window === 'undefined') {
     return 'dark'
@@ -328,6 +329,7 @@ function App() {
   const profileHelpMenuId = useId()
   const settingsOverlayRef = useRef<HTMLDivElement | null>(null)
   const authModalRef = useRef<HTMLDivElement | null>(null)
+  const previousProfileRef = useRef<UserProfile | null>(null)
   const isSignedIn = Boolean(userProfile)
   const userInitials = useMemo(() => {
     if (!userProfile?.name) {
@@ -365,6 +367,13 @@ function App() {
     } else {
       window.localStorage.removeItem(AUTH_PROFILE_STORAGE_KEY)
     }
+    const prev = previousProfileRef.current
+    if (prev?.email !== userProfile?.email) {
+      try {
+        window.localStorage.setItem(QUICK_LIST_EXPANDED_STORAGE_KEY, 'false')
+      } catch {}
+    }
+    previousProfileRef.current = userProfile ?? null
   }, [userProfile])
 
   useEffect(() => {
@@ -557,6 +566,9 @@ function App() {
           window.localStorage.setItem(THEME_STORAGE_KEY, preservedTheme)
         } catch {}
       }
+      try {
+        window.localStorage.setItem(QUICK_LIST_EXPANDED_STORAGE_KEY, 'false')
+      } catch {}
       window.setTimeout(() => {
         window.location.replace(window.location.origin)
       }, 10)
