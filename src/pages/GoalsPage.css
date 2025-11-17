@@ -62,7 +62,7 @@
   /* Tighter spacing under toolbar in dashboard */
   margin-top: clamp(0.2rem, 1.2vw, 0.6rem);
   /* Unify tile heights across all variants (life/quick/goal/placeholder) */
-  --goal-tile-min-h: clamp(4.5rem, 5vw, 4.7rem);
+  --goal-tile-min-h: 4.5rem;
   position: relative; /* allow absolute overlay for insert preview */
 }
 @media (min-width: 560px) { .goals-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -74,10 +74,10 @@
   border: 1px solid rgba(148, 163, 255, 0.26);
   background: linear-gradient(145deg, rgba(18, 26, 72, 0.5), rgba(12, 18, 56, 0.42));
   box-shadow: 0 12px 24px -20px rgba(2, 6, 28, 0.6);
-  padding: clamp(0.55rem, 1.8vw, 0.75rem) clamp(0.6rem, 2vw, 0.8rem) clamp(0.1rem, 0.6vw, 0.25rem);
+  padding: 0.7rem 0.9rem 0.35rem;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.3rem;
   min-height: var(--goal-tile-min-h);
 }
 .goal-tile--active { border-color: rgba(99, 102, 241, 0.55); box-shadow: 0 24px 42px -24px rgba(63,81,181,0.45); }
