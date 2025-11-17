@@ -6588,7 +6588,7 @@ export default function GoalsPage(): ReactElement {
         }
         quickListDebug('deleting remote task', { bucketId, id })
         try {
-          await apiDeleteTaskById(bucketId, id)
+          await apiDeleteTaskById(id, bucketId)
         } catch (error) {
           quickListWarn('failed remote task delete', error)
           refreshQuickListFromSupabase('delete')
@@ -6809,7 +6809,7 @@ export default function GoalsPage(): ReactElement {
       if (!bucketId) return
       quickListDebug('bulk deleting remote completed tasks', { bucketId, count: completedIds.length })
       try {
-        await Promise.allSettled(completedIds.map((taskId) => apiDeleteTaskById(bucketId, taskId)))
+        await Promise.allSettled(completedIds.map((taskId) => apiDeleteTaskById(taskId, bucketId)))
       } catch (error) {
         quickListWarn('failed bulk delete remote tasks', error)
         refreshQuickListFromSupabase('delete-completed')
