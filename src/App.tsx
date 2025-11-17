@@ -176,6 +176,105 @@ const HELP_MENU_ITEMS: Array<{ id: string; label: string; icon: ReactNode }> = [
   },
 ]
 
+const SETTINGS_SECTIONS: Array<{ id: string; label: string; description?: string; icon: ReactNode }> = [
+  {
+    id: 'general',
+    label: 'General',
+    icon: createHelpIcon(
+      <>
+        <circle cx="12" cy="12" r="7.5" />
+        <path d="M12 9.5v5" />
+        <circle cx="12" cy="7" r="0.9" fill="currentColor" stroke="none" />
+      </>,
+    ),
+  },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    icon: createHelpIcon(
+      <>
+        <path d="M12 20a1.5 1.5 0 0 1-1.5-1.5h3A1.5 1.5 0 0 1 12 20Z" />
+        <path d="M18 14V9a6 6 0 0 0-12 0v5l-1.5 2H19.5Z" />
+      </>,
+    ),
+  },
+  {
+    id: 'personalization',
+    label: 'Personalization',
+    icon: createHelpIcon(
+      <>
+        <circle cx="12" cy="12" r="6" />
+        <path d="M12 6v12M6 12h12" />
+      </>,
+    ),
+  },
+  {
+    id: 'apps',
+    label: 'Apps & Connectors',
+    icon: createHelpIcon(
+      <>
+        <rect x="6.5" y="6" width="5" height="5" rx="1" />
+        <rect x="12.5" y="6" width="5" height="5" rx="1" />
+        <rect x="6.5" y="12" width="5" height="5" rx="1" />
+        <rect x="12.5" y="12" width="5" height="5" rx="1" />
+      </>,
+    ),
+  },
+  {
+    id: 'schedules',
+    label: 'Schedules',
+    icon: createHelpIcon(
+      <>
+        <rect x="6" y="7" width="12" height="11" rx="1.4" />
+        <path d="M9 5v4" />
+        <path d="M15 5v4" />
+        <path d="M6 10h12" />
+      </>,
+    ),
+  },
+  {
+    id: 'data',
+    label: 'Data controls',
+    icon: createHelpIcon(
+      <>
+        <path d="M6 8c0-2.5 3-4 6-4s6 1.5 6 4-3 4-6 4-6-1.5-6-4Z" />
+        <path d="M6 12.3c0 2.5 3 4.2 6 4.2s6-1.7 6-4.2" />
+        <path d="M6 16.5C6 19 9 20.5 12 20.5S18 19 18 16.5" />
+      </>,
+    ),
+  },
+  {
+    id: 'security',
+    label: 'Security',
+    icon: createHelpIcon(
+      <>
+        <path d="M12 4 5.5 6.5v6.6c0 4.6 3.7 6.9 6.5 8.4 2.8-1.5 6.5-3.8 6.5-8.4V6.5Z" />
+        <path d="M9.5 12.5 11 14l3.5-3.5" />
+      </>,
+    ),
+  },
+  {
+    id: 'parental',
+    label: 'Parental controls',
+    icon: createHelpIcon(
+      <>
+        <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 0v7" />
+        <path d="M8 22h8" />
+      </>,
+    ),
+  },
+  {
+    id: 'account',
+    label: 'Account',
+    icon: createHelpIcon(
+      <>
+        <circle cx="12" cy="9" r="3.4" />
+        <path d="M6 18c.8-3.1 3.4-4.5 6-4.5s5.2 1.4 6 4.5" />
+      </>,
+    ),
+  },
+]
+
 
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
@@ -189,6 +288,8 @@ function App() {
   const [syncStatus] = useState<SyncStatus>('synced')
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [profileHelpMenuOpen, setProfileHelpMenuOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [activeSettingsSection, setActiveSettingsSection] = useState(SETTINGS_SECTIONS[0]?.id ?? 'general')
 
   const navContainerRef = useRef<HTMLElement | null>(null)
   const navBrandRef = useRef<HTMLButtonElement | null>(null)
@@ -201,6 +302,7 @@ function App() {
   const profileMenuId = useId()
   const profileButtonId = useId()
   const profileHelpMenuId = useId()
+  const settingsOverlayRef = useRef<HTMLDivElement | null>(null)
   const isSignedIn = Boolean(userProfile)
   const userInitials = useMemo(() => {
     if (!userProfile?.name) {
@@ -298,6 +400,49 @@ function App() {
     }
   }, [profileHelpMenuOpen])
 
+  useEffect(() => {
+    if (!settingsOpen) {
+      return
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSettingsOpen(false)
+      }
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!settingsOverlayRef.current) {
+        return
+      }
+      if (event.target instanceof Node && settingsOverlayRef.current.contains(event.target)) {
+        if ((event.target as HTMLElement).closest('.settings-panel')) {
+          return
+        }
+        setSettingsOpen(false)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [settingsOpen])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return
+    }
+    const originalOverflow = document.body.style.overflow
+    if (settingsOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = originalOverflow
+    }
+    return () => {
+      document.body.style.overflow = originalOverflow
+    }
+  }, [settingsOpen])
+
   const handleMockSignIn = useCallback(() => {
     setUserProfile(createDemoProfile())
     closeProfileMenu()
@@ -315,6 +460,16 @@ function App() {
 
   const handleHelpMenuItemSelect = useCallback(() => {
     setProfileHelpMenuOpen(false)
+  }, [])
+
+  const openSettingsPanel = useCallback(() => {
+    closeProfileMenu()
+    setSettingsOpen(true)
+    setActiveSettingsSection((current) => current || (SETTINGS_SECTIONS[0]?.id ?? 'general'))
+  }, [closeProfileMenu])
+
+  const closeSettingsPanel = useCallback(() => {
+    setSettingsOpen(false)
   }, [])
 
   const isCompactBrand = viewportWidth <= COMPACT_BRAND_BREAKPOINT
@@ -732,6 +887,51 @@ function App() {
     </span>
   ))
 
+  const renderSettingsContent = () => {
+    if (activeSettingsSection === 'general') {
+      return (
+        <>
+          <header className="settings-panel__content-header">
+            <div>
+              <p className="settings-panel__content-title">General</p>
+              <p className="settings-panel__content-subtitle">Quickly adjust the look and feel of Taskwatch.</p>
+            </div>
+          </header>
+          <div className="settings-panel__group">
+            <div className="settings-panel__row">
+              <div>
+                <p className="settings-panel__row-title">Appearance</p>
+                <p className="settings-panel__row-subtitle">Match Taskwatch with your OS preference.</p>
+              </div>
+              <button type="button" className="settings-panel__chip">System ▾</button>
+            </div>
+            <div className="settings-panel__row">
+              <div>
+                <p className="settings-panel__row-title">Accent color</p>
+                <p className="settings-panel__row-subtitle">Pick the highlight tone for panels.</p>
+              </div>
+              <button type="button" className="settings-panel__chip">Default ▾</button>
+            </div>
+            <div className="settings-panel__row">
+              <div>
+                <p className="settings-panel__row-title">Language</p>
+                <p className="settings-panel__row-subtitle">Auto-detect</p>
+              </div>
+              <button type="button" className="settings-panel__chip">Auto-detect ▾</button>
+            </div>
+          </div>
+        </>
+      )
+    }
+    const current = SETTINGS_SECTIONS.find((section) => section.id === activeSettingsSection)
+    return (
+      <div className="settings-panel__placeholder">
+        <p className="settings-panel__content-title">{current?.label ?? 'Settings'}</p>
+        <p className="settings-panel__content-subtitle">Detailed controls for this section are coming soon.</p>
+      </div>
+    )
+  }
+
   const renderSignedInMenu = () => {
     if (!userProfile) {
       return null
@@ -761,7 +961,7 @@ function App() {
         <div className="profile-menu__section profile-menu__section--settings">
           <div className="profile-menu__section-label">Settings</div>
           <div className="profile-menu__actions">
-            <button type="button" className="profile-menu__action" role="menuitem" onClick={closeProfileMenu}>
+            <button type="button" className="profile-menu__action" role="menuitem" onClick={openSettingsPanel}>
               <span className="profile-menu__action-title">Settings</span>
               <span className="profile-menu__action-subtitle">Theme, focus tools, and surfaces</span>
             </button>
@@ -770,9 +970,6 @@ function App() {
               <span className="profile-menu__action-subtitle">
                 Email, Subscription, Notifications, Apps &amp; Connectors, Data Controls
               </span>
-            </button>
-            <button type="button" className="profile-menu__action" role="menuitem" onClick={closeProfileMenu}>
-              <span className="profile-menu__action-title">Security…</span>
             </button>
             <button
               type="button"
@@ -1054,6 +1251,39 @@ function App() {
           <ReflectionPage />
         </section>
       </main>
+      {settingsOpen ? (
+        <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Taskwatch settings" ref={settingsOverlayRef}>
+          <div className="settings-panel" role="document">
+            <aside className="settings-panel__sidebar">
+              <div className="settings-panel__sidebar-header">
+                <p>Settings</p>
+                <button type="button" className="settings-panel__close" aria-label="Close settings" onClick={closeSettingsPanel}>
+                  ✕
+                </button>
+              </div>
+              <nav className="settings-panel__nav" aria-label="Settings sections">
+                {SETTINGS_SECTIONS.map((section) => {
+                  const isActive = section.id === activeSettingsSection
+                  return (
+                    <button
+                      key={section.id}
+                      type="button"
+                      className={['settings-panel__nav-button', isActive ? 'settings-panel__nav-button--active' : ''].filter(Boolean).join(' ')}
+                      onClick={() => setActiveSettingsSection(section.id)}
+                    >
+                      <span className="settings-panel__nav-icon" aria-hidden="true">
+                        {section.icon}
+                      </span>
+                      <span className="settings-panel__nav-label">{section.label}</span>
+                    </button>
+                  )
+                })}
+              </nav>
+            </aside>
+            <section className="settings-panel__content">{renderSettingsContent()}</section>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
