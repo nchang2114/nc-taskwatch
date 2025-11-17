@@ -206,6 +206,7 @@ const createTaskDetails = (overrides?: Partial<TaskDetails>): TaskDetails => ({
 })
 
 const TASK_DETAILS_STORAGE_KEY = 'nc-taskwatch-task-details-v1'
+const QUICK_LIST_EXPANDED_STORAGE_KEY = 'nc-taskwatch-quick-list-expanded-v1'
 const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
 const LIFE_ROUTINES_SURFACE: GoalSurfaceStyle = 'linen'
@@ -283,6 +284,24 @@ const readStoredTaskDetails = (): TaskDetailsState => {
     return sanitizeTaskDetailsState(parsed)
   } catch {
     return {}
+  }
+}
+
+const readStoredQuickListExpanded = (): boolean => {
+  if (typeof window === 'undefined') {
+    return true
+  }
+  try {
+    const raw = window.localStorage.getItem(QUICK_LIST_EXPANDED_STORAGE_KEY)
+    if (raw === 'false') {
+      return false
+    }
+    if (raw === 'true') {
+      return true
+    }
+    return true
+  } catch {
+    return true
   }
 }
 
@@ -6022,7 +6041,7 @@ export default function GoalsPage(): ReactElement {
   }, [])
 
   // Quick List (simple tasks without buckets)
-  const [quickListExpanded, setQuickListExpanded] = useState(true)
+  const [quickListExpanded, setQuickListExpanded] = useState(() => readStoredQuickListExpanded())
   const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => readStoredQuickList())
   const [quickDraft, setQuickDraft] = useState('')
   const [quickDraftActive, setQuickDraftActive] = useState(false)
@@ -6031,6 +6050,14 @@ export default function GoalsPage(): ReactElement {
   const quickListBucketIdRef = useRef<string | null>(null)
   const quickListRefreshInFlightRef = useRef(false)
   const quickListRefreshPendingRef = useRef(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    try {
+      window.localStorage.setItem(QUICK_LIST_EXPANDED_STORAGE_KEY, quickListExpanded ? 'true' : 'false')
+    } catch {}
+  }, [quickListExpanded])
   // Quick List header menu
   const [quickListMenuOpen, setQuickListMenuOpen] = useState(false)
   const quickListMenuRef = useRef<HTMLDivElement | null>(null)
