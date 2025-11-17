@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react'
 import type { ReactNode } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { User } from '@supabase/supabase-js'
 import './App.css'
 import GoalsPage from './pages/GoalsPage'
 import ReflectionPage from './pages/ReflectionPage'
 import FocusPage from './pages/FocusPage'
 import { FOCUS_EVENT_TYPE } from './lib/focusChannel'
 import { SCHEDULE_EVENT_TYPE } from './lib/scheduleChannel'
+import { supabase } from './lib/supabaseClient'
 
 type Theme = 'light' | 'dark'
 type TabKey = 'goals' | 'focus' | 'reflection'
@@ -48,11 +50,6 @@ const SWIPE_SEQUENCE: TabKey[] = ['reflection', 'focus', 'goals']
 
 const AUTH_PROFILE_STORAGE_KEY = 'nc-taskwatch-auth-profile'
 
-const createDemoProfile = (): UserProfile => ({
-  name: 'Nicholas Chang',
-  email: 'swagferret11@gmail.com',
-})
-
 const sanitizeStoredProfile = (value: unknown): UserProfile | null => {
   if (!value || typeof value !== 'object') {
     return null
@@ -80,6 +77,32 @@ const readStoredProfile = (): UserProfile | null => {
     return sanitizeStoredProfile(parsed)
   } catch {
     return null
+  }
+}
+
+const deriveProfileFromSupabaseUser = (user: User | null | undefined): UserProfile | null => {
+  if (!user) {
+    return null
+  }
+  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>
+  const possibleNames = [
+    metadata.full_name,
+    metadata.name,
+    metadata.preferred_username,
+    user.email,
+  ]
+  const resolvedName =
+    possibleNames.find((value) => typeof value === 'string' && value.trim().length > 0)?.toString().trim() ??
+    'Taskwatch user'
+  const email = typeof user.email === 'string' ? user.email : ''
+  const avatar =
+    typeof metadata.avatar_url === 'string' && metadata.avatar_url.trim().length > 0
+      ? metadata.avatar_url
+      : undefined
+  return {
+    name: resolvedName,
+    email,
+    avatarUrl: avatar,
   }
 }
 
@@ -288,6 +311,7 @@ function App() {
   const [syncStatus] = useState<SyncStatus>('synced')
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [profileHelpMenuOpen, setProfileHelpMenuOpen] = useState(false)
+  const [authModalOpen, setAuthModalOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [activeSettingsSection, setActiveSettingsSection] = useState(SETTINGS_SECTIONS[0]?.id ?? 'general')
 
@@ -303,6 +327,7 @@ function App() {
   const profileButtonId = useId()
   const profileHelpMenuId = useId()
   const settingsOverlayRef = useRef<HTMLDivElement | null>(null)
+  const authModalRef = useRef<HTMLDivElement | null>(null)
   const isSignedIn = Boolean(userProfile)
   const userInitials = useMemo(() => {
     if (!userProfile?.name) {
@@ -400,6 +425,34 @@ function App() {
     }
   }, [profileHelpMenuOpen])
 
+  const closeAuthModal = useCallback(() => {
+    setAuthModalOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (!authModalOpen) {
+      return
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeAuthModal()
+      }
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (authModalRef.current && target && authModalRef.current.contains(target)) {
+        return
+      }
+      closeAuthModal()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [authModalOpen, closeAuthModal])
+
   useEffect(() => {
     if (!settingsOpen) {
       return
@@ -429,11 +482,52 @@ function App() {
   }, [settingsOpen])
 
   useEffect(() => {
+    if (!supabase) {
+      return
+    }
+    const client = supabase
+    let mounted = true
+    const syncProfileFromSupabase = async () => {
+      try {
+        const { data, error } = await client.auth.getUser()
+        if (error) {
+          console.warn('Unable to fetch Supabase user:', error.message)
+        }
+        if (!mounted) {
+          return
+        }
+        const profile = deriveProfileFromSupabaseUser(data?.user)
+        setUserProfile(profile)
+        if (profile) {
+          setAuthModalOpen(false)
+        }
+      } catch (error) {
+        console.warn('Unexpected Supabase user fetch error:', error)
+      }
+    }
+    void syncProfileFromSupabase()
+    const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) {
+        return
+      }
+      const profile = deriveProfileFromSupabaseUser(session?.user)
+      setUserProfile(profile)
+      if (profile) {
+        setAuthModalOpen(false)
+      }
+    })
+    return () => {
+      mounted = false
+      listener?.subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
     if (typeof document === 'undefined') {
       return
     }
     const originalOverflow = document.body.style.overflow
-    if (settingsOpen) {
+    if (settingsOpen || authModalOpen) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = originalOverflow
@@ -441,16 +535,32 @@ function App() {
     return () => {
       document.body.style.overflow = originalOverflow
     }
-  }, [settingsOpen])
+  }, [settingsOpen, authModalOpen])
 
-  const handleMockSignIn = useCallback(() => {
-    setUserProfile(createDemoProfile())
-    closeProfileMenu()
-  }, [closeProfileMenu])
-
-  const handleLogOut = useCallback(() => {
+  const handleLogOut = useCallback(async () => {
+    if (supabase) {
+      try {
+        await supabase.auth.signOut()
+      } catch (error) {
+        console.warn('Supabase sign-out failed:', error)
+      }
+    }
     setUserProfile(null)
     closeProfileMenu()
+    if (typeof window !== 'undefined') {
+      const preservedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+      try {
+        window.localStorage.clear()
+      } catch {}
+      if (preservedTheme) {
+        try {
+          window.localStorage.setItem(THEME_STORAGE_KEY, preservedTheme)
+        } catch {}
+      }
+      window.setTimeout(() => {
+        window.location.replace(window.location.origin)
+      }, 10)
+    }
   }, [closeProfileMenu])
 
   const handleContinueGuest = useCallback(() => {
@@ -471,6 +581,28 @@ function App() {
   const closeSettingsPanel = useCallback(() => {
     setSettingsOpen(false)
   }, [])
+
+  const handleGoogleSignIn = useCallback(async () => {
+    if (!supabase) {
+      console.warn('Supabase client is not configured; cannot start Google OAuth.')
+      return
+    }
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+        },
+      })
+      if (error) {
+        console.warn('Google OAuth sign-in failed:', error.message)
+      } else {
+        closeAuthModal()
+      }
+    } catch (error) {
+      console.warn('Unexpected error starting Google OAuth flow:', error)
+    }
+  }, [closeAuthModal])
 
   const isCompactBrand = viewportWidth <= COMPACT_BRAND_BREAKPOINT
 
@@ -1080,7 +1212,7 @@ function App() {
         <button
           type="button"
           className="profile-menu__primary-action"
-          onClick={handleMockSignIn}
+          onClick={() => setAuthModalOpen(true)}
           role="menuitem"
         >
           Sign in / Create account
@@ -1281,6 +1413,82 @@ function App() {
               </nav>
             </aside>
             <section className="settings-panel__content">{renderSettingsContent()}</section>
+          </div>
+        </div>
+      ) : null}
+      {authModalOpen ? (
+        <div className="auth-modal-overlay" role="dialog" aria-modal="true" aria-label="Sign in to Taskwatch">
+          <div className="auth-modal" ref={authModalRef}>
+            <div className="auth-modal__header">
+              <div>
+                <p className="auth-modal__title">Sign in to Taskwatch</p>
+                <p className="auth-modal__subtitle">Sync your data and pick up right where you left off.</p>
+              </div>
+              <button type="button" className="auth-modal__close" aria-label="Close sign-in panel" onClick={closeAuthModal}>
+                ✕
+              </button>
+            </div>
+            <div className="auth-modal__providers" role="group" aria-label="Sign-in options">
+              <button type="button" className="auth-provider auth-provider--google" onClick={handleGoogleSignIn}>
+                <span className="auth-provider__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M21.6 12.227c0-.68-.057-1.362-.179-2.027H12v3.84h5.44c-.227 1.243-.934 2.352-1.987 3.07v2.553h3.208c1.882-1.733 2.938-4.29 2.938-7.436z" fill="#4285F4" />
+                    <path d="M12 22c2.7 0 4.97-.89 6.626-2.337l-3.208-2.553c-.893.6-2.037.947-3.418.947a5.92 5.92 0 0 1-5.592-4.018H3.08v2.6C4.8 19.915 8.17 22 12 22z" fill="#34A853" />
+                    <path d="M6.408 14.04A5.83 5.83 0 0 1 6.1 12c0-.706.123-1.386.308-2.04V7.36H3.08A9.996 9.996 0 0 0 2 12c0 1.6.38 3.112 1.08 4.64l3.328-2.6z" fill="#FBBC05" />
+                    <path d="M12 6.08c1.469 0 2.789.507 3.828 1.5l2.872-2.872C16.967 2.94 14.7 2 12 2 8.17 2 4.8 4.085 3.08 7.36l3.328 2.6A5.92 5.92 0 0 1 12 6.08z" fill="#EA4335" />
+                  </svg>
+                </span>
+                Continue with Google
+              </button>
+              <button type="button" className="auth-provider" aria-disabled="true">
+                <span className="auth-provider__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M16.365 2c-.948.062-2.074.66-2.752 1.45-.6.69-1.123 1.77-.924 2.795 1.006.032 2.062-.574 2.715-1.373.634-.793 1.123-1.877.961-2.872zM19.66 11.23c-.026-2.58 2.14-3.819 2.243-3.879-1.225-1.79-3.124-2.034-3.791-2.058-1.607-.167-3.14.942-3.955.942-.824 0-2.078-.922-3.416-.897-1.764.026-3.395 1.03-4.295 2.622-1.829 3.165-.466 7.85 1.309 10.418.869 1.25 1.904 2.642 3.264 2.592 1.317-.052 1.813-.84 3.408-.84 1.586 0 2.043.84 3.424.81 1.41-.026 2.303-1.277 3.168-2.532.994-1.45 1.4-2.857 1.421-2.927-.032-.013-2.718-1.034-2.741-4.344z" />
+                  </svg>
+                </span>
+                Continue with Apple
+              </button>
+              <button type="button" className="auth-provider" aria-disabled="true">
+                <span className="auth-provider__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M3 12c0-2.145 0-4.29.002-6.435C3.013 3.827 3.838 3 4.572 3H11v8h-8Z" fill="#f35325" />
+                    <path d="M11 3h7.43c.735 0 1.559.827 1.571 2.565.003 2.144.002 4.289.002 6.435h-9v-9Z" fill="#81bc06" />
+                    <path d="M3 12h8v9H4.572c-.734 0-1.559-.828-1.57-2.566C3 16.29 3 14.145 3 12Z" fill="#05a6f0" />
+                    <path d="M12 12h9c0 2.145 0 4.29-.002 6.434-.012 1.739-.836 2.566-1.57 2.566H12v-9Z" fill="#ffba08" />
+                  </svg>
+                </span>
+                Continue with Microsoft
+              </button>
+              <button type="button" className="auth-provider" aria-disabled="true">
+                <span className="auth-provider__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                  </svg>
+                </span>
+                Log in with passkey
+              </button>
+              <button type="button" className="auth-provider" aria-disabled="true">
+                <span className="auth-provider__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M3 5h18v14H3z" strokeWidth="1.5" stroke="currentColor" fill="none" />
+                    <path d="M7 9h10v2H7zm0 4h6v2H7z" fill="currentColor" />
+                  </svg>
+                </span>
+                Single sign-on (SSO)
+              </button>
+            </div>
+            <hr className="auth-modal__divider" />
+            <form className="auth-modal__email" onSubmit={(event) => event.preventDefault()}>
+              <label htmlFor="auth-modal-email">Email</label>
+              <input id="auth-modal-email" name="email" type="email" placeholder="Enter your email address…" autoComplete="email" />
+              <p className="auth-modal__hint">Use an organization email to easily collaborate with teammates.</p>
+              <button type="button" className="auth-modal__continue" aria-disabled="true">
+                Continue
+              </button>
+            </form>
+            <p className="auth-modal__terms">
+              By continuing, you acknowledge that you understand and agree to the <span className="auth-modal__link">Terms &amp; Conditions</span> and <span className="auth-modal__link">Privacy Policy</span>.
+            </p>
           </div>
         </div>
       ) : null}
