@@ -2707,6 +2707,8 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
 .calendar-allday-event__background {
   position: absolute;
   inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
   opacity: 0.9;
 }
 .calendar-allday-event__content {
@@ -2724,8 +2726,16 @@ html[data-theme='light'] .calendar-day-header.is-today::after {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.calendar-allday-event--planned {
+  box-shadow: none;
+}
 .calendar-allday-event--planned .calendar-allday-event__background {
-  opacity: 0.15;
+  opacity: 1;
+  background: transparent !important;
+  border: 1.5px dashed currentColor;
+}
+.calendar-allday-event--planned .calendar-allday-event__content {
+  color: currentColor;
 }
 
 html[data-theme='light'] .calendar-allday-wrapper { border-color: rgba(176, 186, 240, 0.35); }

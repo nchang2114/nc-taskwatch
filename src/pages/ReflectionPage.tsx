@@ -6592,6 +6592,7 @@ useEffect(() => {
         lane: number
         label: string
         colorCss: string
+        baseColor: string
         isPlanned?: boolean
       }
 
@@ -6599,7 +6600,15 @@ useEffect(() => {
         if (dayStarts.length === 0) return []
         const windowStartMs = dayStarts[0]
         const windowEndMs = dayStarts[dayStarts.length - 1] + DAY_DURATION_MS
-        type Raw = { entry: HistoryEntry; colStart: number; colEnd: number; label: string; colorCss: string; isPlanned?: boolean }
+        type Raw = {
+          entry: HistoryEntry
+          colStart: number
+          colEnd: number
+          label: string
+          colorCss: string
+          baseColor: string
+          isPlanned?: boolean
+        }
 
         const raws: Raw[] = []
         for (const entry of effectiveHistory) {
@@ -6618,8 +6627,18 @@ useEffect(() => {
           const colEnd = Math.ceil((clampedEnd - windowStartMs) / DAY_DURATION_MS)
           if (colEnd <= colStart) continue
           const meta = resolveGoalMetadata(entry, enhancedGoalLookup, goalColorLookup, lifeRoutineSurfaceLookup)
+          const derivedLabel = deriveEntryTaskName(entry)
           const colorCss = meta.colorInfo?.gradient?.css ?? meta.colorInfo?.solidColor ?? getPaletteColorForLabel(meta.label)
-          raws.push({ entry, colStart: Math.max(0, colStart), colEnd: Math.min(dayStarts.length, colEnd), label: deriveEntryTaskName(entry), colorCss, isPlanned: !!entry.futureSession })
+          const baseColor = meta.colorInfo?.solidColor ?? meta.colorInfo?.gradient?.start ?? getPaletteColorForLabel(derivedLabel)
+          raws.push({
+            entry,
+            colStart: Math.max(0, colStart),
+            colEnd: Math.min(dayStarts.length, colEnd),
+            label: derivedLabel,
+            colorCss,
+            baseColor,
+            isPlanned: !!entry.futureSession,
+          })
         }
         // Lane assignment: greedy place into first lane that doesn't collide
         const occupancy: boolean[][] = []
@@ -6640,7 +6659,16 @@ useEffect(() => {
             }
             if (!overlaps) {
               for (let c = r.colStart; c < r.colEnd; c += 1) row[c] = true
-              bars.push({ entry: r.entry, colStart: r.colStart, colEnd: r.colEnd, lane, label: r.label, colorCss: r.colorCss, isPlanned: r.isPlanned })
+              bars.push({
+                entry: r.entry,
+                colStart: r.colStart,
+                colEnd: r.colEnd,
+                lane,
+                label: r.label,
+                colorCss: r.colorCss,
+                baseColor: r.baseColor,
+                isPlanned: r.isPlanned,
+              })
               break
             }
             lane += 1
@@ -7504,7 +7532,11 @@ useEffect(() => {
                 <div
                   key={`adb-${i}-${bar.entry.id}`}
                   className={`calendar-allday-event${bar.isPlanned ? ' calendar-allday-event--planned' : ''}`}
-                  style={{ gridColumn: `${bar.colStart + 1} / ${bar.colEnd + 1}`, gridRow: `${bar.lane + 1}` }}
+                  style={{
+                    gridColumn: `${bar.colStart + 1} / ${bar.colEnd + 1}`,
+                    gridRow: `${bar.lane + 1}`,
+                    ...(bar.isPlanned ? { color: bar.baseColor, boxShadow: 'none' } : {}),
+                  }}
                   data-entry-id={bar.entry.id}
                   role={'button'}
                   aria-label={`${bar.label} · All-day`}
@@ -7537,12 +7569,18 @@ useEffect(() => {
                     let moved = false
                     const startX = pev.clientX
                     const dayWidth = rect.width / Math.max(1, dayStarts.length)
+                    const trackLeft = rect.left
+                    const clampColumnIndex = (value: number) =>
+                      Math.max(0, Math.min(dayStarts.length - 1, Number.isFinite(value) ? value : 0))
+                    const pointerStartIndex = clampColumnIndex(Math.floor((startX - trackLeft) / dayWidth))
                     const initialStart = bar.entry.startedAt
                     const initialEnd = bar.entry.endedAt
                     const onMove = (e: PointerEvent) => {
                       if (e.pointerId !== pointerId) return
                       const dx = e.clientX - startX
-                      const deltaDays = Math.round(dx / dayWidth)
+                      const rawPointerIndex = Math.floor((e.clientX - trackLeft) / dayWidth)
+                      const pointerIndex = clampColumnIndex(rawPointerIndex)
+                      const deltaDays = pointerIndex - pointerStartIndex
                       if (Math.abs(dx) > 4 && !moved) { moved = true; dragPreventClickRef.current = true }
                       if (!moved) return
                       const nextStart = initialStart + deltaDays * DAY_DURATION_MS
