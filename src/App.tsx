@@ -330,6 +330,7 @@ function App() {
   const settingsOverlayRef = useRef<HTMLDivElement | null>(null)
   const authModalRef = useRef<HTMLDivElement | null>(null)
   const previousProfileRef = useRef<UserProfile | null>(null)
+  const [isAuthCallbackRoute, setIsAuthCallbackRoute] = useState(false)
   const isSignedIn = Boolean(userProfile)
   const userInitials = useMemo(() => {
     if (!userProfile?.name) {
@@ -655,6 +656,13 @@ function App() {
     applyTheme(theme)
   }, [applyTheme, theme])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    setIsAuthCallbackRoute(window.location.pathname.startsWith('/auth/callback'))
+  }, [])
+
   // Gate hover-only visuals with a root class to avoid accidental previews on touch devices
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return
@@ -843,6 +851,9 @@ function App() {
   }, [])
 
   const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
+  if (isAuthCallbackRoute) {
+    return <AuthCallbackScreen />
+  }
   const brandButtonClassName = useMemo(
     () => ['brand', 'brand--toggle', isCompactBrand ? 'brand--compact' : ''].filter(Boolean).join(' '),
     [isCompactBrand],
@@ -1510,3 +1521,43 @@ function App() {
 }
 
 export default App
+
+function AuthCallbackScreen(): React.ReactElement {
+  useEffect(() => {
+    let cancelled = false
+    const finalize = async () => {
+      if (!supabase) {
+        window.location.replace('/')
+        return
+      }
+      try {
+        const { error } = await supabase.auth.exchangeCodeForSession(window.location.href)
+        if (error) {
+          console.warn('Supabase exchangeCodeForSession error:', error.message)
+          await supabase.auth.getSession().catch((fallbackError) => {
+            console.warn('Supabase getSession fallback failed:', fallbackError)
+          })
+        }
+      } catch (error) {
+        console.warn('Unexpected auth callback error:', error)
+      } finally {
+        if (!cancelled) {
+          window.location.replace('/')
+        }
+      }
+    }
+    finalize().catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return (
+    <div className="auth-callback-screen">
+      <div className="auth-callback-panel">
+        <p className="auth-callback-title">Signing you in…</p>
+        <p className="auth-callback-text">Hang tight while we finish connecting your account.</p>
+      </div>
+    </div>
+  )
+}
