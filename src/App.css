@@ -1208,14 +1208,12 @@ html[data-theme='light'] .nav-links--drawer {
   background: linear-gradient(120deg, #4d68ff, #1fc8ff);
   color: #fff;
   cursor: pointer;
-  box-shadow: 0 16px 30px rgba(10, 14, 32, 0.42);
-  transition: transform 180ms ease, box-shadow 180ms ease;
+  transition: transform 180ms ease;
 }
 
 .profile-menu__primary-action:hover,
 .profile-menu__primary-action:focus-visible {
   transform: translateY(-1px);
-  box-shadow: 0 20px 40px rgba(10, 14, 32, 0.5);
 }
 
 .profile-menu__primary-action:focus-visible {

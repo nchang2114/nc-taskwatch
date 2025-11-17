@@ -462,10 +462,10 @@ function App() {
     setProfileHelpMenuOpen(false)
   }, [])
 
-  const openSettingsPanel = useCallback(() => {
+  const openSettingsPanel = useCallback((sectionId?: string) => {
     closeProfileMenu()
     setSettingsOpen(true)
-    setActiveSettingsSection((current) => current || (SETTINGS_SECTIONS[0]?.id ?? 'general'))
+    setActiveSettingsSection((current) => sectionId ?? current ?? (SETTINGS_SECTIONS[0]?.id ?? 'general'))
   }, [closeProfileMenu])
 
   const closeSettingsPanel = useCallback(() => {
@@ -961,11 +961,11 @@ function App() {
         <div className="profile-menu__section profile-menu__section--settings">
           <div className="profile-menu__section-label">Settings</div>
           <div className="profile-menu__actions">
-            <button type="button" className="profile-menu__action" role="menuitem" onClick={openSettingsPanel}>
+            <button type="button" className="profile-menu__action" role="menuitem" onClick={() => openSettingsPanel()}>
               <span className="profile-menu__action-title">Settings</span>
               <span className="profile-menu__action-subtitle">Theme, focus tools, and surfaces</span>
             </button>
-            <button type="button" className="profile-menu__action" role="menuitem" onClick={closeProfileMenu}>
+            <button type="button" className="profile-menu__action" role="menuitem" onClick={() => openSettingsPanel('account')}>
               <span className="profile-menu__action-title">Account</span>
               <span className="profile-menu__action-subtitle">
                 Email, Subscription, Notifications, Apps &amp; Connectors, Data Controls
