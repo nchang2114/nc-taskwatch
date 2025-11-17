@@ -300,7 +300,7 @@ const SETTINGS_SECTIONS: Array<{ id: string; label: string; description?: string
 ]
 
 
-function App() {
+function MainApp() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
   const [activeTab, setActiveTab] = useState<TabKey>('focus')
   const [viewportWidth, setViewportWidth] = useState(() =>
@@ -330,7 +330,6 @@ function App() {
   const settingsOverlayRef = useRef<HTMLDivElement | null>(null)
   const authModalRef = useRef<HTMLDivElement | null>(null)
   const previousProfileRef = useRef<UserProfile | null>(null)
-  const [isAuthCallbackRoute, setIsAuthCallbackRoute] = useState(false)
   const isSignedIn = Boolean(userProfile)
   const userInitials = useMemo(() => {
     if (!userProfile?.name) {
@@ -656,13 +655,6 @@ function App() {
     applyTheme(theme)
   }, [applyTheme, theme])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-    setIsAuthCallbackRoute(window.location.pathname.startsWith('/auth/callback'))
-  }, [])
-
   // Gate hover-only visuals with a root class to avoid accidental previews on touch devices
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return
@@ -850,10 +842,7 @@ function App() {
     }
   }, [])
 
-  const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
-  if (isAuthCallbackRoute) {
-    return <AuthCallbackScreen />
-  }
+const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
   const brandButtonClassName = useMemo(
     () => ['brand', 'brand--toggle', isCompactBrand ? 'brand--compact' : ''].filter(Boolean).join(' '),
     [isCompactBrand],
@@ -1518,6 +1507,28 @@ function App() {
       ) : null}
     </div>
   )
+}
+
+function App(): React.ReactElement {
+  const [isAuthCallbackRoute, setIsAuthCallbackRoute] = useState(() =>
+    typeof window !== 'undefined' ? window.location.pathname.startsWith('/auth/callback') : false,
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handlePopState = () => {
+      setIsAuthCallbackRoute(window.location.pathname.startsWith('/auth/callback'))
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  if (isAuthCallbackRoute) {
+    return <AuthCallbackScreen />
+  }
+  return <MainApp />
 }
 
 export default App
