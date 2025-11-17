@@ -1391,9 +1391,9 @@ html[data-theme='light'] .profile-help-menu {
 }
 
 .settings-panel {
-  width: min(880px, 100%);
-  height: clamp(460px, 70vh, 640px);
-  max-height: 92vh;
+  width: min(760px, 100%);
+  height: clamp(420px, 65vh, 560px);
+  max-height: 88vh;
   background: var(--profile-menu-bg);
   border: 1px solid rgba(148, 164, 255, 0.35);
   border-radius: clamp(1rem, 2vw, 1.4rem);
@@ -1403,7 +1403,7 @@ html[data-theme='light'] .profile-help-menu {
 }
 
 .settings-panel__sidebar {
-  width: clamp(200px, 26vw, 240px);
+  width: clamp(180px, 24vw, 220px);
   background: rgba(12, 18, 42, 0.5);
   border-right: 1px solid rgba(148, 164, 255, 0.15);
   display: flex;
@@ -1418,9 +1418,10 @@ html[data-theme='light'] .settings-panel__sidebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.2rem;
+  padding: 0.8rem 1rem;
   font-weight: 600;
   color: var(--text-primary);
+  font-size: 0.95rem;
 }
 
 .settings-panel__close {
@@ -1428,10 +1429,11 @@ html[data-theme='light'] .settings-panel__sidebar {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
-  width: 1.9rem;
-  height: 1.9rem;
+  width: 1.6rem;
+  height: 1.6rem;
   cursor: pointer;
   transition: background 160ms ease;
+  font-size: 0.9rem;
 }
 
 .settings-panel__close:hover,
@@ -1447,8 +1449,8 @@ html[data-theme='light'] .settings-panel__sidebar {
 .settings-panel__nav {
   display: flex;
   flex-direction: column;
-  padding: 0 0.5rem 1rem;
-  gap: 0.35rem;
+  padding: 0 0.4rem 0.8rem;
+  gap: 0.3rem;
   flex: 1;
   overflow-y: auto;
 }
@@ -1457,11 +1459,12 @@ html[data-theme='light'] .settings-panel__sidebar {
   border: none;
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.75rem;
+  gap: 0.55rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.65rem;
   background: transparent;
   color: var(--text-primary);
+  font-size: 0.92rem;
   cursor: pointer;
   transition: background 150ms ease, color 150ms ease;
 }
@@ -1481,8 +1484,8 @@ html[data-theme='light'] .settings-panel__sidebar {
 }
 
 .settings-panel__nav-icon {
-  width: 1.6rem;
-  height: 1.6rem;
+  width: 1.4rem;
+  height: 1.4rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1496,11 +1499,12 @@ html[data-theme='light'] .settings-panel__sidebar {
 
 .settings-panel__nav-label {
   font-weight: 600;
+  font-size: 0.92rem;
 }
 
 .settings-panel__content {
   flex: 1 1 auto;
-  padding: clamp(1.2rem, 3vw, 1.8rem) clamp(1.4rem, 4vw, 2.6rem);
+  padding: clamp(1rem, 3vw, 1.5rem) clamp(1.1rem, 4vw, 2rem);
   display: flex;
   flex-direction: column;
   gap: clamp(1rem, 3vw, 1.6rem);
@@ -1516,21 +1520,21 @@ html[data-theme='light'] .settings-panel__sidebar {
 
 .settings-panel__content-title {
   margin: 0;
-  font-size: clamp(1.3rem, 3vw, 1.5rem);
+  font-size: clamp(1.1rem, 2.4vw, 1.3rem);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .settings-panel__content-subtitle {
-  margin: 0.3rem 0 0;
+  margin: 0.25rem 0 0;
   color: var(--text-secondary);
-  font-size: 0.92rem;
+  font-size: 0.85rem;
 }
 
 .settings-panel__group {
   border: 1px solid rgba(148, 164, 255, 0.2);
-  border-radius: 1rem;
-  padding: 0.6rem 0;
+  border-radius: 0.85rem;
+  padding: 0.5rem 0;
   background: rgba(10, 14, 36, 0.3);
 }
 
@@ -1542,8 +1546,9 @@ html[data-theme='light'] .settings-panel__group {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.85rem 1.2rem;
-  gap: 1rem;
+  padding: 0.7rem 1rem;
+  gap: 0.8rem;
+  font-size: 0.92rem;
 }
 
 .settings-panel__row + .settings-panel__row {
@@ -1554,20 +1559,22 @@ html[data-theme='light'] .settings-panel__group {
   margin: 0;
   font-weight: 600;
   color: var(--text-primary);
+  font-size: 0.94rem;
 }
 
 .settings-panel__row-subtitle {
-  margin: 0.25rem 0 0;
+  margin: 0.15rem 0 0;
   color: var(--text-secondary);
-  font-size: 0.86rem;
+  font-size: 0.8rem;
 }
 
 .settings-panel__chip {
   border: 1px solid rgba(148, 164, 255, 0.5);
   border-radius: 999px;
   background: transparent;
-  padding: 0.4rem 0.85rem;
+  padding: 0.35rem 0.75rem;
   color: var(--text-primary);
+  font-size: 0.9rem;
   cursor: pointer;
 }
 
@@ -1580,9 +1587,10 @@ html[data-theme='light'] .settings-panel__group {
 .settings-panel__pill {
   border: none;
   border-radius: 999px;
-  padding: 0.45rem 0.9rem;
+  padding: 0.35rem 0.75rem;
   background: rgba(120, 138, 255, 0.22);
   color: var(--text-primary);
+  font-size: 0.85rem;
   cursor: pointer;
 }
 
@@ -1591,10 +1599,10 @@ html[data-theme='light'] .settings-panel__group {
 }
 
 .settings-panel__toggle {
-  --toggle-width: 2.5rem;
+  --toggle-width: 2.1rem;
   position: relative;
   width: var(--toggle-width);
-  height: 1.3rem;
+  height: 1.1rem;
   border-radius: 999px;
   background: rgba(148, 164, 255, 0.3);
   cursor: pointer;
@@ -1610,15 +1618,15 @@ html[data-theme='light'] .settings-panel__group {
 }
 
 .settings-panel__toggle span {
-  width: 1rem;
-  height: 1rem;
+  width: 0.9rem;
+  height: 0.9rem;
   border-radius: 50%;
   background: #fff;
   transition: transform 150ms ease, background 150ms ease;
 }
 
 .settings-panel__toggle input:checked + span {
-  transform: translateX(1.1rem);
+  transform: translateX(0.95rem);
   background: #35d4ff;
 }
 
