@@ -11593,6 +11593,32 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
           document.body,
         )
       : null
+  const quickListMenuPortal =
+    quickListMenuOpen && typeof document !== 'undefined'
+      ? createPortal(
+          <div className="goal-menu-overlay" role="presentation" onMouseDown={() => setQuickListMenuOpen(false)}>
+            <div
+              ref={quickListMenuRef}
+              className="goal-menu goal-menu--floating min-w-[180px] rounded-md border p-1 shadow-lg"
+              style={{ top: `${quickListMenuPosition.top}px`, left: `${quickListMenuPosition.left}px`, visibility: quickListMenuPositionReady ? 'visible' : 'hidden' }}
+              role="menu"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="goal-menu__item goal-menu__item--danger"
+                onClick={() => {
+                  setQuickListMenuOpen(false)
+                  deleteAllCompletedQuickItems()
+                }}
+              >
+                Delete all completed tasks
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null
   return (
     <div className={classNames('goals-layer text-white', dashboardLayout && 'goals-layer--dashboard')}>
       <div className="goals-content site-main__inner">
@@ -12152,18 +12178,6 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                   </button>
                 </div>
               </div>
-              {quickListMenuOpen && typeof document !== 'undefined' ? createPortal(
-                <div className="goal-menu-overlay" role="presentation" onMouseDown={() => setQuickListMenuOpen(false)}>
-                  <div
-                    ref={quickListMenuRef}
-                    className="goal-menu goal-menu--floating min-w-[180px] rounded-md border p-1 shadow-lg"
-                    style={{ top: `${quickListMenuPosition.top}px`, left: `${quickListMenuPosition.left}px`, visibility: quickListMenuPositionReady ? 'visible' : 'hidden' }}
-                    role="menu"
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <button type="button" className="goal-menu__item goal-menu__item--danger" onClick={() => { setQuickListMenuOpen(false); deleteAllCompletedQuickItems() }}>Delete all completed tasks</button>
-                  </div>
-                </div>, document.body) : null}
               {renderQuickListBody()}
             </section>
           ) : null}
@@ -12350,6 +12364,24 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                         >
                           <svg className="life-routines-card__chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                        <button
+                          ref={quickListMenuButtonRef}
+                          type="button"
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40 transition life-routines-card__task-menu-button"
+                          aria-haspopup="menu"
+                          aria-expanded={quickListMenuOpen}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setQuickListMenuOpen((v) => !v)
+                          }}
+                          title="Quick List menu"
+                        >
+                          <svg className="w-4.5 h-4.5 goal-kebab-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <circle cx="12" cy="6" r="1.6" />
+                            <circle cx="12" cy="12" r="1.6" />
+                            <circle cx="12" cy="18" r="1.6" />
                           </svg>
                         </button>
                       </div>
@@ -12739,6 +12771,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
       {lifeRoutineMenuPortal}
       {lifeRoutineCustomizerPortal}
       {customizerPortal}
+      {quickListMenuPortal}
 
       {isSettingsOpen && (
         <div
