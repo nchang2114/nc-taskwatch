@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import './App.css'
 import GoalsPage from './pages/GoalsPage'
@@ -9,6 +9,12 @@ import { SCHEDULE_EVENT_TYPE } from './lib/scheduleChannel'
 
 type Theme = 'light' | 'dark'
 type TabKey = 'goals' | 'focus' | 'reflection'
+type UserProfile = {
+  name: string
+  email: string
+  avatarUrl?: string
+}
+type SyncStatus = 'synced' | 'syncing' | 'offline' | 'pending'
 
 const THEME_STORAGE_KEY = 'nc-taskwatch-theme'
 const getInitialTheme = (): Theme => {
@@ -39,6 +45,50 @@ const ENABLE_TAB_SWIPE = false
 
 const SWIPE_SEQUENCE: TabKey[] = ['reflection', 'focus', 'goals']
 
+const AUTH_PROFILE_STORAGE_KEY = 'nc-taskwatch-auth-profile'
+
+const createDemoProfile = (): UserProfile => ({
+  name: 'Nicholas Chang',
+  email: 'swagferret11@gmail.com',
+})
+
+const sanitizeStoredProfile = (value: unknown): UserProfile | null => {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const candidate = value as Partial<UserProfile>
+  const name = typeof candidate.name === 'string' ? candidate.name : null
+  const email = typeof candidate.email === 'string' ? candidate.email : null
+  const avatarUrl = typeof candidate.avatarUrl === 'string' ? candidate.avatarUrl : undefined
+  if (!name || !email) {
+    return null
+  }
+  return avatarUrl ? { name, email, avatarUrl } : { name, email }
+}
+
+const readStoredProfile = (): UserProfile | null => {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    const raw = window.localStorage.getItem(AUTH_PROFILE_STORAGE_KEY)
+    if (!raw) {
+      return null
+    }
+    const parsed = JSON.parse(raw)
+    return sanitizeStoredProfile(parsed)
+  } catch {
+    return null
+  }
+}
+
+const SYNC_STATUS_COPY: Record<SyncStatus, { icon: string; label: string }> = {
+  synced: { icon: '✓', label: 'Synced just now' },
+  syncing: { icon: '⟳', label: 'Syncing…' },
+  offline: { icon: '⚠', label: 'Offline — changes saved locally' },
+  pending: { icon: '⛁', label: 'Local changes pending upload (3)' },
+}
+
 
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
@@ -48,11 +98,100 @@ function App() {
   )
   const [isNavCollapsed, setIsNavCollapsed] = useState(false)
   const [isNavOpen, setIsNavOpen] = useState(false)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => readStoredProfile())
+  const [syncStatus] = useState<SyncStatus>('synced')
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
 
   const navContainerRef = useRef<HTMLElement | null>(null)
   const navBrandRef = useRef<HTMLButtonElement | null>(null)
   const navControlsRef = useRef<HTMLDivElement | null>(null)
   const navMeasureRef = useRef<HTMLDivElement | null>(null)
+  const profileMenuRef = useRef<HTMLDivElement | null>(null)
+  const profileButtonRef = useRef<HTMLButtonElement | null>(null)
+  const profileMenuId = useId()
+  const profileButtonId = useId()
+  const isSignedIn = Boolean(userProfile)
+  const userInitials = useMemo(() => {
+    if (!userProfile?.name) {
+      return 'U'
+    }
+    const tokens = userProfile.name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+    const initials = tokens.join('')
+    return initials || 'U'
+  }, [userProfile])
+  const syncStatusCopy = SYNC_STATUS_COPY[syncStatus]
+  const profileButtonClassName = useMemo(
+    () =>
+      ['profile-button', isSignedIn ? 'profile-button--signed-in' : 'profile-button--guest', profileMenuOpen ? 'profile-button--open' : '']
+        .filter(Boolean)
+        .join(' '),
+    [isSignedIn, profileMenuOpen],
+  )
+
+  const closeProfileMenu = useCallback(() => {
+    setProfileMenuOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    if (userProfile) {
+      window.localStorage.setItem(AUTH_PROFILE_STORAGE_KEY, JSON.stringify(userProfile))
+    } else {
+      window.localStorage.removeItem(AUTH_PROFILE_STORAGE_KEY)
+    }
+  }, [userProfile])
+
+  useEffect(() => {
+    if (!profileMenuOpen) {
+      return
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (profileMenuRef.current?.contains(target)) {
+        return
+      }
+      if (profileButtonRef.current?.contains(target)) {
+        return
+      }
+      closeProfileMenu()
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeProfileMenu()
+        window.setTimeout(() => {
+          profileButtonRef.current?.focus()
+        }, 0)
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [profileMenuOpen, closeProfileMenu])
+
+  const handleMockSignIn = useCallback(() => {
+    setUserProfile(createDemoProfile())
+    closeProfileMenu()
+  }, [closeProfileMenu])
+
+  const handleLogOut = useCallback(() => {
+    setUserProfile(null)
+    closeProfileMenu()
+  }, [closeProfileMenu])
+
+  const handleContinueGuest = useCallback(() => {
+    setUserProfile(null)
+    closeProfileMenu()
+  }, [closeProfileMenu])
 
   const isCompactBrand = viewportWidth <= COMPACT_BRAND_BREAKPOINT
 
@@ -469,6 +608,140 @@ function App() {
     </span>
   ))
 
+  const renderSignedInMenu = () => {
+    if (!userProfile) {
+      return null
+    }
+    return (
+      <>
+        <div className="profile-menu__section profile-menu__section--user">
+          <div className="profile-menu__avatar profile-menu__avatar--filled" aria-hidden="true">
+            {userInitials}
+          </div>
+          <div className="profile-menu__user-text">
+            <p className="profile-menu__user-name">{userProfile.name}</p>
+            <p className="profile-menu__user-email">{userProfile.email}</p>
+          </div>
+        </div>
+        <hr className="profile-menu__divider" />
+        <div className="profile-menu__section profile-menu__section--sync">
+          <div className="profile-menu__section-label">Sync status</div>
+          <p className="profile-menu__section-hint">Unique to Taskwatch</p>
+          <div className={`profile-menu__status profile-menu__status--${syncStatus}`} role="status" aria-live="polite">
+            <span className="profile-menu__status-icon" aria-hidden="true">
+              {syncStatusCopy.icon}
+            </span>
+            <span className="profile-menu__status-text">{syncStatusCopy.label}</span>
+          </div>
+        </div>
+        <hr className="profile-menu__divider" />
+        <div className="profile-menu__section profile-menu__section--settings">
+          <div className="profile-menu__section-label">Settings</div>
+          <div className="profile-menu__actions">
+            <button type="button" className="profile-menu__action" role="menuitem" onClick={closeProfileMenu}>
+              <span className="profile-menu__action-title">Settings</span>
+              <span className="profile-menu__action-subtitle">Theme, focus tools, and surfaces</span>
+            </button>
+            <button type="button" className="profile-menu__action" role="menuitem" onClick={closeProfileMenu}>
+              <span className="profile-menu__action-title">Account</span>
+              <span className="profile-menu__action-subtitle">
+                Email, Subscription, Notifications, Apps &amp; Connectors, Data Controls
+              </span>
+            </button>
+            <button type="button" className="profile-menu__action" role="menuitem" onClick={closeProfileMenu}>
+              <span className="profile-menu__action-title">Security…</span>
+            </button>
+            <button
+              type="button"
+              className="profile-menu__action profile-menu__action--accent"
+              role="menuitem"
+              onClick={closeProfileMenu}
+            >
+              <span className="profile-menu__action-title">Upgrade your plan…</span>
+            </button>
+          </div>
+        </div>
+        <hr className="profile-menu__divider" />
+        <div className="profile-menu__section profile-menu__section--help">
+          <div className="profile-menu__section-label">Help</div>
+          <div className="profile-menu__actions">
+            <button type="button" className="profile-menu__action" role="menuitem" onClick={closeProfileMenu}>
+              <span className="profile-menu__action-title">Help</span>
+            </button>
+            <button
+              type="button"
+              className="profile-menu__action profile-menu__action--danger"
+              role="menuitem"
+              onClick={handleLogOut}
+            >
+              <span className="profile-menu__action-title">Log out…</span>
+            </button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  const renderGuestMenu = () => (
+    <>
+      <div className="profile-menu__section profile-menu__section--user">
+        <div className="profile-menu__avatar profile-menu__avatar--empty" aria-hidden="true">
+          <svg viewBox="0 0 24 24" className="profile-menu__avatar-icon" aria-hidden="true">
+            <circle cx="12" cy="9" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            <path
+              d="M5 19.2c.68-3.8 3.6-5.9 7-5.9s6.32 2.1 7 5.9"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
+        <div className="profile-menu__user-text">
+          <p className="profile-menu__user-name">You’re using Taskwatch as a guest</p>
+          <p className="profile-menu__user-email">Your data is stored locally only</p>
+        </div>
+      </div>
+      <hr className="profile-menu__divider" />
+      <div className="profile-menu__section">
+        <p className="profile-menu__section-label">Sign in to:</p>
+        <ul className="profile-menu__benefits">
+          <li>Sync across devices</li>
+          <li>Back up your goals &amp; sessions</li>
+          <li>Restore your history anytime</li>
+        </ul>
+        <button
+          type="button"
+          className="profile-menu__primary-action"
+          onClick={handleMockSignIn}
+          role="menuitem"
+        >
+          Sign in / Create account
+        </button>
+      </div>
+      <hr className="profile-menu__divider" />
+      <div className="profile-menu__section profile-menu__section--preferences">
+        <div className="profile-menu__preference-row">
+          <span>Theme</span>
+          <span>Auto</span>
+        </div>
+        <div className="profile-menu__preference-row">
+          <span>Time format</span>
+          <span>12-hour</span>
+        </div>
+      </div>
+      <hr className="profile-menu__divider" />
+      <button
+        type="button"
+        className="profile-menu__ghost-action"
+        onClick={handleContinueGuest}
+        role="menuitem"
+      >
+        Continue as guest
+      </button>
+    </>
+  )
+
   const swipeHandlers = ENABLE_TAB_SWIPE
     ? {
         onPointerDownCapture: handleSwipePointerDown,
@@ -508,6 +781,43 @@ function App() {
                 {navMeasureElements}
               </div>
               <div className="top-bar__controls" ref={navControlsRef}>
+                <div className="profile-menu-wrapper">
+                  <button
+                    type="button"
+                    className={profileButtonClassName}
+                    aria-haspopup="menu"
+                    aria-expanded={profileMenuOpen}
+                    aria-controls={profileMenuId}
+                    aria-label={isSignedIn ? 'Open account menu' : 'Open guest menu'}
+                    title={isSignedIn ? 'Account' : 'You are browsing as a guest'}
+                    onClick={() => setProfileMenuOpen((open) => !open)}
+                    id={profileButtonId}
+                    ref={profileButtonRef}
+                  >
+                    <svg viewBox="0 0 24 24" className="profile-button__icon" aria-hidden="true">
+                      <circle cx="12" cy="9" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                      <path
+                        d="M5 19.2c.68-3.8 3.6-5.9 7-5.9s6.32 2.1 7 5.9"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span className="sr-only">{isSignedIn ? 'Account menu' : 'Guest menu'}</span>
+                  </button>
+                  {profileMenuOpen ? (
+                    <div
+                      className="profile-menu"
+                      role="menu"
+                      id={profileMenuId}
+                      aria-labelledby={profileButtonId}
+                      ref={profileMenuRef}
+                    >
+                      {isSignedIn ? renderSignedInMenu() : renderGuestMenu()}
+                    </div>
+                  ) : null}
+                </div>
                 <button
                   className="nav-toggle"
                   type="button"

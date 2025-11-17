@@ -936,6 +936,305 @@ html[data-theme='light'] .nav-links--drawer {
   outline-offset: 2px;
 }
 
+.profile-menu-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-button {
+  width: clamp(2.35rem, 6vw, 2.85rem);
+  height: clamp(2.35rem, 6vw, 2.85rem);
+  border-radius: 999px;
+  border: 1px solid var(--control-border);
+  background: var(--control-surface);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+  box-shadow: 0 16px 30px rgba(4, 8, 26, 0.35);
+}
+
+.profile-button--guest {
+  color: var(--text-muted);
+}
+
+.profile-button--signed-in {
+  color: var(--text-primary);
+}
+
+.profile-button--open,
+.profile-button:hover,
+.profile-button:focus-visible {
+  background: var(--control-surface-hover);
+  border-color: rgba(143, 160, 255, 0.62);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.profile-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.profile-button__icon {
+  width: clamp(1.1rem, 3.2vw, 1.35rem);
+  height: clamp(1.1rem, 3.2vw, 1.35rem);
+  display: block;
+}
+
+.profile-menu {
+  position: absolute;
+  top: calc(100% + clamp(0.35rem, 1.4vw, 0.6rem));
+  right: 0;
+  width: min(360px, 82vw);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.6rem, 2vw, 0.9rem);
+  padding: clamp(0.85rem, 3vw, 1.2rem);
+  background: var(--panel-background);
+  border: 1px solid var(--panel-border);
+  border-radius: clamp(0.9rem, 3vw, 1.1rem);
+  box-shadow: var(--panel-shadow);
+  z-index: 30;
+  animation: profileMenuAppear 160ms cubic-bezier(0.18, 0.88, 0.32, 1) forwards;
+  min-width: 260px;
+}
+
+@keyframes profileMenuAppear {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.profile-menu__section {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.35rem, 1.4vw, 0.55rem);
+}
+
+.profile-menu__section--user {
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(0.65rem, 2vw, 0.85rem);
+}
+
+.profile-menu__section--preferences {
+  gap: 0.15rem;
+}
+
+.profile-menu__avatar {
+  width: clamp(2.4rem, 6vw, 2.85rem);
+  height: clamp(2.4rem, 6vw, 2.85rem);
+  border-radius: 999px;
+  border: 1px solid rgba(143, 160, 255, 0.4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  background: linear-gradient(140deg, rgba(64, 78, 178, 0.44), rgba(120, 133, 255, 0.38));
+}
+
+.profile-menu__avatar--empty {
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.profile-menu__avatar-icon {
+  width: 70%;
+  height: 70%;
+  opacity: 0.8;
+}
+
+.profile-menu__user-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.profile-menu__user-name {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: clamp(0.92rem, 1.8vw, 1rem);
+}
+
+.profile-menu__user-email {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: clamp(0.78rem, 1.5vw, 0.88rem);
+}
+
+.profile-menu__divider {
+  margin: 0;
+  border: none;
+  border-top: 1px solid rgba(148, 164, 255, 0.22);
+}
+
+.profile-menu__section-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.profile-menu__section-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(180, 196, 255, 0.7);
+}
+
+.profile-menu__status {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.6rem;
+  background: rgba(82, 104, 232, 0.18);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.profile-menu__status--syncing {
+  background: rgba(69, 173, 255, 0.16);
+}
+
+.profile-menu__status--offline {
+  background: rgba(255, 158, 92, 0.16);
+}
+
+.profile-menu__status--pending {
+  background: rgba(255, 214, 92, 0.16);
+}
+
+.profile-menu__status-icon {
+  font-size: 1rem;
+}
+
+.profile-menu__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.profile-menu__action {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.profile-menu__action:hover,
+.profile-menu__action:focus-visible {
+  background: rgba(98, 114, 255, 0.15);
+}
+
+.profile-menu__action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.profile-menu__action-title {
+  display: block;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.profile-menu__action-subtitle {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.profile-menu__action--accent {
+  background: rgba(98, 114, 255, 0.12);
+}
+
+.profile-menu__action--danger {
+  color: #ffb4a2;
+}
+
+.profile-menu__benefits {
+  margin: 0 0 0.4rem 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  list-style: disc;
+}
+
+.profile-menu__primary-action {
+  border: none;
+  width: 100%;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  background: linear-gradient(120deg, #4d68ff, #1fc8ff);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 16px 30px rgba(10, 14, 32, 0.42);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.profile-menu__primary-action:hover,
+.profile-menu__primary-action:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 40px rgba(10, 14, 32, 0.5);
+}
+
+.profile-menu__primary-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.profile-menu__preference-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.profile-menu__ghost-action {
+  border: 1px solid rgba(148, 164, 255, 0.35);
+  border-radius: 0.75rem;
+  padding: 0.65rem;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.profile-menu__ghost-action:hover,
+.profile-menu__ghost-action:focus-visible {
+  background: rgba(148, 164, 255, 0.14);
+}
+
+.profile-menu__ghost-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .hamburger {
   position: relative;
   display: block;
