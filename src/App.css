@@ -1044,9 +1044,6 @@ html[data-theme='light'] .nav-links--drawer {
   gap: clamp(0.65rem, 2vw, 0.85rem);
 }
 
-.profile-menu__section--preferences {
-  gap: 0.15rem;
-}
 
 .profile-menu__section--help {
   gap: clamp(0.45rem, 2vw, 0.7rem);
@@ -1226,14 +1223,6 @@ html[data-theme='light'] .nav-links--drawer {
   outline-offset: 2px;
 }
 
-.profile-menu__preference-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.4rem 0;
-  color: var(--text-secondary);
-  font-size: 0.88rem;
-}
 
 .profile-menu__ghost-action {
   border: 1px solid rgba(148, 164, 255, 0.35);

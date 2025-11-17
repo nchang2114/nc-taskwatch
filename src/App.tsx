@@ -890,17 +890,6 @@ function App() {
         </button>
       </div>
       <hr className="profile-menu__divider" />
-      <div className="profile-menu__section profile-menu__section--preferences">
-        <div className="profile-menu__preference-row">
-          <span>Theme</span>
-          <span>Auto</span>
-        </div>
-        <div className="profile-menu__preference-row">
-          <span>Time format</span>
-          <span>12-hour</span>
-        </div>
-      </div>
-      <hr className="profile-menu__divider" />
       <button
         type="button"
         className="profile-menu__ghost-action"
