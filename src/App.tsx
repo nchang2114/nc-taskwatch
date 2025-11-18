@@ -1601,7 +1601,7 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
                   </button>
                 </div>
                 <div className="auth-modal__providers" role="group" aria-label="Sign-in options">
-                  <button type="button" className="auth-provider auth-provider--google" onClick={handleGoogleSignIn}>
+                  <button type="button" className="auth-provider auth-provider--google" onClick={() => handleGoogleSignIn()}>
                     <span className="auth-provider__icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" focusable="false">
                         <path d="M21.6 12.227c0-.68-.057-1.362-.179-2.027H12v3.84h5.44c-.227 1.243-.934 2.352-1.987 3.07v2.553h3.208c1.882-1.733 2.938-4.29 2.938-7.436z" fill="#4285F4" />
