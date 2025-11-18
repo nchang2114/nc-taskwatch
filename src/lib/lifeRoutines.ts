@@ -15,6 +15,81 @@ export const LIFE_ROUTINE_UPDATE_EVENT = 'nc-life-routines:updated'
 
 const cloneRoutine = (routine: LifeRoutineConfig): LifeRoutineConfig => ({ ...routine })
 
+const LIFE_ROUTINE_DEFAULTS: LifeRoutineConfig[] = [
+  {
+    id: 'life-sleep',
+    bucketId: 'life-sleep',
+    title: 'Sleep',
+    blurb: 'Wind-down rituals, lights-out target, and no-screens buffer.',
+    surfaceStyle: 'midnight',
+    sortIndex: 0,
+  },
+  {
+    id: 'life-cook',
+    bucketId: 'life-cook',
+    title: 'Cook/Eat',
+    blurb: 'Prep staples, plan groceries, and keep easy meals ready.',
+    surfaceStyle: 'warm-amber',
+    sortIndex: 1,
+  },
+  {
+    id: 'life-travel',
+    bucketId: 'life-travel',
+    title: 'Travel',
+    blurb: 'Pack bags, confirm logistics, and keep docs handy.',
+    surfaceStyle: 'cool-blue',
+    sortIndex: 2,
+  },
+  {
+    id: 'life-admin',
+    bucketId: 'life-admin',
+    title: 'Life Admin',
+    blurb: 'Inbox zero, bills, and those small adulting loops.',
+    surfaceStyle: 'neutral-grey-blue',
+    sortIndex: 3,
+  },
+  {
+    id: 'life-nature',
+    bucketId: 'life-nature',
+    title: 'Nature',
+    blurb: 'Walks outside, sunlight breaks, or a weekend trail plan.',
+    surfaceStyle: 'grove',
+    sortIndex: 4,
+  },
+  {
+    id: 'life-socials',
+    bucketId: 'life-socials',
+    title: 'Socials',
+    blurb: 'Reach out to friends, plan hangs, and reply to messages.',
+    surfaceStyle: 'soft-magenta',
+    sortIndex: 5,
+  },
+  {
+    id: 'life-mindfulness',
+    bucketId: 'life-mindfulness',
+    title: 'Mindfulness',
+    blurb: 'Breathwork, journaling prompts, and quick resets.',
+    surfaceStyle: 'frost',
+    sortIndex: 6,
+  },
+  {
+    id: 'life-relationships',
+    bucketId: 'life-relationships',
+    title: 'Relationships',
+    blurb: 'Date nights, check-ins, and celebrate the small stuff.',
+    surfaceStyle: 'sunset-orange',
+    sortIndex: 7,
+  },
+]
+
+export const getDefaultLifeRoutines = (): LifeRoutineConfig[] =>
+  LIFE_ROUTINE_DEFAULTS.map((routine, index) =>
+    cloneRoutine({
+      ...routine,
+      sortIndex: index,
+    }),
+  )
+
 const sanitizeLifeRoutine = (value: unknown): LifeRoutineConfig | null => {
   if (typeof value !== 'object' || value === null) {
     return null
@@ -209,17 +284,24 @@ const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]): Promis
 
 export const readStoredLifeRoutines = (): LifeRoutineConfig[] => {
   if (typeof window === 'undefined') {
-    return []
+    return getDefaultLifeRoutines()
   }
   try {
     const raw = window.localStorage.getItem(LIFE_ROUTINE_STORAGE_KEY)
     if (!raw) {
-      return []
+      return getDefaultLifeRoutines()
     }
     const parsed = JSON.parse(raw)
-    return sanitizeLifeRoutineList(parsed)
+    const sanitized = sanitizeLifeRoutineList(parsed)
+    if (sanitized.length > 0) {
+      return sanitized
+    }
+    if (Array.isArray(parsed) && parsed.length === 0) {
+      return []
+    }
+    return getDefaultLifeRoutines()
   } catch {
-    return []
+    return getDefaultLifeRoutines()
   }
 }
 
