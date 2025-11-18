@@ -1444,7 +1444,7 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
                 aria-label={`Switch to ${nextThemeLabel} mode`}
                 ref={navBrandRef}
               >
-                <span className={`brand-text${isCompactBrand ? ' sr-only' : ''}`}>NC-TASKWATCH</span>
+                <span className={`brand-text${isCompactBrand ? ' sr-only' : ''}`}>Taskwatch</span>
                 <span className="brand-indicator" aria-hidden="true">
                   {theme === 'dark' ? '☾' : '☀︎'}
                 </span>
