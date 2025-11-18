@@ -61,7 +61,7 @@ import {
 import { broadcastFocusTask } from '../lib/focusChannel'
 import { broadcastScheduleTask } from '../lib/scheduleChannel'
 import { readStoredQuickList, writeStoredQuickList, subscribeQuickList, type QuickItem, type QuickSubtask } from '../lib/quickList'
-import { fetchQuickListRemoteItems, ensureQuickListRemoteStructures, QUICK_LIST_DB_GOAL_ID } from '../lib/quickListRemote'
+import { fetchQuickListRemoteItems, ensureQuickListRemoteStructures, QUICK_LIST_GOAL_NAME } from '../lib/quickListRemote'
 
 // Minimal sync instrumentation disabled by default
 const DEBUG_SYNC = false
@@ -7334,7 +7334,7 @@ export default function GoalsPage(): ReactElement {
   const applySupabaseGoalsPayload = useCallback(
     (payload: any[]) => {
       const normalized = (normalizeSupabaseGoalsPayload(payload) as Goal[]).filter(
-        (goal) => goal.id !== QUICK_LIST_DB_GOAL_ID,
+        (goal) => goal.name !== QUICK_LIST_GOAL_NAME,
       )
       if (DEBUG_SYNC) {
         try {

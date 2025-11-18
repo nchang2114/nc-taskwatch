@@ -1,13 +1,26 @@
 import { ensureSingleUserSession, supabase } from './supabaseClient'
 import type { QuickItem, QuickSubtask } from './quickList'
 
-export const QUICK_LIST_DB_GOAL_ID = '00000000-0000-4000-8000-0000000000a1'
-export const QUICK_LIST_DB_BUCKET_ID = '00000000-0000-4000-8000-0000000000a2'
-
-const QUICK_LIST_GOAL_NAME = 'Quick List (Hidden)'
+export const QUICK_LIST_GOAL_NAME = 'Quick List (Hidden)'
 const QUICK_LIST_BUCKET_NAME = 'Quick List'
 
 let ensurePromise: Promise<{ goalId: string; bucketId: string } | null> | null = null
+
+const generateUuid = (): string => {
+  const cryptoRef = typeof globalThis !== 'undefined' ? globalThis.crypto : undefined
+  if (cryptoRef && typeof cryptoRef.randomUUID === 'function') {
+    try {
+      return cryptoRef.randomUUID()
+    } catch {
+      // ignore runtime crypto failures and fall back to manual UUID generation
+    }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const r = (Math.random() * 16) | 0
+    const v = char === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
 
 const normalizeDifficulty = (
   difficulty: unknown,
@@ -46,41 +59,88 @@ export async function ensureQuickListRemoteStructures(): Promise<{ goalId: strin
   ensurePromise = (async () => {
     const session = await ensureSingleUserSession()
     if (!session?.user?.id) {
-      ensurePromise = null
       return null
     }
     const userId = session.user.id
-    const goalPayload = {
-      id: QUICK_LIST_DB_GOAL_ID,
-      user_id: userId,
-      name: QUICK_LIST_GOAL_NAME,
-      color: 'from-blue-500 to-indigo-600',
-      sort_index: 10_000_000,
-      card_surface: 'glass',
-      starred: false,
-      goal_archive: true,
-    }
-    const bucketPayload = {
-      id: QUICK_LIST_DB_BUCKET_ID,
-      user_id: userId,
-      goal_id: QUICK_LIST_DB_GOAL_ID,
-      name: QUICK_LIST_BUCKET_NAME,
-      favorite: false,
-      sort_index: 10_000_000,
-      bucket_archive: true,
-      buckets_card_style: 'glass',
-    }
     try {
-      await supabase.from('goals').upsert(goalPayload, { onConflict: 'id' })
-      await supabase.from('buckets').upsert(bucketPayload, { onConflict: 'id' })
+      const { data: existingGoal, error: goalLookupError } = await supabase
+        .from('goals')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('name', QUICK_LIST_GOAL_NAME)
+        .limit(1)
+        .maybeSingle()
+      if (goalLookupError) {
+        console.warn('[quickListRemote] Failed to look up Quick List goal:', goalLookupError)
+        return null
+      }
+      const goalId =
+        typeof existingGoal?.id === 'string' && existingGoal.id.trim().length > 0
+          ? existingGoal.id
+          : generateUuid()
+      if (!existingGoal?.id) {
+        const goalPayload = {
+          id: goalId,
+          user_id: userId,
+          name: QUICK_LIST_GOAL_NAME,
+          color: 'from-blue-500 to-indigo-600',
+          sort_index: 10_000_000,
+          card_surface: 'glass',
+          starred: false,
+          goal_archive: true,
+        }
+        const { error: goalInsertError } = await supabase.from('goals').insert(goalPayload)
+        if (goalInsertError) {
+          console.warn('[quickListRemote] Failed to create Quick List goal:', goalInsertError)
+          return null
+        }
+      }
+      const { data: existingBucket, error: bucketLookupError } = await supabase
+        .from('buckets')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('goal_id', goalId)
+        .eq('name', QUICK_LIST_BUCKET_NAME)
+        .limit(1)
+        .maybeSingle()
+      if (bucketLookupError) {
+        console.warn('[quickListRemote] Failed to look up Quick List bucket:', bucketLookupError)
+        return null
+      }
+      const bucketId =
+        typeof existingBucket?.id === 'string' && existingBucket.id.trim().length > 0
+          ? existingBucket.id
+          : generateUuid()
+      if (!existingBucket?.id) {
+        const bucketPayload = {
+          id: bucketId,
+          user_id: userId,
+          goal_id: goalId,
+          name: QUICK_LIST_BUCKET_NAME,
+          favorite: false,
+          sort_index: 10_000_000,
+          bucket_archive: true,
+          buckets_card_style: 'glass',
+        }
+        const { error: bucketInsertError } = await supabase.from('buckets').insert(bucketPayload)
+        if (bucketInsertError) {
+          console.warn('[quickListRemote] Failed to create Quick List bucket:', bucketInsertError)
+          return null
+        }
+      }
+      return { goalId, bucketId }
     } catch (error) {
       console.warn('[quickListRemote] Failed to ensure Quick List goal/bucket:', error)
-      ensurePromise = null
       return null
     }
-    ensurePromise = null
-    return { goalId: QUICK_LIST_DB_GOAL_ID, bucketId: QUICK_LIST_DB_BUCKET_ID }
   })()
+  ensurePromise
+    ?.catch(() => {
+      // errors are handled inside the async function; this prevents unhandled rejection noise
+    })
+    .finally(() => {
+      ensurePromise = null
+    })
   return ensurePromise
 }
 
