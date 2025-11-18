@@ -289,19 +289,19 @@ const readStoredTaskDetails = (): TaskDetailsState => {
 
 const readStoredQuickListExpanded = (): boolean => {
   if (typeof window === 'undefined') {
-    return true
+    return false
   }
   try {
     const raw = window.localStorage.getItem(QUICK_LIST_EXPANDED_STORAGE_KEY)
-    if (raw === 'false') {
-      return false
-    }
     if (raw === 'true') {
       return true
     }
-    return true
+    if (raw === 'false') {
+      return false
+    }
+    return false
   } catch {
-    return true
+    return false
   }
 }
 
@@ -815,50 +815,6 @@ const DEFAULT_GOALS: Goal[] = [
         archived: false,
         surfaceStyle: 'glass',
         tasks: [],
-      },
-    ],
-  },
-  {
-    id: 'g1',
-    name: 'Finish PopDot Beta',
-    color: 'from-fuchsia-500 to-purple-500',
-    surfaceStyle: 'glass',
-    starred: false,
-    archived: false,
-    buckets: [
-      {
-        id: 'b1',
-        name: 'Coding',
-        favorite: true,
-        archived: false,
-        surfaceStyle: 'glass',
-        tasks: [
-          { id: 't1', text: 'Chest spawn logic', completed: false },
-          { id: 't2', text: 'XP scaling', completed: false },
-          { id: 't3', text: 'Reward tuning', completed: false },
-        ],
-      },
-      {
-        id: 'b2',
-        name: 'Testing',
-        favorite: true,
-        archived: false,
-        surfaceStyle: 'glass',
-        tasks: [
-          { id: 't4', text: 'Challenge balance', completed: false },
-          { id: 't5', text: 'FPS hitches', completed: false },
-        ],
-      },
-      {
-        id: 'b3',
-        name: 'Art/Polish',
-        favorite: false,
-        archived: false,
-        surfaceStyle: 'glass',
-        tasks: [
-          { id: 't6', text: 'Shop UI polish', completed: false },
-          { id: 't7', text: 'Icon pass', completed: false },
-        ],
       },
     ],
   },
@@ -12937,7 +12893,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
                     handleCreateGoal()
                   }
                 }}
-                placeholder="e.g., Finish PopDot Beta"
+                placeholder="e.g., Launch my first product"
                 className="goal-modal__input"
               />
 
