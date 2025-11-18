@@ -56,11 +56,13 @@ export type DbGoalMilestone = {
 
 export async function fetchGoalCreatedAt(goalId: string): Promise<string | null> {
   if (!supabase) return null
-  await ensureSingleUserSession()
+  const userId = await getActiveUserId()
+  if (!userId) return null
   const { data, error } = await supabase
     .from('goals')
     .select('created_at')
     .eq('id', goalId)
+    .eq('user_id', userId)
     .maybeSingle()
   if (error) {
     console.warn('[goalsApi] fetchGoalCreatedAt error', error.message ?? error)
@@ -93,6 +95,11 @@ export type GoalSeed = {
   starred?: boolean
   archived?: boolean
   buckets?: BucketSeed[]
+}
+
+async function getActiveUserId(): Promise<string | null> {
+  const session = await ensureSingleUserSession()
+  return session?.user?.id ?? null
 }
 
 /** Fetch Goals → Buckets → Tasks for the current session user, ordered for UI. */
@@ -290,11 +297,13 @@ export async function fetchGoalsHierarchy(): Promise<
 /** Fetch notes for a single task lazily to avoid large egress during list loads. */
 export async function fetchTaskNotes(taskId: string): Promise<string> {
   if (!supabase) return ''
-  await ensureSingleUserSession()
+  const userId = await getActiveUserId()
+  if (!userId) return ''
   const { data, error } = await supabase
     .from('tasks')
     .select('notes')
     .eq('id', taskId)
+    .eq('user_id', userId)
     .maybeSingle()
   if (error) {
     console.warn('[goalsApi] fetchTaskNotes error', error.message ?? error)
@@ -356,7 +365,9 @@ export async function upsertGoalMilestone(
 ) {
   if (!supabase) return
   const session = await ensureSingleUserSession()
-  if (!session?.user?.id) throw new Error('[goalsApi] Missing Supabase session for milestone upsert')
+  if (!session?.user?.id) {
+    return
+  }
   const payload: Record<string, any> = {
     id: milestone.id,
     user_id: session.user.id,
@@ -390,7 +401,7 @@ export async function upsertGoalMilestone(
 export async function deleteGoalMilestone(goalId: string, milestoneId: string) {
   if (!supabase) return
   const session = await ensureSingleUserSession()
-  if (!session?.user?.id) throw new Error('[goalsApi] Missing Supabase session for milestone delete')
+  if (!session?.user?.id) return
   const { error } = await supabase
     .from('goal_milestones')
     .delete()
@@ -444,7 +455,7 @@ async function updateTaskWithGuard(
   }
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) {
-    throw new Error('Missing Supabase session')
+    return []
   }
   let guarded = supabase
     .from('tasks')
@@ -507,40 +518,46 @@ export async function createGoal(name: string, color: string, surface: string = 
 
 export async function setGoalColor(goalId: string, color: string) {
   if (!supabase) return
-  await ensureSingleUserSession()
-  await supabase.from('goals').update({ color }).eq('id', goalId)
+  const userId = await getActiveUserId()
+  if (!userId) return
+  await supabase.from('goals').update({ color }).eq('id', goalId).eq('user_id', userId)
 }
 
 export async function setGoalSurface(goalId: string, surface: string | null) {
   if (!supabase) return
-  await ensureSingleUserSession()
-  await supabase.from('goals').update({ card_surface: surface }).eq('id', goalId)
+  const userId = await getActiveUserId()
+  if (!userId) return
+  await supabase.from('goals').update({ card_surface: surface }).eq('id', goalId).eq('user_id', userId)
 }
 
 export async function setGoalStarred(goalId: string, starred: boolean) {
   if (!supabase) return
-  await ensureSingleUserSession()
-  await supabase.from('goals').update({ starred }).eq('id', goalId)
+  const userId = await getActiveUserId()
+  if (!userId) return
+  await supabase.from('goals').update({ starred }).eq('id', goalId).eq('user_id', userId)
 }
 
 export async function setGoalArchived(goalId: string, archived: boolean) {
   if (!supabase) return
-  await ensureSingleUserSession()
-  await supabase.from('goals').update({ goal_archive: archived }).eq('id', goalId)
+  const userId = await getActiveUserId()
+  if (!userId) return
+  await supabase.from('goals').update({ goal_archive: archived }).eq('id', goalId).eq('user_id', userId)
 }
 
 export async function renameGoal(goalId: string, name: string) {
   if (!supabase) return
-  await ensureSingleUserSession()
-  await supabase.from('goals').update({ name }).eq('id', goalId)
+  const userId = await getActiveUserId()
+  if (!userId) return
+  await supabase.from('goals').update({ name }).eq('id', goalId).eq('user_id', userId)
 }
 
 /** Toggle the visibility of the milestones layer for a goal (server-backed when supported) */
 export async function setGoalMilestonesShown(goalId: string, shown: boolean) {
   if (!supabase) return
-  await ensureSingleUserSession()
+  const userId = await getActiveUserId()
+  if (!userId) return
   try {
-    const { error } = await supabase.from('goals').update({ milestones_shown: shown }).eq('id', goalId)
+    const { error } = await supabase.from('goals').update({ milestones_shown: shown }).eq('id', goalId).eq('user_id', userId)
     if (error) {
       const msg = String(error.message || '').toLowerCase()
       if (msg.includes('column') && msg.includes('milestones_shown')) {
@@ -557,12 +574,14 @@ export async function setGoalMilestonesShown(goalId: string, shown: boolean) {
 
 export async function deleteGoalById(goalId: string) {
   if (!supabase) return
-  await ensureSingleUserSession()
+  const userId = await getActiveUserId()
+  if (!userId) return
   // Collect bucket ids under this goal
   const { data: buckets } = await supabase
     .from('buckets')
     .select('id')
     .eq('goal_id', goalId)
+    .eq('user_id', userId)
   const bucketIds = (buckets ?? []).map((b: any) => b.id as string)
   if (bucketIds.length > 0) {
     // Delete tasks in those buckets
@@ -571,14 +590,19 @@ export async function deleteGoalById(goalId: string) {
     await supabase.from('buckets').delete().in('id', bucketIds)
   }
   // Finally delete the goal
-  await supabase.from('goals').delete().eq('id', goalId)
+  await supabase.from('goals').delete().eq('id', goalId).eq('user_id', userId)
 }
 
 export async function setGoalSortIndex(goalId: string, toIndex: number) {
   if (!supabase) return
-  await ensureSingleUserSession()
+  const userId = await getActiveUserId()
+  if (!userId) return
   // Load ordered goals
-  const { data: rows } = await supabase.from('goals').select('id, sort_index').order('sort_index', { ascending: true })
+  const { data: rows } = await supabase
+    .from('goals')
+    .select('id, sort_index')
+    .eq('user_id', userId)
+    .order('sort_index', { ascending: true })
   if (!rows || rows.length === 0) return
   const ids = rows.map((r: any) => r.id as string)
   const prevId = toIndex <= 0 ? null : ids[toIndex - 1] ?? null
@@ -600,7 +624,7 @@ export async function setGoalSortIndex(goalId: string, toIndex: number) {
   } else {
     newSort = STEP
   }
-  await supabase.from('goals').update({ sort_index: newSort }).eq('id', goalId)
+  await supabase.from('goals').update({ sort_index: newSort }).eq('id', goalId).eq('user_id', userId)
 }
 
 // ---------- Buckets ----------
@@ -633,40 +657,47 @@ export async function createBucket(goalId: string, name: string, surface: string
 
 export async function setBucketSurface(bucketId: string, surface: string | null) {
   if (!supabase) return
-  await ensureSingleUserSession()
-  await supabase.from('buckets').update({ buckets_card_style: surface }).eq('id', bucketId)
+  const userId = await getActiveUserId()
+  if (!userId) return
+  await supabase.from('buckets').update({ buckets_card_style: surface }).eq('id', bucketId).eq('user_id', userId)
 }
 
 export async function renameBucket(bucketId: string, name: string) {
   if (!supabase) return
-  await ensureSingleUserSession()
-  await supabase.from('buckets').update({ name }).eq('id', bucketId)
+  const userId = await getActiveUserId()
+  if (!userId) return
+  await supabase.from('buckets').update({ name }).eq('id', bucketId).eq('user_id', userId)
 }
 
 export async function setBucketFavorite(bucketId: string, favorite: boolean) {
   if (!supabase) return
-  await ensureSingleUserSession()
-  await supabase.from('buckets').update({ favorite }).eq('id', bucketId)
+  const userId = await getActiveUserId()
+  if (!userId) return
+  await supabase.from('buckets').update({ favorite }).eq('id', bucketId).eq('user_id', userId)
 }
 
 export async function setBucketArchived(bucketId: string, archived: boolean) {
   if (!supabase) return
-  await ensureSingleUserSession()
-  await supabase.from('buckets').update({ bucket_archive: archived }).eq('id', bucketId)
+  const userId = await getActiveUserId()
+  if (!userId) return
+  await supabase.from('buckets').update({ bucket_archive: archived }).eq('id', bucketId).eq('user_id', userId)
 }
 
 export async function deleteBucketById(bucketId: string) {
   if (!supabase) return
-  await ensureSingleUserSession()
-  await supabase.from('buckets').delete().eq('id', bucketId)
+  const userId = await getActiveUserId()
+  if (!userId) return
+  await supabase.from('buckets').delete().eq('id', bucketId).eq('user_id', userId)
 }
 
 export async function setBucketSortIndex(goalId: string, bucketId: string, toIndex: number) {
   if (!supabase) return
-  await ensureSingleUserSession()
+  const userId = await getActiveUserId()
+  if (!userId) return
   const { data: rows } = await supabase
     .from('buckets')
     .select('id, sort_index')
+    .eq('user_id', userId)
     .eq('goal_id', goalId)
     .order('sort_index', { ascending: true })
   if (!rows || rows.length === 0) return
@@ -690,20 +721,21 @@ export async function setBucketSortIndex(goalId: string, bucketId: string, toInd
   } else {
     newSort = STEP
   }
-  await supabase.from('buckets').update({ sort_index: newSort }).eq('id', bucketId)
+  await supabase.from('buckets').update({ sort_index: newSort }).eq('id', bucketId).eq('user_id', userId)
 }
 
 export async function deleteCompletedTasksInBucket(bucketId: string) {
   if (!supabase) return
-  await ensureSingleUserSession()
-  await supabase.from('tasks').delete().eq('bucket_id', bucketId).eq('completed', true)
+  const userId = await getActiveUserId()
+  if (!userId) return
+  await supabase.from('tasks').delete().eq('bucket_id', bucketId).eq('completed', true).eq('user_id', userId)
 }
 
 export async function deleteTaskById(taskId: string, bucketId: string) {
-  if (!supabase) throw new Error('Supabase client unavailable')
+  if (!supabase) return
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) {
-    throw new Error('[goalsApi] Missing Supabase session for task deletion')
+    return
   }
   await supabase
     .from('tasks')
@@ -719,11 +751,11 @@ export async function createTask(
   text: string,
   options?: { clientId?: string; insertAtTop?: boolean },
 ) {
-  if (!supabase) throw new Error('Supabase client unavailable')
+  if (!supabase) return null
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) {
     console.warn('[goalsApi] Unable to create task without an authenticated session.')
-    throw new Error('Missing Supabase session')
+    return null
   }
   const insertAtTop = Boolean(options?.insertAtTop)
   const sort_index = insertAtTop
@@ -761,27 +793,30 @@ export async function createTask(
 }
 
 export async function updateTaskText(taskId: string, text: string) {
-  if (!supabase) throw new Error('Supabase client unavailable')
-  await ensureSingleUserSession()
-  const { error } = await supabase.from('tasks').update({ text }).eq('id', taskId)
+  if (!supabase) return
+  const userId = await getActiveUserId()
+  if (!userId) return
+  const { error } = await supabase.from('tasks').update({ text }).eq('id', taskId).eq('user_id', userId)
   if (error) {
     throw error
   }
 }
 
 export async function updateTaskNotes(taskId: string, notes: string) {
-  if (!supabase) throw new Error('Supabase client unavailable')
-  await ensureSingleUserSession()
-  const { error } = await supabase.from('tasks').update({ notes }).eq('id', taskId)
+  if (!supabase) return
+  const userId = await getActiveUserId()
+  if (!userId) return
+  const { error } = await supabase.from('tasks').update({ notes }).eq('id', taskId).eq('user_id', userId)
   if (error) {
     throw error
   }
 }
 
 export async function setTaskDifficulty(taskId: string, difficulty: DbTask['difficulty']) {
-  if (!supabase) throw new Error('Supabase client unavailable')
-  await ensureSingleUserSession()
-  const { error } = await supabase.from('tasks').update({ difficulty }).eq('id', taskId)
+  if (!supabase) return
+  const userId = await getActiveUserId()
+  if (!userId) return
+  const { error } = await supabase.from('tasks').update({ difficulty }).eq('id', taskId).eq('user_id', userId)
   if (error) {
     throw error
   }
@@ -795,7 +830,9 @@ export async function setTaskPriorityAndResort(
   completed: boolean,
   priority: boolean,
 ) {
-  if (!supabase) throw new Error('Supabase client unavailable')
+  if (!supabase) return
+  const userId = await getActiveUserId()
+  if (!userId) return
   if (priority) {
     // Enabling priority: place at the top of its section
     const sort_index = await prependSortIndexForTasks(bucketId, completed)
@@ -809,6 +846,7 @@ export async function setTaskPriorityAndResort(
     .eq('bucket_id', bucketId)
     .eq('completed', completed)
     .eq('priority', false)
+    .eq('user_id', userId)
     .order('sort_index', { ascending: true })
     .limit(1)
   let sort_index: number
@@ -842,11 +880,9 @@ const parseBooleanish = (value: unknown): boolean | null => {
 }
 
 export async function setTaskCompletedAndResort(taskId: string, bucketId: string, completed: boolean) {
-  if (!supabase) throw new Error('Supabase client unavailable')
-  const session = await ensureSingleUserSession()
-  if (!session?.user?.id) {
-    throw new Error('[goalsApi] Missing Supabase session for completion toggle')
-  }
+  if (!supabase) return
+  const userId = await getActiveUserId()
+  if (!userId) return
 
   const sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed })
   const updates: Partial<DbTask> = { completed, sort_index }
@@ -863,6 +899,7 @@ export async function setTaskCompletedAndResort(taskId: string, bucketId: string
       .select('id, completed')
       .eq('id', taskId)
       .eq('bucket_id', bucketId)
+      .eq('user_id', userId)
       .maybeSingle()
     if (error) {
       throw error
@@ -879,12 +916,15 @@ export async function setTaskCompletedAndResort(taskId: string, bucketId: string
 }
 
 export async function setTaskSortIndex(bucketId: string, section: 'active' | 'completed', toIndex: number, taskId: string) {
-  if (!supabase) throw new Error('Supabase client unavailable')
+  if (!supabase) return
+  const userId = await getActiveUserId()
+  if (!userId) return
   const { data: rows } = await supabase
     .from('tasks')
     .select('id, sort_index')
     .eq('bucket_id', bucketId)
     .eq('completed', section === 'completed')
+    .eq('user_id', userId)
     .order('sort_index', { ascending: true })
   if (!rows) return
   const ids = rows.map((r: any) => r.id as string)
@@ -913,10 +953,10 @@ export async function setTaskSortIndex(bucketId: string, section: 'active' | 'co
 /** Move a task to a different bucket while preserving completion/priority and assigning a sensible sort_index.
  * Priority tasks are placed at the top of their new section; non-priority tasks are appended to the end. */
 export async function moveTaskToBucket(taskId: string, fromBucketId: string, toBucketId: string) {
-  if (!supabase) throw new Error('Supabase client unavailable')
+  if (!supabase) return
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) {
-    throw new Error('[goalsApi] Missing Supabase session for task move')
+    return
   }
   if (fromBucketId === toBucketId) return
   // Fetch current flags to compute section placement
@@ -925,6 +965,7 @@ export async function moveTaskToBucket(taskId: string, fromBucketId: string, toB
     .select('id, completed, priority')
     .eq('id', taskId)
     .eq('bucket_id', fromBucketId)
+    .eq('user_id', session.user.id)
     .maybeSingle()
   if (error) throw error
   const completed = Boolean((taskRow as any)?.completed)
@@ -944,10 +985,10 @@ export async function upsertTaskSubtask(
   taskId: string,
   subtask: { id: string; text: string; completed: boolean; sort_index: number; updated_at?: string },
 ) {
-  if (!supabase) throw new Error('Supabase client unavailable')
+  if (!supabase) return
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) {
-    throw new Error('[goalsApi] Missing Supabase session for subtask upsert')
+    return
   }
   const payload = {
     id: subtask.id,
@@ -966,10 +1007,10 @@ export async function upsertTaskSubtask(
 }
 
 export async function deleteTaskSubtask(taskId: string, subtaskId: string) {
-  if (!supabase) throw new Error('Supabase client unavailable')
+  if (!supabase) return
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) {
-    throw new Error('[goalsApi] Missing Supabase session for subtask delete')
+    return
   }
   const { error } = await supabase
     .from('task_subtasks')
