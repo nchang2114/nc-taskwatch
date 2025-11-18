@@ -461,13 +461,9 @@ function MainApp() {
       return
     }
     try {
-      const queryParams: Record<string, string> = {}
-      const trimmedHint = emailHint?.trim()
-      if (trimmedHint) {
-        queryParams.login_hint = trimmedHint
-        queryParams.prompt = 'login'
-      } else {
-        queryParams.prompt = 'select_account'
+      const queryParams: Record<string, string> = { prompt: 'select_account' }
+      if (emailHint && emailHint.trim().length > 0) {
+        queryParams.login_hint = emailHint.trim()
       }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
