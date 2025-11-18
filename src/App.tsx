@@ -490,6 +490,26 @@ function MainApp() {
     }
   }, [])
 
+  const handleMicrosoftSignIn = useCallback(async () => {
+    if (!supabase) {
+      console.warn('Supabase client is not configured; cannot start Microsoft OAuth.')
+      return
+    }
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'azure',
+        options: {
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+        },
+      })
+      if (error) {
+        console.warn('Microsoft OAuth sign-in failed:', error.message)
+      }
+    } catch (error) {
+      console.warn('Unexpected error starting Microsoft OAuth flow:', error)
+    }
+  }, [])
+
   const isAuthEmailValid = useMemo(() => EMAIL_PATTERN.test(authEmailValue.trim()), [authEmailValue])
 
   const checkAuthEmailExists = useCallback(
@@ -1681,13 +1701,13 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
                     </span>
                     Continue with Apple
                   </button>
-                  <button type="button" className="auth-provider" aria-disabled="true">
+                  <button type="button" className="auth-provider auth-provider--microsoft" onClick={handleMicrosoftSignIn}>
                     <span className="auth-provider__icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" focusable="false">
-                        <path d="M3 12c0-2.145 0-4.29.002-6.435C3.013 3.827 3.838 3 4.572 3H11v8h-8Z" fill="#f35325" />
-                        <path d="M11 3h7.43c.735 0 1.559.827 1.571 2.565.003 2.144.002 4.289.002 6.435h-9v-9Z" fill="#81bc06" />
-                        <path d="M3 12h8v9H4.572c-.734 0-1.559-.828-1.57-2.566C3 16.29 3 14.145 3 12Z" fill="#05a6f0" />
-                        <path d="M12 12h9c0 2.145 0 4.29-.002 6.434-.012 1.739-.836 2.566-1.57 2.566H12v-9Z" fill="#ffba08" />
+                        <path d="M3 3h8.5v8.5H3Z" fill="#f25022" />
+                        <path d="M12.5 3H21v8.5h-8.5Z" fill="#7fba00" />
+                        <path d="M3 12.5h8.5V21H3Z" fill="#00a4ef" />
+                        <path d="M12.5 12.5H21V21h-8.5Z" fill="#ffb900" />
                       </svg>
                     </span>
                     Continue with Microsoft
