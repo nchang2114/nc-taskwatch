@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react'
-import type { ReactNode } from 'react'
+import type { ReactNode, FormEvent } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { User } from '@supabase/supabase-js'
 import './App.css'
@@ -50,6 +50,7 @@ const ENABLE_TAB_SWIPE = false
 const SWIPE_SEQUENCE: TabKey[] = ['reflection', 'focus', 'goals']
 
 const AUTH_PROFILE_STORAGE_KEY = 'nc-taskwatch-auth-profile'
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const sanitizeStoredProfile = (value: unknown): UserProfile | null => {
   if (!value || typeof value !== 'object') {
@@ -313,6 +314,12 @@ function MainApp() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [profileHelpMenuOpen, setProfileHelpMenuOpen] = useState(false)
   const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [authEmailValue, setAuthEmailValue] = useState('')
+  const [authEmailError, setAuthEmailError] = useState<string | null>(null)
+  const [authEmailStage, setAuthEmailStage] = useState<'input' | 'create'>('input')
+  const [authEmailChecking, setAuthEmailChecking] = useState(false)
+  const [authCreatePassword, setAuthCreatePassword] = useState('')
+  const [authCreatePasswordVisible, setAuthCreatePasswordVisible] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [activeSettingsSection, setActiveSettingsSection] = useState(SETTINGS_SECTIONS[0]?.id ?? 'general')
 
@@ -356,6 +363,15 @@ function MainApp() {
   const closeProfileMenu = useCallback(() => {
     setProfileMenuOpen(false)
     setProfileHelpMenuOpen(false)
+  }, [])
+
+  const resetAuthEmailFlow = useCallback(() => {
+    setAuthEmailValue('')
+    setAuthEmailError(null)
+    setAuthEmailStage('input')
+    setAuthEmailChecking(false)
+    setAuthCreatePassword('')
+    setAuthCreatePasswordVisible(false)
   }, [])
 
   useEffect(() => {
@@ -435,8 +451,112 @@ function MainApp() {
   }, [profileHelpMenuOpen])
 
   const closeAuthModal = useCallback(() => {
+    resetAuthEmailFlow()
     setAuthModalOpen(false)
+  }, [resetAuthEmailFlow])
+
+  const handleGoogleSignIn = useCallback(async (emailHint?: string) => {
+    if (!supabase) {
+      console.warn('Supabase client is not configured; cannot start Google OAuth.')
+      return
+    }
+    try {
+      const queryParams: Record<string, string> = {}
+      const trimmedHint = emailHint?.trim()
+      if (trimmedHint) {
+        queryParams.login_hint = trimmedHint
+        queryParams.prompt = 'login'
+      } else {
+        queryParams.prompt = 'select_account'
+      }
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+          queryParams,
+        },
+      })
+      if (error) {
+        console.warn('Google OAuth sign-in failed:', error.message)
+      } else {
+        closeAuthModal()
+      }
+    } catch (error) {
+      console.warn('Unexpected error starting Google OAuth flow:', error)
+    }
+  }, [closeAuthModal])
+
+  const isAuthEmailValid = useMemo(() => EMAIL_PATTERN.test(authEmailValue.trim()), [authEmailValue])
+
+  const checkAuthEmailExists = useCallback(
+    async (email: string): Promise<boolean | null> => {
+      if (!supabase) {
+        console.warn('[Auth] Supabase is unavailable; cannot verify email.')
+        return null
+      }
+      const normalized = email.trim().toLowerCase()
+      if (!normalized) {
+        return false
+      }
+      try {
+        const { data, error } = await supabase.rpc('check_auth_email_exists', { target_email: normalized })
+        if (error) {
+          console.warn('[Auth] Failed to check email existence:', error.message ?? error)
+          return null
+        }
+        return Boolean(data)
+      } catch (error) {
+        console.warn('[Auth] Unexpected email verification error:', error)
+        return null
+      }
+    },
+    [],
+  )
+
+  const handleAuthEmailSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      if (!isAuthEmailValid) {
+        setAuthEmailError('Please enter a valid email address.')
+        return
+      }
+      setAuthEmailError(null)
+      setAuthEmailChecking(true)
+      const trimmed = authEmailValue.trim()
+      try {
+        const exists = await checkAuthEmailExists(trimmed)
+        if (exists === true) {
+          await handleGoogleSignIn(trimmed)
+          return
+        }
+        if (exists === false) {
+          setAuthEmailValue(trimmed)
+          setAuthEmailStage('create')
+          return
+        }
+        setAuthEmailError('We could not verify that email right now. Please try again.')
+      } finally {
+        setAuthEmailChecking(false)
+      }
+    },
+    [authEmailValue, checkAuthEmailExists, handleGoogleSignIn, isAuthEmailValid],
+  )
+
+  const handleAuthCreateBack = useCallback(() => {
+    setAuthEmailStage('input')
+    setAuthCreatePassword('')
+    setAuthCreatePasswordVisible(false)
   }, [])
+
+  const handleAuthCreateSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+  }, [])
+
+  const toggleAuthCreatePasswordVisibility = useCallback(() => {
+    setAuthCreatePasswordVisible((prev) => !prev)
+  }, [])
+
+  const authCreateContinueDisabled = authCreatePassword.trim().length < 8
 
   useEffect(() => {
     if (!authModalOpen) {
@@ -593,29 +713,6 @@ function MainApp() {
   const closeSettingsPanel = useCallback(() => {
     setSettingsOpen(false)
   }, [])
-
-  const handleGoogleSignIn = useCallback(async () => {
-    if (!supabase) {
-      console.warn('Supabase client is not configured; cannot start Google OAuth.')
-      return
-    }
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
-          queryParams: { prompt: 'select_account' },
-        },
-      })
-      if (error) {
-        console.warn('Google OAuth sign-in failed:', error.message)
-      } else {
-        closeAuthModal()
-      }
-    } catch (error) {
-      console.warn('Unexpected error starting Google OAuth flow:', error)
-    }
-  }, [closeAuthModal])
 
   const isCompactBrand = viewportWidth <= COMPACT_BRAND_BREAKPOINT
 
@@ -1432,76 +1529,164 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
       {authModalOpen ? (
         <div className="auth-modal-overlay" role="dialog" aria-modal="true" aria-label="Sign in to Taskwatch">
           <div className="auth-modal" ref={authModalRef}>
-            <div className="auth-modal__header">
-              <div>
-                <p className="auth-modal__title">Sign in to Taskwatch</p>
-                <p className="auth-modal__subtitle">Sync your data and pick up right where you left off.</p>
-              </div>
-              <button type="button" className="auth-modal__close" aria-label="Close sign-in panel" onClick={closeAuthModal}>
-                ✕
-              </button>
-            </div>
-            <div className="auth-modal__providers" role="group" aria-label="Sign-in options">
-              <button type="button" className="auth-provider auth-provider--google" onClick={handleGoogleSignIn}>
-                <span className="auth-provider__icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M21.6 12.227c0-.68-.057-1.362-.179-2.027H12v3.84h5.44c-.227 1.243-.934 2.352-1.987 3.07v2.553h3.208c1.882-1.733 2.938-4.29 2.938-7.436z" fill="#4285F4" />
-                    <path d="M12 22c2.7 0 4.97-.89 6.626-2.337l-3.208-2.553c-.893.6-2.037.947-3.418.947a5.92 5.92 0 0 1-5.592-4.018H3.08v2.6C4.8 19.915 8.17 22 12 22z" fill="#34A853" />
-                    <path d="M6.408 14.04A5.83 5.83 0 0 1 6.1 12c0-.706.123-1.386.308-2.04V7.36H3.08A9.996 9.996 0 0 0 2 12c0 1.6.38 3.112 1.08 4.64l3.328-2.6z" fill="#FBBC05" />
-                    <path d="M12 6.08c1.469 0 2.789.507 3.828 1.5l2.872-2.872C16.967 2.94 14.7 2 12 2 8.17 2 4.8 4.085 3.08 7.36l3.328 2.6A5.92 5.92 0 0 1 12 6.08z" fill="#EA4335" />
-                  </svg>
-                </span>
-                Continue with Google
-              </button>
-              <button type="button" className="auth-provider" aria-disabled="true">
-                <span className="auth-provider__icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M16.365 2c-.948.062-2.074.66-2.752 1.45-.6.69-1.123 1.77-.924 2.795 1.006.032 2.062-.574 2.715-1.373.634-.793 1.123-1.877.961-2.872zM19.66 11.23c-.026-2.58 2.14-3.819 2.243-3.879-1.225-1.79-3.124-2.034-3.791-2.058-1.607-.167-3.14.942-3.955.942-.824 0-2.078-.922-3.416-.897-1.764.026-3.395 1.03-4.295 2.622-1.829 3.165-.466 7.85 1.309 10.418.869 1.25 1.904 2.642 3.264 2.592 1.317-.052 1.813-.84 3.408-.84 1.586 0 2.043.84 3.424.81 1.41-.026 2.303-1.277 3.168-2.532.994-1.45 1.4-2.857 1.421-2.927-.032-.013-2.718-1.034-2.741-4.344z" />
-                  </svg>
-                </span>
-                Continue with Apple
-              </button>
-              <button type="button" className="auth-provider" aria-disabled="true">
-                <span className="auth-provider__icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M3 12c0-2.145 0-4.29.002-6.435C3.013 3.827 3.838 3 4.572 3H11v8h-8Z" fill="#f35325" />
-                    <path d="M11 3h7.43c.735 0 1.559.827 1.571 2.565.003 2.144.002 4.289.002 6.435h-9v-9Z" fill="#81bc06" />
-                    <path d="M3 12h8v9H4.572c-.734 0-1.559-.828-1.57-2.566C3 16.29 3 14.145 3 12Z" fill="#05a6f0" />
-                    <path d="M12 12h9c0 2.145 0 4.29-.002 6.434-.012 1.739-.836 2.566-1.57 2.566H12v-9Z" fill="#ffba08" />
-                  </svg>
-                </span>
-                Continue with Microsoft
-              </button>
-              <button type="button" className="auth-provider" aria-disabled="true">
-                <span className="auth-provider__icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                  </svg>
-                </span>
-                Log in with passkey
-              </button>
-              <button type="button" className="auth-provider" aria-disabled="true">
-                <span className="auth-provider__icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M3 5h18v14H3z" strokeWidth="1.5" stroke="currentColor" fill="none" />
-                    <path d="M7 9h10v2H7zm0 4h6v2H7z" fill="currentColor" />
-                  </svg>
-                </span>
-                Single sign-on (SSO)
-              </button>
-            </div>
-            <hr className="auth-modal__divider" />
-            <form className="auth-modal__email" onSubmit={(event) => event.preventDefault()}>
-              <label htmlFor="auth-modal-email">Email</label>
-              <input id="auth-modal-email" name="email" type="email" placeholder="Enter your email address…" autoComplete="email" />
-              <p className="auth-modal__hint">Use an organization email to easily collaborate with teammates.</p>
-              <button type="button" className="auth-modal__continue" aria-disabled="true">
-                Continue
-              </button>
-            </form>
-            <p className="auth-modal__terms">
-              By continuing, you acknowledge that you understand and agree to the <span className="auth-modal__link">Terms &amp; Conditions</span> and <span className="auth-modal__link">Privacy Policy</span>.
-            </p>
+            {authEmailStage === 'create' ? (
+              <form className="auth-create" onSubmit={handleAuthCreateSubmit}>
+                <div className="auth-create__header">
+                  <div>
+                    <p className="auth-create__eyebrow">Taskwatch</p>
+                    <h2 className="auth-create__title">Create your account</h2>
+                    <p className="auth-create__subtitle">Set your password to continue.</p>
+                  </div>
+                  <button type="button" className="auth-modal__close auth-create__close" aria-label="Close sign-in panel" onClick={closeAuthModal}>
+                    ✕
+                  </button>
+                </div>
+                <div className="auth-create__card">
+                  <label className="auth-create__field">
+                    <span className="auth-create__label">Email address</span>
+                    <div className="auth-create__email-row">
+                      <span className="auth-create__pill">{authEmailValue}</span>
+                      <button type="button" className="auth-create__edit" onClick={handleAuthCreateBack}>
+                        Edit
+                      </button>
+                    </div>
+                  </label>
+                  <label className="auth-create__field">
+                    <span className="auth-create__label">Password</span>
+                    <div className="auth-create__password">
+                      <input
+                        type={authCreatePasswordVisible ? 'text' : 'password'}
+                        name="auth-create-password"
+                        id="auth-create-password"
+                        placeholder="Create a password"
+                        autoComplete="new-password"
+                        minLength={8}
+                        value={authCreatePassword}
+                        onChange={(event) => setAuthCreatePassword(event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="auth-create__toggle"
+                        onClick={toggleAuthCreatePasswordVisibility}
+                        aria-label={authCreatePasswordVisible ? 'Hide password' : 'Show password'}
+                        aria-pressed={authCreatePasswordVisible}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M12 5C6.5 5 2 9.67 2 12s4.5 7 10 7 10-4.67 10-7-4.5-7-10-7Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                          />
+                          {authCreatePasswordVisible ? <circle cx="12" cy="12" r="1.8" fill="currentColor" /> : null}
+                        </svg>
+                      </button>
+                    </div>
+                    <p className="auth-create__hint">Use at least 8 characters.</p>
+                  </label>
+                </div>
+                <button type="submit" className="auth-create__continue" disabled={authCreateContinueDisabled}>
+                  Continue
+                </button>
+                <p className="auth-modal__terms auth-modal__terms--center">
+                  By continuing, you acknowledge that you understand and agree to the <span className="auth-modal__link">Terms &amp; Conditions</span> and{' '}
+                  <span className="auth-modal__link">Privacy Policy</span>.
+                </p>
+              </form>
+            ) : (
+              <>
+                <div className="auth-modal__header">
+                  <div>
+                    <p className="auth-modal__title">Sign in to Taskwatch</p>
+                    <p className="auth-modal__subtitle">Sync your data and pick up right where you left off.</p>
+                  </div>
+                  <button type="button" className="auth-modal__close" aria-label="Close sign-in panel" onClick={closeAuthModal}>
+                    ✕
+                  </button>
+                </div>
+                <div className="auth-modal__providers" role="group" aria-label="Sign-in options">
+                  <button type="button" className="auth-provider auth-provider--google" onClick={handleGoogleSignIn}>
+                    <span className="auth-provider__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M21.6 12.227c0-.68-.057-1.362-.179-2.027H12v3.84h5.44c-.227 1.243-.934 2.352-1.987 3.07v2.553h3.208c1.882-1.733 2.938-4.29 2.938-7.436z" fill="#4285F4" />
+                        <path d="M12 22c2.7 0 4.97-.89 6.626-2.337l-3.208-2.553c-.893.6-2.037.947-3.418.947a5.92 5.92 0 0 1-5.592-4.018H3.08v2.6C4.8 19.915 8.17 22 12 22z" fill="#34A853" />
+                        <path d="M6.408 14.04A5.83 5.83 0 0 1 6.1 12c0-.706.123-1.386.308-2.04V7.36H3.08A9.996 9.996 0 0 0 2 12c0 1.6.38 3.112 1.08 4.64l3.328-2.6z" fill="#FBBC05" />
+                        <path d="M12 6.08c1.469 0 2.789.507 3.828 1.5l2.872-2.872C16.967 2.94 14.7 2 12 2 8.17 2 4.8 4.085 3.08 7.36l3.328 2.6A5.92 5.92 0 0 1 12 6.08z" fill="#EA4335" />
+                      </svg>
+                    </span>
+                    Continue with Google
+                  </button>
+                  <button type="button" className="auth-provider" aria-disabled="true">
+                    <span className="auth-provider__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M16.365 2c-.948.062-2.074.66-2.752 1.45-.6.69-1.123 1.77-.924 2.795 1.006.032 2.062-.574 2.715-1.373.634-.793 1.123-1.877.961-2.872zM19.66 11.23c-.026-2.58 2.14-3.819 2.243-3.879-1.225-1.79-3.124-2.034-3.791-2.058-1.607-.167-3.14.942-3.955.942-.824 0-2.078-.922-3.416-.897-1.764.026-3.395 1.03-4.295 2.622-1.829 3.165-.466 7.85 1.309 10.418.869 1.25 1.904 2.642 3.264 2.592 1.317-.052 1.813-.84 3.408-.84 1.586 0 2.043.84 3.424.81 1.41-.026 2.303-1.277 3.168-2.532.994-1.45 1.4-2.857 1.421-2.927-.032-.013-2.718-1.034-2.741-4.344z" />
+                      </svg>
+                    </span>
+                    Continue with Apple
+                  </button>
+                  <button type="button" className="auth-provider" aria-disabled="true">
+                    <span className="auth-provider__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M3 12c0-2.145 0-4.29.002-6.435C3.013 3.827 3.838 3 4.572 3H11v8h-8Z" fill="#f35325" />
+                        <path d="M11 3h7.43c.735 0 1.559.827 1.571 2.565.003 2.144.002 4.289.002 6.435h-9v-9Z" fill="#81bc06" />
+                        <path d="M3 12h8v9H4.572c-.734 0-1.559-.828-1.57-2.566C3 16.29 3 14.145 3 12Z" fill="#05a6f0" />
+                        <path d="M12 12h9c0 2.145 0 4.29-.002 6.434-.012 1.739-.836 2.566-1.57 2.566H12v-9Z" fill="#ffba08" />
+                      </svg>
+                    </span>
+                    Continue with Microsoft
+                  </button>
+                  <button type="button" className="auth-provider" aria-disabled="true">
+                    <span className="auth-provider__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                      </svg>
+                    </span>
+                    Log in with passkey
+                  </button>
+                  <button type="button" className="auth-provider" aria-disabled="true">
+                    <span className="auth-provider__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M3 5h18v14H3z" strokeWidth="1.5" stroke="currentColor" fill="none" />
+                        <path d="M7 9h10v2H7zm0 4h6v2H7z" fill="currentColor" />
+                      </svg>
+                    </span>
+                    Single sign-on (SSO)
+                  </button>
+                </div>
+                <hr className="auth-modal__divider" />
+                <form className="auth-modal__email" onSubmit={handleAuthEmailSubmit} noValidate>
+                  <label htmlFor="auth-modal-email">Email</label>
+                  <input
+                    id="auth-modal-email"
+                    name="email"
+                    type="email"
+                    placeholder="Enter your email address…"
+                    autoComplete="email"
+                    value={authEmailValue}
+                    onChange={(event) => {
+                      setAuthEmailValue(event.target.value)
+                      if (authEmailError) {
+                        setAuthEmailError(null)
+                      }
+                    }}
+                    aria-invalid={authEmailError ? 'true' : 'false'}
+                  />
+                  {authEmailError ? (
+                    <p className="auth-modal__error" role="alert">
+                      {authEmailError}
+                    </p>
+                  ) : (
+                    <p className="auth-modal__hint">Use an organization email to easily collaborate with teammates.</p>
+                  )}
+                  <button type="submit" className="auth-modal__continue" disabled={!isAuthEmailValid || authEmailChecking}>
+                    {authEmailChecking ? 'Checking…' : 'Continue'}
+                  </button>
+                </form>
+                <p className="auth-modal__terms">
+                  By continuing, you acknowledge that you understand and agree to the <span className="auth-modal__link">Terms &amp; Conditions</span> and <span className="auth-modal__link">Privacy Policy</span>.
+                </p>
+              </>
+            )}
           </div>
         </div>
       ) : null}
