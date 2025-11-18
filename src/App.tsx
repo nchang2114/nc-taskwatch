@@ -322,6 +322,8 @@ function MainApp() {
   const [authCreatePasswordVisible, setAuthCreatePasswordVisible] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [activeSettingsSection, setActiveSettingsSection] = useState(SETTINGS_SECTIONS[0]?.id ?? 'general')
+  const [authEmailLookupValue, setAuthEmailLookupValue] = useState('')
+  const [authEmailLookupResult, setAuthEmailLookupResult] = useState<boolean | null>(null)
 
   const navContainerRef = useRef<HTMLElement | null>(null)
   const navBrandRef = useRef<HTMLButtonElement | null>(null)
@@ -337,6 +339,7 @@ function MainApp() {
   const settingsOverlayRef = useRef<HTMLDivElement | null>(null)
   const authModalRef = useRef<HTMLDivElement | null>(null)
   const previousProfileRef = useRef<UserProfile | null>(null)
+  const authEmailLookupReqIdRef = useRef(0)
   const isSignedIn = Boolean(userProfile)
   const userInitials = useMemo(() => {
     if (!userProfile?.name) {
@@ -455,15 +458,19 @@ function MainApp() {
     setAuthModalOpen(false)
   }, [resetAuthEmailFlow])
 
-  const handleGoogleSignIn = useCallback(async (emailHint?: string) => {
+  const handleGoogleSignIn = useCallback(async (emailHint?: string): Promise<boolean> => {
     if (!supabase) {
       console.warn('Supabase client is not configured; cannot start Google OAuth.')
-      return
+      return false
     }
     try {
-      const queryParams: Record<string, string> = { prompt: 'select_account' }
-      if (emailHint && emailHint.trim().length > 0) {
-        queryParams.login_hint = emailHint.trim()
+      const queryParams: Record<string, string> = {}
+      const trimmedHint = emailHint?.trim()
+      if (trimmedHint) {
+        queryParams.login_hint = trimmedHint
+        queryParams.prompt = 'login'
+      } else {
+        queryParams.prompt = 'select_account'
       }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -474,13 +481,14 @@ function MainApp() {
       })
       if (error) {
         console.warn('Google OAuth sign-in failed:', error.message)
-      } else {
-        closeAuthModal()
+        return false
       }
+      return true
     } catch (error) {
       console.warn('Unexpected error starting Google OAuth flow:', error)
+      return false
     }
-  }, [closeAuthModal])
+  }, [])
 
   const isAuthEmailValid = useMemo(() => EMAIL_PATTERN.test(authEmailValue.trim()), [authEmailValue])
 
@@ -509,6 +517,42 @@ function MainApp() {
     [],
   )
 
+  useEffect(() => {
+    if (authEmailStage !== 'input') {
+      return
+    }
+    const trimmed = authEmailValue.trim()
+    if (!EMAIL_PATTERN.test(trimmed)) {
+      setAuthEmailLookupValue('')
+      setAuthEmailLookupResult(null)
+      return
+    }
+    const requestId = ++authEmailLookupReqIdRef.current
+    const timeoutId =
+      typeof window !== 'undefined'
+        ? window.setTimeout(() => {
+            ;(async () => {
+              const exists = await checkAuthEmailExists(trimmed)
+              if (authEmailLookupReqIdRef.current !== requestId) {
+                return
+              }
+              setAuthEmailLookupValue(trimmed)
+              setAuthEmailLookupResult(exists)
+            })().catch(() => {
+              if (authEmailLookupReqIdRef.current === requestId) {
+                setAuthEmailLookupValue(trimmed)
+                setAuthEmailLookupResult(null)
+              }
+            })
+          }, 200)
+        : null
+    return () => {
+      if (timeoutId !== null && typeof window !== 'undefined') {
+        window.clearTimeout(timeoutId)
+      }
+    }
+  }, [authEmailStage, authEmailValue, checkAuthEmailExists])
+
   const handleAuthEmailSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
@@ -519,10 +563,18 @@ function MainApp() {
       setAuthEmailError(null)
       setAuthEmailChecking(true)
       const trimmed = authEmailValue.trim()
+      let exists: boolean | null = null
+      if (authEmailLookupValue === trimmed) {
+        exists = authEmailLookupResult
+      }
+      let redirecting = false
       try {
-        const exists = await checkAuthEmailExists(trimmed)
+        if (exists === null) {
+          exists = await checkAuthEmailExists(trimmed)
+        }
         if (exists === true) {
-          await handleGoogleSignIn(trimmed)
+          const started = await handleGoogleSignIn(trimmed)
+          redirecting = started
           return
         }
         if (exists === false) {
@@ -532,10 +584,19 @@ function MainApp() {
         }
         setAuthEmailError('We could not verify that email right now. Please try again.')
       } finally {
-        setAuthEmailChecking(false)
+        if (!redirecting) {
+          setAuthEmailChecking(false)
+        }
       }
     },
-    [authEmailValue, checkAuthEmailExists, handleGoogleSignIn, isAuthEmailValid],
+    [
+      authEmailLookupResult,
+      authEmailLookupValue,
+      authEmailValue,
+      checkAuthEmailExists,
+      handleGoogleSignIn,
+      isAuthEmailValid,
+    ],
   )
 
   const handleAuthCreateBack = useCallback(() => {
