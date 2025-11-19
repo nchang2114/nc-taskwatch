@@ -5665,6 +5665,7 @@ export default function GoalsPage(): ReactElement {
   const submittingEdits = useRef(new Set<string>())
   const [lifeRoutinesExpanded, setLifeRoutinesExpanded] = useState(false)
   const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
+  const initialLifeRoutineCountRef = useRef(lifeRoutineTasks.length)
   const [lifeRoutineMenuOpenId, setLifeRoutineMenuOpenId] = useState<string | null>(null)
   const lifeRoutineMenuRef = useRef<HTMLDivElement | null>(null)
   const lifeRoutineMenuAnchorRef = useRef<HTMLButtonElement | null>(null)
@@ -5683,6 +5684,9 @@ export default function GoalsPage(): ReactElement {
       if (!cancelled) {
         lifeRoutinesSyncedRef.current = true
         if (synced) {
+          if (synced.length === 0 && initialLifeRoutineCountRef.current > 0) {
+            return
+          }
           setLifeRoutineTasks((current) =>
             JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
           )
@@ -5847,6 +5851,13 @@ export default function GoalsPage(): ReactElement {
             quickListDebug('hydrated bucket id', remote.bucketId)
           }
           if (remote?.items) {
+            if (remote.items.length === 0) {
+              const localSnapshot = readStoredQuickList()
+              if (localSnapshot.length > 0) {
+                quickListDebug('remote empty; retaining local quick list')
+                return
+              }
+            }
             const stored = writeStoredQuickList(remote.items)
             setQuickListItems(stored)
           }
@@ -7079,8 +7090,12 @@ export default function GoalsPage(): ReactElement {
           if (!isMountedRef.current) {
             return
           }
-          if (result?.goals) {
+          if (result?.goals && result.goals.length > 0) {
             applySupabaseGoalsPayload(result.goals)
+          } else if (!result || !result.goals) {
+            // no-op
+          } else if (result.goals.length === 0) {
+            // Skip clearing local demo snapshot until remote data exists.
           }
         } catch (error) {
           console.warn(

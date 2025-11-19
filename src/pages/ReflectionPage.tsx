@@ -2717,6 +2717,7 @@ export default function ReflectionPage() {
   const latestHistoryRef = useRef(history)
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
   const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
+  const initialLifeRoutineCountRef = useRef(lifeRoutineTasks.length)
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(() => readStoredActiveSession())
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
@@ -2896,6 +2897,9 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     void (async () => {
       const synced = await syncLifeRoutinesWithSupabase()
       if (!cancelled && synced) {
+        if (synced.length === 0 && initialLifeRoutineCountRef.current > 0) {
+          return
+        }
         setLifeRoutineTasks((current) =>
           JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
         )

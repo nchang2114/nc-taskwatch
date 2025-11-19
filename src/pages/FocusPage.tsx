@@ -612,6 +612,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
   const [expandedBuckets, setExpandedBuckets] = useState<Set<string>>(() => new Set())
   const [lifeRoutinesExpanded, setLifeRoutinesExpanded] = useState(false)
   const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
+  const initialLifeRoutineCountRef = useRef(lifeRoutineTasks.length)
   const lifeRoutineBucketIds = useMemo(
     () => new Set(lifeRoutineTasks.map((task) => task.bucketId)),
     [lifeRoutineTasks],
@@ -684,6 +685,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     void (async () => {
       const synced = await syncLifeRoutinesWithSupabase()
       if (!cancelled && synced) {
+        if (synced.length === 0 && initialLifeRoutineCountRef.current > 0) {
+          return
+        }
         setLifeRoutineTasks((current) =>
           JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
         )
