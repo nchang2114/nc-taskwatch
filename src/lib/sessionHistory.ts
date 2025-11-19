@@ -206,8 +206,13 @@ const createSampleHistoryRecords = (): HistoryRecord[] => {
     })
   }
 
+  const CANONICAL_SLEEP_DAY_OFFSET = 3
+
   const addSleepEntry = (dayOffset: number) => {
-    const startMinute = Math.max(0, Math.min(59, minuteVariance(dayOffset, 4)))
+    let startMinute = Math.max(0, Math.min(59, minuteVariance(dayOffset, 4)))
+    if (dayOffset === CANONICAL_SLEEP_DAY_OFFSET) {
+      startMinute = 0
+    }
     const durationMinutes = 8 * 60
     addEntry({
       taskName: 'Sleep',
@@ -405,8 +410,8 @@ const createSampleHistoryRecords = (): HistoryRecord[] => {
       taskName: 'Sleep (auto-scheduled)',
       daysAgo: -1,
       startHour: 23,
-      startMinute: 15,
-      durationMinutes: 7 * 60,
+      startMinute: 0,
+      durationMinutes: 8 * 60,
       goalName: LIFE_ROUTINES_NAME,
       bucketName: 'Sleep',
       goalId: LIFE_ROUTINES_GOAL_ID,
@@ -422,8 +427,8 @@ const createSampleHistoryRecords = (): HistoryRecord[] => {
       taskName: 'Sleep (auto-scheduled)',
       daysAgo: -2,
       startHour: 23,
-      startMinute: 20,
-      durationMinutes: 7 * 60,
+      startMinute: 0,
+      durationMinutes: 8 * 60,
       goalName: LIFE_ROUTINES_NAME,
       bucketName: 'Sleep',
       goalId: LIFE_ROUTINES_GOAL_ID,

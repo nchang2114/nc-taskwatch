@@ -34,8 +34,13 @@ const LOCAL_ACTIVATION_MAP_KEY = 'nc-taskwatch-repeating-activation-map'
 const LOCAL_END_MAP_KEY = 'nc-taskwatch-repeating-end-map'
 
 const getSampleRepeatingRules = (): RepeatingSessionRule[] => {
-  const now = Date.now()
-  const fiveDaysAgo = now - 5 * 24 * 60 * 60 * 1000
+  const now = new Date()
+  now.setSeconds(0, 0)
+  now.setMilliseconds(0)
+  const anchor = new Date(now.getTime())
+  anchor.setDate(anchor.getDate() - 3)
+  anchor.setHours(23, 0, 0, 0)
+  const activationStartMs = anchor.getTime()
   const timeOfDayMinutes = 23 * 60
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC'
   return [
@@ -50,8 +55,8 @@ const getSampleRepeatingRules = (): RepeatingSessionRule[] => {
       goalName: 'Daily Life',
       bucketName: 'Sleep',
       timezone,
-      createdAtMs: fiveDaysAgo,
-      startAtMs: fiveDaysAgo,
+      createdAtMs: activationStartMs,
+      startAtMs: activationStartMs,
       endAtMs: undefined,
     },
   ]
