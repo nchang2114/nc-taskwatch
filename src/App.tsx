@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react'
 import type { ReactNode, FormEvent } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import type { User } from '@supabase/supabase-js'
+import type { Session, User } from '@supabase/supabase-js'
 import './App.css'
 import GoalsPage from './pages/GoalsPage'
 import ReflectionPage from './pages/ReflectionPage'
@@ -9,6 +9,7 @@ import FocusPage from './pages/FocusPage'
 import { FOCUS_EVENT_TYPE } from './lib/focusChannel'
 import { SCHEDULE_EVENT_TYPE } from './lib/scheduleChannel'
 import { supabase } from './lib/supabaseClient'
+import { clearCachedSupabaseSession, readCachedSessionTokens } from './lib/authStorage'
 
 type Theme = 'light' | 'dark'
 type TabKey = 'goals' | 'focus' | 'reflection'
@@ -693,7 +694,48 @@ function MainApp() {
     }
     const client = supabase
     let mounted = true
-    const syncProfileFromSupabase = async () => {
+    const restoreSessionFromCache = async (): Promise<Session | null> => {
+      const cachedTokens = readCachedSessionTokens()
+      if (!cachedTokens) {
+        return null
+      }
+      try {
+        const { data, error } = await client.auth.setSession({
+          access_token: cachedTokens.accessToken,
+          refresh_token: cachedTokens.refreshToken,
+        })
+        if (error) {
+          console.warn('Supabase cached session restore failed:', error.message)
+          return null
+        }
+        return data.session ?? null
+      } catch (error) {
+        console.warn('Unexpected Supabase cached session restore error:', error)
+        return null
+      }
+    }
+
+    const bootstrapSession = async () => {
+      let session: Session | null = null
+      try {
+        const { data, error } = await client.auth.getSession()
+        if (error) {
+          console.warn('Initial Supabase session fetch failed:', error.message)
+        }
+        session = data.session ?? null
+      } catch (error) {
+        console.warn('Unexpected Supabase getSession error:', error)
+      }
+      if (!session) {
+        session = await restoreSessionFromCache()
+      }
+      if (mounted) {
+        const profile = deriveProfileFromSupabaseUser(session?.user ?? null)
+        setUserProfile(profile)
+        if (profile) {
+          setAuthModalOpen(false)
+        }
+      }
       try {
         const { data, error } = await client.auth.getUser()
         if (error) {
@@ -702,7 +744,7 @@ function MainApp() {
         if (!mounted) {
           return
         }
-        const profile = deriveProfileFromSupabaseUser(data?.user)
+        const profile = deriveProfileFromSupabaseUser(data?.user ?? session?.user ?? null)
         setUserProfile(profile)
         if (profile) {
           setAuthModalOpen(false)
@@ -711,7 +753,8 @@ function MainApp() {
         console.warn('Unexpected Supabase user fetch error:', error)
       }
     }
-    void syncProfileFromSupabase()
+
+    void bootstrapSession()
     const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
       if (!mounted) {
         return
@@ -751,6 +794,7 @@ function MainApp() {
         console.warn('Supabase sign-out failed:', error)
       }
     }
+    clearCachedSupabaseSession()
     setUserProfile(null)
     closeProfileMenu()
     if (typeof window !== 'undefined') {
