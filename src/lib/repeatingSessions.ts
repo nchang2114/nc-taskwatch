@@ -1,6 +1,6 @@
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 import type { HistoryEntry } from './sessionHistory'
-import { readStoredHistory, pruneFuturePlannedForRuleAfter } from './sessionHistory'
+import { readStoredHistory, pruneFuturePlannedForRuleAfter, SAMPLE_SLEEP_ROUTINE_ID } from './sessionHistory'
 import { readRepeatingExceptions } from './repeatingExceptions'
 
 export type RepeatingSessionRule = {
@@ -33,18 +33,54 @@ const LOCAL_ACTIVATION_MAP_KEY = 'nc-taskwatch-repeating-activation-map'
 // We also persist a local end-boundary override to ensure offline correctness.
 const LOCAL_END_MAP_KEY = 'nc-taskwatch-repeating-end-map'
 
+const getSampleRepeatingRules = (): RepeatingSessionRule[] => {
+  const now = Date.now()
+  const fiveDaysAgo = now - 5 * 24 * 60 * 60 * 1000
+  const timeOfDayMinutes = 23 * 60
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC'
+  return [
+    {
+      id: SAMPLE_SLEEP_ROUTINE_ID,
+      isActive: true,
+      frequency: 'daily',
+      dayOfWeek: null,
+      timeOfDayMinutes,
+      durationMinutes: 8 * 60,
+      taskName: 'Sleep – wind down',
+      goalName: 'Daily Life',
+      bucketName: 'Sleep',
+      timezone,
+      createdAtMs: fiveDaysAgo,
+      startAtMs: fiveDaysAgo,
+      endAtMs: undefined,
+    },
+  ]
+}
+
 const readLocalRules = (): RepeatingSessionRule[] => {
-  if (typeof window === 'undefined') return []
+  if (typeof window === 'undefined') return getSampleRepeatingRules()
   try {
     const raw = window.localStorage.getItem(LOCAL_RULES_KEY)
-    if (!raw) return []
+    if (!raw) {
+      const sample = getSampleRepeatingRules()
+      writeLocalRules(sample)
+      return sample
+    }
     const arr = JSON.parse(raw)
     if (!Array.isArray(arr)) return []
-    return arr
+    const mapped = arr
       .map((row) => mapRowToRule(row))
       .filter(Boolean) as RepeatingSessionRule[]
+    if (mapped.length === 0) {
+      const sample = getSampleRepeatingRules()
+      writeLocalRules(sample)
+      return sample
+    }
+    return mapped
   } catch {
-    return []
+    const sample = getSampleRepeatingRules()
+    writeLocalRules(sample)
+    return sample
   }
 }
 

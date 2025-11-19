@@ -29,7 +29,7 @@ const LIFE_ROUTINE_DEFAULTS: LifeRoutineConfig[] = [
     bucketId: 'life-cook',
     title: 'Cook/Eat',
     blurb: 'Prep staples, plan groceries, and keep easy meals ready.',
-    surfaceStyle: 'warm-amber',
+    surfaceStyle: 'grove',
     sortIndex: 1,
   },
   {
@@ -53,7 +53,7 @@ const LIFE_ROUTINE_DEFAULTS: LifeRoutineConfig[] = [
     bucketId: 'life-nature',
     title: 'Nature',
     blurb: 'Walks outside, sunlight breaks, or a weekend trail plan.',
-    surfaceStyle: 'grove',
+    surfaceStyle: 'fresh-teal',
     sortIndex: 4,
   },
   {
@@ -61,7 +61,7 @@ const LIFE_ROUTINE_DEFAULTS: LifeRoutineConfig[] = [
     bucketId: 'life-socials',
     title: 'Socials',
     blurb: 'Reach out to friends, plan hangs, and reply to messages.',
-    surfaceStyle: 'soft-magenta',
+    surfaceStyle: 'sunset-orange',
     sortIndex: 5,
   },
   {
@@ -69,7 +69,7 @@ const LIFE_ROUTINE_DEFAULTS: LifeRoutineConfig[] = [
     bucketId: 'life-mindfulness',
     title: 'Mindfulness',
     blurb: 'Breathwork, journaling prompts, and quick resets.',
-    surfaceStyle: 'frost',
+    surfaceStyle: 'muted-lavender',
     sortIndex: 6,
   },
   {
@@ -77,7 +77,7 @@ const LIFE_ROUTINE_DEFAULTS: LifeRoutineConfig[] = [
     bucketId: 'life-relationships',
     title: 'Relationships',
     blurb: 'Date nights, check-ins, and celebrate the small stuff.',
-    surfaceStyle: 'sunset-orange',
+    surfaceStyle: 'soft-magenta',
     sortIndex: 7,
   },
 ]

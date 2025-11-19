@@ -143,6 +143,12 @@ type HistoryRecordCandidate = HistoryCandidate & {
 }
 
 const MINUTE_MS = 60 * 1000
+export const SAMPLE_SLEEP_ROUTINE_ID = 'sample-sleep-rule'
+const formatOccurrenceDate = (timestamp: number): string => new Date(timestamp).toISOString().slice(0, 10)
+const minuteVariance = (dayOffset: number, seed: number): number => {
+  const base = (dayOffset * 37 + seed * 11) % 21
+  return base - 10
+}
 
 const createSampleHistoryRecords = (): HistoryRecord[] => {
   const anchor = new Date()
@@ -168,12 +174,17 @@ const createSampleHistoryRecords = (): HistoryRecord[] => {
     goalSurface: SurfaceStyle
     bucketSurface?: SurfaceStyle | null
     notes?: string
+    routineId?: string | null
+    occurrenceDate?: string | null
+    futureSession?: boolean
   }
 
   const entries: HistoryEntry[] = []
   const addEntry = (config: SampleConfig) => {
     const startedAt = getStart(config.daysAgo, config.startHour, config.startMinute)
     const elapsed = Math.max(MINUTE_MS, config.durationMinutes * MINUTE_MS)
+    const occurrenceDate =
+      config.occurrenceDate ?? (config.routineId ? formatOccurrenceDate(startedAt) : null)
     entries.push({
       id: `history-sample-${entries.length + 1}`,
       taskName: config.taskName,
@@ -189,33 +200,180 @@ const createSampleHistoryRecords = (): HistoryRecord[] => {
       bucketSurface: config.bucketSurface ?? null,
       notes: config.notes ?? '',
       subtasks: [],
+      routineId: config.routineId ?? null,
+      occurrenceDate,
+      futureSession: config.futureSession ?? false,
     })
   }
 
-  const addWindDown = (daysAgo: number, hour: number, minute: number, notes?: string) => {
-    addEntry({
-      taskName: 'Mindfulness wind-down',
-      daysAgo,
-      startHour: hour,
-      startMinute: minute,
-      durationMinutes: 30,
-      goalName: LIFE_ROUTINES_NAME,
-      bucketName: 'Mindfulness',
-      goalId: LIFE_ROUTINES_GOAL_ID,
-      bucketId: 'life-mindfulness',
-      taskId: 'life-mindfulness',
-      goalSurface: LIFE_ROUTINES_SURFACE,
-      bucketSurface: 'frost',
-      notes: notes ?? 'Light journaling + breathwork.',
-    })
-  }
-
-  const addSleepBlock = (daysAgo: number, notes?: string) => {
+  const addSleepEntry = (dayOffset: number) => {
+    const startMinute = Math.max(0, Math.min(59, minuteVariance(dayOffset, 4)))
+    const durationMinutes = 8 * 60
     addEntry({
       taskName: 'Sleep',
-      daysAgo,
-      startHour: 0,
-      startMinute: 0,
+      daysAgo: dayOffset,
+      startHour: 23,
+      startMinute,
+      durationMinutes,
+      goalName: LIFE_ROUTINES_NAME,
+      bucketName: 'Sleep',
+      goalId: LIFE_ROUTINES_GOAL_ID,
+      bucketId: 'life-sleep',
+      taskId: 'life-sleep',
+      goalSurface: LIFE_ROUTINES_SURFACE,
+      bucketSurface: 'midnight',
+      notes: 'Daily wind-down + sleep block.',
+      routineId: SAMPLE_SLEEP_ROUTINE_ID,
+    })
+  }
+
+  type SessionPreset = Omit<SampleConfig, 'daysAgo' | 'startHour' | 'startMinute' | 'durationMinutes'>
+  const sessionPresets: Record<string, SessionPreset> = {
+    study: {
+      taskName: 'Deep study block',
+      goalName: 'Ace This Semester',
+      bucketName: 'Lectures & Notes',
+      goalId: 'g_demo',
+      bucketId: 'b_demo_1',
+      taskId: 't_demo_1',
+      goalSurface: 'glass',
+      bucketSurface: 'cool-blue',
+      notes: 'Lecture review + flashcards.',
+    },
+    internship: {
+      taskName: 'Internship sprint',
+      goalName: 'Level Up at Work',
+      bucketName: 'Deep Work Sprints',
+      goalId: 'g2',
+      bucketId: 'b4',
+      taskId: 't19',
+      goalSurface: 'glass',
+      bucketSurface: 'charcoal',
+      notes: 'Heads-down product work.',
+    },
+    creative: {
+      taskName: 'Creative assignment burst',
+      goalName: 'Ace This Semester',
+      bucketName: 'Assignments',
+      goalId: 'g_demo',
+      bucketId: 'b_demo_2',
+      taskId: 't_demo_4',
+      goalSurface: 'glass',
+      bucketSurface: 'midnight',
+      notes: 'Essay outline + drafting.',
+    },
+    health: {
+      taskName: 'Gym + movement',
+      goalName: 'Healthy Work-Life Rhythm',
+      bucketName: 'Movement',
+      goalId: 'g3',
+      bucketId: 'b7',
+      taskId: 't14',
+      goalSurface: 'glass',
+      bucketSurface: 'fresh-teal',
+      notes: 'Strength + stretch.',
+    },
+    social: {
+      taskName: 'Social reset',
+      goalName: LIFE_ROUTINES_NAME,
+      bucketName: 'Socials',
+      goalId: LIFE_ROUTINES_GOAL_ID,
+      bucketId: 'life-socials',
+      taskId: 'life-socials',
+      goalSurface: LIFE_ROUTINES_SURFACE,
+      bucketSurface: 'soft-magenta',
+      notes: 'Hangs / check-ins.',
+    },
+    admin: {
+      taskName: 'Life admin sprint',
+      goalName: LIFE_ROUTINES_NAME,
+      bucketName: 'Life Admin',
+      goalId: LIFE_ROUTINES_GOAL_ID,
+      bucketId: 'life-admin',
+      taskId: 'life-admin',
+      goalSurface: LIFE_ROUTINES_SURFACE,
+      bucketSurface: 'neutral-grey-blue',
+      notes: 'Inbox, bills, planning.',
+    },
+  }
+
+  type DaySessionPlan = {
+    preset: keyof typeof sessionPresets
+    duration: number
+    overrideName?: string
+    notes?: string
+  }
+
+  const dayPlans: Array<{ dayOffset: number; sessions: DaySessionPlan[] }> = [
+    { dayOffset: 1, sessions: [
+      { preset: 'study', duration: 180, overrideName: 'Lecture review marathon' },
+      { preset: 'internship', duration: 150, overrideName: 'Product sprint focus' },
+      {
+        preset: 'internship',
+        duration: 240,
+        overrideName: 'End Taskwatch Demo event',
+        notes: 'Wrap up guest walkthrough and share highlights.',
+      },
+    ] },
+    { dayOffset: 2, sessions: [
+      { preset: 'internship', duration: 180, overrideName: 'Deep work sprints' },
+      { preset: 'creative', duration: 150, overrideName: 'Studio critique prep' },
+      { preset: 'social', duration: 120, overrideName: 'Dinner + hangout' },
+    ] },
+    { dayOffset: 3, sessions: [
+      { preset: 'study', duration: 150, overrideName: 'Group study jam' },
+      { preset: 'admin', duration: 90, overrideName: 'Life admin & groceries' },
+      { preset: 'health', duration: 100, overrideName: 'Pilates + walk' },
+    ] },
+    { dayOffset: 4, sessions: [
+      { preset: 'creative', duration: 180, overrideName: 'Essay drafting session' },
+      { preset: 'study', duration: 150, overrideName: 'Lab prep & notes' },
+      { preset: 'social', duration: 120, overrideName: 'Family FaceTime' },
+    ] },
+    { dayOffset: 5, sessions: [] },
+  ]
+
+  const dayClock = new Map<number, number>()
+  const ensureDayClock = (dayOffset: number): number => {
+    if (!dayClock.has(dayOffset)) {
+      const base = 8 * 60 + minuteVariance(dayOffset, 33)
+      dayClock.set(dayOffset, base)
+    }
+    return dayClock.get(dayOffset)!
+  }
+
+  const scheduleSession = (dayOffset: number, session: DaySessionPlan) => {
+    const preset = sessionPresets[session.preset]
+    const startMinutes = Math.max(6 * 60, ensureDayClock(dayOffset))
+    const duration = Math.max(60, session.duration + minuteVariance(dayOffset, session.duration))
+    const safeStartMinutes = Math.min(startMinutes, 21 * 60)
+    const startHour = Math.floor(safeStartMinutes / 60)
+    const startMinute = safeStartMinutes % 60
+    addEntry({
+      ...preset,
+      taskName: session.overrideName ?? preset.taskName,
+      notes: session.notes ?? preset.notes,
+      daysAgo: dayOffset,
+      startHour,
+      startMinute,
+      durationMinutes: duration,
+    })
+    const gap = Math.max(20, 30 + minuteVariance(dayOffset, duration))
+    dayClock.set(dayOffset, safeStartMinutes + duration + gap)
+  }
+
+  dayPlans.forEach((plan) => {
+    addSleepEntry(plan.dayOffset)
+    dayClock.set(plan.dayOffset, 8 * 60 + minuteVariance(plan.dayOffset, 41))
+    plan.sessions.forEach((session) => scheduleSession(plan.dayOffset, session))
+  })
+
+  const futureGuideBlocks: SampleConfig[] = [
+    {
+      taskName: 'Sleep (auto-scheduled)',
+      daysAgo: -1,
+      startHour: 23,
+      startMinute: 15,
       durationMinutes: 7 * 60,
       goalName: LIFE_ROUTINES_NAME,
       bucketName: 'Sleep',
@@ -224,486 +382,30 @@ const createSampleHistoryRecords = (): HistoryRecord[] => {
       taskId: 'life-sleep',
       goalSurface: LIFE_ROUTINES_SURFACE,
       bucketSurface: 'midnight',
-      notes: notes ?? 'Asleep before midnight, up at 7.',
-    })
-  }
-
-  const addCommuteBlock = (daysAgo: number, hour: number, minute: number, notes?: string) => {
-    addEntry({
-      taskName: 'Commute / travel',
-      daysAgo,
-      startHour: hour,
-      startMinute: minute,
-      durationMinutes: 35,
+      routineId: SAMPLE_SLEEP_ROUTINE_ID,
+      futureSession: true,
+      notes: 'Guide entry for tomorrow night.',
+    },
+    {
+      taskName: 'Sleep (auto-scheduled)',
+      daysAgo: -2,
+      startHour: 23,
+      startMinute: 20,
+      durationMinutes: 7 * 60,
       goalName: LIFE_ROUTINES_NAME,
-      bucketName: 'Travel',
+      bucketName: 'Sleep',
       goalId: LIFE_ROUTINES_GOAL_ID,
-      bucketId: 'life-travel',
-      taskId: 'life-travel',
+      bucketId: 'life-sleep',
+      taskId: 'life-sleep',
       goalSurface: LIFE_ROUTINES_SURFACE,
-      bucketSurface: 'cool-blue',
-      notes: notes ?? 'Train + short walk.',
-    })
-  }
+      bucketSurface: 'midnight',
+      routineId: SAMPLE_SLEEP_ROUTINE_ID,
+      futureSession: true,
+      notes: 'Guide entry for later this week.',
+    },
+  ]
 
-  const addSocialBlock = (daysAgo: number, hour: number, minute: number, notes?: string) => {
-    addEntry({
-      taskName: 'Social catch-up',
-      daysAgo,
-      startHour: hour,
-      startMinute: minute,
-      durationMinutes: 30,
-      goalName: LIFE_ROUTINES_NAME,
-      bucketName: 'Socials',
-      goalId: LIFE_ROUTINES_GOAL_ID,
-      bucketId: 'life-socials',
-      taskId: 'life-socials',
-      goalSurface: LIFE_ROUTINES_SURFACE,
-      bucketSurface: 'soft-magenta',
-      notes: notes ?? 'Ping close friends and reply to chats.',
-    })
-  }
-
-  const addLifeAdminBlock = (daysAgo: number, hour: number, minute: number, notes?: string) => {
-    addEntry({
-      taskName: 'Life admin sprint',
-      daysAgo,
-      startHour: hour,
-      startMinute: minute,
-      durationMinutes: 30,
-      goalName: LIFE_ROUTINES_NAME,
-      bucketName: 'Life Admin',
-      goalId: LIFE_ROUTINES_GOAL_ID,
-      bucketId: 'life-admin',
-      taskId: 'life-admin',
-      goalSurface: LIFE_ROUTINES_SURFACE,
-      bucketSurface: 'neutral-grey-blue',
-      notes: notes ?? 'Inbox zero, forms, quick finances.',
-    })
-  }
-
-  const addRelationshipsBlock = (daysAgo: number, hour: number, minute: number, duration: number, notes?: string) => {
-    addEntry({
-      taskName: 'Relationships time',
-      daysAgo,
-      startHour: hour,
-      startMinute: minute,
-      durationMinutes: duration,
-      goalName: LIFE_ROUTINES_NAME,
-      bucketName: 'Relationships',
-      goalId: LIFE_ROUTINES_GOAL_ID,
-      bucketId: 'life-relationships',
-      taskId: 'life-relationships',
-      goalSurface: LIFE_ROUTINES_SURFACE,
-      bucketSurface: 'sunset-orange',
-      notes: notes ?? 'Focused time with partner / best friend.',
-    })
-  }
-
-  for (let day = 1; day <= 5; day += 1) {
-    addSleepBlock(day)
-    const morningCommuteMinute = 35 + ((day + 1) % 3) * 5
-    addCommuteBlock(day, 7, morningCommuteMinute, 'Train to campus')
-    addCommuteBlock(day, 18, 5 + (day % 3) * 10, 'Bike + train back home')
-    const socialHour = day % 2 === 0 ? 21 : 20
-    addSocialBlock(day, socialHour, day % 2 === 0 ? 45 : 30, day % 2 === 0 ? 'Video chat with partner' : 'Roommate tea + chat')
-    if (day % 2 === 0) {
-      addLifeAdminBlock(
-        day,
-        12,
-        15,
-        day === 2 ? 'Pay rent + tidy to-dos' : 'Scholarship paperwork + inbox zero',
-      )
-    }
-    if (day === 3) {
-      addRelationshipsBlock(day, 19, 30, 45, 'Midweek video date')
-    }
-    if (day === 5) {
-      addRelationshipsBlock(day, 20, 0, 90, 'Friday date night + dinner out')
-    }
-  }
-
-  // Day 1 (yesterday) – packed uni + work blocks
-  addEntry({
-    taskName: 'Lecture recap – stats week 5',
-    daysAgo: 1,
-    startHour: 8,
-    startMinute: 30,
-    durationMinutes: 60,
-    goalName: 'Ace This Semester',
-    bucketName: 'Lectures & Notes',
-    goalId: 'g_demo',
-    bucketId: 'b_demo_1',
-    taskId: 't_demo_1',
-    goalSurface: 'glass',
-    bucketSurface: 'cool-blue',
-    notes: 'Notion highlights + flashcards.',
-  })
-  addEntry({
-    taskName: 'Deep work – polish QBR slides',
-    daysAgo: 1,
-    startHour: 10,
-    startMinute: 30,
-    durationMinutes: 55,
-    goalName: 'Level Up at Work',
-    bucketName: 'Deep Work Sprints',
-    goalId: 'g2',
-    bucketId: 'b4',
-    taskId: 't8',
-    goalSurface: 'glass',
-    bucketSurface: 'charcoal',
-    notes: 'Locked a no-meeting window.',
-  })
-  addEntry({
-    taskName: 'Prep lunches – roasted veggie bowls',
-    daysAgo: 1,
-    startHour: 13,
-    startMinute: 0,
-    durationMinutes: 40,
-    goalName: 'Healthy Work-Life Rhythm',
-    bucketName: 'Meals & Fuel',
-    goalId: 'g3',
-    bucketId: 'b8',
-    taskId: 't16',
-    goalSurface: 'glass',
-    bucketSurface: 'ember',
-  })
-  addEntry({
-    taskName: 'Study group – problem set 3',
-    daysAgo: 1,
-    startHour: 16,
-    startMinute: 30,
-    durationMinutes: 70,
-    goalName: 'Ace This Semester',
-    bucketName: 'Study Group',
-    goalId: 'g_demo',
-    bucketId: 'b_demo_3',
-    taskId: 't_demo_8',
-    goalSurface: 'glass',
-    bucketSurface: 'grove',
-    notes: 'Whiteboard session @ library.',
-  })
-  addEntry({
-    taskName: 'Career prep – refresh resume bullet',
-    daysAgo: 1,
-    startHour: 18,
-    startMinute: 15,
-    durationMinutes: 35,
-    goalName: 'Ace This Semester',
-    bucketName: 'Career Prep',
-    goalId: 'g_demo',
-    bucketId: 'b_demo_4',
-    taskId: 't_demo_10',
-    goalSurface: 'glass',
-    bucketSurface: 'soft-magenta',
-  })
-  addEntry({
-    taskName: 'Walk + call a friend',
-    daysAgo: 1,
-    startHour: 20,
-    startMinute: 30,
-    durationMinutes: 30,
-    goalName: 'Healthy Work-Life Rhythm',
-    bucketName: 'Movement',
-    goalId: 'g3',
-    bucketId: 'b7',
-    taskId: 't22',
-    goalSurface: 'glass',
-    bucketSurface: 'fresh-teal',
-  })
-  addWindDown(1, 22, 45, 'Journal + no-screens buffer.')
-
-  // Day 2
-  addEntry({
-    taskName: 'Campus gym – strength circuit',
-    daysAgo: 2,
-    startHour: 7,
-    startMinute: 30,
-    durationMinutes: 50,
-    goalName: 'Healthy Work-Life Rhythm',
-    bucketName: 'Movement',
-    goalId: 'g3',
-    bucketId: 'b7',
-    taskId: 't14',
-    goalSurface: 'glass',
-    bucketSurface: 'fresh-teal',
-  })
-  addEntry({
-    taskName: 'Lab write-up sprint',
-    daysAgo: 2,
-    startHour: 9,
-    startMinute: 30,
-    durationMinutes: 65,
-    goalName: 'Ace This Semester',
-    bucketName: 'Assignments',
-    goalId: 'g_demo',
-    bucketId: 'b_demo_2',
-    taskId: 't_demo_5',
-    goalSurface: 'glass',
-    bucketSurface: 'midnight',
-  })
-  addEntry({
-    taskName: 'Weekly status update',
-    daysAgo: 2,
-    startHour: 11,
-    startMinute: 45,
-    durationMinutes: 35,
-    goalName: 'Level Up at Work',
-    bucketName: 'Team & Stakeholders',
-    goalId: 'g2',
-    bucketId: 'b5',
-    taskId: 't11',
-    goalSurface: 'glass',
-    bucketSurface: 'sunset-orange',
-  })
-  addEntry({
-    taskName: 'Deep work – storyline outline',
-    daysAgo: 2,
-    startHour: 15,
-    startMinute: 0,
-    durationMinutes: 60,
-    goalName: 'Level Up at Work',
-    bucketName: 'Deep Work Sprints',
-    goalId: 'g2',
-    bucketId: 'b4',
-    taskId: 't19',
-    goalSurface: 'glass',
-    bucketSurface: 'charcoal',
-  })
-  addEntry({
-    taskName: 'Grocery run + dinner prep',
-    daysAgo: 2,
-    startHour: 18,
-    startMinute: 30,
-    durationMinutes: 45,
-    goalName: 'Healthy Work-Life Rhythm',
-    bucketName: 'Meals & Fuel',
-    goalId: 'g3',
-    bucketId: 'b8',
-    taskId: 't17',
-    goalSurface: 'glass',
-    bucketSurface: 'ember',
-  })
-  addWindDown(2, 22, 40)
-
-  // Day 3
-  addEntry({
-    taskName: 'Lecture notes – cognitive science',
-    daysAgo: 3,
-    startHour: 8,
-    startMinute: 15,
-    durationMinutes: 55,
-    goalName: 'Ace This Semester',
-    bucketName: 'Lectures & Notes',
-    goalId: 'g_demo',
-    bucketId: 'b_demo_1',
-    taskId: 't_demo_2',
-    goalSurface: 'glass',
-    bucketSurface: 'cool-blue',
-  })
-  addEntry({
-    taskName: 'Mentor 1:1',
-    daysAgo: 3,
-    startHour: 10,
-    startMinute: 15,
-    durationMinutes: 40,
-    goalName: 'Level Up at Work',
-    bucketName: 'Career Growth',
-    goalId: 'g2',
-    bucketId: 'b6',
-    taskId: 't12',
-    goalSurface: 'glass',
-    bucketSurface: 'warm-amber',
-  })
-  addEntry({
-    taskName: 'Deep work – polish slides',
-    daysAgo: 3,
-    startHour: 13,
-    startMinute: 0,
-    durationMinutes: 65,
-    goalName: 'Level Up at Work',
-    bucketName: 'Deep Work Sprints',
-    goalId: 'g2',
-    bucketId: 'b4',
-    taskId: 't8',
-    goalSurface: 'glass',
-    bucketSurface: 'charcoal',
-  })
-  addEntry({
-    taskName: 'Study pod – office hours prep',
-    daysAgo: 3,
-    startHour: 16,
-    startMinute: 45,
-    durationMinutes: 60,
-    goalName: 'Ace This Semester',
-    bucketName: 'Study Group',
-    goalId: 'g_demo',
-    bucketId: 'b_demo_3',
-    taskId: 't_demo_9',
-    goalSurface: 'glass',
-    bucketSurface: 'grove',
-  })
-  addEntry({
-    taskName: 'Mobility + yoga flow',
-    daysAgo: 3,
-    startHour: 19,
-    startMinute: 0,
-    durationMinutes: 35,
-    goalName: 'Healthy Work-Life Rhythm',
-    bucketName: 'Movement',
-    goalId: 'g3',
-    bucketId: 'b7',
-    taskId: 't15',
-    goalSurface: 'glass',
-    bucketSurface: 'fresh-teal',
-  })
-  addWindDown(3, 23, 5)
-
-  // Day 4
-  addEntry({
-    taskName: 'Morning run – campus loop',
-    daysAgo: 4,
-    startHour: 7,
-    startMinute: 15,
-    durationMinutes: 40,
-    goalName: 'Healthy Work-Life Rhythm',
-    bucketName: 'Movement',
-    goalId: 'g3',
-    bucketId: 'b7',
-    taskId: 't14',
-    goalSurface: 'glass',
-    bucketSurface: 'fresh-teal',
-  })
-  addEntry({
-    taskName: 'Lecture catch-up – econ',
-    daysAgo: 4,
-    startHour: 9,
-    startMinute: 30,
-    durationMinutes: 55,
-    goalName: 'Ace This Semester',
-    bucketName: 'Lectures & Notes',
-    goalId: 'g_demo',
-    bucketId: 'b_demo_1',
-    taskId: 't_demo_3',
-    goalSurface: 'glass',
-    bucketSurface: 'cool-blue',
-  })
-  addEntry({
-    taskName: 'Stakeholder sync prep',
-    daysAgo: 4,
-    startHour: 11,
-    startMinute: 45,
-    durationMinutes: 35,
-    goalName: 'Level Up at Work',
-    bucketName: 'Team & Stakeholders',
-    goalId: 'g2',
-    bucketId: 'b5',
-    taskId: 't10',
-    goalSurface: 'glass',
-    bucketSurface: 'sunset-orange',
-  })
-  addEntry({
-    taskName: 'Career prep – coffee chat follow-up',
-    daysAgo: 4,
-    startHour: 16,
-    startMinute: 15,
-    durationMinutes: 30,
-    goalName: 'Ace This Semester',
-    bucketName: 'Career Prep',
-    goalId: 'g_demo',
-    bucketId: 'b_demo_4',
-    taskId: 't_demo_11',
-    goalSurface: 'glass',
-    bucketSurface: 'soft-magenta',
-  })
-  addEntry({
-    taskName: 'Sunday cook – sheet pan dinner',
-    daysAgo: 4,
-    startHour: 19,
-    startMinute: 0,
-    durationMinutes: 45,
-    goalName: 'Healthy Work-Life Rhythm',
-    bucketName: 'Meals & Fuel',
-    goalId: 'g3',
-    bucketId: 'b8',
-    taskId: 't23',
-    goalSurface: 'glass',
-    bucketSurface: 'ember',
-  })
-  addWindDown(4, 22, 50, 'Chamomile tea + stretch.')
-
-  // Day 5
-  addEntry({
-    taskName: 'Lecture planning – week ahead',
-    daysAgo: 5,
-    startHour: 8,
-    startMinute: 20,
-    durationMinutes: 50,
-    goalName: 'Ace This Semester',
-    bucketName: 'Lectures & Notes',
-    goalId: 'g_demo',
-    bucketId: 'b_demo_1',
-    taskId: 't_demo_2',
-    goalSurface: 'glass',
-    bucketSurface: 'cool-blue',
-  })
-  addEntry({
-    taskName: 'Essay outline session',
-    daysAgo: 5,
-    startHour: 10,
-    startMinute: 15,
-    durationMinutes: 60,
-    goalName: 'Ace This Semester',
-    bucketName: 'Assignments',
-    goalId: 'g_demo',
-    bucketId: 'b_demo_2',
-    taskId: 't_demo_4',
-    goalSurface: 'glass',
-    bucketSurface: 'midnight',
-  })
-  addEntry({
-    taskName: 'Study pod – whiteboard jam',
-    daysAgo: 5,
-    startHour: 13,
-    startMinute: 30,
-    durationMinutes: 70,
-    goalName: 'Ace This Semester',
-    bucketName: 'Study Group',
-    goalId: 'g_demo',
-    bucketId: 'b_demo_3',
-    taskId: 't_demo_8',
-    goalSurface: 'glass',
-    bucketSurface: 'grove',
-  })
-  addEntry({
-    taskName: 'Deep work – refine storyline',
-    daysAgo: 5,
-    startHour: 16,
-    startMinute: 45,
-    durationMinutes: 55,
-    goalName: 'Level Up at Work',
-    bucketName: 'Deep Work Sprints',
-    goalId: 'g2',
-    bucketId: 'b4',
-    taskId: 't19',
-    goalSurface: 'glass',
-    bucketSurface: 'charcoal',
-  })
-  addEntry({
-    taskName: 'Campus gym – evening reset',
-    daysAgo: 5,
-    startHour: 19,
-    startMinute: 30,
-    durationMinutes: 45,
-    goalName: 'Healthy Work-Life Rhythm',
-    bucketName: 'Movement',
-    goalId: 'g3',
-    bucketId: 'b7',
-    taskId: 't14',
-    goalSurface: 'glass',
-    bucketSurface: 'fresh-teal',
-  })
-  addWindDown(5, 23, 10, 'Plan tomorrow in Day Planner.')
+  futureGuideBlocks.forEach(addEntry)
 
   return entries.map((entry, index) => ({
     ...entry,
@@ -712,8 +414,6 @@ const createSampleHistoryRecords = (): HistoryRecord[] => {
     pendingAction: null,
   }))
 }
-
-
 const sanitizeHistorySubtasks = (value: unknown): HistorySubtask[] => {
   if (!Array.isArray(value)) {
     return []
