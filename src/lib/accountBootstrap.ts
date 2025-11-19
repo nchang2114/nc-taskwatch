@@ -10,6 +10,18 @@ import { DEFAULT_SURFACE_STYLE } from './surfaceStyles'
 
 const BOOTSTRAP_STATE_PREFIX = 'nc-taskwatch-bootstrap-v1'
 const QUICK_LIST_SORT_STEP = 1024
+export const ACCOUNT_BOOTSTRAP_EVENT = 'nc-taskwatch:account-bootstrap'
+
+const dispatchBootstrapEvent = (detail: { status: 'complete' | 'error'; userId?: string }): void => {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    window.dispatchEvent(new CustomEvent(ACCOUNT_BOOTSTRAP_EVENT, { detail }))
+  } catch {
+    // Swallow event dispatch failures (older browsers)
+  }
+}
 
 const buildBootstrapKey = (userId: string): string => `${BOOTSTRAP_STATE_PREFIX}:${userId}`
 
@@ -199,19 +211,23 @@ export const ensureInitialAccountBootstrap = async (): Promise<void> => {
     const userId = session.user.id
     const state = readBootstrapState(userId)
     if (state === 'complete') {
+      dispatchBootstrapEvent({ status: 'complete', userId })
       return
     }
     if (await userHasRemoteGoals(userId)) {
       writeBootstrapState(userId, 'complete')
+      dispatchBootstrapEvent({ status: 'complete', userId })
       return
     }
     writeBootstrapState(userId, 'pending')
     try {
       await runBootstrapForUser()
       writeBootstrapState(userId, 'complete')
+      dispatchBootstrapEvent({ status: 'complete', userId })
     } catch (error) {
       console.warn('[accountBootstrap] Failed to bootstrap new account data:', error)
       writeBootstrapState(userId, 'error')
+      dispatchBootstrapEvent({ status: 'error', userId })
     }
   })()
   try {

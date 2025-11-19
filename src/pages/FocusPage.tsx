@@ -60,6 +60,7 @@ import {
   syncHistoryWithSupabase,
   type HistoryEntry,
 } from '../lib/sessionHistory'
+import { ACCOUNT_BOOTSTRAP_EVENT } from '../lib/accountBootstrap'
 
 // Minimal sync instrumentation disabled by default
 const DEBUG_SYNC = false
@@ -692,6 +693,34 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handleBootstrap = () => {
+      void (async () => {
+        try {
+          const syncedHistory = await syncHistoryWithSupabase()
+          if (syncedHistory) {
+            setHistory((current) => (historiesAreEqual(current, syncedHistory) ? current : syncedHistory))
+          }
+        } catch {}
+        try {
+          const syncedRoutines = await syncLifeRoutinesWithSupabase()
+          if (syncedRoutines) {
+            setLifeRoutineTasks((current) =>
+              JSON.stringify(current) === JSON.stringify(syncedRoutines) ? current : syncedRoutines,
+            )
+          }
+        } catch {}
+      })()
+    }
+    window.addEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
+    return () => {
+      window.removeEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
+    }
+  }, [setHistory, setLifeRoutineTasks])
 
   useEffect(() => {
     refreshGoalsSnapshotFromSupabase('initial-load')

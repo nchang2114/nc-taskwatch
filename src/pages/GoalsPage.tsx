@@ -42,6 +42,7 @@ import {
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
 import { DEMO_GOALS } from '../lib/demoGoals'
+import { ACCOUNT_BOOTSTRAP_EVENT } from '../lib/accountBootstrap'
 import {
   LIFE_ROUTINE_STORAGE_KEY,
   LIFE_ROUTINE_UPDATE_EVENT,
@@ -7907,6 +7908,20 @@ export default function GoalsPage(): ReactElement {
       subtaskLatestRef.current.clear()
     }
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handleBootstrapComplete = () => {
+      refreshGoalsFromSupabase('bootstrap-complete')
+      refreshQuickListFromSupabase('bootstrap-complete')
+    }
+    window.addEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrapComplete)
+    return () => {
+      window.removeEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrapComplete)
+    }
+  }, [refreshGoalsFromSupabase, refreshQuickListFromSupabase])
   const previousExpandedRef = useRef<Record<string, boolean> | null>(null)
   const previousBucketExpandedRef = useRef<Record<string, boolean> | null>(null)
   const previousCompletedCollapsedRef = useRef<Record<string, boolean> | null>(null)
