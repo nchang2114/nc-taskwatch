@@ -8,7 +8,9 @@ import ReflectionPage from './pages/ReflectionPage'
 import FocusPage from './pages/FocusPage'
 import { FOCUS_EVENT_TYPE } from './lib/focusChannel'
 import { SCHEDULE_EVENT_TYPE } from './lib/scheduleChannel'
-import { supabase } from './lib/supabaseClient'
+import { supabase, ensureSingleUserSession } from './lib/supabaseClient'
+import { fetchGoalsHierarchy } from './lib/goalsApi'
+import { syncLifeRoutinesWithSupabase } from './lib/lifeRoutines'
 
 type Theme = 'light' | 'dark'
 type TabKey = 'goals' | 'focus' | 'reflection'
@@ -1775,21 +1777,100 @@ function App(): React.ReactElement {
   const [isAuthCallbackRoute, setIsAuthCallbackRoute] = useState(() =>
     typeof window !== 'undefined' ? window.location.pathname.startsWith('/auth/callback') : false,
   )
+  const [bootState, setBootState] = useState<'booting' | 'ready'>(() => {
+    if (typeof window === 'undefined') return 'ready'
+    return window.location.pathname.startsWith('/auth/callback') ? 'ready' : 'booting'
+  })
+  const [bootError, setBootError] = useState<string | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
     }
     const handlePopState = () => {
-      setIsAuthCallbackRoute(window.location.pathname.startsWith('/auth/callback'))
+      const isCallback = window.location.pathname.startsWith('/auth/callback')
+      setIsAuthCallbackRoute(isCallback)
+      if (!isCallback) {
+        setBootState('booting')
+      }
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    if (isAuthCallbackRoute) {
+      return
+    }
+    let cancelled = false
+    const runBootstrap = async () => {
+      try {
+        const session = await ensureSingleUserSession()
+        if (!session) {
+          if (!cancelled) {
+            setBootState('ready')
+          }
+          return
+        }
+        await Promise.allSettled([
+          // Core data needed for all tabs
+          (async () => {
+            try {
+              await fetchGoalsHierarchy()
+            } catch (error) {
+              console.warn('[App boot] fetchGoalsHierarchy failed', error)
+              throw error
+            }
+          })(),
+          (async () => {
+            try {
+              await syncLifeRoutinesWithSupabase()
+            } catch (error) {
+              console.warn('[App boot] syncLifeRoutinesWithSupabase failed', error)
+              throw error
+            }
+          })(),
+        ])
+      } catch (error) {
+        console.warn('[App boot] bootstrap failed', error)
+        if (!cancelled) {
+          setBootError('We had trouble loading your workspace. You can keep using local data for now.')
+        }
+      } finally {
+        if (!cancelled) {
+          setBootState('ready')
+        }
+      }
+    }
+    runBootstrap().catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthCallbackRoute])
+
   if (isAuthCallbackRoute) {
     return <AuthCallbackScreen />
   }
+
+  if (bootState === 'booting') {
+    return (
+      <div className="auth-callback-screen">
+        <div className="auth-callback-panel">
+          <p className="auth-callback-title">Loading your Taskwatch workspace…</p>
+          <p className="auth-callback-text">
+            We’re pulling in your goals, focus sessions, and routines.
+          </p>
+          {bootError ? (
+            <p className="auth-callback-text auth-callback-text--error">{bootError}</p>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
   return <MainApp />
 }
 
