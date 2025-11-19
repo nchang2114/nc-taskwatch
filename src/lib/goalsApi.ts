@@ -1,4 +1,5 @@
 import { supabase, ensureSingleUserSession } from './supabaseClient'
+import { QUICK_LIST_GOAL_NAME } from './quickListRemote'
 
 export type DbGoal = {
   id: string
@@ -1060,6 +1061,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       .from('goals')
       .select('id')
       .eq('user_id', userId)
+      .neq('name', QUICK_LIST_GOAL_NAME)
       .limit(1)
     if (existingError) {
       console.warn('[goalsApi] Unable to inspect existing goals before seeding:', existingError.message)
