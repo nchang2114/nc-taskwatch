@@ -62,7 +62,7 @@ const getSampleRepeatingRules = (): RepeatingSessionRule[] => {
   ]
 }
 
-const readLocalRules = (): RepeatingSessionRule[] => {
+export const readLocalRepeatingRules = (): RepeatingSessionRule[] => {
   if (typeof window === 'undefined') return getSampleRepeatingRules()
   try {
     const raw = window.localStorage.getItem(LOCAL_RULES_KEY)
@@ -134,6 +134,47 @@ const writeEndMap = (map: EndMap) => {
   } catch {}
 }
 
+export const pushRepeatingRulesToSupabase = async (rules: RepeatingSessionRule[]): Promise<void> => {
+  if (!supabase) return
+  if (!rules || rules.length === 0) return
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) return
+  const payloads = rules.map((rule) => {
+    const startIso =
+      typeof rule.startAtMs === 'number'
+        ? new Date(rule.startAtMs).toISOString()
+        : typeof rule.createdAtMs === 'number'
+          ? new Date(rule.createdAtMs).toISOString()
+          : new Date().toISOString()
+    const endIso = typeof rule.endAtMs === 'number' ? new Date(rule.endAtMs).toISOString() : null
+    return {
+      id: rule.id,
+      user_id: session.user.id,
+      is_active: rule.isActive,
+      frequency: rule.frequency,
+      day_of_week: rule.dayOfWeek,
+      time_of_day_minutes: rule.timeOfDayMinutes,
+      duration_minutes: rule.durationMinutes,
+      task_name: rule.taskName,
+      goal_name: rule.goalName,
+      bucket_name: rule.bucketName,
+      timezone: rule.timezone,
+      start_date: startIso,
+      end_date: endIso,
+      created_at: startIso,
+      updated_at: new Date().toISOString(),
+    }
+  })
+  try {
+    const { error } = await supabase.from('repeating_sessions').upsert(payloads, { onConflict: 'id' })
+    if (error) {
+      console.warn('[repeatingSessions] Failed to seed repeating rules:', error)
+    }
+  } catch (error) {
+    console.warn('[repeatingSessions] Unexpected error seeding repeating rules:', error)
+  }
+}
+
 const mapRowToRule = (row: any): RepeatingSessionRule | null => {
   if (!row) return null
   const id = typeof row.id === 'string' ? row.id : null
@@ -195,9 +236,9 @@ const mapRowToRule = (row: any): RepeatingSessionRule | null => {
 }
 
 export async function fetchRepeatingSessionRules(): Promise<RepeatingSessionRule[]> {
-  if (!supabase) return readLocalRules()
+  if (!supabase) return readLocalRepeatingRules()
   const session = await ensureSingleUserSession()
-  if (!session) return readLocalRules()
+  if (!session) return readLocalRepeatingRules()
   const { data, error } = await supabase
     .from('repeating_sessions')
     .select(
@@ -207,7 +248,7 @@ export async function fetchRepeatingSessionRules(): Promise<RepeatingSessionRule
     .order('created_at', { ascending: true })
   if (error) {
     console.warn('[repeatingSessions] fetch error', error)
-    return readLocalRules()
+    return readLocalRepeatingRules()
   }
   let remote = (data ?? []).map(mapRowToRule).filter(Boolean) as RepeatingSessionRule[]
   // Merge persisted activation boundaries by rule id (client-side sticky value)
@@ -259,7 +300,7 @@ export async function createRepeatingRuleForEntry(
       createdAtMs: Math.max(0, entry.startedAt),
       startAtMs: Math.max(0, nextStartMs),
     }
-    const current = readLocalRules()
+    const current = readLocalRepeatingRules()
     const next = [...current, localRule]
     writeLocalRules(next)
     return localRule
@@ -280,7 +321,7 @@ export async function createRepeatingRuleForEntry(
       createdAtMs: Math.max(0, entry.startedAt),
       startAtMs: Math.max(0, nextStartMs),
     }
-    const current = readLocalRules()
+    const current = readLocalRepeatingRules()
     const next = [...current, localRule]
     writeLocalRules(next)
     return localRule
@@ -320,7 +361,7 @@ export async function createRepeatingRuleForEntry(
       createdAtMs: Math.max(0, entry.startedAt),
       startAtMs: Math.max(0, nextStartMs),
     }
-    const current = readLocalRules()
+    const current = readLocalRepeatingRules()
     const next = [...current, localRule]
     writeLocalRules(next)
     return localRule
@@ -368,7 +409,7 @@ export async function deactivateMatchingRulesForEntry(entry: HistoryEntry): Prom
 
   // Local fallback path: mark matching rules inactive and persist
   const deactivateLocal = (): string[] => {
-    const rules = readLocalRules()
+    const rules = readLocalRepeatingRules()
     const ids: string[] = []
     const next = rules.map((r) => {
       const labelMatch = (r.taskName ?? '') === task && (r.goalName ?? null) === goal && (r.bucketName ?? null) === bucket
@@ -446,7 +487,7 @@ export async function deleteMatchingRulesForEntry(entry: HistoryEntry): Promise<
   const bucket = entry.bucketName ?? null
 
   const deleteLocal = (): string[] => {
-    const rules = readLocalRules()
+    const rules = readLocalRepeatingRules()
     const ids: string[] = []
     const next = rules.filter((r) => {
       const labelMatch = (r.taskName ?? '') === task && (r.goalName ?? null) === goal && (r.bucketName ?? null) === bucket
@@ -538,7 +579,7 @@ export async function updateRepeatingRuleEndDate(ruleId: string, endAtMs: number
   endMap[ruleId] = Math.max(0, endAtMs)
   writeEndMap(endMap)
   // Also update the cached local rules blob if present
-  const local = readLocalRules()
+  const local = readLocalRepeatingRules()
   const idx = local.findIndex((r) => r.id === ruleId)
   if (idx >= 0) {
     local[idx] = { ...local[idx], endAtMs: Math.max(0, endAtMs) }
@@ -568,7 +609,7 @@ export async function updateRepeatingRuleEndDate(ruleId: string, endAtMs: number
     const e = typeof (row as any).end_date === 'string' ? Date.parse((row as any).end_date) : NaN
     if (Number.isFinite(s) && Number.isFinite(e) && s === e) {
       // Clean up local caches first
-      const current = readLocalRules()
+      const current = readLocalRepeatingRules()
       const filtered = current.filter((r) => r.id !== ruleId)
       if (filtered.length !== current.length) writeLocalRules(filtered)
       const act = readActivationMap()
@@ -592,7 +633,7 @@ export async function updateRepeatingRuleEndDate(ruleId: string, endAtMs: number
 // Delete a single repeating rule by id on server; remove from local cache too.
 export async function deleteRepeatingRuleById(ruleId: string): Promise<boolean> {
   // Local remove first
-  const local = readLocalRules()
+  const local = readLocalRepeatingRules()
   const next = local.filter((r) => r.id !== ruleId)
   if (next.length !== local.length) writeLocalRules(next)
   const act = readActivationMap()
