@@ -168,10 +168,6 @@ const pushQuickListToSupabase = async (items: QuickItem[]): Promise<void> => {
 const runBootstrapForUser = async (): Promise<void> => {
   const snapshot = readStoredGoalsSnapshot()
   const seeds = snapshot.length > 0 ? convertSnapshotToSeeds(snapshot) : DEMO_GOAL_SEEDS
-  console.info('[accountBootstrap] Starting goal seed push', {
-    snapshotCount: snapshot.length,
-    seedGoalCount: seeds.length,
-  })
   try {
     await seedGoalsIfEmpty(seeds)
     console.info('[accountBootstrap] Goal seed push complete.')

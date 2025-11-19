@@ -1056,12 +1056,17 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
   }
   const userId = session.user.id
   try {
-    const { data: existing, error: existingError } = await supabase.from('goals').select('id').limit(1)
+    const { data: existing, error: existingError } = await supabase
+      .from('goals')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1)
     if (existingError) {
       console.warn('[goalsApi] Unable to inspect existing goals before seeding:', existingError.message)
       return false
     }
     if (existing && existing.length > 0) {
+      console.info('[goalsApi] Skipping goal seed because account already has goals.')
       return false
     }
 
