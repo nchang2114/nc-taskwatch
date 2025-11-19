@@ -150,7 +150,7 @@ const minuteVariance = (dayOffset: number, seed: number): number => {
   return base - 10
 }
 
-const createSampleHistoryRecords = (): HistoryRecord[] => {
+export const createSampleHistoryRecords = (): HistoryRecord[] => {
   const anchor = new Date()
   anchor.setSeconds(0, 0)
   const getStart = (daysAgo: number, hour: number, minute: number): number => {
@@ -1233,7 +1233,12 @@ export const pushAllHistoryToSupabase = async (): Promise<void> => {
   if (!session) {
     return
   }
-  const records = readHistoryRecords()
+  let records = readHistoryRecords()
+  if (!records || records.length === 0) {
+    const samples = createSampleHistoryRecords()
+    writeHistoryRecords(samples)
+    records = samples
+  }
   const next = records.map((record) => ({ ...record, pendingAction: 'upsert' as HistoryPendingAction }))
   writeHistoryRecords(next)
   console.info('[sessionHistory] pushAllHistoryToSupabase marked records pending', {

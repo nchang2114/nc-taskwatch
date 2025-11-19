@@ -2,7 +2,7 @@ import { seedGoalsIfEmpty, type GoalSeed } from './goalsApi'
 import { readStoredGoalsSnapshot, type GoalSnapshot } from './goalsSync'
 import { readStoredQuickList, type QuickItem } from './quickList'
 import { ensureQuickListRemoteStructures, generateUuid, QUICK_LIST_GOAL_NAME } from './quickListRemote'
-import { readStoredLifeRoutines, pushLifeRoutinesToSupabase } from './lifeRoutines'
+import { readStoredLifeRoutines, pushLifeRoutinesToSupabase, getDefaultLifeRoutines } from './lifeRoutines'
 import { pushAllHistoryToSupabase } from './sessionHistory'
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { DEMO_GOAL_SEEDS } from './demoGoals'
@@ -185,7 +185,10 @@ const runBootstrapForUser = async (): Promise<void> => {
   }
 
   try {
-    const routines = readStoredLifeRoutines()
+    let routines = readStoredLifeRoutines()
+    if (!Array.isArray(routines) || routines.length === 0) {
+      routines = getDefaultLifeRoutines()
+    }
     console.info('[accountBootstrap] Seeding life routines', { count: routines.length })
     await pushLifeRoutinesToSupabase(routines)
     console.info('[accountBootstrap] Life routines seed push complete')
