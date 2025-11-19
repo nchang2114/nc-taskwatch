@@ -29,7 +29,6 @@ import {
   setTaskPriorityAndResort as apiSetTaskPriorityAndResort,
   upsertTaskSubtask as apiUpsertTaskSubtask,
   deleteTaskSubtask as apiDeleteTaskSubtask,
-  seedGoalsIfEmpty,
   fetchTaskNotes as apiFetchTaskNotes,
   fetchGoalMilestones as apiFetchGoalMilestones,
   upsertGoalMilestone as apiUpsertGoalMilestone,
@@ -42,7 +41,7 @@ import {
   ensureSurfaceStyle,
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
-import { DEMO_GOALS, DEMO_GOAL_SEEDS } from '../lib/demoGoals'
+import { DEMO_GOALS } from '../lib/demoGoals'
 import {
   LIFE_ROUTINE_STORAGE_KEY,
   LIFE_ROUTINE_UPDATE_EVENT,
@@ -765,8 +764,6 @@ type GoalAppearanceUpdate = {
 
 // Default data
 const DEFAULT_GOALS: Goal[] = DEMO_GOALS as Goal[]
-const DEFAULT_GOAL_SEEDS: Parameters<typeof seedGoalsIfEmpty>[0] = DEMO_GOAL_SEEDS
-
 const GOAL_GRADIENTS = [
   'from-fuchsia-500 to-purple-500',
   'from-emerald-500 to-cyan-500',
@@ -7858,24 +7855,6 @@ export default function GoalsPage(): ReactElement {
     () => (archivedManagerGoal ? archivedManagerGoal.buckets.filter((bucket) => bucket.archived) : []),
     [archivedManagerGoal],
   )
-  // On first load, attempt to hydrate from Supabase (single-user session).
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        await seedGoalsIfEmpty(DEFAULT_GOAL_SEEDS)
-      } catch (error) {
-        console.warn('[GoalsPage] Failed to seed Supabase defaults:', error)
-      }
-      if (!cancelled) {
-        refreshGoalsFromSupabase('initial-load')
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [refreshGoalsFromSupabase])
-
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') {
       return
