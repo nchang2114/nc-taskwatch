@@ -368,6 +368,38 @@ const createSampleHistoryRecords = (): HistoryRecord[] => {
     plan.sessions.forEach((session) => scheduleSession(plan.dayOffset, session))
   })
 
+  addEntry({
+    taskName: "X's Birthday",
+    daysAgo: 3,
+    startHour: 0,
+    startMinute: 0,
+    durationMinutes: 24 * 60,
+    goalName: LIFE_ROUTINES_NAME,
+    bucketName: 'Socials',
+    goalId: LIFE_ROUTINES_GOAL_ID,
+    bucketId: 'life-socials',
+    taskId: 'life-socials-birthday',
+    goalSurface: LIFE_ROUTINES_SURFACE,
+    bucketSurface: 'sunset-orange',
+    notes: 'All-day celebration for a close friend.',
+  })
+
+  addEntry({
+    taskName: 'Snapback – Doomscrolling',
+    daysAgo: 2,
+    startHour: 22,
+    startMinute: 0,
+    durationMinutes: 45,
+    goalName: 'Snapback',
+    bucketName: 'Doomscrolling',
+    goalId: 'snapback',
+    bucketId: 'snapback-doomscrolling',
+    taskId: 'snapback-doomscroll',
+    goalSurface: 'charcoal',
+    bucketSurface: 'charcoal',
+    notes: 'Mindless scrolling that pulled me off track.',
+  })
+
   const futureGuideBlocks: SampleConfig[] = [
     {
       taskName: 'Sleep (auto-scheduled)',
