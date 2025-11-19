@@ -102,9 +102,7 @@ async function getActiveUserId(): Promise<string | null> {
   return session?.user?.id ?? null
 }
 
-/** Fetch Goals → Buckets → Tasks for the current session user, ordered for UI. */
-export async function fetchGoalsHierarchy(): Promise<
-  | null
+export type GoalsHierarchyResult =
   | {
       goals: Array<{
         id: string
@@ -137,83 +135,115 @@ export async function fetchGoalsHierarchy(): Promise<
           }>
         }>
       }>
+      error: null
     }
-> {
-  if (!supabase) return null
+  | {
+      goals: null | []
+      error: { code?: string; message: string }
+    }
+
+/** Fetch Goals → Buckets → Tasks for the current session user, ordered for UI. */
+export async function fetchGoalsHierarchy(): Promise<GoalsHierarchyResult> {
+  if (!supabase) {
+    return { goals: null, error: { message: 'Supabase client is not configured.' } }
+  }
   const session = await ensureSingleUserSession()
-  if (!session) return null
+  if (!session) {
+    return { goals: null, error: { code: 'NO_SESSION', message: 'No active Supabase session.' } }
+  }
 
-  // Goals
-  // Try selecting optional milestones_shown; if unsupported, retry without
-  let goals: any[] | null = null
-  let gErr: any = null
+  const client = supabase
+
   let includeMilestones = true
-  {
-    const { data, error } = await supabase
+  let goalsRows: any[] | null = null
+  let goalsError: any = null
+
+  const runGoalsQuery = async (withMilestones: boolean) => {
+    const columns = withMilestones
+      ? 'id, name, color, sort_index, card_surface, starred, goal_archive, created_at, milestones_shown'
+      : 'id, name, color, sort_index, card_surface, starred, goal_archive, created_at'
+    const { data, error } = await client
       .from('goals')
-      .select('id, name, color, sort_index, card_surface, starred, goal_archive, created_at, milestones_shown')
+      .select(columns)
       .order('sort_index', { ascending: true })
-    goals = data as any[] | null
-    gErr = error
+    return { data: data as any[] | null, error }
+  }
+
+  {
+    const { data, error } = await runGoalsQuery(true)
+    goalsRows = data
+    goalsError = error
+
     const code = String((error as any)?.code || '')
-    // Only fall back when the column truly does not exist (PG code 42703)
-    if (gErr && (code === '42703')) {
+    if (goalsError && code === '42703') {
       includeMilestones = false
-      const retry = await supabase
-        .from('goals')
-        .select('id, name, color, sort_index, card_surface, starred, goal_archive, created_at')
-        .order('sort_index', { ascending: true })
-      goals = retry.data as any[] | null
-      gErr = retry.error
+      const retry = await runGoalsQuery(false)
+      goalsRows = retry.data
+      goalsError = retry.error
     }
   }
-  if (gErr) {
-    console.warn('[goalsApi] fetchGoalsHierarchy goals error', gErr?.message ?? gErr)
-    return null
+
+  if (goalsError) {
+    const code = String((goalsError as any)?.code || '')
+    const message = (goalsError as any)?.message ?? String(goalsError)
+    console.warn('[goalsApi] fetchGoalsHierarchy goals error', message, goalsError)
+    return { goals: null, error: { code, message } }
   }
-  if (!goals || goals.length === 0) return { goals: [] }
 
-  const goalIds = goals.map((g) => g.id)
+  if (!goalsRows || goalsRows.length === 0) {
+    return { goals: [], error: null }
+  }
 
-  // Buckets
-  const { data: buckets, error: bErr } = await supabase
+  const goalIds = goalsRows.map((g) => g.id as string)
+
+  const { data: buckets, error: bErr } = await client
     .from('buckets')
     .select('id, user_id, goal_id, name, favorite, sort_index, buckets_card_style, bucket_archive')
     .in('goal_id', goalIds)
     .order('sort_index', { ascending: true })
-  if (bErr) return null
 
-  const bucketIds = (buckets ?? []).map((b) => b.id)
+  if (bErr) {
+    const code = String((bErr as any)?.code || '')
+    const message = (bErr as any)?.message ?? String(bErr)
+    console.warn('[goalsApi] fetchGoalsHierarchy buckets error', message, bErr)
+    return { goals: null, error: { code, message } }
+  }
 
-  // Tasks (order by completed then sort_index so active first)
+  const bucketIds = (buckets ?? []).map((b) => b.id as string)
+
   const { data: tasks, error: tErr } = bucketIds.length
-    ? await supabase
+    ? await client
         .from('tasks')
-        // Omit notes here to reduce payload; fetch lazily per-task when needed
         .select('id, user_id, bucket_id, text, completed, difficulty, priority, sort_index')
         .in('bucket_id', bucketIds)
         .order('completed', { ascending: true })
         .order('priority', { ascending: false })
         .order('sort_index', { ascending: true })
     : { data: [], error: null as any }
+
   if (tErr) {
-    console.error('[goalsApi] fetchGoalsHierarchy tasks error', tErr.message ?? tErr, tErr)
-    return null
+    const code = String((tErr as any)?.code || '')
+    const message = (tErr as any)?.message ?? String(tErr)
+    console.error('[goalsApi] fetchGoalsHierarchy tasks error', message, tErr)
+    return { goals: null, error: { code, message } }
   }
 
-  const taskIds = (tasks ?? []).map((task) => task.id)
+  const taskIds = (tasks ?? []).map((task) => task.id as string)
 
   const { data: taskSubtasks, error: sErr } = taskIds.length
-    ? await supabase
+    ? await client
         .from('task_subtasks')
         .select('id, user_id, task_id, text, completed, sort_index, updated_at')
         .in('task_id', taskIds)
         .order('task_id', { ascending: true })
         .order('sort_index', { ascending: true })
     : { data: [], error: null as any }
+
   if (sErr) {
-    console.error('[goalsApi] fetchGoalsHierarchy subtasks error', sErr.message ?? sErr, sErr)
-    return null
+    const code = String((sErr as any)?.code || '')
+    const message = (sErr as any)?.message ?? String(sErr)
+    console.error('[goalsApi] fetchGoalsHierarchy subtasks error', message, sErr)
+    return { goals: null, error: { code, message } }
   }
 
   const subtasksByTaskId = new Map<string, DbTaskSubtask[]>()
@@ -223,75 +253,78 @@ export async function fetchGoalsHierarchy(): Promise<
     subtasksByTaskId.set(subtask.task_id, list)
   })
 
-  // Build hierarchy
   const bucketsByGoal = new Map<
     string,
-    Array<{ id: string; name: string; favorite: boolean; surfaceStyle?: string | null; tasks: any[] }>
+    Array<{
+      id: string
+      name: string
+      favorite: boolean
+      archived?: boolean
+      surfaceStyle?: string | null
+      tasks: any[]
+    }>
   >()
   const bucketMap = new Map<
     string,
-    { id: string; name: string; favorite: boolean; surfaceStyle?: string | null; tasks: any[] }
+    {
+      id: string
+      name: string
+      favorite: boolean
+      archived?: boolean
+      surfaceStyle?: string | null
+      tasks: any[]
+    }
   >()
+
   ;(buckets ?? []).forEach((b) => {
     const node = {
-      id: b.id,
-      name: b.name,
-      favorite: b.favorite,
+      id: b.id as string,
+      name: b.name as string,
+      favorite: !!b.favorite,
       surfaceStyle: (b as any).buckets_card_style ?? null,
       archived: Boolean((b as any).bucket_archive),
       tasks: [] as any[],
     }
-    bucketMap.set(b.id, node)
-    const list = bucketsByGoal.get(b.goal_id) ?? []
+    bucketMap.set(node.id, node)
+    const list = bucketsByGoal.get(b.goal_id as string) ?? []
     list.push(node)
-    bucketsByGoal.set(b.goal_id, list)
+    bucketsByGoal.set(b.goal_id as string, list)
   })
 
   ;(tasks ?? []).forEach((t) => {
-    const bucket = bucketMap.get(t.bucket_id)
-    if (bucket) {
-      const subtasks = subtasksByTaskId.get(t.id) ?? []
-      bucket.tasks.push({
-        id: t.id,
-        text: t.text,
-        completed: !!t.completed,
-        difficulty: (t.difficulty as any) ?? 'none',
-        priority: !!(t as any).priority,
-        // Notes intentionally omitted in bulk fetch; loaded on demand
-        subtasks: subtasks.map((subtask) => ({
-          id: subtask.id,
-          text: subtask.text ?? '',
-          completed: !!subtask.completed,
-          sort_index: subtask.sort_index ?? 0,
-          updated_at: (subtask as any).updated_at ?? null,
-        })),
-      })
-    }
-  })
-
-  const tree = goals.map((g) => {
-    const rawSurface = (g as any).card_surface
-    const surfaceStyle = typeof rawSurface === 'string' && rawSurface.length > 0 ? rawSurface : 'glass'
-    return {
-      id: g.id,
-      name: g.name,
-      color: g.color,
-      createdAt: typeof (g as any).created_at === 'string' ? ((g as any).created_at as string) : undefined,
-      starred: Boolean((g as any).starred),
-      surfaceStyle,
-      archived: Boolean((g as any).goal_archive),
-      milestonesShown: includeMilestones ? Boolean((g as any).milestones_shown) : undefined,
-      buckets: (bucketsByGoal.get(g.id) ?? []).map((bucket) => ({
-        ...bucket,
-        surfaceStyle:
-          typeof bucket.surfaceStyle === 'string' && bucket.surfaceStyle.length > 0
-            ? bucket.surfaceStyle
-            : 'glass',
+    const bucket = bucketMap.get(t.bucket_id as string)
+    if (!bucket) return
+    const subtasks = subtasksByTaskId.get(t.id as string) ?? []
+    bucket.tasks.push({
+      id: t.id as string,
+      text: t.text as string,
+      completed: !!t.completed,
+      difficulty: (t.difficulty as any) ?? 'none',
+      priority: !!(t as any).priority,
+      notes: null,
+      subtasks: subtasks.map((subtask) => ({
+        id: subtask.id as string,
+        text: subtask.text as string,
+        completed: !!subtask.completed,
+        sort_index: subtask.sort_index ?? null,
       })),
-    }
+    })
   })
 
-  return { goals: tree }
+  return {
+    goals: goalsRows.map((g) => ({
+      id: g.id as string,
+      name: g.name as string,
+      color: g.color as string,
+      createdAt: g.created_at as string | undefined,
+      surfaceStyle: (g.card_surface as string | null) ?? null,
+      starred: !!g.starred,
+      archived: !!g.goal_archive,
+      milestonesShown: includeMilestones ? !!g.milestones_shown : undefined,
+      buckets: bucketsByGoal.get(g.id as string) ?? [],
+    })),
+    error: null,
+  }
 }
 
 /** Fetch notes for a single task lazily to avoid large egress during list loads. */
