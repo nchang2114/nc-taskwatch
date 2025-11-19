@@ -4403,6 +4403,10 @@ html[data-theme='light'] .goal-task-row--diff-green {
   display: grid;
   gap: 0.75rem;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  max-height: min(28rem, 70vh);
+  overflow-y: auto;
+  padding-right: 0.35rem;
+  scroll-behavior: smooth;
 }
 
 .goal-customizer__surface {
@@ -4486,6 +4490,46 @@ html[data-theme='light'] .goal-task-row--diff-green {
 .goal-customizer__surface-preview--ember {
   background: linear-gradient(135deg, rgba(255, 210, 170, 0.3), rgba(249, 115, 22, 0.18));
   border-color: rgba(249, 140, 52, 0.26);
+}
+
+.goal-customizer__surface-preview--deep-indigo {
+  background: linear-gradient(135deg, rgba(180, 184, 255, 0.3), rgba(122, 127, 232, 0.18));
+  border-color: rgba(122, 127, 232, 0.26);
+}
+
+.goal-customizer__surface-preview--warm-amber {
+  background: linear-gradient(135deg, rgba(255, 236, 204, 0.32), rgba(251, 191, 36, 0.2));
+  border-color: rgba(251, 191, 36, 0.26);
+}
+
+.goal-customizer__surface-preview--fresh-teal {
+  background: linear-gradient(135deg, rgba(167, 255, 235, 0.28), rgba(94, 234, 212, 0.16));
+  border-color: rgba(45, 212, 191, 0.26);
+}
+
+.goal-customizer__surface-preview--sunset-orange {
+  background: linear-gradient(135deg, rgba(255, 212, 192, 0.3), rgba(249, 121, 84, 0.18));
+  border-color: rgba(249, 115, 22, 0.28);
+}
+
+.goal-customizer__surface-preview--cool-blue {
+  background: linear-gradient(135deg, rgba(207, 232, 255, 0.32), rgba(156, 206, 255, 0.18));
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
+.goal-customizer__surface-preview--soft-magenta {
+  background: linear-gradient(135deg, rgba(255, 219, 247, 0.3), rgba(232, 121, 249, 0.18));
+  border-color: rgba(232, 121, 249, 0.28);
+}
+
+.goal-customizer__surface-preview--muted-lavender {
+  background: linear-gradient(135deg, rgba(233, 225, 255, 0.3), rgba(204, 196, 253, 0.18));
+  border-color: rgba(139, 92, 246, 0.28);
+}
+
+.goal-customizer__surface-preview--neutral-grey-blue {
+  background: linear-gradient(135deg, rgba(226, 232, 240, 0.3), rgba(195, 203, 213, 0.16));
+  border-color: rgba(100, 116, 139, 0.26);
 }
 
 .goal-customizer--life-routine .goal-customizer__surface-preview--glass {
@@ -4875,6 +4919,46 @@ html[data-theme='light'] .goal-customizer__surface-preview--lagoon {
 html[data-theme='light'] .goal-customizer__surface-preview--ember {
   background: linear-gradient(135deg, rgba(255, 226, 198, 0.22), rgba(254, 178, 105, 0.14));
   border-color: rgba(249, 115, 22, 0.22);
+}
+
+html[data-theme='light'] .goal-customizer__surface-preview--deep-indigo {
+  background: linear-gradient(135deg, rgba(233, 235, 255, 0.9), rgba(203, 207, 255, 0.8));
+  border-color: rgba(99, 102, 241, 0.24);
+}
+
+html[data-theme='light'] .goal-customizer__surface-preview--warm-amber {
+  background: linear-gradient(135deg, rgba(255, 247, 224, 0.9), rgba(254, 225, 166, 0.78));
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+html[data-theme='light'] .goal-customizer__surface-preview--fresh-teal {
+  background: linear-gradient(135deg, rgba(224, 255, 248, 0.9), rgba(191, 247, 236, 0.78));
+  border-color: rgba(20, 184, 166, 0.24);
+}
+
+html[data-theme='light'] .goal-customizer__surface-preview--sunset-orange {
+  background: linear-gradient(135deg, rgba(255, 242, 236, 0.9), rgba(254, 217, 204, 0.78));
+  border-color: rgba(249, 115, 22, 0.24);
+}
+
+html[data-theme='light'] .goal-customizer__surface-preview--cool-blue {
+  background: linear-gradient(135deg, rgba(233, 242, 255, 0.9), rgba(207, 227, 255, 0.78));
+  border-color: rgba(96, 165, 250, 0.24);
+}
+
+html[data-theme='light'] .goal-customizer__surface-preview--soft-magenta {
+  background: linear-gradient(135deg, rgba(255, 236, 249, 0.9), rgba(247, 208, 239, 0.78));
+  border-color: rgba(232, 121, 249, 0.24);
+}
+
+html[data-theme='light'] .goal-customizer__surface-preview--muted-lavender {
+  background: linear-gradient(135deg, rgba(244, 240, 255, 0.9), rgba(229, 223, 255, 0.78));
+  border-color: rgba(139, 92, 246, 0.24);
+}
+
+html[data-theme='light'] .goal-customizer__surface-preview--neutral-grey-blue {
+  background: linear-gradient(135deg, rgba(236, 240, 247, 0.9), rgba(215, 222, 232, 0.78));
+  border-color: rgba(100, 116, 139, 0.22);
 }
 
 html[data-theme='light'] .goal-customizer__swatch {
