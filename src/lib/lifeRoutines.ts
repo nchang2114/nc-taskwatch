@@ -205,7 +205,7 @@ const mapDbRowToRoutine = (row: LifeRoutineDbRow): LifeRoutineConfig | null => {
   }
 }
 
-const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]): Promise<void> => {
+export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]): Promise<void> => {
   if (!supabase) {
     return
   }

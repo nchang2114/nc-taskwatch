@@ -9,6 +9,7 @@ import FocusPage from './pages/FocusPage'
 import { FOCUS_EVENT_TYPE } from './lib/focusChannel'
 import { SCHEDULE_EVENT_TYPE } from './lib/scheduleChannel'
 import { supabase } from './lib/supabaseClient'
+import { ensureInitialAccountBootstrap } from './lib/accountBootstrap'
 import { clearCachedSupabaseSession, readCachedSessionTokens } from './lib/authStorage'
 
 type Theme = 'light' | 'dark'
@@ -770,6 +771,15 @@ function MainApp() {
       listener?.subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!userProfile) {
+      return
+    }
+    void ensureInitialAccountBootstrap().catch((error) => {
+      console.warn('[App] Initial account bootstrap failed:', error)
+    })
+  }, [userProfile])
 
   useEffect(() => {
     if (typeof document === 'undefined') {

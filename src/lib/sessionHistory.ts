@@ -1218,3 +1218,22 @@ export const pruneFuturePlannedForRuleAfter = async (ruleId: string, afterYmd: s
     schedulePendingPush()
   }
 }
+
+export const pushAllHistoryToSupabase = async (): Promise<void> => {
+  if (!supabase) {
+    return
+  }
+  const session = await ensureSingleUserSession()
+  if (!session) {
+    return
+  }
+  const records = readHistoryRecords()
+  const next = records.map((record) => ({ ...record, pendingAction: 'upsert' as HistoryPendingAction }))
+  writeHistoryRecords(next)
+  await pushPendingHistoryToSupabase()
+  try {
+    await syncHistoryWithSupabase()
+  } catch {
+    // best-effort; ignore sync errors so bootstrap can continue
+  }
+}

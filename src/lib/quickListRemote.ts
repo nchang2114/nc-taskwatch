@@ -6,7 +6,7 @@ const QUICK_LIST_BUCKET_NAME = 'Quick List'
 
 let ensurePromise: Promise<{ goalId: string; bucketId: string } | null> | null = null
 
-const generateUuid = (): string => {
+export const generateUuid = (): string => {
   const cryptoRef = typeof globalThis !== 'undefined' ? globalThis.crypto : undefined
   if (cryptoRef && typeof cryptoRef.randomUUID === 'function') {
     try {
