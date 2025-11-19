@@ -2429,9 +2429,9 @@ const computeRangeOverview = (
 
 export default function ReflectionPage() {
   type CalendarViewMode = 'day' | '3d' | 'week' | 'month' | 'year'
-  const [calendarView, setCalendarView] = useState<CalendarViewMode>('week')
+  const [calendarView, setCalendarView] = useState<CalendarViewMode>('3d')
   // No explicit visibility gating; transforms are guarded until measured
-  const [multiDayCount, setMultiDayCount] = useState<number>(4)
+  const [multiDayCount, setMultiDayCount] = useState<number>(6)
   const [showMultiDayChooser, setShowMultiDayChooser] = useState(false)
   const [historyDayOffset, setHistoryDayOffset] = useState(0)
   const historyDayOffsetRef = useRef(historyDayOffset)

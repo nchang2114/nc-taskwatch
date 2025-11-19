@@ -51,7 +51,7 @@ const getSampleRepeatingRules = (): RepeatingSessionRule[] => {
       dayOfWeek: null,
       timeOfDayMinutes,
       durationMinutes: 8 * 60,
-      taskName: 'Sleep – wind down',
+      taskName: 'Sleep',
       goalName: 'Daily Life',
       bucketName: 'Sleep',
       timezone,

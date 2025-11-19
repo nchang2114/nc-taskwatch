@@ -407,7 +407,7 @@ const createSampleHistoryRecords = (): HistoryRecord[] => {
 
   const futureGuideBlocks: SampleConfig[] = [
     {
-      taskName: 'Sleep (auto-scheduled)',
+      taskName: 'Sleep',
       daysAgo: -1,
       startHour: 23,
       startMinute: 0,
@@ -424,7 +424,7 @@ const createSampleHistoryRecords = (): HistoryRecord[] => {
       notes: 'Guide entry for tomorrow night.',
     },
     {
-      taskName: 'Sleep (auto-scheduled)',
+      taskName: 'Sleep',
       daysAgo: -2,
       startHour: 23,
       startMinute: 0,
