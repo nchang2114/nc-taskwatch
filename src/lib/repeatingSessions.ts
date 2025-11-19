@@ -33,6 +33,15 @@ const LOCAL_ACTIVATION_MAP_KEY = 'nc-taskwatch-repeating-activation-map'
 // We also persist a local end-boundary override to ensure offline correctness.
 const LOCAL_END_MAP_KEY = 'nc-taskwatch-repeating-end-map'
 
+const randomRuleId = (): string => {
+  try {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID()
+    }
+  } catch {}
+  return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 const getSampleRepeatingRules = (): RepeatingSessionRule[] => {
   const now = new Date()
   now.setSeconds(0, 0)
@@ -139,7 +148,22 @@ export const pushRepeatingRulesToSupabase = async (rules: RepeatingSessionRule[]
   if (!rules || rules.length === 0) return
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) return
-  const payloads = rules.map((rule) => {
+  let mutated = false
+  const normalizedRules = rules.map((rule) => {
+    if (!rule.id || rule.id === SAMPLE_SLEEP_ROUTINE_ID) {
+      mutated = true
+      return { ...rule, id: randomRuleId() }
+    }
+    return rule
+  })
+  if (mutated) {
+    try {
+      writeLocalRules(normalizedRules)
+    } catch {
+      // ignore local write issues
+    }
+  }
+  const payloads = normalizedRules.map((rule) => {
     const startIso =
       typeof rule.startAtMs === 'number'
         ? new Date(rule.startAtMs).toISOString()
@@ -287,7 +311,7 @@ export async function createRepeatingRuleForEntry(
   // Try Supabase; if not available, persist locally
   if (!supabase) {
     const localRule: RepeatingSessionRule = {
-      id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `local-${Date.now()}`) as string,
+      id: randomRuleId(),
       isActive: true,
       frequency,
       dayOfWeek,
@@ -308,7 +332,7 @@ export async function createRepeatingRuleForEntry(
   const session = await ensureSingleUserSession()
   if (!session) {
     const localRule: RepeatingSessionRule = {
-      id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `local-${Date.now()}`) as string,
+      id: randomRuleId(),
       isActive: true,
       frequency,
       dayOfWeek,
@@ -348,7 +372,7 @@ export async function createRepeatingRuleForEntry(
     console.warn('[repeatingSessions] create error', error)
     // Fallback: store locally so user still sees guides
     const localRule: RepeatingSessionRule = {
-      id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `local-${Date.now()}`) as string,
+      id: randomRuleId(),
       isActive: true,
       frequency,
       dayOfWeek,
