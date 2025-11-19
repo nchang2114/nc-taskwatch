@@ -1134,58 +1134,6 @@ const BUCKET_SURFACE_CLASS_MAP: Partial<Record<BucketSurfaceStyle, string>> = {
   'neutral-grey-blue': 'goal-bucket-item--surface-neutral-grey-blue',
 }
 
-const GOAL_SURFACE_PRESETS: Array<{
-  id: GoalSurfaceStyle
-  label: string
-  description: string
-}> = [
-  {
-    id: 'glass',
-    label: 'Simple',
-    description: 'Barely-there wash with a soft outline.',
-  },
-  {
-    id: 'slate',
-    label: 'Coastal',
-    description: 'Airy blue tint with a gentle fade.',
-  },
-  {
-    id: 'midnight',
-    label: 'Midnight',
-    description: 'Cool indigo haze for subtle depth.',
-  },
-  {
-    id: 'charcoal',
-    label: 'Cherry',
-    description: 'Blush pink highlight with a pastel glow.',
-  },
-  {
-    id: 'linen',
-    label: 'Warm',
-    description: 'Golden peach accent with gentle warmth.',
-  },
-  {
-    id: 'frost',
-    label: 'Frost',
-    description: 'Minty aqua highlight with a breezy feel.',
-  },
-  {
-    id: 'grove',
-    label: 'Grove',
-    description: 'Lush greens with a soft forest glow.',
-  },
-  {
-    id: 'lagoon',
-    label: 'Lagoon',
-    description: 'Crystal blues with a calming tide.',
-  },
-  {
-    id: 'ember',
-    label: 'Ember',
-    description: 'Vibrant amber with a warm spark.',
-  },
-]
-
 const BUCKET_SURFACE_PRESETS: Array<{
   id: BucketSurfaceStyle
   label: string
@@ -1261,7 +1209,6 @@ interface GoalCustomizerProps {
 }
 
 const GoalCustomizer = React.forwardRef<HTMLDivElement, GoalCustomizerProps>(({ goal, onUpdate, onClose }, ref) => {
-  const surfaceStyle: GoalSurfaceStyle = goal.surfaceStyle ?? 'glass'
   const initialStops = useMemo(() => {
     if (goal.customGradient) {
       return goal.customGradient
@@ -1293,10 +1240,6 @@ const GoalCustomizer = React.forwardRef<HTMLDivElement, GoalCustomizerProps>(({ 
     [customPreview],
   )
 
-  const handleSurfaceSelect = (style: GoalSurfaceStyle) => {
-    onUpdate({ surfaceStyle: style })
-  }
-
   const handleGradientSelect = (value: string) => {
     if (value === 'custom') {
       onUpdate({ customGradient: { ...customStops } })
@@ -1319,7 +1262,7 @@ const GoalCustomizer = React.forwardRef<HTMLDivElement, GoalCustomizerProps>(({ 
       <div className="goal-customizer__header">
         <div>
           <p className="goal-customizer__title">Personalise</p>
-          <p className="goal-customizer__subtitle">Tune the card surface and progress glow.</p>
+          <p className="goal-customizer__subtitle">Tune the progress glow.</p>
         </div>
         <button
           type="button"
@@ -1330,30 +1273,6 @@ const GoalCustomizer = React.forwardRef<HTMLDivElement, GoalCustomizerProps>(({ 
         >
           <span aria-hidden="true">×</span>
         </button>
-      </div>
-
-      <div className="goal-customizer__section">
-        <p className="goal-customizer__label">Card surface</p>
-        <div className="goal-customizer__surface-grid">
-          {GOAL_SURFACE_PRESETS.map((preset) => {
-            const isActive = surfaceStyle === preset.id
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                className={classNames('goal-customizer__surface', isActive && 'goal-customizer__surface--active')}
-                onClick={() => handleSurfaceSelect(preset.id)}
-              >
-                <span
-                  aria-hidden="true"
-                  className={classNames('goal-customizer__surface-preview', `goal-customizer__surface-preview--${preset.id}`)}
-                />
-                <span className="goal-customizer__surface-title">{preset.label}</span>
-                <span className="goal-customizer__surface-caption">{preset.description}</span>
-              </button>
-            )
-          })}
-        </div>
       </div>
 
       <div className="goal-customizer__section">
