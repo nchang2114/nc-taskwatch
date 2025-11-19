@@ -1,7 +1,7 @@
 import { seedGoalsIfEmpty, type GoalSeed } from './goalsApi'
 import { readStoredGoalsSnapshot, type GoalSnapshot } from './goalsSync'
 import { readStoredQuickList, type QuickItem } from './quickList'
-import { ensureQuickListRemoteStructures, generateUuid } from './quickListRemote'
+import { ensureQuickListRemoteStructures, generateUuid, QUICK_LIST_GOAL_NAME } from './quickListRemote'
 import { readStoredLifeRoutines, pushLifeRoutinesToSupabase } from './lifeRoutines'
 import { pushAllHistoryToSupabase } from './sessionHistory'
 import { supabase, ensureSingleUserSession } from './supabaseClient'
@@ -60,6 +60,7 @@ const userHasRemoteGoals = async (userId: string): Promise<boolean> => {
       .from('goals')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
+      .neq('name', QUICK_LIST_GOAL_NAME)
     if (error) {
       console.warn('[accountBootstrap] Unable to inspect existing goals:', error)
       return true
