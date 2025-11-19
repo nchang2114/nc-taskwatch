@@ -1234,10 +1234,25 @@ export const pushAllHistoryToSupabase = async (): Promise<void> => {
     return
   }
   let records = readHistoryRecords()
+  const samples = createSampleHistoryRecords()
   if (!records || records.length === 0) {
-    const samples = createSampleHistoryRecords()
     writeHistoryRecords(samples)
     records = samples
+  } else {
+    const map = new Map<string, HistoryRecord>()
+    records.forEach((record) => map.set(record.id, record))
+    let added = false
+    samples.forEach((sample) => {
+      if (!map.has(sample.id)) {
+        map.set(sample.id, sample)
+        added = true
+      }
+    })
+    if (added) {
+      const merged = Array.from(map.values())
+      records = sortRecordsForStorage(merged)
+      writeHistoryRecords(records)
+    }
   }
   const next = records.map((record) => ({ ...record, pendingAction: 'upsert' as HistoryPendingAction }))
   writeHistoryRecords(next)
