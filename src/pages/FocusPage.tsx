@@ -703,6 +703,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       return
     }
     const handleBootstrap = () => {
+      console.info('[FocusPage] Account bootstrap event received; syncing data.')
       void (async () => {
         try {
           const syncedHistory = await syncHistoryWithSupabase()

@@ -5851,6 +5851,7 @@ export default function GoalsPage(): ReactElement {
             quickListDebug('hydrated bucket id', remote.bucketId)
           }
           if (remote?.items) {
+            quickListDebug('Supabase quick list refresh result', { count: remote.items.length })
             if (remote.items.length === 0) {
               const localSnapshot = readStoredQuickList()
               if (localSnapshot.length > 0) {
@@ -7090,12 +7091,12 @@ export default function GoalsPage(): ReactElement {
           if (!isMountedRef.current) {
             return
           }
+          console.info('[GoalsPage] Supabase goals refresh', {
+            count: result?.goals?.length ?? 0,
+            reason,
+          })
           if (result?.goals && result.goals.length > 0) {
             applySupabaseGoalsPayload(result.goals)
-          } else if (!result || !result.goals) {
-            // no-op
-          } else if (result.goals.length === 0) {
-            // Skip clearing local demo snapshot until remote data exists.
           }
         } catch (error) {
           console.warn(
@@ -7929,6 +7930,7 @@ export default function GoalsPage(): ReactElement {
       return
     }
     const handleBootstrapComplete = () => {
+      console.info('[GoalsPage] Account bootstrap event received; refreshing Supabase data.')
       refreshGoalsFromSupabase('bootstrap-complete')
       refreshQuickListFromSupabase('bootstrap-complete')
     }

@@ -2915,6 +2915,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       return
     }
     const handleBootstrap = () => {
+      console.info('[ReflectionPage] Account bootstrap event received; syncing history + routines.')
       void (async () => {
         try {
           const syncedHistory = await syncHistoryWithSupabase()

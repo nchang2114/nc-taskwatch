@@ -77,6 +77,7 @@ const userHasRemoteGoals = async (userId: string): Promise<boolean> => {
       console.warn('[accountBootstrap] Unable to inspect existing goals:', error)
       return true
     }
+    console.info('[accountBootstrap] Remote goal count', count)
     return typeof count === 'number' && count > 0
   } catch (error) {
     console.warn('[accountBootstrap] Failed to inspect existing goals:', error)
@@ -109,6 +110,7 @@ const pushQuickListToSupabase = async (items: QuickItem[]): Promise<void> => {
       await supabase.from('tasks').delete().in('id', existingIds)
     }
     if (items.length === 0) {
+      console.info('[accountBootstrap] Quick List snapshot empty; skipping push.')
       return
     }
     const nowIso = new Date().toISOString()
@@ -166,28 +168,39 @@ const pushQuickListToSupabase = async (items: QuickItem[]): Promise<void> => {
 const runBootstrapForUser = async (): Promise<void> => {
   const snapshot = readStoredGoalsSnapshot()
   const seeds = snapshot.length > 0 ? convertSnapshotToSeeds(snapshot) : DEMO_GOAL_SEEDS
+  console.info('[accountBootstrap] Starting goal seed push', {
+    snapshotCount: snapshot.length,
+    seedGoalCount: seeds.length,
+  })
   try {
     await seedGoalsIfEmpty(seeds)
+    console.info('[accountBootstrap] Goal seed push complete.')
   } catch (error) {
     console.warn('[accountBootstrap] Failed to seed goals for new account:', error)
   }
 
   try {
     const quickItems = readStoredQuickList()
+    console.info('[accountBootstrap] Seeding Quick List items', { count: quickItems.length })
     await pushQuickListToSupabase(quickItems)
+    console.info('[accountBootstrap] Quick List seed push complete')
   } catch (error) {
     console.warn('[accountBootstrap] Failed to seed Quick List for new account:', error)
   }
 
   try {
     const routines = readStoredLifeRoutines()
+    console.info('[accountBootstrap] Seeding life routines', { count: routines.length })
     await pushLifeRoutinesToSupabase(routines)
+    console.info('[accountBootstrap] Life routines seed push complete')
   } catch (error) {
     console.warn('[accountBootstrap] Failed to seed life routines for new account:', error)
   }
 
   try {
+    console.info('[accountBootstrap] Seeding session history')
     await pushAllHistoryToSupabase()
+    console.info('[accountBootstrap] Session history seed push complete')
   } catch (error) {
     console.warn('[accountBootstrap] Failed to seed session history for new account:', error)
   }
@@ -203,19 +216,23 @@ export const ensureInitialAccountBootstrap = async (): Promise<void> => {
   bootstrapPromise = (async () => {
     const session = await ensureSingleUserSession()
     if (!session?.user?.id) {
+      console.info('[accountBootstrap] No session available; skipping bootstrap.')
       return
     }
     if (typeof window === 'undefined') {
       return
     }
     const userId = session.user.id
+    console.info('[accountBootstrap] Evaluating bootstrap for user', userId)
     const state = readBootstrapState(userId)
     if (state === 'complete') {
+      console.info('[accountBootstrap] Bootstrap already completed for user', userId)
       dispatchBootstrapEvent({ status: 'complete', userId })
       return
     }
     if (await userHasRemoteGoals(userId)) {
       writeBootstrapState(userId, 'complete')
+       console.info('[accountBootstrap] Remote goals already exist; marking bootstrap complete.')
       dispatchBootstrapEvent({ status: 'complete', userId })
       return
     }

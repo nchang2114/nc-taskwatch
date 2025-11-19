@@ -1140,6 +1140,12 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
   const records = readHistoryRecords()
   const pendingUpserts = records.filter((record) => record.pendingAction === 'upsert')
   const pendingDeletes = records.filter((record) => record.pendingAction === 'delete')
+  if (pendingUpserts.length > 0 || pendingDeletes.length > 0) {
+    console.info('[sessionHistory] pushPendingHistory run', {
+      pendingUpserts: pendingUpserts.length,
+      pendingDeletes: pendingDeletes.length,
+    })
+  }
 
   if (pendingUpserts.length > 0) {
     const client = supabase!
@@ -1230,6 +1236,10 @@ export const pushAllHistoryToSupabase = async (): Promise<void> => {
   const records = readHistoryRecords()
   const next = records.map((record) => ({ ...record, pendingAction: 'upsert' as HistoryPendingAction }))
   writeHistoryRecords(next)
+  console.info('[sessionHistory] pushAllHistoryToSupabase marked records pending', {
+    total: next.length,
+    pending: next.length,
+  })
   await pushPendingHistoryToSupabase()
   try {
     await syncHistoryWithSupabase()
