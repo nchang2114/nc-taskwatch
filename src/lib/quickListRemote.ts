@@ -85,7 +85,6 @@ export async function ensureQuickListRemoteStructures(): Promise<{ goalId: strin
           name: QUICK_LIST_GOAL_NAME,
           color: 'from-blue-500 to-indigo-600',
           sort_index: 10_000_000,
-          card_surface: 'glass',
           starred: false,
           goal_archive: true,
         }

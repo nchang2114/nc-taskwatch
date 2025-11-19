@@ -5,7 +5,7 @@ export type DbGoal = {
   name: string
   color: string
   sort_index: number
-  card_surface: string | null
+  card_surface?: string | null
   starred: boolean
   goal_archive?: boolean
   milestones_shown?: boolean
@@ -500,6 +500,8 @@ async function updateTaskWithGuard(
 }
 
 // ---------- Goals ----------
+let goalSurfacePersistenceWarningLogged = false
+
 export async function createGoal(name: string, color: string, surface: string = 'glass') {
   if (!supabase) return null
   const session = await ensureSingleUserSession()
@@ -508,13 +510,31 @@ export async function createGoal(name: string, color: string, surface: string = 
     return null
   }
   const sort_index = await nextSortIndex('goals')
+  const payload = {
+    user_id: session.user.id,
+    name,
+    color,
+    sort_index,
+    starred: false,
+    goal_archive: false,
+  }
   const { data, error } = await supabase
     .from('goals')
-    .insert([{ user_id: session.user.id, name, color, sort_index, card_surface: surface, starred: false, goal_archive: false }])
-    .select('id, name, color, sort_index, card_surface, starred, goal_archive')
+    .insert([payload])
+    .select('id, name, color, sort_index, starred, goal_archive')
     .single()
-  if (error) return null
-  return data as DbGoal
+  if (error) {
+    console.warn('[goalsApi] Failed to create goal:', error.message ?? error)
+    return null
+  }
+  const base = (data ?? null) as DbGoal | null
+  if (!base) {
+    return null
+  }
+  return {
+    ...base,
+    card_surface: surface ?? base.card_surface ?? null,
+  }
 }
 
 export async function setGoalColor(goalId: string, color: string) {
@@ -525,10 +545,12 @@ export async function setGoalColor(goalId: string, color: string) {
 }
 
 export async function setGoalSurface(goalId: string, surface: string | null) {
-  if (!supabase) return
-  const userId = await getActiveUserId()
-  if (!userId) return
-  await supabase.from('goals').update({ card_surface: surface }).eq('id', goalId).eq('user_id', userId)
+  void goalId
+  void surface
+  if (!goalSurfacePersistenceWarningLogged) {
+    goalSurfacePersistenceWarningLogged = true
+    console.warn('[goalsApi] Goal surface styles are not persisted because the card_surface column was removed.')
+  }
 }
 
 export async function setGoalStarred(goalId: string, starred: boolean) {
@@ -1048,7 +1070,6 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       name: goal.name,
       color: goal.color ?? 'from-fuchsia-500 to-purple-500',
       sort_index: (index + 1) * STEP,
-      card_surface: goal.surfaceStyle ?? 'glass',
       starred: Boolean(goal.starred),
       goal_archive: Boolean(goal.archived),
       // milestones_shown intentionally omitted to avoid errors if column not present
