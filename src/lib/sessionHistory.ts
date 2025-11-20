@@ -1288,6 +1288,26 @@ export const pruneFuturePlannedForRuleAfter = async (ruleId: string, afterYmd: s
   }
 }
 
+export const hasRemoteHistory = async (): Promise<boolean> => {
+  if (!supabase) return true
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) return true
+  try {
+    const { count, error } = await supabase
+      .from('session_history')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', session.user.id)
+    if (error) {
+      console.warn('[sessionHistory] Unable to inspect remote history:', error)
+      return true
+    }
+    return typeof count === 'number' && count > 0
+  } catch (error) {
+    console.warn('[sessionHistory] Unexpected remote history check error:', error)
+    return true
+  }
+}
+
 export const pushAllHistoryToSupabase = async (): Promise<void> => {
   if (!supabase) {
     return

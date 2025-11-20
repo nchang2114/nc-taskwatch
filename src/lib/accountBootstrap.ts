@@ -3,7 +3,7 @@ import { readStoredGoalsSnapshot, type GoalSnapshot } from './goalsSync'
 import { readStoredQuickList, type QuickItem } from './quickList'
 import { ensureQuickListRemoteStructures, generateUuid, QUICK_LIST_GOAL_NAME } from './quickListRemote'
 import { readStoredLifeRoutines, pushLifeRoutinesToSupabase, getDefaultLifeRoutines } from './lifeRoutines'
-import { pushAllHistoryToSupabase } from './sessionHistory'
+import { pushAllHistoryToSupabase, hasRemoteHistory } from './sessionHistory'
 import { readLocalRepeatingRules, pushRepeatingRulesToSupabase } from './repeatingSessions'
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { DEMO_GOAL_SEEDS } from './demoGoals'
@@ -203,9 +203,14 @@ const runBootstrapForUser = async (): Promise<void> => {
   }
 
   try {
-    console.info('[accountBootstrap] Seeding session history')
-    await pushAllHistoryToSupabase()
-    console.info('[accountBootstrap] Session history seed push complete')
+    const remoteHistoryExists = await hasRemoteHistory()
+    if (remoteHistoryExists) {
+      console.info('[accountBootstrap] Remote session history already present; skipping seed.')
+    } else {
+      console.info('[accountBootstrap] Seeding session history')
+      await pushAllHistoryToSupabase()
+      console.info('[accountBootstrap] Session history seed push complete')
+    }
   } catch (error) {
     console.warn('[accountBootstrap] Failed to seed session history for new account:', error)
   }
