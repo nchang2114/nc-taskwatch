@@ -8,7 +8,7 @@ import { readLocalRepeatingRules, pushRepeatingRulesToSupabase } from './repeati
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { DEMO_GOAL_SEEDS } from './demoGoals'
 import { DEFAULT_SURFACE_STYLE } from './surfaceStyles'
-import { restoreGuestSnapshotFromCache } from './guestSnapshot'
+import { restoreGuestSnapshotFromCache, clearGuestSnapshotCache } from './guestSnapshot'
 
 const BOOTSTRAP_STATE_PREFIX = 'nc-taskwatch-bootstrap-v1'
 const QUICK_LIST_SORT_STEP = 1024
@@ -268,7 +268,8 @@ export const ensureInitialAccountBootstrap = async (): Promise<void> => {
     }
     if (await userHasRemoteGoals(userId)) {
       writeBootstrapState(userId, 'complete')
-       console.info('[accountBootstrap] Remote goals already exist; marking bootstrap complete.')
+      clearGuestSnapshotCache()
+      console.info('[accountBootstrap] Remote goals already exist; marking bootstrap complete.')
       dispatchBootstrapEvent({ status: 'complete', userId })
       return
     }
@@ -277,6 +278,7 @@ export const ensureInitialAccountBootstrap = async (): Promise<void> => {
       restoreGuestSnapshotFromCache()
       await runBootstrapForUser()
       writeBootstrapState(userId, 'complete')
+      clearGuestSnapshotCache()
       dispatchBootstrapEvent({ status: 'complete', userId })
     } catch (error) {
       console.warn('[accountBootstrap] Failed to bootstrap new account data:', error)

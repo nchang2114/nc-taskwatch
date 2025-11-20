@@ -98,3 +98,14 @@ export const restoreGuestSnapshotFromCache = (): void => {
     // ignore corrupt cache
   }
 }
+
+export const clearGuestSnapshotCache = (): void => {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    window.sessionStorage.removeItem(GUEST_SNAPSHOT_CACHE_KEY)
+  } catch {
+    // ignore
+  }
+}
