@@ -699,35 +699,6 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
   }, [])
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-    const handleBootstrap = () => {
-      console.info('[FocusPage] Account bootstrap event received; syncing data.')
-      void (async () => {
-        try {
-          const syncedHistory = await syncHistoryWithSupabase()
-          if (syncedHistory) {
-            setHistory((current) => (historiesAreEqual(current, syncedHistory) ? current : syncedHistory))
-          }
-        } catch {}
-        try {
-          const syncedRoutines = await syncLifeRoutinesWithSupabase()
-          if (syncedRoutines) {
-            setLifeRoutineTasks((current) =>
-              JSON.stringify(current) === JSON.stringify(syncedRoutines) ? current : syncedRoutines,
-            )
-          }
-        } catch {}
-      })()
-    }
-    window.addEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
-    return () => {
-      window.removeEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
-    }
-  }, [setHistory, setLifeRoutineTasks])
-
-  useEffect(() => {
     refreshGoalsSnapshotFromSupabase('initial-load')
   }, [refreshGoalsSnapshotFromSupabase])
 
@@ -1368,6 +1339,14 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
 
   // Fetch repeating rules to surface guide tasks that overlap 'now'
   const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
+  const reloadRepeatingRules = useCallback(async () => {
+    try {
+      const rules = await fetchRepeatingSessionRules()
+      if (Array.isArray(rules)) {
+        setRepeatingRules(rules)
+      }
+    } catch {}
+  }, [])
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -1538,6 +1517,38 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       return true
     })
   }, [scheduledNowSuggestions, guideNowSuggestions, currentTime])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handleBootstrap = () => {
+      console.info('[FocusPage] Account bootstrap event received; syncing data.')
+      void (async () => {
+        try {
+          const syncedHistory = await syncHistoryWithSupabase()
+          if (syncedHistory) {
+            setHistory((current) => (historiesAreEqual(current, syncedHistory) ? current : syncedHistory))
+          }
+        } catch {}
+        try {
+          const syncedRoutines = await syncLifeRoutinesWithSupabase()
+          if (syncedRoutines) {
+            setLifeRoutineTasks((current) =>
+              JSON.stringify(current) === JSON.stringify(syncedRoutines) ? current : syncedRoutines,
+            )
+          }
+        } catch {}
+        try {
+          await reloadRepeatingRules()
+        } catch {}
+      })()
+    }
+    window.addEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
+    return () => {
+      window.removeEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
+    }
+  }, [setHistory, setLifeRoutineTasks, reloadRepeatingRules])
 
   const activeFocusCandidate = useMemo(() => {
     if (!focusSource) {

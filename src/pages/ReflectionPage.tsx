@@ -2480,13 +2480,24 @@ export default function ReflectionPage() {
     }
   }, [])
 
+  const reloadRepeatingRules = useCallback(async () => {
+    try {
+      const rules = await fetchRepeatingSessionRules()
+      if (Array.isArray(rules)) {
+        setRepeatingRules(rules)
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
   // Load repeating session rules once (single-user dev auth handled in supabase client)
   useEffect(() => {
     let cancelled = false
     const load = async () => {
       try {
         const rules = await fetchRepeatingSessionRules()
-        if (!cancelled) setRepeatingRules(rules)
+        if (!cancelled && Array.isArray(rules)) setRepeatingRules(rules)
       } catch (err) {
         // Silenced repeating sessions load warning
       }
@@ -2931,13 +2942,16 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
             )
           }
         } catch {}
+        try {
+          await reloadRepeatingRules()
+        } catch {}
       })()
     }
     window.addEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
     return () => {
       window.removeEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
     }
-  }, [setHistory, setLifeRoutineTasks])
+  }, [setHistory, setLifeRoutineTasks, reloadRepeatingRules])
 
   useEffect(() => {
     dragPreviewRef.current = dragPreview
