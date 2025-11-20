@@ -16,7 +16,7 @@
 -- pine, basil, mint, coral, peach, apricot, salmon, tangerine, papaya
 
 -- 1A. Buckets: add values to ENUM (if the column uses an enum type)
-DO $$
+DO $$ 
 DECLARE
   enum_name text;
   val text;
