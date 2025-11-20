@@ -1358,6 +1358,11 @@ export const pushAllHistoryToSupabase = async (): Promise<void> => {
   if (!session) {
     return
   }
+  const remoteExists = await hasRemoteHistory()
+  if (remoteExists) {
+    console.info('[sessionHistory] Remote history already exists; skipping seed.')
+    return
+  }
   let records = readHistoryRecords()
   const samples = createSampleHistoryRecords()
   if (!records || records.length === 0) {
