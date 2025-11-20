@@ -10537,11 +10537,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
             // Guest mode or Supabase unavailable; keep local optimistic state.
             return
           }
-          const persistedCompleted =
-            typeof persisted.completed === 'string'
-              ? persisted.completed.toLowerCase() === 'true'
-              : Boolean(persisted.completed)
-          if (persistedCompleted !== toggledNewCompleted) {
+          if (persisted.completed !== toggledNewCompleted) {
             console.warn(
               '[GoalsPage] Supabase completion toggle mismatch; expected',
               toggledNewCompleted,

@@ -938,9 +938,17 @@ export async function setTaskCompletedAndResort(
         `[goalsApi] Completion update mismatch for task ${taskId}: expected ${completed} but received ${refetch?.completed}`,
       )
     }
-    return refetch as DbTask
+    const normalized = {
+      ...(refetch as DbTask),
+      completed: finalCompleted ?? completed,
+    }
+    return normalized
   }
-  return persisted as DbTask
+  const normalizedPersisted: DbTask = {
+    ...(persisted as DbTask),
+    completed: persistedCompleted ?? completed,
+  }
+  return normalizedPersisted
 }
 
 export async function setTaskSortIndex(bucketId: string, section: 'active' | 'completed', toIndex: number, taskId: string) {
