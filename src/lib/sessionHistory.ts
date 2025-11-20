@@ -1599,6 +1599,6 @@ export const pushAllHistoryToSupabase = async (
   } else {
     console.info('[sessionHistory] Seeded session history rows:', payloads.length)
   }
-  writeHistoryRecords(normalizedRecords)
+  persistRecords(normalizedRecords)
   setStoredHistoryUserId(session.user.id)
 }
