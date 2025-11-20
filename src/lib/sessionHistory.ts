@@ -91,6 +91,16 @@ const DB_SURFACES = new Set<SurfaceStyle>([
   'grove',
   'lagoon',
   'ember',
+  'cool-blue',
+  'muted-lavender',
+  'neutral-grey-blue',
+  'fresh-teal',
+  'sunset-orange',
+  'soft-magenta',
+  'deep-indigo',
+  'warm-amber',
+  'grove',
+  'midnight',
 ])
 const toDbSurface = (value: SurfaceStyle | null | undefined): SurfaceStyle | null => {
   if (!value) return null
@@ -1327,6 +1337,52 @@ export const pruneFuturePlannedForRuleAfter = async (ruleId: string, afterYmd: s
   if (changed) {
     persistRecords(records)
     schedulePendingPush()
+  }
+}
+
+export const remapHistoryRoutineIds = async (mapping: Record<string, string>): Promise<void> => {
+  if (!mapping || Object.keys(mapping).length === 0) {
+    return
+  }
+  let records = readHistoryRecords()
+  let changed = false
+  records = records.map((record) => {
+    let next = record
+    if (record.routineId && mapping[record.routineId]) {
+      next = { ...next, routineId: mapping[record.routineId] }
+      changed = true
+    }
+    if (record.repeatingSessionId && mapping[record.repeatingSessionId]) {
+      next = { ...next, repeatingSessionId: mapping[record.repeatingSessionId] }
+      changed = true
+    }
+    return next
+  })
+  if (changed) {
+    writeHistoryRecords(records)
+  }
+  if (!supabase) return
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) return
+  for (const [oldId, newId] of Object.entries(mapping)) {
+    try {
+      await supabase
+        .from('session_history')
+        .update({ routine_id: newId })
+        .eq('user_id', session.user.id)
+        .eq('routine_id', oldId)
+    } catch (error) {
+      console.warn('[sessionHistory] Failed to remap routine_id', oldId, error)
+    }
+    try {
+      await supabase
+        .from('session_history')
+        .update({ repeating_session_id: newId })
+        .eq('user_id', session.user.id)
+        .eq('repeating_session_id', oldId)
+    } catch (error) {
+      console.warn('[sessionHistory] Failed to remap repeating_session_id', oldId, error)
+    }
   }
 }
 

@@ -143,20 +143,23 @@ const writeEndMap = (map: EndMap) => {
   } catch {}
 }
 
-export const pushRepeatingRulesToSupabase = async (rules: RepeatingSessionRule[]): Promise<void> => {
-  if (!supabase) return
-  if (!rules || rules.length === 0) return
+export const pushRepeatingRulesToSupabase = async (
+  rules: RepeatingSessionRule[],
+): Promise<Record<string, string>> => {
+  if (!supabase) return {}
+  if (!rules || rules.length === 0) return {}
   const session = await ensureSingleUserSession()
-  if (!session?.user?.id) return
-  let mutated = false
+  if (!session?.user?.id) return {}
+  const idMap: Record<string, string> = {}
   const normalizedRules = rules.map((rule) => {
     if (!rule.id || rule.id === SAMPLE_SLEEP_ROUTINE_ID) {
-      mutated = true
-      return { ...rule, id: randomRuleId() }
+      const newId = randomRuleId()
+      idMap[rule.id ?? SAMPLE_SLEEP_ROUTINE_ID] = newId
+      return { ...rule, id: newId }
     }
     return rule
   })
-  if (mutated) {
+  if (Object.keys(idMap).length > 0) {
     try {
       writeLocalRules(normalizedRules)
     } catch {
@@ -197,6 +200,7 @@ export const pushRepeatingRulesToSupabase = async (rules: RepeatingSessionRule[]
   } catch (error) {
     console.warn('[repeatingSessions] Unexpected error seeding repeating rules:', error)
   }
+  return idMap
 }
 
 const mapRowToRule = (row: any): RepeatingSessionRule | null => {

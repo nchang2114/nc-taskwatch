@@ -3,7 +3,7 @@ import { readStoredGoalsSnapshot, type GoalSnapshot } from './goalsSync'
 import { readStoredQuickList, type QuickItem } from './quickList'
 import { ensureQuickListRemoteStructures, generateUuid, QUICK_LIST_GOAL_NAME } from './quickListRemote'
 import { readStoredLifeRoutines, pushLifeRoutinesToSupabase, getDefaultLifeRoutines } from './lifeRoutines'
-import { pushAllHistoryToSupabase, hasRemoteHistory } from './sessionHistory'
+import { pushAllHistoryToSupabase, hasRemoteHistory, remapHistoryRoutineIds } from './sessionHistory'
 import { readLocalRepeatingRules, pushRepeatingRulesToSupabase } from './repeatingSessions'
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { DEMO_GOAL_SEEDS } from './demoGoals'
@@ -218,7 +218,10 @@ const runBootstrapForUser = async (): Promise<void> => {
   try {
     const localRules = readLocalRepeatingRules()
     console.info('[accountBootstrap] Seeding repeating rules', { count: localRules.length })
-    await pushRepeatingRulesToSupabase(localRules)
+    const idMap = await pushRepeatingRulesToSupabase(localRules)
+    if (idMap && Object.keys(idMap).length > 0) {
+      await remapHistoryRoutineIds(idMap)
+    }
     console.info('[accountBootstrap] Repeating rules seed push complete')
   } catch (error) {
     console.warn('[accountBootstrap] Failed to seed repeating rules for new account:', error)
