@@ -874,7 +874,13 @@ const payloadFromRecord = (
   userId: string,
   overrideUpdatedAt?: number,
 ): Record<string, unknown> => {
-  const updatedAt = overrideUpdatedAt ?? record.updatedAt
+  const updatedAt = overrideUpdatedAt ?? record.updatedAt ?? Date.now()
+  const createdAtSource =
+    typeof record.createdAt === 'number'
+      ? record.createdAt
+      : typeof record.startedAt === 'number'
+        ? record.startedAt
+        : Date.now()
   const ENABLE_ROUTINE_TAGS = Boolean((import.meta as any)?.env?.VITE_ENABLE_ROUTINE_TAGS)
   const ENABLE_REPEAT_ORIGINAL = isRepeatOriginalEnabled()
   const DEBUG_REPEAT = false
@@ -909,7 +915,7 @@ const payloadFromRecord = (
     // Clamp surfaces to DB-allowed values to satisfy CHECK constraints server-side
     goal_surface: toDbSurface(record.goalSurface),
     bucket_surface: toDbSurface(record.bucketSurface ?? undefined),
-    created_at: new Date(record.createdAt).toISOString(),
+    created_at: new Date(createdAtSource).toISOString(),
     updated_at: new Date(updatedAt).toISOString(),
     ...(typeof record.futureSession === 'boolean' ? { future_session: record.futureSession } : {}),
     // Only include routine tags if the DB has these columns; gate with env flag to avoid PostgREST errors
