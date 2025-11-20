@@ -2,7 +2,6 @@ import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { readStoredLifeRoutines, LIFE_ROUTINE_UPDATE_EVENT } from './lifeRoutines'
 import {
   DEFAULT_SURFACE_STYLE,
-  clampSurfaceToSupabase,
   ensureSurfaceStyle,
   sanitizeSurfaceStyle,
   type SurfaceStyle,
@@ -82,7 +81,7 @@ const isConflictError = (err: any): boolean => {
 }
 
 const toDbSurface = (value: SurfaceStyle | null | undefined): SurfaceStyle | null =>
-  clampSurfaceToSupabase(value)
+  sanitizeSurfaceStyle(value) ?? null
 
 const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
