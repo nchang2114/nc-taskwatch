@@ -1113,7 +1113,7 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
         // First attempt
         let resp = await client
           .from('session_history')
-          .upsert(pls, { onConflict: 'user_id,id', ignoreDuplicates: true })
+          .upsert(pls, { onConflict: 'id', ignoreDuplicates: true })
         // Column missing for ANY optional column (routine_id, occurrence_date, repeating_session_id, original_time)
         // Retry once stripping all optional linkage/tag columns.
         if (resp.error && isColumnMissingError(resp.error)) {
@@ -1131,7 +1131,7 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
           })
           resp = await client
             .from('session_history')
-            .upsert(strippedOptional, { onConflict: 'user_id,id', ignoreDuplicates: true })
+            .upsert(strippedOptional, { onConflict: 'id', ignoreDuplicates: true })
           return { resp, usedPayloads: strippedOptional }
         }
         // Foreign key violation for repeating_session_id → retry stripping linkage only (keep routine tags if present)
@@ -1144,9 +1144,9 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
             delete copy.original_time
             return copy
           })
-          resp = await client
-            .from('session_history')
-            .upsert(stripped, { onConflict: 'user_id,id', ignoreDuplicates: true })
+        resp = await client
+          .from('session_history')
+          .upsert(stripped, { onConflict: 'id', ignoreDuplicates: true })
           return { resp, usedPayloads: stripped }
         }
         if (resp.error && isConflictError(resp.error)) {
@@ -1235,7 +1235,7 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
     const doUpsertWithFallback = async (pls: any[]) => {
       let resp = await client
         .from('session_history')
-        .upsert(pls, { onConflict: 'user_id,id', ignoreDuplicates: true })
+        .upsert(pls, { onConflict: 'id', ignoreDuplicates: true })
       // Handle missing columns for any optional set (routine tags or repeat-original linkage)
       if (resp.error && isColumnMissingError(resp.error)) {
         if (isRepeatOriginalEnabled()) {
@@ -1244,7 +1244,7 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
         const strippedOptional = pls.map((p) => { const c: any = { ...p }; delete c.routine_id; delete c.occurrence_date; delete c.repeating_session_id; delete c.original_time; return c })
         resp = await client
           .from('session_history')
-          .upsert(strippedOptional, { onConflict: 'user_id,id', ignoreDuplicates: true })
+          .upsert(strippedOptional, { onConflict: 'id', ignoreDuplicates: true })
         return { resp, usedPayloads: strippedOptional }
       }
       const code = String((resp.error as any)?.code || '')
@@ -1253,7 +1253,7 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
         const stripped = pls.map((p) => { const c: any = { ...p }; delete c.repeating_session_id; delete c.original_time; return c })
         resp = await client
           .from('session_history')
-          .upsert(stripped, { onConflict: 'user_id,id', ignoreDuplicates: true })
+          .upsert(stripped, { onConflict: 'id', ignoreDuplicates: true })
         return { resp, usedPayloads: stripped }
       }
       if (resp.error && isConflictError(resp.error)) {
@@ -1403,7 +1403,7 @@ export const pushAllHistoryToSupabase = async (): Promise<void> => {
   )
   const { error } = await supabase
     .from('session_history')
-    .upsert(payloads, { onConflict: 'user_id,id', ignoreDuplicates: true })
+    .upsert(payloads, { onConflict: 'id', ignoreDuplicates: true })
   if (error) {
     console.warn('[sessionHistory] Failed to seed initial history:', error)
   } else {
