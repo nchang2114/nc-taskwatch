@@ -382,13 +382,17 @@ export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[
     return stored
   }
 
-  // If local is empty, adopt remote when available; otherwise persist an empty list locally
+  // Remote wins only when it actually has data; otherwise hold onto local snapshot.
   if (remoteRows.length > 0) {
     const mapped = remoteRows
       .map((row) => mapDbRowToRoutine(row as LifeRoutineDbRow))
       .filter((routine): routine is LifeRoutineConfig => Boolean(routine))
     const sanitized = sanitizeLifeRoutineList(mapped)
     return storeLifeRoutinesLocal(sanitized)
+  }
+
+  if (localSanitized.length > 0) {
+    return storeLifeRoutinesLocal(localSanitized)
   }
 
   // Both empty: persist empty locally

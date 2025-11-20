@@ -1,5 +1,5 @@
 import { supabase, ensureSingleUserSession } from './supabaseClient'
-import { QUICK_LIST_GOAL_NAME } from './quickListRemote'
+import { QUICK_LIST_GOAL_NAME, generateUuid } from './quickListRemote'
 import { DEFAULT_SURFACE_STYLE, sanitizeSurfaceStyle } from './surfaceStyles'
 
 export type DbGoal = {
@@ -74,12 +74,21 @@ export async function fetchGoalCreatedAt(goalId: string): Promise<string | null>
   return typeof value === 'string' ? value : null
 }
 
+type TaskSubtaskSeed = {
+  id?: string
+  text: string
+  completed?: boolean
+  sortIndex?: number
+}
+
 type TaskSeed = {
+  id?: string
   text: string
   completed?: boolean
   difficulty?: DbTask['difficulty']
   priority?: boolean
   notes?: string
+  subtasks?: TaskSubtaskSeed[]
 }
 
 type BucketSeed = {
@@ -1151,6 +1160,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
     const bucketIdByMetaIndex = (insertedBuckets.data ?? []).map((row) => row.id as string)
     let bucketCursor = 0
     const taskInserts: Array<{
+      id: string
       user_id: string
       bucket_id: string
       text: string
@@ -1160,6 +1170,18 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       sort_index: number
       notes: string
     }> = []
+    const taskSubtaskInserts: Array<{
+      id: string
+      user_id: string
+      task_id: string
+      text: string
+      completed: boolean
+      sort_index: number
+      created_at: string
+      updated_at: string
+    }> = []
+    const nowIso = new Date().toISOString()
+    const fallbackSubtaskSortStep = 100
 
     seeds.forEach((goal) => {
       goal.buckets?.forEach((bucket) => {
@@ -1170,7 +1192,10 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
         const completed = (bucket.tasks ?? []).filter((task) => !!task.completed)
         const ordered = [...active, ...completed]
         ordered.forEach((task, taskIndex) => {
+          const taskId = task.id ?? generateUuid()
+          task.id = taskId
           taskInserts.push({
+            id: taskId,
             user_id: userId,
             bucket_id: bucketId,
             text: task.text,
@@ -1179,6 +1204,23 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
             priority: Boolean(task.priority),
             sort_index: (taskIndex + 1) * STEP,
             notes: task.notes ?? '',
+          })
+          ;(task.subtasks ?? []).forEach((subtask, subIndex) => {
+            const subtaskId = subtask.id ?? generateUuid()
+            const sortIndex =
+              typeof subtask.sortIndex === 'number' && Number.isFinite(subtask.sortIndex)
+                ? subtask.sortIndex
+                : (subIndex + 1) * fallbackSubtaskSortStep
+            taskSubtaskInserts.push({
+              id: subtaskId,
+              user_id: userId,
+              task_id: taskId,
+              text: subtask.text,
+              completed: Boolean(subtask.completed),
+              sort_index: sortIndex,
+              created_at: nowIso,
+              updated_at: nowIso,
+            })
           })
         })
       })
@@ -1189,6 +1231,13 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       if (tasksError) {
         console.warn('[goalsApi] Failed to seed tasks:', tasksError.message)
         return false
+      }
+      if (taskSubtaskInserts.length > 0) {
+        const { error: subtaskError } = await supabase.from('task_subtasks').insert(taskSubtaskInserts)
+        if (subtaskError) {
+          console.warn('[goalsApi] Failed to seed task subtasks:', subtaskError.message)
+          return false
+        }
       }
     }
 

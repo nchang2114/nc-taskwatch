@@ -57,11 +57,21 @@ const convertSnapshotToSeeds = (snapshot: GoalSnapshot[]): GoalSeed[] =>
       archived: bucket.archived,
       surfaceStyle: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
       tasks: bucket.tasks.map((task) => ({
+        id: task.id ?? generateUuid(),
         text: task.text,
         completed: task.completed,
         difficulty: task.difficulty ?? 'none',
         priority: Boolean(task.priority),
         notes: typeof task.notes === 'string' ? task.notes : '',
+        subtasks: (task.subtasks ?? []).map((subtask, idx) => ({
+          id: subtask.id ?? generateUuid(),
+          text: subtask.text,
+          completed: subtask.completed,
+          sortIndex:
+            typeof subtask.sortIndex === 'number' && Number.isFinite(subtask.sortIndex)
+              ? subtask.sortIndex
+              : (idx + 1) * 100,
+        })),
       })),
     })),
   }))

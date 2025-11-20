@@ -60,7 +60,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT %I', 'public', 'buckets', check_name);
   END IF;
 
-  EXECUTE $$
+  EXECUTE $buckets$
     ALTER TABLE public.buckets
     ADD CONSTRAINT buckets_card_style_check
     CHECK (buckets_card_style IS NULL OR buckets_card_style IN (
@@ -68,8 +68,8 @@ BEGIN
       'deep-indigo','warm-amber','fresh-teal','sunset-orange','cool-blue','soft-magenta',
       'muted-lavender','neutral-grey-blue','leaf','sprout','fern','sage','meadow','willow',
       'pine','basil','mint','coral','peach','apricot','salmon','tangerine','papaya'
-    ))
-  $$;
+    ));
+  $buckets$;
 END $$;
 
 -- 2A. session_history.goal_surface ENUM block
@@ -117,7 +117,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT %I', 'public', 'session_history', check_name);
   END IF;
 
-  EXECUTE $$
+  EXECUTE $goal$
     ALTER TABLE public.session_history
     ADD CONSTRAINT session_history_goal_surface_check
     CHECK (goal_surface IS NULL OR goal_surface IN (
@@ -125,8 +125,8 @@ BEGIN
       'deep-indigo','warm-amber','fresh-teal','sunset-orange','cool-blue','soft-magenta',
       'muted-lavender','neutral-grey-blue','leaf','sprout','fern','sage','meadow','willow',
       'pine','basil','mint','coral','peach','apricot','salmon','tangerine','papaya'
-    ))
-  $$;
+    ));
+  $goal$;
 END $$;
 
 -- 3. session_history.bucket_surface (same pattern)
@@ -146,7 +146,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT %I', 'public', 'session_history', check_name);
   END IF;
 
-  EXECUTE $$
+  EXECUTE $bucket$
     ALTER TABLE public.session_history
     ADD CONSTRAINT session_history_bucket_surface_check
     CHECK (bucket_surface IS NULL OR bucket_surface IN (
@@ -154,8 +154,8 @@ BEGIN
       'deep-indigo','warm-amber','fresh-teal','sunset-orange','cool-blue','soft-magenta',
       'muted-lavender','neutral-grey-blue','leaf','sprout','fern','sage','meadow','willow',
       'pine','basil','mint','coral','peach','apricot','salmon','tangerine','papaya'
-    ))
-  $$;
+    ));
+  $bucket$;
 END $$;
 
 -- 4. Optional backfill: re-tag any NULL/legacy values before syncing again.
