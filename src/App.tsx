@@ -1566,7 +1566,7 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
                 </button>
               </div>
             </nav>
-        </div>
+        </div> 
         {isNavCollapsed ? (
           <div className={drawerContainerClassName} aria-hidden={!isNavOpen}>
             <div className={collapsedNavClassName} id="primary-navigation" aria-hidden={!isNavOpen}>
