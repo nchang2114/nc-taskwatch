@@ -91,20 +91,41 @@ const DB_SURFACES = new Set<SurfaceStyle>([
   'grove',
   'lagoon',
   'ember',
-  'cool-blue',
-  'muted-lavender',
-  'neutral-grey-blue',
-  'fresh-teal',
-  'sunset-orange',
-  'soft-magenta',
-  'deep-indigo',
-  'warm-amber',
-  'grove',
-  'midnight',
 ])
+
+const SURFACE_FALLBACKS: Record<string, SurfaceStyle> = {
+  'cool-blue': 'glass',
+  'muted-lavender': 'frost',
+  'neutral-grey-blue': 'slate',
+  'fresh-teal': 'lagoon',
+  'sunset-orange': 'ember',
+  'soft-magenta': 'grove',
+  'deep-indigo': 'midnight',
+  'warm-amber': 'ember',
+  leaf: 'grove',
+  sprout: 'grove',
+  fern: 'grove',
+  sage: 'grove',
+  meadow: 'grove',
+  willow: 'grove',
+  pine: 'grove',
+  basil: 'grove',
+  mint: 'grove',
+  coral: 'ember',
+  peach: 'ember',
+  apricot: 'ember',
+  salmon: 'ember',
+  tangerine: 'ember',
+  papaya: 'ember',
+}
+
 const toDbSurface = (value: SurfaceStyle | null | undefined): SurfaceStyle | null => {
   if (!value) return null
-  return DB_SURFACES.has(value) ? value : DEFAULT_SURFACE_STYLE
+  if (DB_SURFACES.has(value)) {
+    return value
+  }
+  const fallback = SURFACE_FALLBACKS[value] ?? DEFAULT_SURFACE_STYLE
+  return fallback
 }
 
 const LIFE_ROUTINES_NAME = 'Daily Life'
