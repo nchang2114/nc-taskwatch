@@ -1,5 +1,5 @@
 import { supabase, ensureSingleUserSession } from './supabaseClient'
-import { readStoredLifeRoutines } from './lifeRoutines'
+import { readStoredLifeRoutines, LIFE_ROUTINE_UPDATE_EVENT } from './lifeRoutines'
 import {
   DEFAULT_SURFACE_STYLE,
   ensureSurfaceStyle,
@@ -214,11 +214,15 @@ const applyLifeRoutineSurfaces = (
       const normalized = record.bucketName.trim().toLowerCase()
       surface = lookups.title.get(normalized) ?? null
     }
-    if (!surface || (record.bucketSurface === surface && record.goalSurface === surface)) {
+    if (!surface || record.bucketSurface === surface) {
       return record
     }
     changed = true
-    return { ...record, bucketSurface: surface, goalSurface: surface }
+    const next: HistoryRecord = { ...record, bucketSurface: surface }
+    if (record.goalId === LIFE_ROUTINES_GOAL_ID && record.goalSurface !== LIFE_ROUTINES_SURFACE) {
+      next.goalSurface = LIFE_ROUTINES_SURFACE
+    }
+    return next
   })
   return { records: changed ? next : records, changed }
 }
@@ -947,6 +951,39 @@ const persistRecords = (records: HistoryRecord[]): HistoryEntry[] => {
   broadcastHistoryRecords(sorted)
   return activeEntries
 }
+
+const realignHistoryWithLifeRoutineSurfaces = (): void => {
+  const records = readHistoryRecords()
+  if (!Array.isArray(records) || records.length === 0) {
+    return
+  }
+  const { records: alignedRecords, changed } = applyLifeRoutineSurfaces(records)
+  if (!changed) {
+    return
+  }
+  persistRecords(alignedRecords)
+}
+
+const setupLifeRoutineSurfaceSync = (): void => {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    realignHistoryWithLifeRoutineSurfaces()
+  } catch (error) {
+    console.warn('[sessionHistory] Failed to align history surfaces on load', error)
+  }
+  const handleUpdate = () => {
+    try {
+      realignHistoryWithLifeRoutineSurfaces()
+    } catch (error) {
+      console.warn('[sessionHistory] Failed to align history surfaces after routine update', error)
+    }
+  }
+  window.addEventListener(LIFE_ROUTINE_UPDATE_EVENT, handleUpdate)
+}
+
+setupLifeRoutineSurfaceSync()
 
 export const persistHistorySnapshot = (nextEntries: HistoryEntry[]): HistoryEntry[] => {
   const sanitized = sanitizeHistoryEntries(nextEntries).map(normalizeEntryTimes)
