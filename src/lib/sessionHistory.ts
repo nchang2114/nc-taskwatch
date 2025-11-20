@@ -1,4 +1,5 @@
 import { supabase, ensureSingleUserSession } from './supabaseClient'
+import { readStoredLifeRoutines } from './lifeRoutines'
 import {
   DEFAULT_SURFACE_STYLE,
   ensureSurfaceStyle,
@@ -131,6 +132,96 @@ const toDbSurface = (value: SurfaceStyle | null | undefined): SurfaceStyle | nul
 const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
+
+const buildLifeRoutineSurfaceLookups = (): {
+  idOrBucket: Map<string, SurfaceStyle>
+  title: Map<string, SurfaceStyle>
+} | null => {
+  const routines = readStoredLifeRoutines()
+  if (!Array.isArray(routines) || routines.length === 0) {
+    return null
+  }
+  const idOrBucket = new Map<string, SurfaceStyle>()
+  const title = new Map<string, SurfaceStyle>()
+  routines.forEach((routine) => {
+    if (!routine) {
+      return
+    }
+    const surface = ensureSurfaceStyle(routine.surfaceStyle, DEFAULT_SURFACE_STYLE)
+    const keys = new Set<string>()
+    if (typeof routine.id === 'string' && routine.id.trim().length > 0) {
+      keys.add(routine.id.trim())
+    }
+    if (typeof routine.bucketId === 'string' && routine.bucketId.trim().length > 0) {
+      keys.add(routine.bucketId.trim())
+    }
+    keys.forEach((key) => {
+      if (!idOrBucket.has(key)) {
+        idOrBucket.set(key, surface)
+      }
+    })
+    if (typeof routine.title === 'string' && routine.title.trim().length > 0) {
+      title.set(routine.title.trim().toLowerCase(), surface)
+    }
+  })
+  if (idOrBucket.size === 0 && title.size === 0) {
+    return null
+  }
+  return { idOrBucket, title }
+}
+
+const applyLifeRoutineSurfaces = (
+  records: HistoryRecord[],
+): { records: HistoryRecord[]; changed: boolean } => {
+  if (!records || records.length === 0) {
+    return { records, changed: false }
+  }
+  const lookups = buildLifeRoutineSurfaceLookups()
+  if (!lookups) {
+    return { records, changed: false }
+  }
+  let changed = false
+  const next = records.map((record) => {
+    if (!record) {
+      return record
+    }
+    const isDailyLifeRecord =
+      record.goalId === LIFE_ROUTINES_GOAL_ID ||
+      record.goalName === LIFE_ROUTINES_NAME ||
+      (typeof record.bucketId === 'string' && record.bucketId.startsWith('life-'))
+    if (!isDailyLifeRecord) {
+      return record
+    }
+    const candidateKeys: string[] = []
+    if (typeof record.bucketId === 'string' && record.bucketId.trim()) {
+      candidateKeys.push(record.bucketId.trim())
+    }
+    if (typeof record.taskId === 'string' && record.taskId.trim()) {
+      candidateKeys.push(record.taskId.trim())
+    }
+    if (typeof record.routineId === 'string' && record.routineId.trim()) {
+      candidateKeys.push(record.routineId.trim())
+    }
+    let surface: SurfaceStyle | null = null
+    for (const key of candidateKeys) {
+      const match = lookups.idOrBucket.get(key)
+      if (match) {
+        surface = match
+        break
+      }
+    }
+    if (!surface && typeof record.bucketName === 'string' && record.bucketName.trim().length > 0) {
+      const normalized = record.bucketName.trim().toLowerCase()
+      surface = lookups.title.get(normalized) ?? null
+    }
+    if (!surface || record.bucketSurface === surface) {
+      return record
+    }
+    changed = true
+    return { ...record, bucketSurface: surface }
+  })
+  return { records: changed ? next : records, changed }
+}
 
 type HistoryPendingAction = 'upsert' | 'delete'
 
@@ -1230,7 +1321,9 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
         })
     }
 
-    const persisted = persistRecords(Array.from(recordsById.values()))
+    const recordList = Array.from(recordsById.values())
+    const { records: enrichedRecords } = applyLifeRoutineSurfaces(recordList)
+    const persisted = persistRecords(enrichedRecords)
     setStoredHistoryUserId(userId)
     return persisted
   })()
@@ -1451,19 +1544,24 @@ export const pushAllHistoryToSupabase = async (
       writeHistoryRecords(records)
     }
   }
-  let normalizedRecords = records.map((record) => {
+  const uuidNormalized = records.map((record) => {
     if (isUuid(record.id)) {
       return record
     }
     const id = generateUuid()
     return { ...record, id }
   })
-  if (normalizedRecords.some((record, index) => record.id !== records[index]?.id)) {
+  if (uuidNormalized.some((record, index) => record.id !== records[index]?.id)) {
     console.info('[sessionHistory] Normalized history ids to UUID format')
-    records = normalizedRecords
+    records = uuidNormalized
     writeHistoryRecords(records)
   }
-  normalizedRecords = sortRecordsForStorage(records).map((record, index) => {
+  const { records: lifeRoutineAligned, changed: alignedChanged } = applyLifeRoutineSurfaces(records)
+  if (alignedChanged) {
+    records = lifeRoutineAligned
+    writeHistoryRecords(records)
+  }
+  const normalizedRecords = sortRecordsForStorage(records).map((record, index) => {
     let mappedRoutineId = record.routineId
     let mappedRepeatingId = record.repeatingSessionId
     if (ruleIdMap && record.routineId && ruleIdMap[record.routineId]) {
