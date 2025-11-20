@@ -8,6 +8,7 @@ import {
 
 export const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
 export const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
+const HISTORY_USER_KEY = 'nc-taskwatch-history-user'
 export const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 export const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 export const HISTORY_LIMIT = 250
@@ -41,6 +42,24 @@ const disableRepeatOriginal = () => {
   if (flags.repeatOriginal === false) return
   flags.repeatOriginal = false
   writeFeatureFlags(flags)
+}
+const getStoredHistoryUserId = (): string | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage.getItem(HISTORY_USER_KEY)
+  } catch {
+    return null
+  }
+}
+const setStoredHistoryUserId = (userId: string | null): void => {
+  if (typeof window === 'undefined') return
+  try {
+    if (!userId) {
+      window.localStorage.removeItem(HISTORY_USER_KEY)
+    } else {
+      window.localStorage.setItem(HISTORY_USER_KEY, userId)
+    }
+  } catch {}
 }
 const isColumnMissingError = (err: any): boolean => {
   const msg = (err && (err.message || err.msg || err.error_description)) || ''
@@ -978,13 +997,17 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     }
 
     const userId = session.user.id
+    const lastUserId = getStoredHistoryUserId()
+    const userChanged = lastUserId !== userId
     const now = Date.now()
     const nowIso = new Date(now).toISOString()
     const localRecords = readHistoryRecords()
     const recordsById = new Map<string, HistoryRecord>()
-    localRecords.forEach((record) => {
-      recordsById.set(record.id, record)
-    })
+    if (!userChanged) {
+      localRecords.forEach((record) => {
+        recordsById.set(record.id, record)
+      })
+    }
 
     const ENABLE_REPEAT_ORIGINAL = isRepeatOriginalEnabled()
     let selectColumns =
@@ -1158,7 +1181,9 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
         })
     }
 
-    return persistRecords(Array.from(recordsById.values()))
+    const persisted = persistRecords(Array.from(recordsById.values()))
+    setStoredHistoryUserId(userId)
+    return persisted
   })()
 
   try {
@@ -1178,6 +1203,11 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
   }
 
   const userId = session.user.id
+  const lastUserId = getStoredHistoryUserId()
+  if (lastUserId !== null && lastUserId !== userId) {
+    console.info('[sessionHistory] User changed; deferring pending push until sync.')
+    return
+  }
   const records = readHistoryRecords()
   const pendingUpserts = records.filter((record) => record.pendingAction === 'upsert')
   const pendingDeletes = records.filter((record) => record.pendingAction === 'delete')
@@ -1361,4 +1391,5 @@ export const pushAllHistoryToSupabase = async (): Promise<void> => {
     console.info('[sessionHistory] Seeded session history rows:', payloads.length)
   }
   writeHistoryRecords(normalizedRecords)
+  setStoredHistoryUserId(session.user.id)
 }
