@@ -3,6 +3,7 @@ import { DEFAULT_SURFACE_STYLE, ensureSurfaceStyle, type SurfaceStyle } from './
 
 const STORAGE_KEY = 'nc-taskwatch-goals-snapshot'
 const EVENT_NAME = 'nc-taskwatch:goals-update'
+export const GOALS_SNAPSHOT_REQUEST_EVENT = 'nc-taskwatch:goals-snapshot-request'
 
 export type GoalTaskSubtaskSnapshot = {
   id: string

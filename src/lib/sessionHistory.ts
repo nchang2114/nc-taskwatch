@@ -1459,7 +1459,12 @@ export const remapHistoryRoutineIds = async (mapping: Record<string, string>): P
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) return
 
-  let records = readHistoryRecords().filter((record) => record.pendingAction !== 'delete')
+  let records = readHistoryRecords()
+  const originalLength = records.length
+  records = records.filter((record) => record.pendingAction !== 'delete')
+  if (originalLength !== records.length) {
+    writeHistoryRecords(records)
+  }
   let changed = false
   records = records.map((record) => {
     let next = record

@@ -58,6 +58,7 @@ import {
   readStoredGoalsSnapshot,
   subscribeToGoalsSnapshot,
   type GoalSnapshot,
+  GOALS_SNAPSHOT_REQUEST_EVENT,
 } from '../lib/goalsSync'
 import { broadcastFocusTask } from '../lib/focusChannel'
 import { broadcastScheduleTask } from '../lib/scheduleChannel'
@@ -5502,6 +5503,10 @@ export default function GoalsPage(): ReactElement {
     }
     return DEFAULT_GOALS
   })
+  const latestGoalsRef = useRef(goals)
+  useEffect(() => {
+    latestGoalsRef.current = goals
+  }, [goals])
   // Keep subtask inputs sized correctly on viewport changes (text wrap)
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -7181,6 +7186,23 @@ export default function GoalsPage(): ReactElement {
       unsubscribe()
     }
   }, [mergeIncomingGoals, mergeIncomingTaskDetails, refreshGoalsFromSupabase])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handleSnapshotRequest = () => {
+      const snapshot = createGoalsSnapshot(latestGoalsRef.current)
+      const signature = computeSnapshotSignature(snapshot)
+      lastSnapshotSignatureRef.current = signature
+      skipNextPublishRef.current = true
+      publishGoalsSnapshot(snapshot)
+    }
+    window.addEventListener(GOALS_SNAPSHOT_REQUEST_EVENT, handleSnapshotRequest as EventListener)
+    return () => {
+      window.removeEventListener(GOALS_SNAPSHOT_REQUEST_EVENT, handleSnapshotRequest as EventListener)
+    }
+  }, [])
 
   // Load once on mount and refresh when the user returns focus to this tab
   useEffect(() => {

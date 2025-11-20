@@ -1,5 +1,5 @@
 import { seedGoalsIfEmpty, type GoalSeed } from './goalsApi'
-import { readStoredGoalsSnapshot, type GoalSnapshot } from './goalsSync'
+import { readStoredGoalsSnapshot, GOALS_SNAPSHOT_REQUEST_EVENT, type GoalSnapshot } from './goalsSync'
 import { readStoredQuickList, type QuickItem } from './quickList'
 import { ensureQuickListRemoteStructures, generateUuid, QUICK_LIST_GOAL_NAME } from './quickListRemote'
 import { readStoredLifeRoutines, pushLifeRoutinesToSupabase, getDefaultLifeRoutines } from './lifeRoutines'
@@ -177,6 +177,11 @@ const pushQuickListToSupabase = async (items: QuickItem[]): Promise<void> => {
 }
 
 const runBootstrapForUser = async (): Promise<void> => {
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent(GOALS_SNAPSHOT_REQUEST_EVENT))
+    } catch {}
+  }
   const snapshot = readStoredGoalsSnapshot()
   const seeds = snapshot.length > 0 ? convertSnapshotToSeeds(snapshot) : DEMO_GOAL_SEEDS
   console.info('[accountBootstrap] Prepared goal seeds', {
