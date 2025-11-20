@@ -1139,15 +1139,23 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     }
 
     if (pendingDeletes.length > 0) {
-      const deleteIds = pendingDeletes.map((record) => record.id)
-      const { error: deleteError } = await supabase.from('session_history').delete().in('id', deleteIds)
-      if (deleteError) {
-        console.warn('Failed to delete session history rows from Supabase', deleteError)
-      } else {
-        deleteIds.forEach((id) => {
-          recordsById.delete(id)
-        })
+      const deleteIds = pendingDeletes.map((record) => record.id).filter((id) => isUuid(id))
+      if (deleteIds.length > 0) {
+        const { error: deleteError } = await supabase.from('session_history').delete().in('id', deleteIds)
+        if (deleteError) {
+          console.warn('Failed to delete session history rows from Supabase', deleteError)
+        } else {
+          deleteIds.forEach((id) => {
+            recordsById.delete(id)
+          })
+        }
       }
+      // Purge any non-UUID delete candidates locally since we can't delete them remotely
+      pendingDeletes
+        .filter((record) => !isUuid(record.id))
+        .forEach((record) => {
+          recordsById.delete(record.id)
+        })
     }
 
     return persistRecords(Array.from(recordsById.values()))
@@ -1230,17 +1238,28 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
   }
 
   if (pendingDeletes.length > 0) {
-    const deleteIds = pendingDeletes.map((record) => record.id)
-    const { error: deleteError } = await supabase.from('session_history').delete().in('id', deleteIds)
-    if (deleteError) {
-      console.warn('Failed to delete session history rows from Supabase', deleteError)
-    } else {
-      for (let index = records.length - 1; index >= 0; index -= 1) {
-        if (deleteIds.includes(records[index].id)) {
-          records.splice(index, 1)
+    const uuidDeleteIds = pendingDeletes.map((record) => record.id).filter((id) => isUuid(id))
+    if (uuidDeleteIds.length > 0) {
+      const { error: deleteError } = await supabase.from('session_history').delete().in('id', uuidDeleteIds)
+      if (deleteError) {
+        console.warn('Failed to delete session history rows from Supabase', deleteError)
+      } else {
+        for (let index = records.length - 1; index >= 0; index -= 1) {
+          if (uuidDeleteIds.includes(records[index].id)) {
+            records.splice(index, 1)
+          }
         }
       }
     }
+    // Remove local-only ids that have no remote UUID equivalent.
+    pendingDeletes
+      .filter((record) => !isUuid(record.id))
+      .forEach((record) => {
+        const idx = records.findIndex((r) => r.id === record.id)
+        if (idx !== -1) {
+          records.splice(idx, 1)
+        }
+      })
   }
 
   persistRecords(records)
