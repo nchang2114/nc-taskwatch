@@ -2,6 +2,7 @@ import type { Goal } from '../pages/GoalsPage'
 import { DEFAULT_SURFACE_STYLE, ensureSurfaceStyle, type SurfaceStyle } from './surfaceStyles'
 
 const STORAGE_KEY = 'nc-taskwatch-goals-snapshot'
+export const GOALS_SNAPSHOT_STORAGE_KEY = STORAGE_KEY
 const EVENT_NAME = 'nc-taskwatch:goals-update'
 export const GOALS_SNAPSHOT_REQUEST_EVENT = 'nc-taskwatch:goals-snapshot-request'
 

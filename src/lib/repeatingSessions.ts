@@ -28,10 +28,10 @@ export type RepeatingSessionRule = {
   endAtMs?: number
 }
 
-const LOCAL_RULES_KEY = 'nc-taskwatch-repeating-rules'
-const LOCAL_ACTIVATION_MAP_KEY = 'nc-taskwatch-repeating-activation-map'
+export const REPEATING_RULES_STORAGE_KEY = 'nc-taskwatch-repeating-rules'
+export const REPEATING_RULES_ACTIVATION_KEY = 'nc-taskwatch-repeating-activation-map'
 // We also persist a local end-boundary override to ensure offline correctness.
-const LOCAL_END_MAP_KEY = 'nc-taskwatch-repeating-end-map'
+export const REPEATING_RULES_END_KEY = 'nc-taskwatch-repeating-end-map'
 
 const randomRuleId = (): string => {
   try {
@@ -91,7 +91,7 @@ const getSampleRepeatingRules = (): RepeatingSessionRule[] => {
 export const readLocalRepeatingRules = (): RepeatingSessionRule[] => {
   if (typeof window === 'undefined') return getSampleRepeatingRules()
   try {
-    const raw = window.localStorage.getItem(LOCAL_RULES_KEY)
+    const raw = window.localStorage.getItem(REPEATING_RULES_STORAGE_KEY)
     if (!raw) {
       const sample = getSampleRepeatingRules()
       writeLocalRules(sample)
@@ -118,7 +118,7 @@ export const readLocalRepeatingRules = (): RepeatingSessionRule[] => {
 const writeLocalRules = (rules: RepeatingSessionRule[]) => {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(LOCAL_RULES_KEY, JSON.stringify(rules))
+    window.localStorage.setItem(REPEATING_RULES_STORAGE_KEY, JSON.stringify(rules))
   } catch {}
 }
 
@@ -126,7 +126,7 @@ type ActivationMap = Record<string, number>
 const readActivationMap = (): ActivationMap => {
   if (typeof window === 'undefined') return {}
   try {
-    const raw = window.localStorage.getItem(LOCAL_ACTIVATION_MAP_KEY)
+    const raw = window.localStorage.getItem(REPEATING_RULES_ACTIVATION_KEY)
     if (!raw) return {}
     const parsed = JSON.parse(raw)
     return (parsed && typeof parsed === 'object') ? parsed as ActivationMap : {}
@@ -137,7 +137,7 @@ const readActivationMap = (): ActivationMap => {
 const writeActivationMap = (map: ActivationMap) => {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(LOCAL_ACTIVATION_MAP_KEY, JSON.stringify(map))
+    window.localStorage.setItem(REPEATING_RULES_ACTIVATION_KEY, JSON.stringify(map))
   } catch {}
 }
 
@@ -145,7 +145,7 @@ type EndMap = Record<string, number>
 const readEndMap = (): EndMap => {
   if (typeof window === 'undefined') return {}
   try {
-    const raw = window.localStorage.getItem(LOCAL_END_MAP_KEY)
+    const raw = window.localStorage.getItem(REPEATING_RULES_END_KEY)
     if (!raw) return {}
     const parsed = JSON.parse(raw)
     return (parsed && typeof parsed === 'object') ? (parsed as EndMap) : {}
@@ -156,7 +156,7 @@ const readEndMap = (): EndMap => {
 const writeEndMap = (map: EndMap) => {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(LOCAL_END_MAP_KEY, JSON.stringify(map))
+    window.localStorage.setItem(REPEATING_RULES_END_KEY, JSON.stringify(map))
   } catch {}
 }
 

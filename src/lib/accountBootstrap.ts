@@ -8,6 +8,7 @@ import { readLocalRepeatingRules, pushRepeatingRulesToSupabase } from './repeati
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { DEMO_GOAL_SEEDS } from './demoGoals'
 import { DEFAULT_SURFACE_STYLE } from './surfaceStyles'
+import { restoreGuestSnapshotFromCache } from './guestSnapshot'
 
 const BOOTSTRAP_STATE_PREFIX = 'nc-taskwatch-bootstrap-v1'
 const QUICK_LIST_SORT_STEP = 1024
@@ -177,6 +178,7 @@ const pushQuickListToSupabase = async (items: QuickItem[]): Promise<void> => {
 }
 
 const runBootstrapForUser = async (): Promise<void> => {
+  restoreGuestSnapshotFromCache()
   if (typeof window !== 'undefined') {
     try {
       window.dispatchEvent(new CustomEvent(GOALS_SNAPSHOT_REQUEST_EVENT))
