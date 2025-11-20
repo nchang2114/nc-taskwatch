@@ -153,6 +153,19 @@ export const sanitizeLifeRoutineList = (value: unknown): LifeRoutineConfig[] => 
   })
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const ensureRoutineId = (id: string | undefined | null): string => {
+  if (id && UUID_REGEX.test(id)) {
+    return id
+  }
+  try {
+    if (typeof globalThis.crypto?.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID()
+    }
+  } catch {}
+  return `routine-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 type LifeRoutineDbRow = {
   id: string
   title?: string | null
@@ -214,7 +227,10 @@ export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]):
     return
   }
 
-  const normalized = sanitizeLifeRoutineList(routines)
+  const normalized = sanitizeLifeRoutineList(routines).map((routine) => ({
+    ...routine,
+    id: ensureRoutineId(routine.id),
+  }))
 
   const rows = normalized.map((routine, index) => ({
     id: routine.id,
@@ -235,9 +251,9 @@ export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]):
     return
   }
 
-  if (rows.length > 0) {
-    const tryUpsert = async (payload: typeof rows) =>
-      supabase!.from('life_routines').upsert(payload, { onConflict: 'id' })
+    if (rows.length > 0) {
+      const tryUpsert = async (payload: typeof rows) =>
+        supabase!.from('life_routines').upsert(payload, { onConflict: 'id' })
 
     const { error: upsertError } = await tryUpsert(rows)
     if (upsertError) {

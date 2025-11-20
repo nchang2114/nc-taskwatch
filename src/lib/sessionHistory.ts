@@ -1337,7 +1337,7 @@ export const pushAllHistoryToSupabase = async (): Promise<void> => {
       writeHistoryRecords(records)
     }
   }
-  const normalizedRecords = records.map((record) => {
+  let normalizedRecords = records.map((record) => {
     if (isUuid(record.id)) {
       return record
     }
@@ -1349,16 +1349,16 @@ export const pushAllHistoryToSupabase = async (): Promise<void> => {
     records = normalizedRecords
     writeHistoryRecords(records)
   }
-  const next = records.map((record) => ({ ...record, pendingAction: 'upsert' as HistoryPendingAction }))
-  writeHistoryRecords(next)
-  console.info('[sessionHistory] pushAllHistoryToSupabase marked records pending', {
-    total: next.length,
-    pending: next.length,
-  })
-  await pushPendingHistoryToSupabase()
-  try {
-    await syncHistoryWithSupabase()
-  } catch {
-    // best-effort; ignore sync errors so bootstrap can continue
+  normalizedRecords = sortRecordsForStorage(records).map((record) => ({ ...record, pendingAction: null }))
+  const userId = session.user.id
+  const payloads = normalizedRecords.map((record, index) =>
+    payloadFromRecord(record, userId, Date.now() + index),
+  )
+  const { error } = await supabase.from('session_history').insert(payloads)
+  if (error) {
+    console.warn('[sessionHistory] Failed to seed initial history:', error)
+  } else {
+    console.info('[sessionHistory] Seeded session history rows:', payloads.length)
   }
+  writeHistoryRecords(normalizedRecords)
 }
