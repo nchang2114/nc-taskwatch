@@ -1473,7 +1473,10 @@ export const pushAllHistoryToSupabase = async (
     .from('session_history')
     .upsert(payloads, { onConflict: 'id', ignoreDuplicates: true })
   if (error) {
-    console.warn('[sessionHistory] Failed to seed initial history:', error)
+    console.warn('[sessionHistory] Failed to seed initial history:', {
+      error,
+      samplePayload: payloads[0],
+    })
   } else {
     console.info('[sessionHistory] Seeded session history rows:', payloads.length)
   }
