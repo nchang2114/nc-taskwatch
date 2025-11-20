@@ -214,11 +214,11 @@ const applyLifeRoutineSurfaces = (
       const normalized = record.bucketName.trim().toLowerCase()
       surface = lookups.title.get(normalized) ?? null
     }
-    if (!surface || record.bucketSurface === surface) {
+    if (!surface || (record.bucketSurface === surface && record.goalSurface === surface)) {
       return record
     }
     changed = true
-    return { ...record, bucketSurface: surface }
+    return { ...record, bucketSurface: surface, goalSurface: surface }
   })
   return { records: changed ? next : records, changed }
 }
