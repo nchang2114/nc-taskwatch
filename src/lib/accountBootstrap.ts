@@ -178,7 +178,6 @@ const pushQuickListToSupabase = async (items: QuickItem[]): Promise<void> => {
 }
 
 const runBootstrapForUser = async (): Promise<void> => {
-  restoreGuestSnapshotFromCache()
   if (typeof window !== 'undefined') {
     try {
       window.dispatchEvent(new CustomEvent(GOALS_SNAPSHOT_REQUEST_EVENT))
@@ -275,6 +274,7 @@ export const ensureInitialAccountBootstrap = async (): Promise<void> => {
     }
     writeBootstrapState(userId, 'pending')
     try {
+      restoreGuestSnapshotFromCache()
       await runBootstrapForUser()
       writeBootstrapState(userId, 'complete')
       dispatchBootstrapEvent({ status: 'complete', userId })

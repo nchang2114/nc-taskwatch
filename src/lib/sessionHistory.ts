@@ -1,5 +1,6 @@
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { readStoredLifeRoutines, LIFE_ROUTINE_UPDATE_EVENT } from './lifeRoutines'
+import { GUEST_SNAPSHOT_CACHE_KEY } from './guestSnapshotKeys'
 import {
   DEFAULT_SURFACE_STYLE,
   ensureSurfaceStyle,
@@ -82,6 +83,17 @@ const isConflictError = (err: any): boolean => {
 
 const toDbSurface = (value: SurfaceStyle | null | undefined): SurfaceStyle | null =>
   sanitizeSurfaceStyle(value) ?? null
+
+const isGuestBootstrapPending = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  try {
+    return window.sessionStorage.getItem(GUEST_SNAPSHOT_CACHE_KEY) !== null
+  } catch {
+    return false
+  }
+}
 
 const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
@@ -1137,8 +1149,13 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     let localRecords = readHistoryRecords()
 
     if (userChanged && (!lastUserId || lastUserId.length === 0) && localRecords.length > 0) {
-      console.info('[sessionHistory] Guest history detected; deferring Supabase sync until bootstrap seeds data.')
-      return recordsToActiveEntries(localRecords)
+      if (isGuestBootstrapPending()) {
+        console.info('[sessionHistory] Guest history detected; deferring Supabase sync until bootstrap seeds data.')
+        return recordsToActiveEntries(localRecords)
+      }
+      console.info('[sessionHistory] Guest history detected but no bootstrap pending; clearing local cache for new session.')
+      writeHistoryRecords([])
+      localRecords = []
     }
 
     if (userChanged && lastUserId && lastUserId !== userId) {

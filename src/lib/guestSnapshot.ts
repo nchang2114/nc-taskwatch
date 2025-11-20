@@ -7,8 +7,7 @@ import {
   REPEATING_RULES_ACTIVATION_KEY,
   REPEATING_RULES_END_KEY,
 } from './repeatingSessions'
-
-const SNAPSHOT_CACHE_KEY = 'nc-taskwatch-guest-bootstrap-cache'
+import { GUEST_SNAPSHOT_CACHE_KEY } from './guestSnapshotKeys'
 
 const SNAPSHOT_KEYS = [
   GOALS_SNAPSHOT_STORAGE_KEY,
@@ -66,7 +65,7 @@ export const cacheGuestSnapshotForBootstrap = async (): Promise<void> => {
     return
   }
   try {
-    stores.session.setItem(SNAPSHOT_CACHE_KEY, JSON.stringify(payload))
+    stores.session.setItem(GUEST_SNAPSHOT_CACHE_KEY, JSON.stringify(payload))
   } catch {
     // ignore write errors (e.g., quota)
   }
@@ -75,11 +74,11 @@ export const cacheGuestSnapshotForBootstrap = async (): Promise<void> => {
 export const restoreGuestSnapshotFromCache = (): void => {
   const stores = canUseStorage()
   if (!stores) return
-  const raw = stores.session.getItem(SNAPSHOT_CACHE_KEY)
+  const raw = stores.session.getItem(GUEST_SNAPSHOT_CACHE_KEY)
   if (!raw) {
     return
   }
-  stores.session.removeItem(SNAPSHOT_CACHE_KEY)
+  stores.session.removeItem(GUEST_SNAPSHOT_CACHE_KEY)
   try {
     const payload = JSON.parse(raw) as Record<string, string> | null
     if (!payload || typeof payload !== 'object') {
