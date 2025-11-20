@@ -1401,7 +1401,9 @@ export const pushAllHistoryToSupabase = async (): Promise<void> => {
   const payloads = normalizedRecords.map((record, index) =>
     payloadFromRecord(record, userId, Date.now() + index),
   )
-  const { error } = await supabase.from('session_history').insert(payloads)
+  const { error } = await supabase
+    .from('session_history')
+    .upsert(payloads, { onConflict: 'user_id,id', ignoreDuplicates: true })
   if (error) {
     console.warn('[sessionHistory] Failed to seed initial history:', error)
   } else {
