@@ -1001,7 +1001,19 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     const userChanged = lastUserId !== userId
     const now = Date.now()
     const nowIso = new Date(now).toISOString()
-    const localRecords = readHistoryRecords()
+    let localRecords = readHistoryRecords()
+
+    if (userChanged && (!lastUserId || lastUserId.length === 0) && localRecords.length > 0) {
+      console.info('[sessionHistory] Guest history detected; deferring Supabase sync until bootstrap seeds data.')
+      return recordsToActiveEntries(localRecords)
+    }
+
+    if (userChanged && lastUserId && lastUserId !== userId) {
+      console.info('[sessionHistory] Switching users; clearing local history cache for new session.')
+      writeHistoryRecords([])
+      localRecords = []
+    }
+
     const recordsById = new Map<string, HistoryRecord>()
     if (!userChanged) {
       localRecords.forEach((record) => {
