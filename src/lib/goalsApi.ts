@@ -91,6 +91,9 @@ type TaskSeed = {
   subtasks?: TaskSubtaskSeed[]
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const isUuid = (value: string | undefined | null): value is string => !!value && UUID_REGEX.test(value)
+
 type BucketSeed = {
   name: string
   favorite?: boolean
@@ -1192,7 +1195,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
         const completed = (bucket.tasks ?? []).filter((task) => !!task.completed)
         const ordered = [...active, ...completed]
         ordered.forEach((task, taskIndex) => {
-          const taskId = task.id ?? generateUuid()
+          const taskId = isUuid(task.id) ? task.id : generateUuid()
           task.id = taskId
           taskInserts.push({
             id: taskId,
@@ -1206,7 +1209,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
             notes: task.notes ?? '',
           })
           ;(task.subtasks ?? []).forEach((subtask, subIndex) => {
-            const subtaskId = subtask.id ?? generateUuid()
+            const subtaskId = isUuid(subtask.id) ? subtask.id : generateUuid()
             const sortIndex =
               typeof subtask.sortIndex === 'number' && Number.isFinite(subtask.sortIndex)
                 ? subtask.sortIndex
