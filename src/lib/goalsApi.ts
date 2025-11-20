@@ -1,5 +1,6 @@
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { QUICK_LIST_GOAL_NAME } from './quickListRemote'
+import { clampSurfaceToSupabase, DEFAULT_SURFACE_STYLE, sanitizeSurfaceStyle } from './surfaceStyles'
 
 export type DbGoal = {
   id: string
@@ -1121,6 +1122,10 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       const goalId = goalIdBySeedIndex[goalIndex]
       if (!goalId) return
       goal.buckets?.forEach((bucket, bucketIndex) => {
+        const normalizedSurface =
+          clampSurfaceToSupabase(
+            sanitizeSurfaceStyle(bucket.surfaceStyle) ?? DEFAULT_SURFACE_STYLE,
+          ) ?? DEFAULT_SURFACE_STYLE
         bucketInserts.push({
           user_id: userId,
           goal_id: goalId,
@@ -1128,7 +1133,7 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
           favorite: Boolean(bucket.favorite),
           bucket_archive: Boolean(bucket.archived),
           sort_index: (bucketIndex + 1) * STEP,
-          buckets_card_style: bucket.surfaceStyle ?? 'glass',
+          buckets_card_style: normalizedSurface,
         })
       })
     })

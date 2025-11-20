@@ -42,6 +42,23 @@ const randomRuleId = (): string => {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+const deriveRuleTaskNameFromParts = (
+  taskName?: string | null,
+  bucketName?: string | null,
+  goalName?: string | null,
+): string => {
+  const task = typeof taskName === 'string' ? taskName.trim() : ''
+  if (task.length > 0) return task
+  const bucket = typeof bucketName === 'string' ? bucketName.trim() : ''
+  if (bucket.length > 0) return bucket
+  const goal = typeof goalName === 'string' ? goalName.trim() : ''
+  if (goal.length > 0) return goal
+  return 'Session'
+}
+
+const deriveRuleTaskNameFromEntry = (entry: HistoryEntry): string =>
+  deriveRuleTaskNameFromParts(entry.taskName, entry.bucketName, entry.goalName)
+
 const getSampleRepeatingRules = (): RepeatingSessionRule[] => {
   const now = new Date()
   now.setSeconds(0, 0)
@@ -152,12 +169,14 @@ export const pushRepeatingRulesToSupabase = async (
   if (!session?.user?.id) return {}
   const idMap: Record<string, string> = {}
   const normalizedRules = rules.map((rule) => {
+    const safeTaskName = deriveRuleTaskNameFromParts(rule.taskName, rule.bucketName, rule.goalName)
+    const baseRule = { ...rule, taskName: safeTaskName }
     if (!rule.id || rule.id === SAMPLE_SLEEP_ROUTINE_ID) {
       const newId = randomRuleId()
       idMap[rule.id ?? SAMPLE_SLEEP_ROUTINE_ID] = newId
-      return { ...rule, id: newId }
+      return { ...baseRule, id: newId }
     }
-    return rule
+    return baseRule
   })
   if (Object.keys(idMap).length > 0) {
     try {
@@ -217,9 +236,10 @@ const mapRowToRule = (row: any): RepeatingSessionRule | null => {
     ? Math.max(1, Number(row.duration_minutes))
     : (Number.isFinite(row.durationMinutes) ? Math.max(1, Number(row.durationMinutes)) : 60)
   const isActive = typeof row.is_active === 'boolean' ? row.is_active : (row.isActive !== false)
-  const taskName = typeof row.task_name === 'string' ? row.task_name : (typeof row.taskName === 'string' ? row.taskName : '')
   const goalName = typeof row.goal_name === 'string' ? row.goal_name : (typeof row.goalName === 'string' ? row.goalName : null)
   const bucketName = typeof row.bucket_name === 'string' ? row.bucket_name : (typeof row.bucketName === 'string' ? row.bucketName : null)
+  const rawTaskName = typeof row.task_name === 'string' ? row.task_name : (typeof row.taskName === 'string' ? row.taskName : '')
+  const taskName = deriveRuleTaskNameFromParts(rawTaskName, bucketName, goalName)
   const timezone = typeof row.timezone === 'string' ? row.timezone : (typeof row.timeZone === 'string' ? row.timeZone : null)
   // DB created_at is ISO string; local fallback may store createdAtMs
   let createdAtMs: number | undefined
@@ -313,6 +333,8 @@ export async function createRepeatingRuleForEntry(
   const nextStartMs = ruleStartMs + (frequency === 'daily' ? 1 : 7) * 24 * 60 * 60 * 1000
 
   // Try Supabase; if not available, persist locally
+  const ruleTaskName = deriveRuleTaskNameFromEntry(entry)
+
   if (!supabase) {
     const localRule: RepeatingSessionRule = {
       id: randomRuleId(),
@@ -321,7 +343,7 @@ export async function createRepeatingRuleForEntry(
       dayOfWeek,
       timeOfDayMinutes,
       durationMinutes,
-      taskName: entry.taskName ?? '',
+      taskName: ruleTaskName,
       goalName: entry.goalName ?? null,
       bucketName: entry.bucketName ?? null,
       timezone: tz,
@@ -342,7 +364,7 @@ export async function createRepeatingRuleForEntry(
       dayOfWeek,
       timeOfDayMinutes,
       durationMinutes,
-      taskName: entry.taskName ?? '',
+      taskName: ruleTaskName,
       goalName: entry.goalName ?? null,
       bucketName: entry.bucketName ?? null,
       timezone: tz,
@@ -361,7 +383,7 @@ export async function createRepeatingRuleForEntry(
     day_of_week: dayOfWeek,
     time_of_day_minutes: timeOfDayMinutes,
     duration_minutes: durationMinutes,
-    task_name: entry.taskName ?? '',
+    task_name: ruleTaskName,
     goal_name: entry.goalName,
     bucket_name: entry.bucketName,
     timezone: tz,
@@ -382,7 +404,7 @@ export async function createRepeatingRuleForEntry(
       dayOfWeek,
       timeOfDayMinutes,
       durationMinutes,
-      taskName: entry.taskName ?? '',
+      taskName: ruleTaskName,
       goalName: entry.goalName ?? null,
       bucketName: entry.bucketName ?? null,
       timezone: tz,

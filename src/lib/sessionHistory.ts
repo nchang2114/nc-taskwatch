@@ -2,6 +2,7 @@ import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { readStoredLifeRoutines, LIFE_ROUTINE_UPDATE_EVENT } from './lifeRoutines'
 import {
   DEFAULT_SURFACE_STYLE,
+  clampSurfaceToSupabase,
   ensureSurfaceStyle,
   sanitizeSurfaceStyle,
   type SurfaceStyle,
@@ -80,54 +81,8 @@ const isConflictError = (err: any): boolean => {
   return combined.includes('duplicate key value') || combined.includes('already exists')
 }
 
-// Database-enforced surface styles (session_history goal_surface check and bucket_surface check)
-// Keep in sync with scripts/READONLY sql (DO NOT EDIT)/session_history.sql
-const DB_SURFACES = new Set<SurfaceStyle>([
-  'glass',
-  'midnight',
-  'slate',
-  'charcoal',
-  'linen',
-  'frost',
-  'grove',
-  'lagoon',
-  'ember',
-])
-
-const SURFACE_FALLBACKS: Record<string, SurfaceStyle> = {
-  'cool-blue': 'glass',
-  'muted-lavender': 'frost',
-  'neutral-grey-blue': 'slate',
-  'fresh-teal': 'lagoon',
-  'sunset-orange': 'ember',
-  'soft-magenta': 'grove',
-  'deep-indigo': 'midnight',
-  'warm-amber': 'ember',
-  leaf: 'grove',
-  sprout: 'grove',
-  fern: 'grove',
-  sage: 'grove',
-  meadow: 'grove',
-  willow: 'grove',
-  pine: 'grove',
-  basil: 'grove',
-  mint: 'grove',
-  coral: 'ember',
-  peach: 'ember',
-  apricot: 'ember',
-  salmon: 'ember',
-  tangerine: 'ember',
-  papaya: 'ember',
-}
-
-const toDbSurface = (value: SurfaceStyle | null | undefined): SurfaceStyle | null => {
-  if (!value) return null
-  if (DB_SURFACES.has(value)) {
-    return value
-  }
-  const fallback = SURFACE_FALLBACKS[value] ?? DEFAULT_SURFACE_STYLE
-  return fallback
-}
+const toDbSurface = (value: SurfaceStyle | null | undefined): SurfaceStyle | null =>
+  clampSurfaceToSupabase(value)
 
 const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
