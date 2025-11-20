@@ -48,6 +48,17 @@ const isColumnMissingError = (err: any): boolean => {
   const combined = `${msg} ${details}`.toLowerCase()
   return combined.includes('column') && combined.includes('does not exist')
 }
+const isConflictError = (err: any): boolean => {
+  if (!err) return false
+  const code = String(err.code ?? '').trim()
+  if (code === '409' || code === '23505') {
+    return true
+  }
+  const msg = String(err.message ?? '')
+  const details = String(err.details ?? '')
+  const combined = `${msg} ${details}`.toLowerCase()
+  return combined.includes('duplicate key value') || combined.includes('already exists')
+}
 
 // Database-enforced surface styles (session_history goal_surface check and bucket_surface check)
 // Keep in sync with scripts/READONLY sql (DO NOT EDIT)/session_history.sql
@@ -1097,6 +1108,11 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
           resp = await client.from('session_history').upsert(stripped, { onConflict: 'user_id,id' })
           return { resp, usedPayloads: stripped }
         }
+        if (resp.error && isConflictError(resp.error)) {
+          console.info('[sessionHistory] Ignoring history conflict error', resp.error?.message ?? resp.error)
+          const cleanResp: typeof resp = { ...resp, error: null as any }
+          return { resp: cleanResp, usedPayloads: pls }
+        }
         return { resp, usedPayloads: pls }
       }
 
@@ -1177,6 +1193,11 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
         const stripped = pls.map((p) => { const c: any = { ...p }; delete c.repeating_session_id; delete c.original_time; return c })
         resp = await client.from('session_history').upsert(stripped, { onConflict: 'user_id,id' })
         return { resp, usedPayloads: stripped }
+      }
+      if (resp.error && isConflictError(resp.error)) {
+        console.info('[sessionHistory] Ignoring conflict while pushing history', resp.error?.message ?? resp.error)
+        const cleanResp: typeof resp = { ...resp, error: null as any }
+        return { resp: cleanResp, usedPayloads: pls }
       }
       return { resp, usedPayloads: pls }
     }
