@@ -903,10 +903,14 @@ const parseBooleanish = (value: unknown): boolean | null => {
   return null
 }
 
-export async function setTaskCompletedAndResort(taskId: string, bucketId: string, completed: boolean) {
-  if (!supabase) return
+export async function setTaskCompletedAndResort(
+  taskId: string,
+  bucketId: string,
+  completed: boolean,
+): Promise<DbTask | null> {
+  if (!supabase) return null
   const userId = await getActiveUserId()
-  if (!userId) return
+  if (!userId) return null
 
   const sort_index = await nextSortIndex('tasks', { bucket_id: bucketId, completed })
   const updates: Partial<DbTask> = { completed, sort_index }
@@ -934,9 +938,9 @@ export async function setTaskCompletedAndResort(taskId: string, bucketId: string
         `[goalsApi] Completion update mismatch for task ${taskId}: expected ${completed} but received ${refetch?.completed}`,
       )
     }
-    return refetch
+    return refetch as DbTask
   }
-  return persisted
+  return persisted as DbTask
 }
 
 export async function setTaskSortIndex(bucketId: string, section: 'active' | 'completed', toIndex: number, taskId: string) {

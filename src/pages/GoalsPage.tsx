@@ -10533,16 +10533,20 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
     if (toggledNewCompleted !== null) {
       apiSetTaskCompletedAndResort(taskId, bucketId, toggledNewCompleted)
         .then((persisted) => {
+          if (!persisted) {
+            // Guest mode or Supabase unavailable; keep local optimistic state.
+            return
+          }
           const persistedCompleted =
-            persisted && typeof persisted.completed === 'string'
+            typeof persisted.completed === 'string'
               ? persisted.completed.toLowerCase() === 'true'
-              : Boolean(persisted?.completed)
+              : Boolean(persisted.completed)
           if (persistedCompleted !== toggledNewCompleted) {
             console.warn(
               '[GoalsPage] Supabase completion toggle mismatch; expected',
               toggledNewCompleted,
               'but received',
-              persisted?.completed,
+              persisted.completed,
             )
             setGoals(() => previousGoals)
             setCompletedCollapsed(() => previousCompletedCollapsed)
