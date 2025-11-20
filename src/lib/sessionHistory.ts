@@ -1387,7 +1387,10 @@ export const hasRemoteHistory = async (): Promise<boolean> => {
   }
 }
 
-export const pushAllHistoryToSupabase = async (ruleIdMap?: Record<string, string>): Promise<void> => {
+export const pushAllHistoryToSupabase = async (
+  ruleIdMap?: Record<string, string>,
+  seedTimestamp?: number,
+): Promise<void> => {
   if (!supabase) {
     return
   }
@@ -1433,7 +1436,7 @@ export const pushAllHistoryToSupabase = async (ruleIdMap?: Record<string, string
     records = normalizedRecords
     writeHistoryRecords(records)
   }
-  normalizedRecords = sortRecordsForStorage(records).map((record) => {
+  normalizedRecords = sortRecordsForStorage(records).map((record, index) => {
     let mappedRoutineId = record.routineId
     let mappedRepeatingId = record.repeatingSessionId
     if (ruleIdMap && record.routineId && ruleIdMap[record.routineId]) {
@@ -1442,11 +1445,23 @@ export const pushAllHistoryToSupabase = async (ruleIdMap?: Record<string, string
     if (ruleIdMap && record.repeatingSessionId && ruleIdMap[record.repeatingSessionId]) {
       mappedRepeatingId = ruleIdMap[record.repeatingSessionId]
     }
-    return { ...record, routineId: mappedRoutineId, repeatingSessionId: mappedRepeatingId, pendingAction: null }
+    const createdAt =
+      typeof record.createdAt === 'number'
+        ? record.createdAt
+        : typeof seedTimestamp === 'number'
+          ? seedTimestamp + index
+          : Date.now() + index
+    return {
+      ...record,
+      createdAt,
+      routineId: mappedRoutineId,
+      repeatingSessionId: mappedRepeatingId,
+      pendingAction: null,
+    }
   })
   const userId = session.user.id
   const payloads = normalizedRecords.map((record, index) =>
-    payloadFromRecord(record, userId, Date.now() + index),
+    payloadFromRecord(record, userId, seedTimestamp ? seedTimestamp + index : Date.now() + index),
   )
   const { error } = await supabase
     .from('session_history')

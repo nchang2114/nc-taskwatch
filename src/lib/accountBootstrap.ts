@@ -218,7 +218,7 @@ const runBootstrapForUser = async (): Promise<void> => {
       console.info('[accountBootstrap] Remote session history already present; skipping seed.')
     } else {
       console.info('[accountBootstrap] Seeding session history')
-      await pushAllHistoryToSupabase(ruleIdMap)
+      await pushAllHistoryToSupabase(ruleIdMap, Date.now())
       console.info('[accountBootstrap] Session history seed push complete')
     }
   } catch (error) {
