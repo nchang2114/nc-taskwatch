@@ -198,6 +198,13 @@ const runBootstrapForUser = async (): Promise<void> => {
     try {
       window.dispatchEvent(new CustomEvent(GOALS_SNAPSHOT_REQUEST_EVENT))
     } catch {}
+    await new Promise((resolve) => {
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(() => resolve(undefined))
+      } else {
+        setTimeout(resolve, 0)
+      }
+    })
   }
   const snapshot = readStoredGoalsSnapshot()
   const taskDetails = readStoredTaskDetailsSnapshot()
