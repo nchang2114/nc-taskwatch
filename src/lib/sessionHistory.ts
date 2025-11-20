@@ -736,6 +736,17 @@ const sortRecordsForStorage = (records: HistoryRecord[]): HistoryRecord[] =>
       return b.endedAt - a.endedAt
     })
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const isUuid = (value: string | undefined | null): value is string => !!value && UUID_REGEX.test(value)
+const generateUuid = (): string => {
+  try {
+    if (typeof globalThis.crypto?.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID()
+    }
+  } catch {}
+  return `history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 const recordEqualsEntry = (record: HistoryRecord, entry: HistoryEntry): boolean =>
   record.taskName === entry.taskName &&
   record.elapsed === entry.elapsed &&
@@ -1253,6 +1264,18 @@ export const pushAllHistoryToSupabase = async (): Promise<void> => {
       records = sortRecordsForStorage(merged)
       writeHistoryRecords(records)
     }
+  }
+  const normalizedRecords = records.map((record) => {
+    if (isUuid(record.id)) {
+      return record
+    }
+    const id = generateUuid()
+    return { ...record, id }
+  })
+  if (normalizedRecords.some((record, index) => record.id !== records[index]?.id)) {
+    console.info('[sessionHistory] Normalized history ids to UUID format')
+    records = normalizedRecords
+    writeHistoryRecords(records)
   }
   const next = records.map((record) => ({ ...record, pendingAction: 'upsert' as HistoryPendingAction }))
   writeHistoryRecords(next)
