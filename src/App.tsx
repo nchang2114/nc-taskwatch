@@ -466,7 +466,7 @@ function MainApp() {
       console.warn('Supabase client is not configured; cannot start Google OAuth.')
       return false
     }
-    cacheGuestSnapshotForBootstrap()
+    await cacheGuestSnapshotForBootstrap()
     try {
       const queryParams: Record<string, string> = {}
       const trimmedHint = emailHint?.trim()
@@ -499,7 +499,7 @@ function MainApp() {
       console.warn('Supabase client is not configured; cannot start Microsoft OAuth.')
       return
     }
-    cacheGuestSnapshotForBootstrap()
+    await cacheGuestSnapshotForBootstrap()
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'azure',
@@ -581,7 +581,7 @@ function MainApp() {
   const handleAuthEmailSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
-      cacheGuestSnapshotForBootstrap()
+      await cacheGuestSnapshotForBootstrap()
       if (!isAuthEmailValid) {
         setAuthEmailError('Please enter a valid email address.')
         return
@@ -631,9 +631,9 @@ function MainApp() {
     setAuthCreatePasswordVisible(false)
   }, [])
 
-  const handleAuthCreateSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
+  const handleAuthCreateSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    cacheGuestSnapshotForBootstrap()
+    await cacheGuestSnapshotForBootstrap()
   }, [])
 
   const toggleAuthCreatePasswordVisibility = useCallback(() => {

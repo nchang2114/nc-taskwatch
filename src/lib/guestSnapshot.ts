@@ -1,7 +1,7 @@
-import { GOALS_SNAPSHOT_STORAGE_KEY } from './goalsSync'
+import { GOALS_SNAPSHOT_STORAGE_KEY, GOALS_SNAPSHOT_REQUEST_EVENT } from './goalsSync'
 import { QUICK_LIST_STORAGE_KEY } from './quickList'
 import { LIFE_ROUTINE_STORAGE_KEY } from './lifeRoutines'
-import { HISTORY_STORAGE_KEY } from './sessionHistory'
+import { HISTORY_STORAGE_KEY, purgeDeletedHistoryRecords } from './sessionHistory'
 import {
   REPEATING_RULES_STORAGE_KEY,
   REPEATING_RULES_ACTIVATION_KEY,
@@ -32,7 +32,23 @@ const canUseStorage = (): { local: Storage; session: Storage } | null => {
   return { local, session }
 }
 
-export const cacheGuestSnapshotForBootstrap = (): void => {
+const waitForFlush = async (): Promise<void> => {
+  if (typeof window === 'undefined') {
+    return
+  }
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0)
+  })
+}
+
+export const cacheGuestSnapshotForBootstrap = async (): Promise<void> => {
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent(GOALS_SNAPSHOT_REQUEST_EVENT))
+    } catch {}
+  }
+  await waitForFlush()
+  purgeDeletedHistoryRecords()
   const stores = canUseStorage()
   if (!stores) return
   const payload: Record<string, string> = {}

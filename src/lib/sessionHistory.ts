@@ -802,6 +802,20 @@ const readHistoryRecords = (): HistoryRecord[] => {
   }
 }
 
+export const purgeDeletedHistoryRecords = (): void => {
+  const records = readHistoryRecords()
+  if (!Array.isArray(records) || records.length === 0) {
+    return
+  }
+  const filtered = records.filter((record) => record.pendingAction !== 'delete')
+  if (filtered.length === records.length) {
+    return
+  }
+  const sorted = sortRecordsForStorage(filtered)
+  writeHistoryRecords(sorted)
+  broadcastHistoryRecords(sorted)
+}
+
 const writeHistoryRecords = (records: HistoryRecord[]): void => {
   if (typeof window === 'undefined') {
     return
@@ -1514,6 +1528,7 @@ export const pushAllHistoryToSupabase = async (
   if (!session) {
     return
   }
+  purgeDeletedHistoryRecords()
   const remoteExists = await hasRemoteHistory()
   if (remoteExists) {
     console.info('[sessionHistory] Remote history already exists; skipping seed.')
