@@ -9,6 +9,7 @@ import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { DEMO_GOAL_SEEDS } from './demoGoals'
 import { DEFAULT_SURFACE_STYLE } from './surfaceStyles'
 import { restoreGuestSnapshotFromCache, clearGuestSnapshotCache } from './guestSnapshot'
+import { readStoredTaskDetailsSnapshot, type TaskDetailSnapshot } from './taskDetailsSnapshot'
 
 const BOOTSTRAP_STATE_PREFIX = 'nc-taskwatch-bootstrap-v1'
 const QUICK_LIST_SORT_STEP = 1024
@@ -45,7 +46,38 @@ const writeBootstrapState = (userId: string, state: string): void => {
   }
 }
 
-const convertSnapshotToSeeds = (snapshot: GoalSnapshot[]): GoalSeed[] =>
+const mergeTaskSnapshot = (
+  task: GoalSnapshot['buckets'][number]['tasks'][number],
+  detail: TaskDetailSnapshot | undefined,
+) => {
+  const mergedNotes =
+    typeof detail?.notes === 'string' && detail.notes.trim().length > 0 ? detail.notes : task.notes ?? ''
+  const detailSubtasks = Array.isArray(detail?.subtasks) ? detail.subtasks : []
+  const snapshotSubtasks = Array.isArray(task.subtasks) ? task.subtasks : []
+  const mergedSubtasks = detailSubtasks.length > 0 ? detailSubtasks : snapshotSubtasks
+  return {
+    id: task.id ?? generateUuid(),
+    text: task.text,
+    completed: task.completed,
+    difficulty: task.difficulty ?? 'none',
+    priority: Boolean(task.priority),
+    notes: mergedNotes,
+    subtasks: mergedSubtasks.map((subtask, idx) => ({
+      id: subtask.id ?? generateUuid(),
+      text: subtask.text,
+      completed: subtask.completed,
+      sortIndex:
+        typeof subtask.sortIndex === 'number' && Number.isFinite(subtask.sortIndex)
+          ? subtask.sortIndex
+          : (idx + 1) * 100,
+    })),
+  }
+}
+
+const convertSnapshotToSeeds = (
+  snapshot: GoalSnapshot[],
+  taskDetails?: Record<string, TaskDetailSnapshot>,
+): GoalSeed[] =>
   snapshot.map((goal) => ({
     name: goal.name,
     color: goal.color ?? null,
@@ -57,23 +89,7 @@ const convertSnapshotToSeeds = (snapshot: GoalSnapshot[]): GoalSeed[] =>
       favorite: bucket.favorite,
       archived: bucket.archived,
       surfaceStyle: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
-      tasks: bucket.tasks.map((task) => ({
-        id: task.id ?? generateUuid(),
-        text: task.text,
-        completed: task.completed,
-        difficulty: task.difficulty ?? 'none',
-        priority: Boolean(task.priority),
-        notes: typeof task.notes === 'string' ? task.notes : '',
-        subtasks: (task.subtasks ?? []).map((subtask, idx) => ({
-          id: subtask.id ?? generateUuid(),
-          text: subtask.text,
-          completed: subtask.completed,
-          sortIndex:
-            typeof subtask.sortIndex === 'number' && Number.isFinite(subtask.sortIndex)
-              ? subtask.sortIndex
-              : (idx + 1) * 100,
-        })),
-      })),
+      tasks: bucket.tasks.map((task) => mergeTaskSnapshot(task, taskDetails?.[task.id])),
     })),
   }))
 
@@ -184,7 +200,9 @@ const runBootstrapForUser = async (): Promise<void> => {
     } catch {}
   }
   const snapshot = readStoredGoalsSnapshot()
-  const seeds = snapshot.length > 0 ? convertSnapshotToSeeds(snapshot) : DEMO_GOAL_SEEDS
+  const taskDetails = readStoredTaskDetailsSnapshot()
+  const seeds =
+    snapshot.length > 0 ? convertSnapshotToSeeds(snapshot, taskDetails) : DEMO_GOAL_SEEDS
   console.info('[accountBootstrap] Prepared goal seeds', {
     snapshotCount: snapshot.length,
     seedGoalCount: seeds.length,

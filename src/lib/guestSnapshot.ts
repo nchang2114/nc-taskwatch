@@ -7,6 +7,7 @@ import {
   REPEATING_RULES_ACTIVATION_KEY,
   REPEATING_RULES_END_KEY,
 } from './repeatingSessions'
+import { TASK_DETAILS_STORAGE_KEY } from './taskDetailsSnapshot'
 import { GUEST_SNAPSHOT_CACHE_KEY } from './guestSnapshotKeys'
 
 const SNAPSHOT_KEYS = [
@@ -17,6 +18,7 @@ const SNAPSHOT_KEYS = [
   REPEATING_RULES_STORAGE_KEY,
   REPEATING_RULES_ACTIVATION_KEY,
   REPEATING_RULES_END_KEY,
+  TASK_DETAILS_STORAGE_KEY,
 ]
 
 const canUseStorage = (): { local: Storage; session: Storage } | null => {
