@@ -863,9 +863,9 @@ const payloadFromRecord = (
     ended_at: new Date(record.endedAt).toISOString(),
     goal_name: record.goalName,
     bucket_name: record.bucketName,
-    goal_id: record.goalId,
-    bucket_id: record.bucketId,
-    task_id: record.taskId,
+    goal_id: isUuid(record.goalId) ? record.goalId : null,
+    bucket_id: isUuid(record.bucketId) ? record.bucketId : null,
+    task_id: isUuid(record.taskId) ? record.taskId : null,
     // Clamp surfaces to DB-allowed values to satisfy CHECK constraints server-side
     goal_surface: toDbSurface(record.goalSurface),
     bucket_surface: toDbSurface(record.bucketSurface ?? undefined),
