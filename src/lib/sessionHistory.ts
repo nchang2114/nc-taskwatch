@@ -1344,6 +1344,10 @@ export const remapHistoryRoutineIds = async (mapping: Record<string, string>): P
   if (!mapping || Object.keys(mapping).length === 0) {
     return
   }
+  if (!supabase) return
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) return
+
   let records = readHistoryRecords()
   let changed = false
   records = records.map((record) => {
@@ -1360,29 +1364,6 @@ export const remapHistoryRoutineIds = async (mapping: Record<string, string>): P
   })
   if (changed) {
     writeHistoryRecords(records)
-  }
-  if (!supabase) return
-  const session = await ensureSingleUserSession()
-  if (!session?.user?.id) return
-  for (const [oldId, newId] of Object.entries(mapping)) {
-    try {
-      await supabase
-        .from('session_history')
-        .update({ routine_id: newId })
-        .eq('user_id', session.user.id)
-        .eq('routine_id', oldId)
-    } catch (error) {
-      console.warn('[sessionHistory] Failed to remap routine_id', oldId, error)
-    }
-    try {
-      await supabase
-        .from('session_history')
-        .update({ repeating_session_id: newId })
-        .eq('user_id', session.user.id)
-        .eq('repeating_session_id', oldId)
-    } catch (error) {
-      console.warn('[sessionHistory] Failed to remap repeating_session_id', oldId, error)
-    }
   }
 }
 
@@ -1406,7 +1387,7 @@ export const hasRemoteHistory = async (): Promise<boolean> => {
   }
 }
 
-export const pushAllHistoryToSupabase = async (): Promise<void> => {
+export const pushAllHistoryToSupabase = async (ruleIdMap?: Record<string, string>): Promise<void> => {
   if (!supabase) {
     return
   }
@@ -1452,7 +1433,17 @@ export const pushAllHistoryToSupabase = async (): Promise<void> => {
     records = normalizedRecords
     writeHistoryRecords(records)
   }
-  normalizedRecords = sortRecordsForStorage(records).map((record) => ({ ...record, pendingAction: null }))
+  normalizedRecords = sortRecordsForStorage(records).map((record) => {
+    let mappedRoutineId = record.routineId
+    let mappedRepeatingId = record.repeatingSessionId
+    if (ruleIdMap && record.routineId && ruleIdMap[record.routineId]) {
+      mappedRoutineId = ruleIdMap[record.routineId]
+    }
+    if (ruleIdMap && record.repeatingSessionId && ruleIdMap[record.repeatingSessionId]) {
+      mappedRepeatingId = ruleIdMap[record.repeatingSessionId]
+    }
+    return { ...record, routineId: mappedRoutineId, repeatingSessionId: mappedRepeatingId, pendingAction: null }
+  })
   const userId = session.user.id
   const payloads = normalizedRecords.map((record, index) =>
     payloadFromRecord(record, userId, Date.now() + index),

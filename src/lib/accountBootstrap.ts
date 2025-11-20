@@ -3,7 +3,7 @@ import { readStoredGoalsSnapshot, type GoalSnapshot } from './goalsSync'
 import { readStoredQuickList, type QuickItem } from './quickList'
 import { ensureQuickListRemoteStructures, generateUuid, QUICK_LIST_GOAL_NAME } from './quickListRemote'
 import { readStoredLifeRoutines, pushLifeRoutinesToSupabase, getDefaultLifeRoutines } from './lifeRoutines'
-import { pushAllHistoryToSupabase, hasRemoteHistory, remapHistoryRoutineIds } from './sessionHistory'
+import { pushAllHistoryToSupabase, hasRemoteHistory } from './sessionHistory'
 import { readLocalRepeatingRules, pushRepeatingRulesToSupabase } from './repeatingSessions'
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { DEMO_GOAL_SEEDS } from './demoGoals'
@@ -202,29 +202,27 @@ const runBootstrapForUser = async (): Promise<void> => {
     console.warn('[accountBootstrap] Failed to seed life routines for new account:', error)
   }
 
+  let ruleIdMap: Record<string, string> = {}
+  try {
+    const localRules = readLocalRepeatingRules()
+    console.info('[accountBootstrap] Seeding repeating rules', { count: localRules.length })
+    ruleIdMap = await pushRepeatingRulesToSupabase(localRules)
+    console.info('[accountBootstrap] Repeating rules seed push complete')
+  } catch (error) {
+    console.warn('[accountBootstrap] Failed to seed repeating rules for new account:', error)
+  }
+
   try {
     const remoteHistoryExists = await hasRemoteHistory()
     if (remoteHistoryExists) {
       console.info('[accountBootstrap] Remote session history already present; skipping seed.')
     } else {
       console.info('[accountBootstrap] Seeding session history')
-      await pushAllHistoryToSupabase()
+      await pushAllHistoryToSupabase(ruleIdMap)
       console.info('[accountBootstrap] Session history seed push complete')
     }
   } catch (error) {
     console.warn('[accountBootstrap] Failed to seed session history for new account:', error)
-  }
-
-  try {
-    const localRules = readLocalRepeatingRules()
-    console.info('[accountBootstrap] Seeding repeating rules', { count: localRules.length })
-    const idMap = await pushRepeatingRulesToSupabase(localRules)
-    if (idMap && Object.keys(idMap).length > 0) {
-      await remapHistoryRoutineIds(idMap)
-    }
-    console.info('[accountBootstrap] Repeating rules seed push complete')
-  } catch (error) {
-    console.warn('[accountBootstrap] Failed to seed repeating rules for new account:', error)
   }
 }
 
