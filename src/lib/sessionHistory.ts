@@ -1013,14 +1013,6 @@ const broadcastHistoryRecords = (records: HistoryRecord[]): void => {
   }
 }
 
-const clearHistoryStorage = (): void => {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.removeItem(HISTORY_STORAGE_KEY)
-  } catch {}
-  broadcastHistoryRecords([])
-}
-
 const sortRecordsForStorage = (records: HistoryRecord[]): HistoryRecord[] =>
   records
     .slice()
@@ -1101,7 +1093,11 @@ export const ensureHistoryUser = (userId: string | null): void => {
   }
   setStoredHistoryUserId(normalized)
   if (normalized === HISTORY_GUEST_USER_ID) {
-    clearHistoryStorage()
+    if (current !== HISTORY_GUEST_USER_ID) {
+      const samples = createSampleHistoryRecords()
+      writeHistoryRecords(samples)
+      broadcastHistoryRecords(samples)
+    }
   } else {
     writeHistoryRecords([])
     broadcastHistoryRecords([])

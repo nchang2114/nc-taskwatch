@@ -121,14 +121,6 @@ const normalizeQuickListUserId = (userId: string | null | undefined): string =>
 const isGuestQuickListUser = (userId: string | null): boolean =>
   !userId || userId === QUICK_LIST_GUEST_USER_ID
 
-const clearQuickListStorage = (): void => {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.removeItem(QUICK_LIST_STORAGE_KEY)
-    window.dispatchEvent(new CustomEvent<QuickItem[]>(QUICK_LIST_UPDATE_EVENT, { detail: [] }))
-  } catch {}
-}
-
 const sanitizeSubtask = (value: unknown, index: number): QuickSubtask | null => {
   if (typeof value !== 'object' || value === null) return null
   const v = value as any
@@ -259,7 +251,9 @@ export const ensureQuickListUser = (userId: string | null): void => {
   if (current === normalized) return
   setStoredQuickListUserId(normalized)
   if (normalized === QUICK_LIST_GUEST_USER_ID) {
-    clearQuickListStorage()
+    if (current !== QUICK_LIST_GUEST_USER_ID) {
+      writeStoredQuickList(getDefaultQuickList())
+    }
   } else {
     writeStoredQuickList([])
   }

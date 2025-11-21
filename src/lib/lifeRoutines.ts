@@ -189,14 +189,6 @@ const storeLifeRoutinesLocal = (routines: LifeRoutineConfig[]): LifeRoutineConfi
   return clones
 }
 
-const clearLifeRoutineStorage = (): void => {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.removeItem(LIFE_ROUTINE_STORAGE_KEY)
-    window.dispatchEvent(new CustomEvent(LIFE_ROUTINE_UPDATE_EVENT, { detail: [] }))
-  } catch {}
-}
-
 const readStoredLifeRoutineUserId = (): string | null => {
   if (typeof window === 'undefined') return null
   try {
@@ -388,7 +380,9 @@ export const ensureLifeRoutineUser = (userId: string | null): void => {
   }
   setStoredLifeRoutineUserId(normalized)
   if (normalized === LIFE_ROUTINE_GUEST_USER_ID) {
-    clearLifeRoutineStorage()
+    if (current !== LIFE_ROUTINE_GUEST_USER_ID) {
+      storeLifeRoutinesLocal(getDefaultLifeRoutines())
+    }
   } else {
     storeLifeRoutinesLocal([])
   }
