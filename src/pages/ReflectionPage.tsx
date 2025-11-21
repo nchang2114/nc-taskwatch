@@ -7366,9 +7366,6 @@ useEffect(() => {
               const realEntry: HistoryEntry = {
                 ...entry,
                 id: makeHistoryId(),
-                routineId: ruleId,
-                occurrenceDate: ymd,
-                // Server metadata to link transformed guide back to its rule
                 repeatingSessionId: ruleId,
                 originalTime: entry.startedAt,
               }
@@ -8161,9 +8158,6 @@ useEffect(() => {
                             const newEntry: HistoryEntry = {
                               ...ev.entry,
                               id: makeHistoryId(),
-                              routineId: ruleId,
-                              occurrenceDate: ymd,
-                              // Server metadata to link transformed guide back to its rule
                               repeatingSessionId: ruleId,
                               originalTime: ev.entry.startedAt,
                             }
@@ -9140,9 +9134,6 @@ useEffect(() => {
                     const newEntry: HistoryEntry = {
                       ...entry,
                       id: makeHistoryId(),
-                      routineId: parsedGuide.ruleId,
-                      occurrenceDate: parsedGuide.ymd,
-                      // Server metadata for rule retirement
                       repeatingSessionId: parsedGuide.ruleId,
                       originalTime: entry.startedAt,
                     }
@@ -9178,8 +9169,6 @@ useEffect(() => {
                       id: makeHistoryId(),
                       endedAt: entry.startedAt,
                       elapsed: 0,
-                      routineId: parsedGuide.ruleId,
-                      occurrenceDate: parsedGuide.ymd,
                       repeatingSessionId: parsedGuide.ruleId,
                       originalTime: entry.startedAt,
                     }
