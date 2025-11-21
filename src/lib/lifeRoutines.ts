@@ -396,6 +396,15 @@ export const ensureLifeRoutineUser = (userId: string | null): void => {
   if (current === normalized) {
     return
   }
+  try {
+    const currentRoutines = readStoredLifeRoutines()
+    console.log('[lifeRoutines] ensure user swap', {
+      from: current,
+      to: normalized,
+      migratingFromGuest: current === LIFE_ROUTINE_GUEST_USER_ID && normalized !== LIFE_ROUTINE_GUEST_USER_ID,
+      routineCount: currentRoutines.length,
+    })
+  } catch {}
   const migratingFromGuest = current === LIFE_ROUTINE_GUEST_USER_ID && normalized !== LIFE_ROUTINE_GUEST_USER_ID
   setStoredLifeRoutineUserId(normalized)
   if (normalized === LIFE_ROUTINE_GUEST_USER_ID) {
