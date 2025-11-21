@@ -23,6 +23,9 @@ export type FocusBroadcastDetail = {
   autoStart?: boolean
   notes?: string | null
   subtasks?: FocusBroadcastSubtaskDetail[] | null
+  repeatingRuleId?: string | null
+  repeatingOccurrenceDate?: string | null
+  repeatingOriginalTime?: number | null
 }
 
 export type FocusBroadcastEvent = CustomEvent<FocusBroadcastDetail>
