@@ -2,7 +2,7 @@ import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { readStoredHistory, pushAllHistoryToSupabase, SAMPLE_SLEEP_ROUTINE_ID } from './sessionHistory'
 import { readLocalRepeatingRules, pushRepeatingRulesToSupabase } from './repeatingSessions'
 import { readStoredQuickList, type QuickItem } from './quickList'
-import { ensureQuickListRemoteStructures } from './quickListRemote'
+import { ensureQuickListRemoteStructures, generateUuid } from './quickListRemote'
 import {
   createTask,
   updateTaskNotes,
@@ -14,6 +14,9 @@ import {
 import { readStoredLifeRoutines, pushLifeRoutinesToSupabase } from './lifeRoutines'
 
 let bootstrapPromises = new Map<string, Promise<void>>()
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const isUuid = (value: string | undefined | null): value is string => !!value && UUID_REGEX.test(value)
+const ensureUuid = (value: string | undefined): string => (isUuid(value) ? value! : generateUuid())
 
 const sortByIndex = (a: { sortIndex?: number }, b: { sortIndex?: number }) => {
   const left = typeof a.sortIndex === 'number' ? a.sortIndex : 0
@@ -60,7 +63,7 @@ const uploadQuickListItems = async (items: QuickItem[]): Promise<void> => {
       const sub = subtasks[idx]
       const sortIndex = typeof sub.sortIndex === 'number' ? sub.sortIndex : idx
       await upsertTaskSubtask(taskId, {
-        id: sub.id,
+        id: ensureUuid(sub.id),
         text: sub.text,
         completed: Boolean(sub.completed),
         sort_index: sortIndex,
