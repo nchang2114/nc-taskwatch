@@ -784,7 +784,12 @@ export async function evaluateAndMaybeRetireRule(ruleId: string): Promise<boolea
   const history = readStoredHistory()
   const exceptions = readRepeatingExceptions()
   const resolved = isRuleWindowFullyResolved(rule, {
-    history: history.map((h) => ({ routineId: (h as any).routineId ?? null, occurrenceDate: (h as any).occurrenceDate ?? null })),
+    history: history.map((h) => {
+      const rid = (h as any).repeatingSessionId ?? null
+      const ot = (h as any).originalTime as number | undefined | null
+      const occ = rid && Number.isFinite(ot as number) ? formatLocalYmd(ot as number) : null
+      return { routineId: rid, occurrenceDate: occ }
+    }),
     exceptions: exceptions.map((e) => ({ routineId: e.routineId, occurrenceDate: e.occurrenceDate })),
   })
   if (!resolved) return false

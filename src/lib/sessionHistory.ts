@@ -22,7 +22,6 @@ type FeatureFlags = {
   repeatOriginal?: boolean
   historyNotes?: boolean
   historySubtasks?: boolean
-  historyRoutineTags?: boolean
 }
 const parseEnvToggle = (value: unknown): boolean | null => {
   if (typeof value !== 'string') return null
@@ -98,17 +97,6 @@ const disableHistorySubtasks = () => {
   flags.historySubtasks = false
   writeFeatureFlags(flags)
 }
-const isHistoryRoutineTagsEnabled = (): boolean => {
-  const flags = readFeatureFlags()
-  return flags.historyRoutineTags !== false
-}
-const disableHistoryRoutineTags = () => {
-  const flags = readFeatureFlags()
-  if (flags.historyRoutineTags === false) return
-  flags.historyRoutineTags = false
-  writeFeatureFlags(flags)
-}
-
 const HISTORY_BASE_SELECT_COLUMNS =
   'id, task_name, elapsed_ms, started_at, ended_at, goal_name, bucket_name, goal_id, bucket_id, task_id, goal_surface, bucket_surface, created_at, updated_at, future_session'
 
@@ -119,10 +107,6 @@ const buildHistorySelectColumns = (): string => {
   }
   if (isHistorySubtasksEnabled()) {
     columns += ', subtasks'
-  }
-  const routineEnvEnabled = Boolean((import.meta as any)?.env?.VITE_ENABLE_ROUTINE_TAGS)
-  if (routineEnvEnabled && isHistoryRoutineTagsEnabled()) {
-    columns += ', routine_id, occurrence_date'
   }
   if (isRepeatOriginalEnabled()) {
     columns += ', repeating_session_id, original_time'
@@ -168,16 +152,12 @@ type HistoryPayload = Record<string, unknown>
 
 const stripHistoryPayloadColumns = (
   payload: HistoryPayload,
-  removal: { routine?: boolean; repeat?: boolean; notes?: boolean; subtasks?: boolean },
+  removal: { repeat?: boolean; notes?: boolean; subtasks?: boolean },
 ): HistoryPayload => {
-  if (!removal.routine && !removal.repeat && !removal.notes && !removal.subtasks) {
+  if (!removal.repeat && !removal.notes && !removal.subtasks) {
     return payload
   }
   const next = { ...payload }
-  if (removal.routine) {
-    delete (next as any).routine_id
-    delete (next as any).occurrence_date
-  }
   if (removal.repeat) {
     delete (next as any).repeating_session_id
     delete (next as any).original_time
@@ -200,14 +180,11 @@ const upsertHistoryPayloads = async (
   let resp = await attempt(usedPayloads)
   let attempts = 0
   while (resp.error && isColumnMissingError(resp.error) && attempts < 5) {
-    const missingRoutineColumns =
-      errorMentionsColumn(resp.error, 'routine_id') || errorMentionsColumn(resp.error, 'occurrence_date')
     const missingRepeatColumns =
       errorMentionsColumn(resp.error, 'repeating_session_id') || errorMentionsColumn(resp.error, 'original_time')
     const missingNotesColumn = errorMentionsColumn(resp.error, 'notes')
     const missingSubtasksColumn = errorMentionsColumn(resp.error, 'subtasks')
-    const removalNeeded =
-      missingRoutineColumns || missingRepeatColumns || missingNotesColumn || missingSubtasksColumn
+    const removalNeeded = missingRepeatColumns || missingNotesColumn || missingSubtasksColumn
     if (!removalNeeded) {
       break
     }
@@ -220,12 +197,8 @@ const upsertHistoryPayloads = async (
     if (missingSubtasksColumn && isHistorySubtasksEnabled()) {
       disableHistorySubtasks()
     }
-    if (missingRoutineColumns && isHistoryRoutineTagsEnabled()) {
-      disableHistoryRoutineTags()
-    }
     usedPayloads = usedPayloads.map((payload) =>
       stripHistoryPayloadColumns(payload, {
-        routine: missingRoutineColumns,
         repeat: missingRepeatColumns,
         notes: missingNotesColumn,
         subtasks: missingSubtasksColumn,
@@ -321,9 +294,6 @@ const applyLifeRoutineSurfaces = (
     if (typeof record.taskId === 'string' && record.taskId.trim()) {
       candidateKeys.push(record.taskId.trim())
     }
-    if (typeof record.routineId === 'string' && record.routineId.trim()) {
-      candidateKeys.push(record.routineId.trim())
-    }
     let surface: SurfaceStyle | null = null
     for (const key of candidateKeys) {
       const match = lookups.idOrBucket.get(key)
@@ -375,10 +345,6 @@ export type HistoryEntry = {
   subtasks: HistorySubtask[]
   // When true, this entry represents a planned future session rather than logged work
   futureSession?: boolean
-  // Optional tags to link a real entry back to a repeating rule occurrence
-  // routineId: id of repeating_sessions rule; occurrenceDate: local YYYY-MM-DD for the occurrence day
-  routineId?: string | null
-  occurrenceDate?: string | null
   // Server-side deletion support:
   // repeatingSessionId: FK to repeating_sessions.id when a guide transforms (confirm/skip/reschedule)
   // originalTime: the scheduled timestamptz (in ms) of the guide occurrence that transformed
@@ -408,8 +374,6 @@ type HistoryCandidate = {
   notes?: unknown
   subtasks?: unknown
   futureSession?: unknown
-  routineId?: unknown
-  occurrenceDate?: unknown
   repeatingSessionId?: unknown
   originalTime?: unknown
 }
@@ -422,7 +386,13 @@ type HistoryRecordCandidate = HistoryCandidate & {
 
 const MINUTE_MS = 60 * 1000
 export const SAMPLE_SLEEP_ROUTINE_ID = 'sample-sleep-rule'
-const formatOccurrenceDate = (timestamp: number): string => new Date(timestamp).toISOString().slice(0, 10)
+const formatOccurrenceDate = (timestamp: number): string => {
+  const date = new Date(timestamp)
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
 const minuteVariance = (dayOffset: number, seed: number): number => {
   const base = (dayOffset * 37 + seed * 11) % 21
   return base - 10
@@ -449,20 +419,21 @@ export const createSampleHistoryRecords = (): HistoryRecord[] => {
     goalId: string | null
     bucketId: string | null
     taskId: string | null
-    goalSurface: SurfaceStyle
-    bucketSurface?: SurfaceStyle | null
-    notes?: string
-    routineId?: string | null
-    occurrenceDate?: string | null
-    futureSession?: boolean
-  }
+  goalSurface: SurfaceStyle
+  bucketSurface?: SurfaceStyle | null
+  notes?: string
+  repeatingSessionId?: string | null
+  includeOriginalTime?: boolean
+  futureSession?: boolean
+}
 
   const entries: HistoryEntry[] = []
   const addEntry = (config: SampleConfig) => {
     const startedAt = getStart(config.daysAgo, config.startHour, config.startMinute)
     const elapsed = Math.max(MINUTE_MS, config.durationMinutes * MINUTE_MS)
-    const occurrenceDate =
-      config.occurrenceDate ?? (config.routineId ? formatOccurrenceDate(startedAt) : null)
+    const repeatingSessionId = config.repeatingSessionId ?? null
+    const originalTime =
+      repeatingSessionId && config.includeOriginalTime !== false ? startedAt : null
     entries.push({
       id: `history-sample-${entries.length + 1}`,
       taskName: config.taskName,
@@ -478,8 +449,8 @@ export const createSampleHistoryRecords = (): HistoryRecord[] => {
       bucketSurface: config.bucketSurface ?? null,
       notes: config.notes ?? '',
       subtasks: [],
-      routineId: config.routineId ?? null,
-      occurrenceDate,
+      repeatingSessionId,
+      originalTime,
       futureSession: config.futureSession ?? false,
     })
   }
@@ -506,7 +477,7 @@ export const createSampleHistoryRecords = (): HistoryRecord[] => {
       goalSurface: LIFE_ROUTINES_SURFACE,
       bucketSurface: 'midnight',
       notes: 'Daily wind-down + sleep block.',
-      routineId: SAMPLE_SLEEP_ROUTINE_ID,
+      repeatingSessionId: SAMPLE_SLEEP_ROUTINE_ID,
     })
   }
 
@@ -697,7 +668,7 @@ export const createSampleHistoryRecords = (): HistoryRecord[] => {
       taskId: 'life-sleep',
       goalSurface: LIFE_ROUTINES_SURFACE,
       bucketSurface: 'midnight',
-      routineId: SAMPLE_SLEEP_ROUTINE_ID,
+      repeatingSessionId: SAMPLE_SLEEP_ROUTINE_ID,
       futureSession: true,
       notes: 'Guide entry for tomorrow night.',
     },
@@ -714,7 +685,7 @@ export const createSampleHistoryRecords = (): HistoryRecord[] => {
       taskId: 'life-sleep',
       goalSurface: LIFE_ROUTINES_SURFACE,
       bucketSurface: 'midnight',
-      routineId: SAMPLE_SLEEP_ROUTINE_ID,
+      repeatingSessionId: SAMPLE_SLEEP_ROUTINE_ID,
       futureSession: true,
       notes: 'Guide entry for later this week.',
     },
@@ -855,10 +826,6 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
       const notesRaw = typeof candidate.notes === 'string' ? candidate.notes : ''
       const subtasksRaw = sanitizeHistorySubtasks(candidate.subtasks)
       const futureSessionRaw = Boolean((candidate as any).futureSession)
-      const routineIdRaw: string | null =
-        typeof (candidate as any).routineId === 'string' ? ((candidate as any).routineId as string) : null
-      const occurrenceDateRaw: string | null =
-        typeof (candidate as any).occurrenceDate === 'string' ? ((candidate as any).occurrenceDate as string) : null
       const repeatingSessionIdRaw: string | null =
         typeof (candidate as any).repeatingSessionId === 'string' ? ((candidate as any).repeatingSessionId as string) : null
       const originalTimeRaw: number | null =
@@ -893,8 +860,6 @@ const sanitizeHistoryEntries = (value: unknown): HistoryEntry[] => {
         notes: notesRaw,
         subtasks: subtasksRaw,
         futureSession: futureSessionRaw,
-        routineId: routineIdRaw,
-        occurrenceDate: occurrenceDateRaw,
         repeatingSessionId: repeatingSessionIdRaw,
         originalTime: originalTimeRaw,
       }
@@ -1187,11 +1152,9 @@ const payloadFromRecord = (
       : typeof record.startedAt === 'number'
         ? record.startedAt
         : Date.now()
-  const ENABLE_ROUTINE_TAGS = Boolean((import.meta as any)?.env?.VITE_ENABLE_ROUTINE_TAGS)
   const ENABLE_REPEAT_ORIGINAL = isRepeatOriginalEnabled()
   const INCLUDE_NOTES = isHistoryNotesEnabled()
   const INCLUDE_SUBTASKS = isHistorySubtasksEnabled()
-  const INCLUDE_ROUTINE_TAGS = ENABLE_ROUTINE_TAGS && isHistoryRoutineTagsEnabled()
   const includeRepeat = ENABLE_REPEAT_ORIGINAL && !!record.repeatingSessionId
   const includeOriginal = ENABLE_REPEAT_ORIGINAL && Number.isFinite(record.originalTime as number)
   return {
@@ -1214,9 +1177,6 @@ const payloadFromRecord = (
     created_at: new Date(createdAtSource).toISOString(),
     updated_at: new Date(updatedAt).toISOString(),
     ...(typeof record.futureSession === 'boolean' ? { future_session: record.futureSession } : {}),
-    // Only include routine tags if the DB has these columns; gate with env flag to avoid PostgREST errors
-    ...(INCLUDE_ROUTINE_TAGS && record.routineId ? { routine_id: record.routineId } : {}),
-    ...(INCLUDE_ROUTINE_TAGS && record.occurrenceDate ? { occurrence_date: record.occurrenceDate } : {}),
     // Include server-side resolution metadata if enabled
     ...(includeRepeat ? { repeating_session_id: record.repeatingSessionId } : {}),
     ...(includeOriginal ? { original_time: new Date(record.originalTime as number).toISOString() } : {}),
@@ -1253,8 +1213,6 @@ const mapDbRowToRecord = (row: Record<string, unknown>): HistoryRecord | null =>
     notes: typeof row.notes === 'string' ? row.notes : null,
     subtasks: row.subtasks ?? null,
     futureSession: typeof (row as any).future_session === 'boolean' ? ((row as any).future_session as boolean) : null,
-    routineId: typeof (row as any).routine_id === 'string' ? (row as any).routine_id : null,
-    occurrenceDate: typeof (row as any).occurrence_date === 'string' ? (row as any).occurrence_date : null,
     repeatingSessionId: typeof (row as any).repeating_session_id === 'string' ? (row as any).repeating_session_id : null,
     originalTime: parseTimestamp((row as any).original_time, NaN),
   }
@@ -1349,8 +1307,6 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
         errorMentionsColumn(fetchError, 'repeating_session_id') || errorMentionsColumn(fetchError, 'original_time')
       const missingNotes = errorMentionsColumn(fetchError, 'notes')
       const missingSubtasks = errorMentionsColumn(fetchError, 'subtasks')
-      const missingRoutineTags =
-        errorMentionsColumn(fetchError, 'routine_id') || errorMentionsColumn(fetchError, 'occurrence_date')
       let changed = false
       if (missingRepeat && isRepeatOriginalEnabled()) {
         disableRepeatOriginal()
@@ -1362,10 +1318,6 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       }
       if (missingSubtasks && isHistorySubtasksEnabled()) {
         disableHistorySubtasks()
-        changed = true
-      }
-      if (missingRoutineTags && isHistoryRoutineTagsEnabled()) {
-        disableHistoryRoutineTags()
         changed = true
       }
       if (!changed) {
@@ -1392,15 +1344,12 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       const remoteTimestamp = record.updatedAt
       const localTimestamp = local.updatedAt
       if (remoteTimestamp > localTimestamp || (!local.pendingAction && remoteTimestamp === localTimestamp)) {
-        // Preserve routine tags from local if remote mapping lacks them (schema may not include these columns)
-        const routineId = (record as any).routineId ?? (local as any).routineId ?? null
-        const occurrenceDate = (record as any).occurrenceDate ?? (local as any).occurrenceDate ?? null
-        // Also preserve repeat-orig linkage if remote rows don't include these columns
+        // Preserve repeat-orig linkage if remote rows don't include these columns
         const repeatingSessionId = (record as any).repeatingSessionId ?? (local as any).repeatingSessionId ?? null
         const originalTime = Number.isFinite((record as any).originalTime)
           ? (record as any).originalTime
           : ((local as any).originalTime ?? null)
-        recordsById.set(record.id, { ...record, routineId, occurrenceDate, repeatingSessionId, originalTime, pendingAction: null })
+        recordsById.set(record.id, { ...record, repeatingSessionId, originalTime, pendingAction: null })
       }
     })
 
@@ -1569,8 +1518,9 @@ export const pruneFuturePlannedForRuleAfter = async (ruleId: string, afterYmd: s
   for (let i = 0; i < records.length; i += 1) {
     const r = records[i] as any
     const isPlanned = Boolean(r.futureSession)
-    const rid = typeof r.routineId === 'string' ? (r.routineId as string) : null
-    const od = typeof r.occurrenceDate === 'string' ? (r.occurrenceDate as string) : null
+    const rid = typeof r.repeatingSessionId === 'string' ? (r.repeatingSessionId as string) : null
+    const ot = Number.isFinite(r.originalTime) ? Number(r.originalTime) : null
+    const od = ot ? formatOccurrenceDate(ot) : null
     if (isPlanned && rid === ruleId && od && od > afterYmd && (records[i] as any).pendingAction !== 'delete') {
       records[i] = { ...records[i], pendingAction: 'delete', updatedAt: now }
       changed = true
@@ -1598,16 +1548,11 @@ export const remapHistoryRoutineIds = async (mapping: Record<string, string>): P
   }
   let changed = false
   records = records.map((record) => {
-    let next = record
-    if (record.routineId && mapping[record.routineId]) {
-      next = { ...next, routineId: mapping[record.routineId] }
-      changed = true
-    }
     if (record.repeatingSessionId && mapping[record.repeatingSessionId]) {
-      next = { ...next, repeatingSessionId: mapping[record.repeatingSessionId] }
       changed = true
+      return { ...record, repeatingSessionId: mapping[record.repeatingSessionId] }
     }
-    return next
+    return record
   })
   if (changed) {
     writeHistoryRecords(records)
@@ -1669,11 +1614,7 @@ export const pushAllHistoryToSupabase = async (
     writeHistoryRecords(records)
   }
   const normalizedRecords = sortRecordsForStorage(records).map((record, index) => {
-    let mappedRoutineId = record.routineId
     let mappedRepeatingId = record.repeatingSessionId
-    if (ruleIdMap && record.routineId && ruleIdMap[record.routineId]) {
-      mappedRoutineId = ruleIdMap[record.routineId]
-    }
     if (ruleIdMap && record.repeatingSessionId && ruleIdMap[record.repeatingSessionId]) {
       mappedRepeatingId = ruleIdMap[record.repeatingSessionId]
     }
@@ -1686,7 +1627,6 @@ export const pushAllHistoryToSupabase = async (
     return {
       ...record,
       createdAt,
-      routineId: mappedRoutineId,
       repeatingSessionId: mappedRepeatingId,
       pendingAction: null,
     }

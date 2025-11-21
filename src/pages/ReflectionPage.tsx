@@ -3720,11 +3720,17 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
           const idx = current.findIndex((e) => e.id === entryId)
           if (idx === -1) return current
           const target = current[idx] as any
-          const rid = typeof target.routineId === 'string' ? (target.routineId as string) : null
-          const od = typeof target.occurrenceDate === 'string' ? (target.occurrenceDate as string) : null
+          const rid = typeof target.repeatingSessionId === 'string' ? (target.repeatingSessionId as string) : null
+          const ot = (target as any).originalTime as number | undefined | null
+          const od = Number.isFinite(ot as number) ? formatLocalYmd(ot as number) : null
           const next = current.filter((e) => e.id !== entryId)
           if (rid && od) {
-            const stillConfirmed = next.some((e: any) => e && e.routineId === rid && e.occurrenceDate === od)
+            const stillConfirmed = next.some((e: any) => {
+              const nr = typeof e.repeatingSessionId === 'string' ? e.repeatingSessionId : null
+              const no =
+                Number.isFinite((e as any).originalTime as number) ? formatLocalYmd((e as any).originalTime as number) : null
+              return nr === rid && no === od
+            })
             if (!stillConfirmed) { cleanupRid = rid; cleanupOcc = od }
           }
           return next
@@ -6652,9 +6658,9 @@ useEffect(() => {
           const confirmedKeySet = (() => {
             const set = new Set<string>()
             effectiveHistory.forEach((h) => {
-              const rid = (h as any).routineId as string | undefined | null
-              const od = (h as any).occurrenceDate as string | undefined | null
-              if (rid && od) set.add(`${rid}:${od}`)
+              const rid = (h as any).repeatingSessionId as string | undefined | null
+              const ot = (h as any).originalTime as number | undefined | null
+              if (rid && Number.isFinite(ot as number)) set.add(`${rid}:${formatLocalYmd(ot as number)}`)
             })
             return set
           })()
@@ -6872,9 +6878,9 @@ useEffect(() => {
         const confirmedKeySet = (() => {
           const set = new Set<string>()
           effectiveHistory.forEach((h) => {
-            const rid = (h as any).routineId as string | undefined | null
-            const od = (h as any).occurrenceDate as string | undefined | null
-            if (rid && od) set.add(`${rid}:${od}`)
+            const rid = (h as any).repeatingSessionId as string | undefined | null
+            const ot = (h as any).originalTime as number | undefined | null
+            if (rid && Number.isFinite(ot as number)) set.add(`${rid}:${formatLocalYmd(ot as number)}`)
           })
           return set
         })()

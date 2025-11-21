@@ -91,21 +91,19 @@ Interactive guide entries (suggested by repeating rules) are supported:
   - Confirm: converts the guide into a real session and tags it with the originating rule and local occurrence date.
   - Skip this repetition: records an exception so the guide is hidden on that date.
 - Guides auto-hide if:
-  - A real entry exists with matching routine_id + occurrence_date (client-side optional tags), or
+  - A real entry exists with matching `repeating_session_id` + `original_time` metadata, or
   - An exception exists for that rule/date.
 
 Implementation details:
 
-- History entries carry optional local tags:
-  - routineId: string | null
-  - occurrenceDate: YYYY-MM-DD (local) | null
+- History entries carry the repeating rule ID (`repeatingSessionId`) and the original scheduled timestamp (`originalTime`). The local YYYY-MM-DD occurrence is derived from `originalTime` when needed.
 - Exceptions persist locally in localStorage under `nc-taskwatch-repeating-exceptions`. Optional remote sync is gated by env.
 
 Supabase schema proposal (optional, recommended for cross-device):
 
 - Alter `session_history` to add:
-  - routine_id: uuid or text, nullable
-  - occurrence_date: date, nullable
+  - repeating_session_id: uuid or text, nullable
+  - original_time: timestamptz, nullable
 - Create table `repeating_exceptions`:
   - id uuid primary key
   - user_id uuid (FK → auth.users.id)
@@ -120,5 +118,4 @@ Supabase schema proposal (optional, recommended for cross-device):
 
 Env flags for safe rollout:
 
-- VITE_ENABLE_ROUTINE_TAGS=true to include routine_id and occurrence_date in session_history sync.
 - VITE_ENABLE_REPEATING_EXCEPTIONS=true to sync exceptions to repeating_exceptions; otherwise they remain local-only.

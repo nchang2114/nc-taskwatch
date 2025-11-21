@@ -173,6 +173,18 @@ const QUICK_LIST_NAME = 'Quick List'
 const QUICK_LIST_GOAL_ID = 'quick-list'
 const QUICK_LIST_BUCKET_ID = 'quick-list-bucket'
 const QUICK_LIST_SURFACE: SurfaceStyle = 'cool-blue'
+const formatLocalYmd = (ms: number): string => {
+  const d = new Date(ms)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+const makeOccurrenceKey = (ruleId: string | null | undefined, originalTime: number | null | undefined): string | null => {
+  if (!ruleId) return null
+  if (typeof originalTime !== 'number' || !Number.isFinite(originalTime)) return null
+  return `${ruleId}:${formatLocalYmd(originalTime)}`
+}
 const makeSessionKey = (goalId: string | null, bucketId: string | null, taskId: string | null) =>
   goalId && bucketId ? `${goalId}::${bucketId}::${taskId ?? ''}` : null
 
@@ -1267,10 +1279,13 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     // Any entries overlapping now (real or planned)
     const overlapping = history.filter((h) => h.startedAt <= (now + TOL) && h.endedAt >= (now - TOL))
     const suggestions: ScheduledSuggestion[] = []
-    overlapping.forEach((entry) => {
-      // Try to enrich from goals snapshot by id first, else by names
-      let match: FocusCandidate | null = null
-      if (entry.taskId) {
+      overlapping.forEach((entry) => {
+        const entryOriginalTime =
+          typeof entry.originalTime === 'number' && Number.isFinite(entry.originalTime) ? entry.originalTime : null
+        const entryOccurrenceDate = entryOriginalTime !== null ? formatLocalYmd(entryOriginalTime) : null
+        // Try to enrich from goals snapshot by id first, else by names
+        let match: FocusCandidate | null = null
+        if (entry.taskId) {
         outer: for (let gi = 0; gi < activeGoalSnapshots.length; gi += 1) {
           const goal = activeGoalSnapshots[gi]
           for (let bi = 0; bi < goal.buckets.length; bi += 1) {
@@ -1298,10 +1313,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                       sortIndex: typeof s.sortIndex === 'number' ? s.sortIndex : (idx + 1) * NOTEBOOK_SUBTASK_SORT_STEP,
                     }))
                   : [],
-                repeatingRuleId: entry.repeatingSessionId ?? entry.routineId ?? null,
-                repeatingOccurrenceDate: entry.occurrenceDate ?? null,
-                repeatingOriginalTime:
-                  Number.isFinite(entry.originalTime as number) && entry.originalTime ? (entry.originalTime as number) : null,
+                repeatingRuleId: entry.repeatingSessionId ?? null,
+                repeatingOccurrenceDate: entryOccurrenceDate,
+                repeatingOriginalTime: entryOriginalTime,
               }
               break outer
             }
@@ -1339,10 +1353,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                       sortIndex: typeof s.sortIndex === 'number' ? s.sortIndex : (idx + 1) * NOTEBOOK_SUBTASK_SORT_STEP,
                     }))
                   : [],
-                repeatingRuleId: entry.repeatingSessionId ?? entry.routineId ?? null,
-                repeatingOccurrenceDate: entry.occurrenceDate ?? null,
-                repeatingOriginalTime:
-                  Number.isFinite(entry.originalTime as number) && entry.originalTime ? (entry.originalTime as number) : null,
+                repeatingRuleId: entry.repeatingSessionId ?? null,
+                repeatingOccurrenceDate: entryOccurrenceDate,
+                repeatingOriginalTime: entryOriginalTime,
               }
               break outer2
             }
@@ -1364,10 +1377,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         bucketSurface: ensureSurfaceStyle(entry.bucketSurface ?? undefined, DEFAULT_SURFACE_STYLE),
         notes: entry.notes ?? '',
         subtasks: [],
-        repeatingRuleId: entry.repeatingSessionId ?? entry.routineId ?? null,
-        repeatingOccurrenceDate: entry.occurrenceDate ?? null,
-        repeatingOriginalTime:
-          Number.isFinite(entry.originalTime as number) && entry.originalTime ? (entry.originalTime as number) : null,
+        repeatingRuleId: entry.repeatingSessionId ?? null,
+        repeatingOccurrenceDate: entryOccurrenceDate,
+        repeatingOriginalTime: entryOriginalTime,
       }
       // Life routine color restoration: if this represents a Daily Life entry but the bucket surface
       // is missing or defaulted, look up the surface from current life routine config.
@@ -1567,9 +1579,11 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     const coveredOccurrenceSet = (() => {
       const set = new Set<string>()
       history.forEach((h) => {
-        const rid = (h as any).routineId as string | undefined | null
-        const occ = (h as any).occurrenceDate as string | undefined | null
-        if (rid && typeof occ === 'string' && occ) set.add(`${rid}:${occ}`)
+        const key = makeOccurrenceKey(
+          (h as any).repeatingSessionId as string | undefined | null,
+          (h as any).originalTime as number | undefined | null,
+        )
+        if (key) set.add(key)
       })
       return set
     })()
@@ -4449,6 +4463,11 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         bucketSurfaceCandidate !== undefined && bucketSurfaceCandidate !== null
           ? ensureSurfaceStyle(bucketSurfaceCandidate, DEFAULT_SURFACE_STYLE)
           : null
+      const derivedOccurrenceDate =
+        contextRepeatingOccurrenceDate ??
+        (typeof contextRepeatingOriginalTime === 'number' && Number.isFinite(contextRepeatingOriginalTime)
+          ? formatLocalYmd(contextRepeatingOriginalTime)
+          : null)
 
       const entry: HistoryEntry = {
         id: makeHistoryId(),
@@ -4465,8 +4484,6 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         bucketSurface: normalizedBucketSurface,
         notes: '',
         subtasks: [],
-        routineId: contextRepeatingRuleId ?? null,
-        occurrenceDate: contextRepeatingOccurrenceDate ?? null,
         repeatingSessionId: contextRepeatingRuleId ?? null,
         originalTime:
           contextRepeatingOriginalTime && Number.isFinite(contextRepeatingOriginalTime)
@@ -4479,10 +4496,10 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         return next.length > HISTORY_LIMIT ? next.slice(0, HISTORY_LIMIT) : next
       })
 
-      if (entry.repeatingSessionId && entry.occurrenceDate) {
+      if (entry.repeatingSessionId && derivedOccurrenceDate) {
         void upsertRepeatingException({
           routineId: entry.repeatingSessionId,
-          occurrenceDate: entry.occurrenceDate,
+          occurrenceDate: derivedOccurrenceDate,
           action: 'rescheduled',
           newStartedAt: entry.startedAt,
           newEndedAt: entry.endedAt,
