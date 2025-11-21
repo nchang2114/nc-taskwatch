@@ -185,6 +185,10 @@ export async function fetchGoalsHierarchy(): Promise<
     return null
   }
   if (!goals || goals.length === 0) return { goals: [] }
+  goals = goals.filter((goal) => goal.name !== QUICK_LIST_GOAL_NAME)
+  if (goals.length === 0) {
+    return { goals: [] }
+  }
 
   const goalIds = goals.map((g) => g.id)
 
