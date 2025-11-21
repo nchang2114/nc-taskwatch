@@ -693,7 +693,9 @@ function MainApp() {
     const alignLocalStoresForUser = async (userId: string | null): Promise<void> => {
       try {
         await bootstrapGuestDataIfNeeded(userId)
-      } catch {}
+      } catch (error) {
+        console.error('[bootstrap] failed during alignLocalStoresForUser', error)
+      }
       ensureQuickListUser(userId)
       ensureLifeRoutineUser(userId)
       ensureHistoryUser(userId)
