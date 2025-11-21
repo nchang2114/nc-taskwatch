@@ -40,7 +40,12 @@ import {
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
 import { fetchRepeatingSessionRules, type RepeatingSessionRule } from '../lib/repeatingSessions'
-import { readRepeatingExceptions, subscribeRepeatingExceptions, type RepeatingException } from '../lib/repeatingExceptions'
+import {
+  readRepeatingExceptions,
+  subscribeRepeatingExceptions,
+  type RepeatingException,
+  upsertRepeatingException,
+} from '../lib/repeatingExceptions'
 import {
   LIFE_ROUTINE_STORAGE_KEY,
   LIFE_ROUTINE_UPDATE_EVENT,
@@ -1167,14 +1172,19 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                 goalSurface: goal.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
                 bucketSurface: bucket.surfaceStyle ?? DEFAULT_SURFACE_STYLE,
                 notes: typeof task.notes === 'string' ? task.notes : '',
-              subtasks: Array.isArray(task.subtasks)
-                ? task.subtasks.map((s, idx) => ({ id: s.id, text: s.text, completed: s.completed, sortIndex: typeof s.sortIndex === 'number' ? s.sortIndex : (idx + 1) * NOTEBOOK_SUBTASK_SORT_STEP }))
-                : [],
-              repeatingRuleId: entry.repeatingSessionId ?? entry.routineId ?? null,
-              repeatingOccurrenceDate: entry.occurrenceDate ?? null,
-              repeatingOriginalTime:
-                Number.isFinite(entry.originalTime as number) && entry.originalTime ? (entry.originalTime as number) : null,
-            }
+                subtasks: Array.isArray(task.subtasks)
+                  ? task.subtasks.map((s, idx) => ({
+                      id: s.id,
+                      text: s.text,
+                      completed: s.completed,
+                      sortIndex: typeof s.sortIndex === 'number' ? s.sortIndex : (idx + 1) * NOTEBOOK_SUBTASK_SORT_STEP,
+                    }))
+                  : [],
+                repeatingRuleId: entry.repeatingSessionId ?? entry.routineId ?? null,
+                repeatingOccurrenceDate: entry.occurrenceDate ?? null,
+                repeatingOriginalTime:
+                  Number.isFinite(entry.originalTime as number) && entry.originalTime ? (entry.originalTime as number) : null,
+              }
               break outer
             }
           }
@@ -4333,6 +4343,17 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         return next.length > HISTORY_LIMIT ? next.slice(0, HISTORY_LIMIT) : next
       })
 
+      if (entry.repeatingSessionId && entry.occurrenceDate) {
+        void upsertRepeatingException({
+          routineId: entry.repeatingSessionId,
+          occurrenceDate: entry.occurrenceDate,
+          action: 'rescheduled',
+          newStartedAt: entry.startedAt,
+          newEndedAt: entry.endedAt,
+          notes: null,
+        }).catch((error) => logWarn('[Focus] Failed to upsert repeating exception', error))
+      }
+
       if (context?.sessionKey !== undefined || sessionMeta.sessionKey !== null) {
         const nextLabel = taskName.length > 0 ? taskName : sessionMeta.taskLabel
         sessionMetadataRef.current = createEmptySessionMetadata(nextLabel)
@@ -4835,6 +4856,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                     bucketSurface: task.bucketSurface,
                                     notes: task.notes,
                                     subtasks: task.subtasks,
+                                    repeatingRuleId: task.repeatingRuleId,
+                                    repeatingOccurrenceDate: task.repeatingOccurrenceDate,
+                                    repeatingOriginalTime: task.repeatingOriginalTime,
                                   })
                                 }
                               >
@@ -4939,6 +4963,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                     bucketSurface: task.bucketSurface,
                                     notes: task.notes,
                                     subtasks: task.subtasks,
+                                    repeatingRuleId: task.repeatingRuleId,
+                                    repeatingOccurrenceDate: task.repeatingOccurrenceDate,
+                                    repeatingOriginalTime: task.repeatingOriginalTime,
                                   })
                                 }
                               >
@@ -5018,6 +5045,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                     bucketSurface: task.surfaceStyle,
                                     notes: '',
                                     subtasks: [],
+                                    repeatingRuleId: null,
+                                    repeatingOccurrenceDate: null,
+                                    repeatingOriginalTime: null,
                                   })
                                 }
                               >
@@ -5142,6 +5172,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                                             bucketSurface,
                                                             notes: task.notes,
                                                             subtasks: task.subtasks,
+                                                            repeatingRuleId: null,
+                                                            repeatingOccurrenceDate: null,
+                                                            repeatingOriginalTime: null,
                                                           })
                                                         }
                                                       >
@@ -5395,12 +5428,15 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                               taskId: task.taskId,
                               taskDifficulty: task.difficulty,
                               priority: true,
-                              goalSurface: task.goalSurface,
-                              bucketSurface: task.bucketSurface,
-                              notes: task.notes,
-                              subtasks: task.subtasks,
-                            })
-                          }
+                            goalSurface: task.goalSurface,
+                            bucketSurface: task.bucketSurface,
+                            notes: task.notes,
+                            subtasks: task.subtasks,
+                            repeatingRuleId: task.repeatingRuleId,
+                            repeatingOccurrenceDate: task.repeatingOccurrenceDate,
+                            repeatingOriginalTime: task.repeatingOriginalTime,
+                          })
+                        }
                         >
                           <div className="task-selector__task-main">
                             <div className="task-selector__task-content">
@@ -5499,12 +5535,15 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                               taskId: task.taskId,
                               taskDifficulty: task.difficulty,
                               priority: task.priority,
-                              goalSurface: task.goalSurface,
-                              bucketSurface: task.bucketSurface,
-                              notes: task.notes,
-                              subtasks: task.subtasks,
-                            })
-                          }
+                            goalSurface: task.goalSurface,
+                            bucketSurface: task.bucketSurface,
+                            notes: task.notes,
+                            subtasks: task.subtasks,
+                            repeatingRuleId: task.repeatingRuleId,
+                            repeatingOccurrenceDate: task.repeatingOccurrenceDate,
+                            repeatingOriginalTime: task.repeatingOriginalTime,
+                          })
+                        }
                         >
                           <div className="task-selector__task-main">
                             <div className="task-selector__task-content">
@@ -5578,12 +5617,15 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                               taskId: task.id,
                               taskDifficulty: 'none',
                               priority: false,
-                              goalSurface: LIFE_ROUTINES_SURFACE,
-                              bucketSurface: task.surfaceStyle,
-                              notes: '',
-                              subtasks: [],
-                            })
-                          }
+                            goalSurface: LIFE_ROUTINES_SURFACE,
+                            bucketSurface: task.surfaceStyle,
+                            notes: '',
+                            subtasks: [],
+                            repeatingRuleId: null,
+                            repeatingOccurrenceDate: null,
+                            repeatingOriginalTime: null,
+                          })
+                        }
                         >
                           <div className="task-selector__task-main">
                             <div className="task-selector__task-content">
@@ -5706,6 +5748,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                                       bucketSurface,
                                                       notes: task.notes,
                                                       subtasks: task.subtasks,
+                                                      repeatingRuleId: null,
+                                                      repeatingOccurrenceDate: null,
+                                                      repeatingOriginalTime: null,
                                                     })
                                                   }
                                                 >
