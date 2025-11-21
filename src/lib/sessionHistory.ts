@@ -922,21 +922,6 @@ const readHistoryRecords = (): HistoryRecord[] => {
       return []
     }
     const records = sanitizeHistoryRecords(JSON.parse(raw))
-    // Local normalization: ensure future entries are flagged even before remote sync
-    const now = Date.now()
-    let changed = false
-    for (let i = 0; i < records.length; i += 1) {
-      const r = records[i]
-      if (r.startedAt > now && !r.futureSession) {
-        records[i] = { ...r, futureSession: true, updatedAt: now, pendingAction: 'upsert' }
-        changed = true
-      }
-    }
-    if (changed) {
-      writeHistoryRecords(sortRecordsForStorage(records))
-      // Schedule a background push; broadcast will occur on next persist
-      schedulePendingPush()
-    }
     return records
   } catch {
     return []
