@@ -1842,12 +1842,20 @@ function AuthCallbackScreen(): React.ReactElement {
         window.location.replace('/')
         return
       }
+      const url = new URL(window.location.href)
+      const hasAuthCode = Boolean(url.searchParams.get('code'))
       try {
-        const { error } = await supabase.auth.exchangeCodeForSession(window.location.href)
-        if (error) {
+        if (hasAuthCode) {
+          const { error } = await supabase.auth.exchangeCodeForSession(window.location.href)
+          if (error) {
+            await supabase.auth.getSession().catch(() => {})
+          }
+        } else {
           await supabase.auth.getSession().catch(() => {})
         }
-      } catch {}
+      } catch {
+        await supabase.auth.getSession().catch(() => {})
+      }
       finally {
         if (!cancelled) {
           window.location.replace('/')
