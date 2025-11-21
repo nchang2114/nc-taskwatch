@@ -1513,7 +1513,7 @@ export const pruneFuturePlannedForRuleAfter = async (ruleId: string, afterYmd: s
     const rid = typeof r.repeatingSessionId === 'string' ? (r.repeatingSessionId as string) : null
     const ot = Number.isFinite(r.originalTime) ? Number(r.originalTime) : null
     const od = ot ? formatOccurrenceDate(ot) : null
-    if (isPlanned && rid === ruleId && od && od > afterYmd && (records[i] as any).pendingAction !== 'delete') {
+    if (isPlanned && rid === ruleId && od && od >= afterYmd && (records[i] as any).pendingAction !== 'delete') {
       records[i] = { ...records[i], pendingAction: 'delete', updatedAt: now }
       changed = true
     }
