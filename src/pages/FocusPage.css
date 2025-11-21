@@ -554,6 +554,50 @@ html[data-theme='light'] .goal-task-row.surface-life-routine--frost { --task-row
 html[data-theme='light'] .goal-task-row.surface-life-routine--grove { --task-row-bg: rgba(222, 251, 232, 0.94); --task-row-border: rgba(74, 222, 128, 0.32); --task-row-overlay: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(22, 163, 74, 0.12)); --taskwatch-life-text: rgba(24, 78, 56, 0.94); --taskwatch-life-muted: rgba(32, 102, 70, 0.7); }
 html[data-theme='light'] .goal-task-row.surface-life-routine--lagoon { --task-row-bg: rgba(224, 242, 255, 0.94); --task-row-border: rgba(59, 130, 246, 0.32); --task-row-overlay: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(28, 110, 212, 0.14)); --taskwatch-life-text: rgba(18, 68, 110, 0.94); --taskwatch-life-muted: rgba(30, 92, 136, 0.7); }
 html[data-theme='light'] .goal-task-row.surface-life-routine--ember { --task-row-bg: rgba(255, 239, 224, 0.94); --task-row-border: rgba(249, 115, 22, 0.32); --task-row-overlay: linear-gradient(135deg, rgba(253, 186, 116, 0.24), rgba(234, 88, 12, 0.14)); --taskwatch-life-text: rgba(110, 60, 24, 0.94); --taskwatch-life-muted: rgba(134, 76, 34, 0.7); }
+.surface-quick-list {
+  --surface-quick-bg: linear-gradient(135deg, rgba(174, 233, 255, 0.24), rgba(142, 210, 255, 0.14));
+  --surface-quick-border: rgba(124, 222, 255, 0.32);
+  --surface-quick-overlay: linear-gradient(135deg, rgba(124, 222, 255, 0.24), rgba(59, 130, 246, 0.12));
+  --taskwatch-quick-text: rgba(224, 248, 255, 0.94);
+  --taskwatch-quick-muted: rgba(190, 228, 255, 0.74);
+  background: var(--surface-quick-bg);
+  border-color: var(--surface-quick-border);
+  color: var(--taskwatch-quick-text);
+}
+.task-selector__goal-toggle.surface-quick-list {
+  border: 1px solid var(--surface-quick-border);
+  background: var(--surface-quick-bg);
+  color: var(--taskwatch-quick-text);
+}
+.goal-task-row.surface-quick-list {
+  --task-row-bg: var(--surface-quick-bg);
+  --task-row-border: var(--surface-quick-border);
+  --task-row-overlay: var(--surface-quick-overlay);
+  --taskwatch-quick-text: rgba(224, 248, 255, 0.94);
+  --taskwatch-quick-muted: rgba(190, 228, 255, 0.74);
+  color: var(--taskwatch-quick-text);
+}
+.task-selector__task--quick-list { color: var(--taskwatch-quick-text, var(--text-primary)); }
+.task-selector__task--quick-list .goal-task-text,
+.task-selector__task--quick-list .goal-task-text__inner { color: inherit; }
+.task-selector__task--quick-list .task-selector__origin,
+.task-selector__task--quick-list .task-selector__origin--dropdown { color: var(--taskwatch-quick-muted, var(--text-secondary)); }
+.focus-task.surface-quick-list { color: var(--taskwatch-quick-text, var(--text-primary)); }
+.focus-task.surface-quick-list .focus-task__name,
+.focus-task.surface-quick-list .goal-task-text__inner { color: inherit; }
+.focus-task.surface-quick-list .focus-task__label,
+.focus-task.surface-quick-list .focus-task__origin { color: var(--taskwatch-quick-muted, var(--text-secondary)); }
+html[data-theme='light'] .surface-quick-list {
+  --surface-quick-bg: linear-gradient(135deg, rgba(232, 249, 255, 0.96), rgba(216, 240, 255, 0.94));
+  --surface-quick-border: rgba(124, 222, 255, 0.32);
+  --surface-quick-overlay: linear-gradient(135deg, rgba(59, 191, 255, 0.18), rgba(2, 132, 199, 0.12));
+  --taskwatch-quick-text: rgba(24, 68, 92, 0.94);
+  --taskwatch-quick-muted: rgba(32, 92, 132, 0.7);
+}
+html[data-theme='light'] .goal-task-row.surface-quick-list {
+  --taskwatch-quick-text: rgba(24, 68, 92, 0.94);
+  --taskwatch-quick-muted: rgba(32, 92, 132, 0.7);
+}
 
 .task-selector__task:active { transform: translateY(1px); }
 .task-selector__task--active { border-color: var(--accent); background: var(--accent-soft); }

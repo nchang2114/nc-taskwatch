@@ -54,6 +54,8 @@ import {
   syncLifeRoutinesWithSupabase,
   type LifeRoutineConfig,
 } from '../lib/lifeRoutines'
+import { readStoredQuickList, subscribeQuickList, writeStoredQuickList, type QuickItem } from '../lib/quickList'
+import { fetchQuickListRemoteItems } from '../lib/quickListRemote'
 import {
   CURRENT_SESSION_EVENT_NAME,
   CURRENT_SESSION_STORAGE_KEY,
@@ -167,6 +169,10 @@ type SnapbackActionId = (typeof SNAPBACK_ACTIONS)[number]['id']
 const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
 const LIFE_ROUTINES_SURFACE: SurfaceStyle = 'linen'
+const QUICK_LIST_NAME = 'Quick List'
+const QUICK_LIST_GOAL_ID = 'quick-list'
+const QUICK_LIST_BUCKET_ID = 'quick-list-bucket'
+const QUICK_LIST_SURFACE: SurfaceStyle = 'cool-blue'
 const makeSessionKey = (goalId: string | null, bucketId: string | null, taskId: string | null) =>
   goalId && bucketId ? `${goalId}::${bucketId}::${taskId ?? ''}` : null
 
@@ -654,6 +660,11 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     () => new Set(lifeRoutineTasks.map((task) => task.bucketId)),
     [lifeRoutineTasks],
   )
+  const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => readStoredQuickList())
+  const [quickListExpanded, setQuickListExpanded] = useState(false)
+  const [quickListRemoteIds, setQuickListRemoteIds] = useState<{ goalId: string; bucketId: string } | null>(null)
+  const quickListRefreshInFlightRef = useRef(false)
+  const quickListRefreshPendingRef = useRef(false)
   // Build a lookup of life routine (bucket) title -> surface style so we can restore colors for
   // history-derived life routine suggestions that may have missing bucketSurface metadata.
   const lifeRoutineSurfaceLookup = useMemo(() => {
@@ -664,6 +675,14 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     })
     return map
   }, [lifeRoutineTasks])
+  useEffect(() => {
+    const unsubscribe = subscribeQuickList((items) => setQuickListItems(items))
+    return () => {
+      try {
+        unsubscribe()
+      } catch {}
+    }
+  }, [])
   useEffect(() => {
     goalsSnapshotSignatureRef.current = JSON.stringify(goalsSnapshot)
   }, [goalsSnapshot])
@@ -704,6 +723,39 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     },
     [setGoalsSnapshot],
   )
+  const refreshQuickListFromSupabase = useCallback(
+    (reason?: string) => {
+      if (quickListRefreshInFlightRef.current) {
+        quickListRefreshPendingRef.current = true
+        return
+      }
+      quickListRefreshInFlightRef.current = true
+      ;(async () => {
+        try {
+          const remote = await fetchQuickListRemoteItems()
+          if (remote?.goalId && remote?.bucketId) {
+            setQuickListRemoteIds({ goalId: remote.goalId, bucketId: remote.bucketId })
+          }
+          if (remote?.items) {
+            const stored = writeStoredQuickList(remote.items)
+            setQuickListItems(stored)
+          }
+        } catch (error) {
+          logWarn(
+            `[Focus] Failed to refresh Quick List from Supabase${reason ? ` (${reason})` : ''}:`,
+            error,
+          )
+        } finally {
+          quickListRefreshInFlightRef.current = false
+          if (quickListRefreshPendingRef.current) {
+            quickListRefreshPendingRef.current = false
+            refreshQuickListFromSupabase(reason)
+          }
+        }
+      })()
+    },
+    [],
+  )
   const [focusSource, setFocusSource] = useState<FocusSource | null>(() => readStoredFocusSource())
   const [customTaskDraft, setCustomTaskDraft] = useState('')
   const [isCompletingFocus, setIsCompletingFocus] = useState(false)
@@ -738,6 +790,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
   useEffect(() => {
     refreshGoalsSnapshotFromSupabase('initial-load')
   }, [refreshGoalsSnapshotFromSupabase])
+  useEffect(() => {
+    refreshQuickListFromSupabase('initial-load')
+  }, [refreshQuickListFromSupabase])
 
   useEffect(() => {
     setCurrentTime(Date.now())
@@ -1034,11 +1089,13 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     const handleFocus = () => {
       if (!document.hidden) {
         refreshGoalsSnapshotFromSupabase('window-focus')
+        refreshQuickListFromSupabase('window-focus')
       }
     }
     const handleVisibility = () => {
       if (!document.hidden) {
         refreshGoalsSnapshotFromSupabase('document-visible')
+        refreshQuickListFromSupabase('document-visible')
       }
     }
     window.addEventListener('focus', handleFocus)
@@ -1047,7 +1104,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       window.removeEventListener('focus', handleFocus)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [refreshGoalsSnapshotFromSupabase])
+  }, [refreshGoalsSnapshotFromSupabase, refreshQuickListFromSupabase])
 
 
   useEffect(() => {
@@ -1134,10 +1191,71 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     })
     return candidates
   }, [activeGoalSnapshots])
+  const quickListFocusCandidates = useMemo<FocusCandidate[]>(() => {
+    if (quickListItems.length === 0) {
+      return []
+    }
+    const goalId = quickListRemoteIds?.goalId ?? QUICK_LIST_GOAL_ID
+    const bucketId = quickListRemoteIds?.bucketId ?? QUICK_LIST_BUCKET_ID
+    return quickListItems.map((item) => ({
+      goalId,
+      goalName: QUICK_LIST_NAME,
+      bucketId,
+      bucketName: QUICK_LIST_NAME,
+      taskId: item.id,
+      taskName: item.text,
+      completed: Boolean(item.completed),
+      priority: Boolean(item.priority),
+      difficulty: item.difficulty ?? 'none',
+      goalSurface: QUICK_LIST_SURFACE,
+      bucketSurface: QUICK_LIST_SURFACE,
+      notes: typeof item.notes === 'string' ? item.notes : '',
+      subtasks: Array.isArray(item.subtasks)
+        ? item.subtasks.map((subtask, index) => ({
+            id: subtask.id,
+            text: subtask.text,
+            completed: Boolean(subtask.completed),
+            sortIndex:
+              typeof subtask.sortIndex === 'number'
+                ? subtask.sortIndex
+                : (index + 1) * NOTEBOOK_SUBTASK_SORT_STEP,
+          }))
+        : [],
+      repeatingRuleId: null,
+      repeatingOccurrenceDate: null,
+      repeatingOriginalTime: null,
+    }))
+  }, [quickListItems, quickListRemoteIds])
+  const quickListActiveCandidates = useMemo(
+    () => quickListFocusCandidates.filter((candidate) => !candidate.completed),
+    [quickListFocusCandidates],
+  )
+  const quickListPriorityCandidates = useMemo(
+    () => quickListFocusCandidates.filter((candidate) => candidate.priority && !candidate.completed),
+    [quickListFocusCandidates],
+  )
+  const isQuickListGoal = useCallback(
+    (goalId: string | null | undefined) => {
+      if (!goalId) {
+        return false
+      }
+      if (goalId === QUICK_LIST_GOAL_ID) {
+        return true
+      }
+      if (quickListRemoteIds?.goalId) {
+        return goalId === quickListRemoteIds.goalId
+      }
+      return false
+    },
+    [quickListRemoteIds],
+  )
 
   const priorityTasks = useMemo(
-    () => focusCandidates.filter((candidate) => candidate.priority && !candidate.completed),
-    [focusCandidates],
+    () => [
+      ...focusCandidates.filter((candidate) => candidate.priority && !candidate.completed),
+      ...quickListPriorityCandidates,
+    ],
+    [focusCandidates, quickListPriorityCandidates],
   )
 
   // Promote scheduled (planned) sessions that overlap 'now' to the top of the selector
@@ -1694,14 +1812,18 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     focusSource?.goalSurface ?? activeFocusCandidate?.goalSurface ?? DEFAULT_SURFACE_STYLE
   const effectiveBucketSurface =
     focusSource?.bucketSurface ?? activeFocusCandidate?.bucketSurface ?? null
-  const isLifeRoutineFocus =
-    (focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null) === LIFE_ROUTINES_GOAL_ID
+  const focusGoalIdentifier = focusSource?.goalId ?? activeFocusCandidate?.goalId ?? null
+  const isLifeRoutineFocus = focusGoalIdentifier === LIFE_ROUTINES_GOAL_ID
+  const isQuickListFocus = isQuickListGoal(focusGoalIdentifier)
   const focusSurfaceClasses = useMemo(() => {
+    if (isQuickListFocus) {
+      return ['surface-quick-list']
+    }
     if (isLifeRoutineFocus && effectiveBucketSurface) {
       return ['surface-life-routine', `surface-life-routine--${effectiveBucketSurface}`]
     }
     return []
-  }, [effectiveBucketSurface, isLifeRoutineFocus])
+  }, [effectiveBucketSurface, isLifeRoutineFocus, isQuickListFocus])
   const notebookKey = useMemo(
     () => computeNotebookKey(focusSource, normalizedCurrentTask),
     [focusSource, normalizedCurrentTask],
@@ -4053,6 +4175,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     const entryBucketName = focusSource?.bucketName ?? activeFocusCandidate?.bucketName ?? null
     const isLifeRoutineFocus =
       goalId === LIFE_ROUTINES_GOAL_ID && bucketId !== null && lifeRoutineBucketIds.has(bucketId)
+    const isQuickListFocusTarget = isQuickListGoal(goalId)
 
     if (!taskId || !bucketId || !goalId) {
       return
@@ -4092,7 +4215,16 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     lastLoggedSessionKeyRef.current = null
     sessionMetadataRef.current = createEmptySessionMetadata(safeTaskName)
 
-    if (!isLifeRoutineFocus) {
+    if (isQuickListFocusTarget) {
+      const updated = quickListItems.map((item) =>
+        item.id === taskId ? { ...item, completed: true, updatedAt: new Date().toISOString() } : item,
+      )
+      const active = updated.filter((item) => !item.completed)
+      const completedItems = updated.filter((item) => item.completed)
+      const normalized = [...active, ...completedItems].map((item, index) => ({ ...item, sortIndex: index }))
+      const stored = writeStoredQuickList(normalized)
+      setQuickListItems(stored)
+    } else if (!isLifeRoutineFocus) {
       setGoalsSnapshot((current) => {
         let mutated = false
         const updated = current.map((goal) => {
@@ -4132,6 +4264,10 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         await setTaskCompletedAndResort(taskId, bucketId, true)
       } catch (error) {
         logWarn('Failed to mark task complete from Focus', error)
+      } finally {
+        if (isQuickListFocusTarget) {
+          refreshQuickListFromSupabase('focus-complete')
+        }
       }
     }
 
@@ -4821,12 +4957,16 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                             isLifeSuggestion && task.bucketSurface
                               ? ['surface-life-routine', `surface-life-routine--${task.bucketSurface}`]
                               : []
+                          const isQuickListTask = isQuickListGoal(task.goalId)
+                          const quickSurfaceClasses = isQuickListTask ? ['surface-quick-list'] : []
                           const rowClassName = [
                             'task-selector__task',
                             'goal-task-row',
                             diffClass,
                             'goal-task-row--priority',
                             ...lifeSurfaceClasses,
+                            ...quickSurfaceClasses,
+                            isQuickListTask ? 'task-selector__task--quick-list' : '',
                             matches ? 'task-selector__task--active' : '',
                           ]
                             .filter(Boolean)
@@ -5066,6 +5206,90 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                       </ul>
                     ) : null}
                   </div>
+
+                  {quickListActiveCandidates.length > 0 ? (
+                    <div className="task-selector__section">
+                      <h2 className="task-selector__section-title">{QUICK_LIST_NAME}</h2>
+                      <button
+                        type="button"
+                        className="task-selector__goal-toggle surface-quick-list"
+                        onClick={() => setQuickListExpanded((value) => !value)}
+                        aria-expanded={quickListExpanded}
+                      >
+                        <span className="task-selector__goal-info">
+                          <span className="task-selector__goal-badge" aria-hidden="true">
+                            Quick
+                          </span>
+                          <span className="task-selector__goal-name">{QUICK_LIST_NAME}</span>
+                        </span>
+                        <span className="task-selector__chevron" aria-hidden="true">
+                          {quickListExpanded ? '−' : '+'}
+                        </span>
+                      </button>
+                      {quickListExpanded ? (
+                        <ul className="task-selector__list">
+                          {quickListActiveCandidates.map((task) => {
+                            const candidateLower = task.taskName.trim().toLocaleLowerCase()
+                            const matches = focusSource
+                              ? focusSource.goalId === task.goalId &&
+                                focusSource.bucketId === task.bucketId &&
+                                candidateLower === currentTaskLower
+                              : !isDefaultTask && candidateLower === currentTaskLower
+                            const rowClassName = [
+                              'task-selector__task',
+                              'goal-task-row',
+                              'task-selector__task--quick-list',
+                              'surface-quick-list',
+                              matches ? 'task-selector__task--active' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')
+                            const subtitle =
+                              task.notes && task.notes.trim().length > 0
+                                ? task.notes
+                                : 'Lightweight tasks to keep momentum'
+                            return (
+                              <li key={`quick-${task.taskId || task.taskName}`} className="task-selector__item">
+                                <button
+                                  type="button"
+                                  className={rowClassName}
+                                  onClick={() =>
+                                    handleSelectTask(task.taskName, {
+                                      goalId: task.goalId,
+                                      bucketId: task.bucketId,
+                                      goalName: task.goalName,
+                                      bucketName: task.bucketName,
+                                      taskId: task.taskId,
+                                      taskDifficulty: task.difficulty,
+                                      priority: task.priority,
+                                      goalSurface: task.goalSurface,
+                                      bucketSurface: task.bucketSurface,
+                                      notes: task.notes,
+                                      subtasks: task.subtasks,
+                                      repeatingRuleId: null,
+                                      repeatingOccurrenceDate: null,
+                                      repeatingOriginalTime: null,
+                                    })
+                                  }
+                                >
+                                  <div className="task-selector__task-main">
+                                    <div className="task-selector__task-content">
+                                      <span className="goal-task-text">
+                                        <span className="goal-task-text__inner">{task.taskName}</span>
+                                      </span>
+                                      <span className="task-selector__origin task-selector__origin--dropdown">
+                                        {subtitle}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </button>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   <div className="task-selector__section">
                     <h2 className="task-selector__section-title">Goals</h2>
@@ -5389,22 +5613,26 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                         focusSource.bucketId === task.bucketId &&
                         candidateLower === currentTaskLower
                       : !isDefaultTask && candidateLower === currentTaskLower
-                    const diffClass =
-                      task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : ''
-                    const isLifeSuggestion =
-                      (task.goalName ?? '').trim().toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
-                    const lifeSurfaceClasses =
-                      isLifeSuggestion && task.bucketSurface
-                        ? ['surface-life-routine', `surface-life-routine--${task.bucketSurface}`]
-                        : []
-                    const rowClassName = [
-                      'task-selector__task',
-                      'goal-task-row',
-                      diffClass,
-                      'goal-task-row--priority',
-                      ...lifeSurfaceClasses,
-                      matches ? 'task-selector__task--active' : '',
-                    ]
+                          const diffClass =
+                            task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : ''
+                          const isLifeSuggestion =
+                            (task.goalName ?? '').trim().toLowerCase() === LIFE_ROUTINES_NAME.toLowerCase()
+                          const lifeSurfaceClasses =
+                            isLifeSuggestion && task.bucketSurface
+                              ? ['surface-life-routine', `surface-life-routine--${task.bucketSurface}`]
+                              : []
+                          const isQuickListTask = isQuickListGoal(task.goalId)
+                          const quickSurfaceClasses = isQuickListTask ? ['surface-quick-list'] : []
+                          const rowClassName = [
+                            'task-selector__task',
+                            'goal-task-row',
+                            diffClass,
+                            'goal-task-row--priority',
+                            ...lifeSurfaceClasses,
+                            ...quickSurfaceClasses,
+                            isQuickListTask ? 'task-selector__task--quick-list' : '',
+                            matches ? 'task-selector__task--active' : '',
+                          ]
                       .filter(Boolean)
                       .join(' ')
                     const diffBadgeClass =
@@ -5641,10 +5869,94 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                   })}
                 </ul>
               ) : null}
-            </div>
+                  </div>
 
-            <div className="task-selector__section">
-              <h2 className="task-selector__section-title">Goals</h2>
+                  {quickListActiveCandidates.length > 0 ? (
+                    <div className="task-selector__section">
+                      <h2 className="task-selector__section-title">{QUICK_LIST_NAME}</h2>
+                      <button
+                        type="button"
+                        className="task-selector__goal-toggle surface-quick-list"
+                        onClick={() => setQuickListExpanded((value) => !value)}
+                        aria-expanded={quickListExpanded}
+                      >
+                        <span className="task-selector__goal-info">
+                          <span className="task-selector__goal-badge" aria-hidden="true">
+                            Quick
+                          </span>
+                          <span className="task-selector__goal-name">{QUICK_LIST_NAME}</span>
+                        </span>
+                        <span className="task-selector__chevron" aria-hidden="true">
+                          {quickListExpanded ? '−' : '+'}
+                        </span>
+                      </button>
+                      {quickListExpanded ? (
+                        <ul className="task-selector__list">
+                          {quickListActiveCandidates.map((task) => {
+                            const candidateLower = task.taskName.trim().toLocaleLowerCase()
+                            const matches = focusSource
+                              ? focusSource.goalId === task.goalId &&
+                                focusSource.bucketId === task.bucketId &&
+                                candidateLower === currentTaskLower
+                              : !isDefaultTask && candidateLower === currentTaskLower
+                            const rowClassName = [
+                              'task-selector__task',
+                              'goal-task-row',
+                              'task-selector__task--quick-list',
+                              'surface-quick-list',
+                              matches ? 'task-selector__task--active' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')
+                            const subtitle =
+                              task.notes && task.notes.trim().length > 0
+                                ? task.notes
+                                : 'Lightweight tasks to keep momentum'
+                            return (
+                              <li key={`quick-${task.taskId || task.taskName}`} className="task-selector__item">
+                                <button
+                                  type="button"
+                                  className={rowClassName}
+                                  onClick={() =>
+                                    handleSelectTask(task.taskName, {
+                                      goalId: task.goalId,
+                                      bucketId: task.bucketId,
+                                      goalName: task.goalName,
+                                      bucketName: task.bucketName,
+                                      taskId: task.taskId,
+                                      taskDifficulty: task.difficulty,
+                                      priority: task.priority,
+                                      goalSurface: task.goalSurface,
+                                      bucketSurface: task.bucketSurface,
+                                      notes: task.notes,
+                                      subtasks: task.subtasks,
+                                      repeatingRuleId: null,
+                                      repeatingOccurrenceDate: null,
+                                      repeatingOriginalTime: null,
+                                    })
+                                  }
+                                >
+                                  <div className="task-selector__task-main">
+                                    <div className="task-selector__task-content">
+                                      <span className="goal-task-text">
+                                        <span className="goal-task-text__inner">{task.taskName}</span>
+                                      </span>
+                                      <span className="task-selector__origin task-selector__origin--dropdown">
+                                        {subtitle}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </button>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div className="task-selector__section">
+                    <h2 className="task-selector__section-title">Goals</h2>
               {activeGoalSnapshots.length > 0 ? (
                 <ul className="task-selector__goals">
                   {activeGoalSnapshots.map((goal) => {
