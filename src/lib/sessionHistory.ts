@@ -59,7 +59,7 @@ const isRepeatOriginalEnabled = (): boolean => {
     return ENV_ENABLE_REPEAT_ORIGINAL
   }
   const flags = readFeatureFlags()
-  return flags.repeatOriginal === true
+  return flags.repeatOriginal !== false
 }
 const disableRepeatOriginal = () => {
   const flags = readFeatureFlags()
@@ -72,7 +72,7 @@ const isHistoryNotesEnabled = (): boolean => {
     return ENV_ENABLE_HISTORY_NOTES
   }
   const flags = readFeatureFlags()
-  return flags.historyNotes === true
+  return flags.historyNotes !== false
 }
 const disableHistoryNotes = () => {
   const flags = readFeatureFlags()
@@ -85,7 +85,7 @@ const isHistorySubtasksEnabled = (): boolean => {
     return ENV_ENABLE_HISTORY_SUBTASKS
   }
   const flags = readFeatureFlags()
-  return flags.historySubtasks === true
+  return flags.historySubtasks !== false
 }
 const disableHistorySubtasks = () => {
   const flags = readFeatureFlags()
