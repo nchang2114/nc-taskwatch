@@ -17,7 +17,12 @@ export const HISTORY_LIMIT = 250
 export const HISTORY_REMOTE_WINDOW_DAYS = 30
 // Feature flags persisted locally to enable/disable optional server columns dynamically
 const FEATURE_FLAGS_STORAGE_KEY = 'nc-taskwatch-flags'
-type FeatureFlags = { repeatOriginal?: boolean }
+type FeatureFlags = {
+  repeatOriginal?: boolean
+  historyNotes?: boolean
+  historySubtasks?: boolean
+  historyRoutineTags?: boolean
+}
 const readFeatureFlags = (): FeatureFlags => {
   if (typeof window === 'undefined') return {}
   try {
@@ -44,6 +49,53 @@ const disableRepeatOriginal = () => {
   flags.repeatOriginal = false
   writeFeatureFlags(flags)
 }
+const isHistoryNotesEnabled = (): boolean => {
+  const flags = readFeatureFlags()
+  return flags.historyNotes !== false
+}
+const disableHistoryNotes = () => {
+  const flags = readFeatureFlags()
+  if (flags.historyNotes === false) return
+  flags.historyNotes = false
+  writeFeatureFlags(flags)
+}
+const isHistorySubtasksEnabled = (): boolean => {
+  const flags = readFeatureFlags()
+  return flags.historySubtasks !== false
+}
+const disableHistorySubtasks = () => {
+  const flags = readFeatureFlags()
+  if (flags.historySubtasks === false) return
+  flags.historySubtasks = false
+  writeFeatureFlags(flags)
+}
+const isHistoryRoutineTagsEnabled = (): boolean => {
+  const flags = readFeatureFlags()
+  return flags.historyRoutineTags !== false
+}
+const disableHistoryRoutineTags = () => {
+  const flags = readFeatureFlags()
+  if (flags.historyRoutineTags === false) return
+  flags.historyRoutineTags = false
+  writeFeatureFlags(flags)
+}
+
+const HISTORY_BASE_SELECT_COLUMNS =
+  'id, task_name, elapsed_ms, started_at, ended_at, goal_name, bucket_name, goal_id, bucket_id, task_id, goal_surface, bucket_surface, created_at, updated_at, future_session'
+
+const buildHistorySelectColumns = (): string => {
+  let columns = HISTORY_BASE_SELECT_COLUMNS
+  if (isHistoryNotesEnabled()) {
+    columns += ', notes'
+  }
+  if (isHistorySubtasksEnabled()) {
+    columns += ', subtasks'
+  }
+  if (isRepeatOriginalEnabled()) {
+    columns += ', repeating_session_id, original_time'
+  }
+  return columns
+}
 const getStoredHistoryUserId = (): string | null => {
   if (typeof window === 'undefined') return null
   try {
@@ -62,11 +114,92 @@ const setStoredHistoryUserId = (userId: string | null): void => {
     }
   } catch {}
 }
+const getErrorContext = (err: any): string => {
+  if (!err) return ''
+  const msg = (err.message || err.msg || err.error_description || '') as string
+  const details = (err.details || err.hint || '') as string
+  return `${msg} ${details}`.toLowerCase()
+}
 const isColumnMissingError = (err: any): boolean => {
-  const msg = (err && (err.message || err.msg || err.error_description)) || ''
-  const details = (err && (err.details || err.hint)) || ''
-  const combined = `${msg} ${details}`.toLowerCase()
+  const combined = getErrorContext(err)
   return combined.includes('column') && combined.includes('does not exist')
+}
+const errorMentionsColumn = (err: any, column: string): boolean => {
+  if (!err) return false
+  const normalized = column.toLowerCase()
+  const combined = getErrorContext(err)
+  return combined.includes(normalized)
+}
+
+type HistoryPayload = Record<string, unknown>
+
+const stripHistoryPayloadColumns = (
+  payload: HistoryPayload,
+  removal: { routine?: boolean; repeat?: boolean; notes?: boolean; subtasks?: boolean },
+): HistoryPayload => {
+  if (!removal.routine && !removal.repeat && !removal.notes && !removal.subtasks) {
+    return payload
+  }
+  const next = { ...payload }
+  if (removal.routine) {
+    delete (next as any).routine_id
+    delete (next as any).occurrence_date
+  }
+  if (removal.repeat) {
+    delete (next as any).repeating_session_id
+    delete (next as any).original_time
+  }
+  if (removal.notes) {
+    delete (next as any).notes
+  }
+  if (removal.subtasks) {
+    delete (next as any).subtasks
+  }
+  return next
+}
+
+const upsertHistoryPayloads = async (
+  client: NonNullable<typeof supabase>,
+  payloads: HistoryPayload[],
+): Promise<{ resp: any; usedPayloads: HistoryPayload[] }> => {
+  const attempt = async (pls: HistoryPayload[]) =>
+    client.from('session_history').upsert(pls, { onConflict: 'id', ignoreDuplicates: true })
+  let usedPayloads = payloads
+  let resp = await attempt(usedPayloads)
+  if (resp.error && isColumnMissingError(resp.error)) {
+    const missingRoutineColumns =
+      errorMentionsColumn(resp.error, 'routine_id') || errorMentionsColumn(resp.error, 'occurrence_date')
+    const missingRepeatColumns =
+      errorMentionsColumn(resp.error, 'repeating_session_id') || errorMentionsColumn(resp.error, 'original_time')
+    const missingNotesColumn = errorMentionsColumn(resp.error, 'notes')
+    const missingSubtasksColumn = errorMentionsColumn(resp.error, 'subtasks')
+    const removalNeeded =
+      missingRoutineColumns || missingRepeatColumns || missingNotesColumn || missingSubtasksColumn
+    if (removalNeeded) {
+      if (missingRepeatColumns && isRepeatOriginalEnabled()) {
+        disableRepeatOriginal()
+      }
+      if (missingNotesColumn && isHistoryNotesEnabled()) {
+        disableHistoryNotes()
+      }
+      if (missingSubtasksColumn && isHistorySubtasksEnabled()) {
+        disableHistorySubtasks()
+      }
+      if (missingRoutineColumns && isHistoryRoutineTagsEnabled()) {
+        disableHistoryRoutineTags()
+      }
+      usedPayloads = usedPayloads.map((payload) =>
+        stripHistoryPayloadColumns(payload, {
+          routine: missingRoutineColumns,
+          repeat: missingRepeatColumns,
+          notes: missingNotesColumn,
+          subtasks: missingSubtasksColumn,
+        }),
+      )
+      resp = await attempt(usedPayloads)
+    }
+  }
+  return { resp, usedPayloads }
 }
 const isConflictError = (err: any): boolean => {
   if (!err) return false
@@ -992,6 +1125,9 @@ const payloadFromRecord = (
         : Date.now()
   const ENABLE_ROUTINE_TAGS = Boolean((import.meta as any)?.env?.VITE_ENABLE_ROUTINE_TAGS)
   const ENABLE_REPEAT_ORIGINAL = isRepeatOriginalEnabled()
+  const INCLUDE_NOTES = isHistoryNotesEnabled()
+  const INCLUDE_SUBTASKS = isHistorySubtasksEnabled()
+  const INCLUDE_ROUTINE_TAGS = ENABLE_ROUTINE_TAGS && isHistoryRoutineTagsEnabled()
   const includeRepeat = ENABLE_REPEAT_ORIGINAL && !!record.repeatingSessionId
   const includeOriginal = ENABLE_REPEAT_ORIGINAL && Number.isFinite(record.originalTime as number)
   return {
@@ -1003,8 +1139,8 @@ const payloadFromRecord = (
     ended_at: new Date(record.endedAt).toISOString(),
     goal_name: record.goalName,
     bucket_name: record.bucketName,
-    notes: record.notes,
-    subtasks: Array.isArray(record.subtasks) ? record.subtasks : [],
+    ...(INCLUDE_NOTES ? { notes: record.notes } : {}),
+    ...(INCLUDE_SUBTASKS ? { subtasks: Array.isArray(record.subtasks) ? record.subtasks : [] } : {}),
     goal_id: isUuid(record.goalId) ? record.goalId : null,
     bucket_id: isUuid(record.bucketId) ? record.bucketId : null,
     task_id: isUuid(record.taskId) ? record.taskId : null,
@@ -1015,8 +1151,8 @@ const payloadFromRecord = (
     updated_at: new Date(updatedAt).toISOString(),
     ...(typeof record.futureSession === 'boolean' ? { future_session: record.futureSession } : {}),
     // Only include routine tags if the DB has these columns; gate with env flag to avoid PostgREST errors
-    ...(ENABLE_ROUTINE_TAGS && record.routineId ? { routine_id: record.routineId } : {}),
-    ...(ENABLE_ROUTINE_TAGS && record.occurrenceDate ? { occurrence_date: record.occurrenceDate } : {}),
+    ...(INCLUDE_ROUTINE_TAGS && record.routineId ? { routine_id: record.routineId } : {}),
+    ...(INCLUDE_ROUTINE_TAGS && record.occurrenceDate ? { occurrence_date: record.occurrenceDate } : {}),
     // Include server-side resolution metadata if enabled
     ...(includeRepeat ? { repeating_session_id: record.repeatingSessionId } : {}),
     ...(includeOriginal ? { original_time: new Date(record.originalTime as number).toISOString() } : {}),
@@ -1127,13 +1263,7 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       })
     }
 
-    const ENABLE_REPEAT_ORIGINAL = isRepeatOriginalEnabled()
-    let selectColumns =
-      'id, task_name, elapsed_ms, started_at, ended_at, goal_name, bucket_name, goal_id, bucket_id, task_id, goal_surface, bucket_surface, created_at, updated_at, future_session'
-    // If server has repeat-orig columns, request them to avoid losing local metadata on merge
-    if (ENABLE_REPEAT_ORIGINAL) {
-      selectColumns += ', repeating_session_id, original_time'
-    }
+    let selectColumns = buildHistorySelectColumns()
 
     // Limit remote fetch to a recent window to reduce egress
     const sinceIso = new Date(now - HISTORY_REMOTE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
@@ -1143,14 +1273,28 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       .eq('user_id', userId)
       .gte('updated_at', sinceIso)
       .order('updated_at', { ascending: false })
-    if (fetchError) {
-      if (ENABLE_REPEAT_ORIGINAL && isColumnMissingError(fetchError)) {
-        // Server likely doesn't have the optional columns; disable dynamically and retry once
+    if (fetchError && isColumnMissingError(fetchError)) {
+      const missingRepeat =
+        errorMentionsColumn(fetchError, 'repeating_session_id') || errorMentionsColumn(fetchError, 'original_time')
+      const missingNotes = errorMentionsColumn(fetchError, 'notes')
+      const missingSubtasks = errorMentionsColumn(fetchError, 'subtasks')
+      let retried = false
+      if (missingRepeat && isRepeatOriginalEnabled()) {
         disableRepeatOriginal()
-        const baseColumns = 'id, task_name, elapsed_ms, started_at, ended_at, goal_name, bucket_name, goal_id, bucket_id, task_id, goal_surface, bucket_surface, created_at, updated_at, future_session'
+        retried = true
+      }
+      if (missingNotes && isHistoryNotesEnabled()) {
+        disableHistoryNotes()
+        retried = true
+      }
+      if (missingSubtasks && isHistorySubtasksEnabled()) {
+        disableHistorySubtasks()
+        retried = true
+      }
+      if (retried) {
         const retry = await supabase
           .from('session_history')
-          .select((baseColumns as unknown) as any)
+          .select((buildHistorySelectColumns() as unknown) as any)
           .eq('user_id', userId)
           .gte('updated_at', sinceIso)
           .order('updated_at', { ascending: false })
@@ -1214,55 +1358,23 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
 
     if (pendingUpserts.length > 0) {
       const client = supabase!
-      const doUpsertWithFallback = async (pls: any[]) => {
-        // First attempt
-        let resp = await client
-          .from('session_history')
-          .upsert(pls, { onConflict: 'id', ignoreDuplicates: true })
-        // Column missing for ANY optional column (routine_id, occurrence_date, repeating_session_id, original_time)
-        // Retry once stripping all optional linkage/tag columns.
-        if (resp.error && isColumnMissingError(resp.error)) {
-          if (isRepeatOriginalEnabled()) {
-            // Disable repeat-original feature dynamically so future payloads omit linkage columns
-            disableRepeatOriginal()
-          }
-          const strippedOptional = pls.map((p) => {
-            const c: any = { ...p }
-            delete c.routine_id
-            delete c.occurrence_date
-            delete c.repeating_session_id
-            delete c.original_time
-            return c
-          })
-          resp = await client
+      const timestamp = Date.now()
+      let payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, timestamp))
+      let { resp: upsertResp, usedPayloads } = await upsertHistoryPayloads(client, payloads)
+      if (upsertResp.error) {
+        const code = String((upsertResp.error as any)?.code || '')
+        const details =
+          String((upsertResp.error as any)?.details || '') + ' ' + String((upsertResp.error as any)?.message || '')
+        if (code === '23503' && details.toLowerCase().includes('repeating_sessions')) {
+          const stripped = usedPayloads.map((payload) => stripHistoryPayloadColumns(payload, { repeat: true }))
+          upsertResp = await client
             .from('session_history')
-            .upsert(strippedOptional, { onConflict: 'id', ignoreDuplicates: true })
-          return { resp, usedPayloads: strippedOptional }
+            .upsert(stripped, { onConflict: 'id', ignoreDuplicates: true })
+          usedPayloads = stripped
+        } else if (isConflictError(upsertResp.error)) {
+          upsertResp = { ...upsertResp, error: null as any }
         }
-        // Foreign key violation for repeating_session_id → retry stripping linkage only (keep routine tags if present)
-        const code = String((resp.error as any)?.code || '')
-        const details = String((resp.error as any)?.details || '') + ' ' + String((resp.error as any)?.message || '')
-        if (resp.error && code === '23503' && details.toLowerCase().includes('repeating_sessions')) {
-          const stripped = pls.map((p) => {
-            const copy: any = { ...p }
-            delete copy.repeating_session_id
-            delete copy.original_time
-            return copy
-          })
-        resp = await client
-          .from('session_history')
-          .upsert(stripped, { onConflict: 'id', ignoreDuplicates: true })
-          return { resp, usedPayloads: stripped }
-        }
-        if (resp.error && isConflictError(resp.error)) {
-          const cleanResp: typeof resp = { ...resp, error: null as any }
-          return { resp: cleanResp, usedPayloads: pls }
-        }
-        return { resp, usedPayloads: pls }
       }
-
-      let payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
-      const { resp: upsertResp, usedPayloads } = await doUpsertWithFallback(payloads)
       if (!upsertResp.error) {
         pendingUpserts.forEach((record, index) => {
           const payload = usedPayloads[index]
@@ -1326,39 +1438,23 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
   const pendingDeletes = records.filter((record) => record.pendingAction === 'delete')
   if (pendingUpserts.length > 0) {
     const client = supabase!
-    const doUpsertWithFallback = async (pls: any[]) => {
-      let resp = await client
-        .from('session_history')
-        .upsert(pls, { onConflict: 'id', ignoreDuplicates: true })
-      // Handle missing columns for any optional set (routine tags or repeat-original linkage)
-      if (resp.error && isColumnMissingError(resp.error)) {
-        if (isRepeatOriginalEnabled()) {
-          disableRepeatOriginal()
-        }
-        const strippedOptional = pls.map((p) => { const c: any = { ...p }; delete c.routine_id; delete c.occurrence_date; delete c.repeating_session_id; delete c.original_time; return c })
-        resp = await client
-          .from('session_history')
-          .upsert(strippedOptional, { onConflict: 'id', ignoreDuplicates: true })
-        return { resp, usedPayloads: strippedOptional }
-      }
-      const code = String((resp.error as any)?.code || '')
-      const details = String((resp.error as any)?.details || '') + ' ' + String((resp.error as any)?.message || '')
-      if (resp.error && code === '23503' && details.toLowerCase().includes('repeating_sessions')) {
-        const stripped = pls.map((p) => { const c: any = { ...p }; delete c.repeating_session_id; delete c.original_time; return c })
-        resp = await client
+    const timestamp = Date.now()
+    let payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, timestamp))
+    let { resp: upsertResp, usedPayloads } = await upsertHistoryPayloads(client, payloads)
+    if (upsertResp.error) {
+      const code = String((upsertResp.error as any)?.code || '')
+      const details =
+        String((upsertResp.error as any)?.details || '') + ' ' + String((upsertResp.error as any)?.message || '')
+      if (code === '23503' && details.toLowerCase().includes('repeating_sessions')) {
+        const stripped = usedPayloads.map((payload) => stripHistoryPayloadColumns(payload, { repeat: true }))
+        upsertResp = await client
           .from('session_history')
           .upsert(stripped, { onConflict: 'id', ignoreDuplicates: true })
-        return { resp, usedPayloads: stripped }
+        usedPayloads = stripped
+      } else if (isConflictError(upsertResp.error)) {
+        upsertResp = { ...upsertResp, error: null as any }
       }
-      if (resp.error && isConflictError(resp.error)) {
-        const cleanResp: typeof resp = { ...resp, error: null as any }
-        return { resp: cleanResp, usedPayloads: pls }
-      }
-      return { resp, usedPayloads: pls }
     }
-
-    let payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
-    const { resp: upsertResp, usedPayloads } = await doUpsertWithFallback(payloads)
     if (!upsertResp.error) {
       pendingUpserts.forEach((record, index) => {
         const payload = usedPayloads[index]
@@ -1549,7 +1645,8 @@ export const pushAllHistoryToSupabase = async (
   const payloads = normalizedRecords.map((record, index) =>
     payloadFromRecord(record, userId, seedTimestamp ? seedTimestamp + index : Date.now() + index),
   )
-  await supabase.from('session_history').upsert(payloads, { onConflict: 'id', ignoreDuplicates: true })
+  const client = supabase!
+  await upsertHistoryPayloads(client, payloads)
   persistRecords(normalizedRecords)
   setStoredHistoryUserId(session.user.id)
 }
