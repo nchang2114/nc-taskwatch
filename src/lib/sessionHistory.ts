@@ -54,12 +54,15 @@ const writeFeatureFlags = (flags: FeatureFlags) => {
   if (typeof window === 'undefined') return
   try { window.localStorage.setItem(FEATURE_FLAGS_STORAGE_KEY, JSON.stringify(flags)) } catch {}
 }
+const envOverride = (flag: boolean | null): boolean | null => flag
+
 const isRepeatOriginalEnabled = (): boolean => {
-  if (ENV_ENABLE_REPEAT_ORIGINAL !== null) {
-    return ENV_ENABLE_REPEAT_ORIGINAL
+  const override = envOverride(ENV_ENABLE_REPEAT_ORIGINAL)
+  if (override !== null) {
+    return override
   }
   const flags = readFeatureFlags()
-  return flags.repeatOriginal === true
+  return flags.repeatOriginal !== false
 }
 const disableRepeatOriginal = () => {
   const flags = readFeatureFlags()
@@ -68,11 +71,12 @@ const disableRepeatOriginal = () => {
   writeFeatureFlags(flags)
 }
 const isHistoryNotesEnabled = (): boolean => {
-  if (ENV_ENABLE_HISTORY_NOTES !== null) {
-    return ENV_ENABLE_HISTORY_NOTES
+  const override = envOverride(ENV_ENABLE_HISTORY_NOTES)
+  if (override !== null) {
+    return override
   }
   const flags = readFeatureFlags()
-  return flags.historyNotes === true
+  return flags.historyNotes !== false
 }
 const disableHistoryNotes = () => {
   const flags = readFeatureFlags()
@@ -81,11 +85,12 @@ const disableHistoryNotes = () => {
   writeFeatureFlags(flags)
 }
 const isHistorySubtasksEnabled = (): boolean => {
-  if (ENV_ENABLE_HISTORY_SUBTASKS !== null) {
-    return ENV_ENABLE_HISTORY_SUBTASKS
+  const override = envOverride(ENV_ENABLE_HISTORY_SUBTASKS)
+  if (override !== null) {
+    return override
   }
   const flags = readFeatureFlags()
-  return flags.historySubtasks === true
+  return flags.historySubtasks !== false
 }
 const disableHistorySubtasks = () => {
   const flags = readFeatureFlags()
