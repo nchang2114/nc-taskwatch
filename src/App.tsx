@@ -12,7 +12,7 @@ import { supabase } from './lib/supabaseClient'
 import { clearCachedSupabaseSession, readCachedSessionTokens } from './lib/authStorage'
 import { ensureQuickListUser } from './lib/quickList'
 import { ensureLifeRoutineUser } from './lib/lifeRoutines'
-import { ensureHistoryUser } from './lib/sessionHistory'
+import { ensureHistoryUser, pushPendingHistoryToSupabase } from './lib/sessionHistory'
 
 type Theme = 'light' | 'dark'
 type TabKey = 'goals' | 'focus' | 'reflection'
@@ -779,6 +779,9 @@ function MainApp() {
 
   const handleLogOut = useCallback(async () => {
     if (supabase) {
+      try {
+        await pushPendingHistoryToSupabase()
+      } catch {}
       try {
         await supabase.auth.signOut()
       } catch {}

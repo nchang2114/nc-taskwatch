@@ -185,8 +185,7 @@ const upsertHistoryPayloads = async (
   client: NonNullable<typeof supabase>,
   payloads: HistoryPayload[],
 ): Promise<{ resp: any; usedPayloads: HistoryPayload[] }> => {
-  const attempt = async (pls: HistoryPayload[]) =>
-    client.from('session_history').upsert(pls, { onConflict: 'id', ignoreDuplicates: true })
+  const attempt = async (pls: HistoryPayload[]) => client.from('session_history').upsert(pls, { onConflict: 'id' })
   let usedPayloads = payloads
   let resp = await attempt(usedPayloads)
   let attempts = 0
@@ -1429,9 +1428,7 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
           String((upsertResp.error as any)?.details || '') + ' ' + String((upsertResp.error as any)?.message || '')
         if (code === '23503' && details.toLowerCase().includes('repeating_sessions')) {
           const stripped = usedPayloads.map((payload) => stripHistoryPayloadColumns(payload, { repeat: true }))
-          upsertResp = await client
-            .from('session_history')
-            .upsert(stripped, { onConflict: 'id', ignoreDuplicates: true })
+          upsertResp = await client.from('session_history').upsert(stripped, { onConflict: 'id' })
           usedPayloads = stripped
         } else if (isConflictError(upsertResp.error)) {
           upsertResp = { ...upsertResp, error: null as any }
@@ -1509,9 +1506,7 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
         String((upsertResp.error as any)?.details || '') + ' ' + String((upsertResp.error as any)?.message || '')
       if (code === '23503' && details.toLowerCase().includes('repeating_sessions')) {
         const stripped = usedPayloads.map((payload) => stripHistoryPayloadColumns(payload, { repeat: true }))
-        upsertResp = await client
-          .from('session_history')
-          .upsert(stripped, { onConflict: 'id', ignoreDuplicates: true })
+        upsertResp = await client.from('session_history').upsert(stripped, { onConflict: 'id' })
         usedPayloads = stripped
       } else if (isConflictError(upsertResp.error)) {
         upsertResp = { ...upsertResp, error: null as any }
