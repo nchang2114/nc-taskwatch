@@ -5068,12 +5068,15 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                             isLifePriority && task.bucketSurface
                               ? ['surface-life-routine', `surface-life-routine--${task.bucketSurface}`]
                               : []
+                          const isQuickListTask = isQuickListGoal(task.goalId)
+                          const quickRowClasses = isQuickListTask ? ['surface-quick-list', 'task-selector__task--quick-list'] : []
                           const rowClassName = [
                             'task-selector__task',
                             'goal-task-row',
                             diffClass,
                             task.priority ? 'goal-task-row--priority' : '',
                             ...lifeRowClasses,
+                            ...quickRowClasses,
                             matches ? 'task-selector__task--active' : '',
                           ]
                             .filter(Boolean)
@@ -5114,9 +5117,11 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                     <span className="goal-task-text">
                                       <span className="goal-task-text__inner">{task.taskName}</span>
                                     </span>
-                                    <span className="task-selector__origin task-selector__origin--dropdown">
-                                      {`${task.goalName} → ${task.bucketName}`}
-                                    </span>
+                                    {!isQuickListTask && (
+                                      <span className="task-selector__origin task-selector__origin--dropdown">
+                                        {`${task.goalName} → ${task.bucketName}`}
+                                      </span>
+                                    )}
                                   </div>
                                   <span className={diffBadgeClass} aria-hidden="true" />
                                 </div>
@@ -5235,22 +5240,21 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                 focusSource.bucketId === task.bucketId &&
                                 candidateLower === currentTaskLower
                               : !isDefaultTask && candidateLower === currentTaskLower
+                            const diffClass =
+                              task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : ''
                             const rowClassName = [
                               'task-selector__task',
                               'goal-task-row',
+                              diffClass,
                               'task-selector__task--quick-list',
                               'surface-quick-list',
                               matches ? 'task-selector__task--active' : '',
                             ]
                               .filter(Boolean)
                               .join(' ')
-                            const subtitle =
-                              task.notes && task.notes.trim().length > 0
-                                ? task.notes
-                                : 'Lightweight tasks to keep momentum'
                             return (
-                              <li key={`quick-${task.taskId || task.taskName}`} className="task-selector__item">
-                                <button
+                            <li key={`quick-${task.taskId || task.taskName}`} className="task-selector__item">
+                              <button
                                   type="button"
                                   className={rowClassName}
                                   onClick={() =>
@@ -5276,9 +5280,6 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                     <div className="task-selector__task-content">
                                       <span className="goal-task-text">
                                         <span className="goal-task-text__inner">{task.taskName}</span>
-                                      </span>
-                                      <span className="task-selector__origin task-selector__origin--dropdown">
-                                        {subtitle}
                                       </span>
                                     </div>
                                   </div>
@@ -5732,12 +5733,15 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                       isLifePriority && task.bucketSurface
                         ? ['surface-life-routine', `surface-life-routine--${task.bucketSurface}`]
                         : []
+                    const isQuickListTask = isQuickListGoal(task.goalId)
+                    const quickRowClasses = isQuickListTask ? ['surface-quick-list', 'task-selector__task--quick-list'] : []
                     const rowClassName = [
                       'task-selector__task',
                       'goal-task-row',
                       diffClass,
                       task.priority ? 'goal-task-row--priority' : '',
                       ...lifeRowClasses,
+                      ...quickRowClasses,
                       matches ? 'task-selector__task--active' : '',
                     ]
                       .filter(Boolean)
@@ -5773,15 +5777,17 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                           })
                         }
                         >
-                          <div className="task-selector__task-main">
-                            <div className="task-selector__task-content">
-                              <span className="goal-task-text">
-                                <span className="goal-task-text__inner">{task.taskName}</span>
-                              </span>
-                              <span className="task-selector__origin task-selector__origin--dropdown">
-                                {`${task.goalName} → ${task.bucketName}`}
-                              </span>
-                            </div>
+                                <div className="task-selector__task-main">
+                                  <div className="task-selector__task-content">
+                                    <span className="goal-task-text">
+                                      <span className="goal-task-text__inner">{task.taskName}</span>
+                                    </span>
+                                    {!isQuickListTask && (
+                                      <span className="task-selector__origin task-selector__origin--dropdown">
+                                        {`${task.goalName} → ${task.bucketName}`}
+                                      </span>
+                                    )}
+                                  </div>
                             <span className={diffBadgeClass} aria-hidden="true" />
                           </div>
                         </button>
@@ -5902,19 +5908,16 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                             const rowClassName = [
                               'task-selector__task',
                               'goal-task-row',
+                              task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : '',
                               'task-selector__task--quick-list',
                               'surface-quick-list',
                               matches ? 'task-selector__task--active' : '',
                             ]
                               .filter(Boolean)
                               .join(' ')
-                            const subtitle =
-                              task.notes && task.notes.trim().length > 0
-                                ? task.notes
-                                : 'Lightweight tasks to keep momentum'
                             return (
-                              <li key={`quick-${task.taskId || task.taskName}`} className="task-selector__item">
-                                <button
+                            <li key={`quick-${task.taskId || task.taskName}`} className="task-selector__item">
+                              <button
                                   type="button"
                                   className={rowClassName}
                                   onClick={() =>
@@ -5940,9 +5943,6 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                     <div className="task-selector__task-content">
                                       <span className="goal-task-text">
                                         <span className="goal-task-text__inner">{task.taskName}</span>
-                                      </span>
-                                      <span className="task-selector__origin task-selector__origin--dropdown">
-                                        {subtitle}
                                       </span>
                                     </div>
                                   </div>
