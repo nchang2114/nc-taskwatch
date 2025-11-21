@@ -113,11 +113,13 @@ export const bootstrapGuestDataIfNeeded = async (userId: string | null | undefin
   if (!userId || !supabase) {
     return
   }
+  console.log('[bootstrap] invoked for', userId)
   if (bootstrapPromises.has(userId)) {
     await bootstrapPromises.get(userId)
     return
   }
   const task = (async () => {
+    console.log('[bootstrap] profile lookup', userId)
     const { data, error } = await supabase
       .from('profiles')
       .select('bootstrap_completed')
@@ -127,9 +129,12 @@ export const bootstrapGuestDataIfNeeded = async (userId: string | null | undefin
       throw error
     }
     if (data?.bootstrap_completed) {
+      console.log('[bootstrap] skipped, already completed', userId)
       return
     }
+    console.log('[bootstrap] migrating now', userId)
     await migrateGuestData()
+    console.log('[bootstrap] updating profile flag', userId)
     const { error: updateError } = await supabase
       .from('profiles')
       .update({ bootstrap_completed: true })
@@ -137,6 +142,7 @@ export const bootstrapGuestDataIfNeeded = async (userId: string | null | undefin
     if (updateError) {
       throw updateError
     }
+    console.log('[bootstrap] completed successfully', userId)
   })()
   bootstrapPromises.set(userId, task)
   try {
