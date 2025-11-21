@@ -26,6 +26,71 @@ export type QuickItem = {
 export const QUICK_LIST_STORAGE_KEY = 'nc-taskwatch-quick-list-v1'
 export const QUICK_LIST_UPDATE_EVENT = 'nc-quick-list:updated'
 const QUICK_LIST_USER_STORAGE_KEY = 'nc-taskwatch-quick-list-user'
+const QUICK_LIST_GUEST_USER_ID = '__guest__'
+
+const QUICK_LIST_DEFAULT_ITEMS: QuickItem[] = [
+  {
+    id: 'quick-groceries',
+    text: 'Groceries – restock basics',
+    completed: false,
+    sortIndex: 0,
+    notes: 'Think breakfast, greens, grab-and-go snacks.',
+    difficulty: 'green',
+    priority: true,
+    subtasks: [
+      { id: 'quick-groceries-1', text: 'Fruit + greens', completed: false, sortIndex: 0 },
+      { id: 'quick-groceries-2', text: 'Breakfast staples', completed: false, sortIndex: 1 },
+      { id: 'quick-groceries-3', text: 'Snacks / treats', completed: false, sortIndex: 2 },
+    ],
+  },
+  {
+    id: 'quick-laundry',
+    text: 'Laundry + fold',
+    completed: false,
+    sortIndex: 1,
+    notes: 'Start a load before work, fold during a show.',
+    difficulty: 'green',
+    priority: false,
+  },
+  {
+    id: 'quick-clean',
+    text: '10-min reset: tidy desk & surfaces',
+    completed: false,
+    sortIndex: 2,
+    notes: 'Clear cups, wipe surfaces, light candle or diffuser.',
+    difficulty: 'yellow',
+    priority: false,
+  },
+  {
+    id: 'quick-bills',
+    text: 'Pay bills & snapshot budget',
+    completed: false,
+    sortIndex: 3,
+    notes: 'Autopay check + log any big expenses.',
+    difficulty: 'yellow',
+    priority: false,
+  },
+  {
+    id: 'quick-social',
+    text: 'Send a check-in text',
+    completed: false,
+    sortIndex: 4,
+    notes: 'Ping a friend/family member you’ve been thinking about.',
+    difficulty: 'green',
+    priority: false,
+  },
+]
+
+const getDefaultQuickList = (): QuickItem[] =>
+  QUICK_LIST_DEFAULT_ITEMS.map((item, index) => ({
+    ...item,
+    sortIndex: index,
+    subtasks:
+      item.subtasks?.map((subtask, subIndex) => ({
+        ...subtask,
+        sortIndex: subIndex,
+      })) ?? [],
+  }))
 
 const readStoredQuickListUserId = (): string | null => {
   if (typeof window === 'undefined') return null
@@ -47,6 +112,20 @@ const setStoredQuickListUserId = (userId: string | null): void => {
     } else {
       window.localStorage.setItem(QUICK_LIST_USER_STORAGE_KEY, userId)
     }
+  } catch {}
+}
+
+const normalizeQuickListUserId = (userId: string | null | undefined): string =>
+  typeof userId === 'string' && userId.trim().length > 0 ? userId.trim() : QUICK_LIST_GUEST_USER_ID
+
+const isGuestQuickListUser = (userId: string | null): boolean =>
+  !userId || userId === QUICK_LIST_GUEST_USER_ID
+
+const clearQuickListStorage = (): void => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(QUICK_LIST_STORAGE_KEY)
+    window.dispatchEvent(new CustomEvent<QuickItem[]>(QUICK_LIST_UPDATE_EVENT, { detail: [] }))
   } catch {}
 }
 
@@ -133,7 +212,18 @@ export const readStoredQuickList = (): QuickItem[] => {
   if (typeof window === 'undefined') return []
   try {
     const raw = window.localStorage.getItem(QUICK_LIST_STORAGE_KEY)
-    if (!raw) return []
+    const currentUser = readStoredQuickListUserId()
+    const guestContext = isGuestQuickListUser(currentUser)
+    if (!raw) {
+      if (guestContext) {
+        const seeded = writeStoredQuickList(getDefaultQuickList())
+        if (!currentUser) {
+          setStoredQuickListUserId(QUICK_LIST_GUEST_USER_ID)
+        }
+        return seeded
+      }
+      return []
+    }
     const parsed = JSON.parse(raw)
     const sanitized = sanitizeQuickList(parsed)
     if (sanitized.length > 0) {
@@ -141,6 +231,9 @@ export const readStoredQuickList = (): QuickItem[] => {
     }
     if (Array.isArray(parsed) && parsed.length === 0) {
       return []
+    }
+    if (guestContext) {
+      return writeStoredQuickList(getDefaultQuickList())
     }
     return sanitized
   } catch {
@@ -161,13 +254,15 @@ export const writeStoredQuickList = (items: QuickItem[]): QuickItem[] => {
 
 export const ensureQuickListUser = (userId: string | null): void => {
   if (typeof window === 'undefined') return
-  const normalized = typeof userId === 'string' && userId.trim().length > 0 ? userId : null
+  const normalized = normalizeQuickListUserId(userId)
   const current = readStoredQuickListUserId()
-  if (current === normalized) {
-    return
-  }
+  if (current === normalized) return
   setStoredQuickListUserId(normalized)
-  writeStoredQuickList([])
+  if (normalized === QUICK_LIST_GUEST_USER_ID) {
+    clearQuickListStorage()
+  } else {
+    writeStoredQuickList([])
+  }
 }
 
 export const subscribeQuickList = (cb: (items: QuickItem[]) => void): (() => void) => {

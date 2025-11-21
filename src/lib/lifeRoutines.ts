@@ -12,6 +12,8 @@ export type LifeRoutineConfig = {
 
 export const LIFE_ROUTINE_STORAGE_KEY = 'nc-taskwatch-life-routines-v1'
 export const LIFE_ROUTINE_UPDATE_EVENT = 'nc-life-routines:updated'
+const LIFE_ROUTINE_USER_STORAGE_KEY = 'nc-taskwatch-life-routines-user'
+const LIFE_ROUTINE_GUEST_USER_ID = '__guest__'
 
 const cloneRoutine = (routine: LifeRoutineConfig): LifeRoutineConfig => ({ ...routine })
 
@@ -187,6 +189,43 @@ const storeLifeRoutinesLocal = (routines: LifeRoutineConfig[]): LifeRoutineConfi
   return clones
 }
 
+const clearLifeRoutineStorage = (): void => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(LIFE_ROUTINE_STORAGE_KEY)
+    window.dispatchEvent(new CustomEvent(LIFE_ROUTINE_UPDATE_EVENT, { detail: [] }))
+  } catch {}
+}
+
+const readStoredLifeRoutineUserId = (): string | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(LIFE_ROUTINE_USER_STORAGE_KEY)
+    if (!raw) return null
+    const trimmed = raw.trim()
+    return trimmed.length > 0 ? trimmed : null
+  } catch {
+    return null
+  }
+}
+
+const setStoredLifeRoutineUserId = (userId: string | null): void => {
+  if (typeof window === 'undefined') return
+  try {
+    if (!userId) {
+      window.localStorage.removeItem(LIFE_ROUTINE_USER_STORAGE_KEY)
+    } else {
+      window.localStorage.setItem(LIFE_ROUTINE_USER_STORAGE_KEY, userId)
+    }
+  } catch {}
+}
+
+const normalizeLifeRoutineUserId = (userId: string | null | undefined): string =>
+  typeof userId === 'string' && userId.trim().length > 0 ? userId.trim() : LIFE_ROUTINE_GUEST_USER_ID
+
+const isGuestLifeRoutineUser = (userId: string | null): boolean =>
+  !userId || userId === LIFE_ROUTINE_GUEST_USER_ID
+
 // Read raw local value without default seeding; returns null when key is absent
 const readRawLifeRoutinesLocal = (): unknown | null => {
   if (typeof window === 'undefined') return null
@@ -295,7 +334,17 @@ export const readStoredLifeRoutines = (): LifeRoutineConfig[] => {
   }
   try {
     const raw = window.localStorage.getItem(LIFE_ROUTINE_STORAGE_KEY)
+    const currentUser = readStoredLifeRoutineUserId()
+    const guestContext = isGuestLifeRoutineUser(currentUser)
     if (!raw) {
+      if (guestContext) {
+        const defaults = getDefaultLifeRoutines()
+        storeLifeRoutinesLocal(defaults)
+        if (!currentUser) {
+          setStoredLifeRoutineUserId(LIFE_ROUTINE_GUEST_USER_ID)
+        }
+        return defaults
+      }
       return []
     }
     const parsed = JSON.parse(raw)
@@ -305,6 +354,11 @@ export const readStoredLifeRoutines = (): LifeRoutineConfig[] => {
     }
     if (Array.isArray(parsed) && parsed.length === 0) {
       return []
+    }
+    if (guestContext) {
+      const defaults = getDefaultLifeRoutines()
+      storeLifeRoutinesLocal(defaults)
+      return defaults
     }
     return []
   } catch {
@@ -323,6 +377,21 @@ export const writeStoredLifeRoutines = (
     void pushLifeRoutinesToSupabase(stored)
   }
   return stored
+}
+
+export const ensureLifeRoutineUser = (userId: string | null): void => {
+  if (typeof window === 'undefined') return
+  const normalized = normalizeLifeRoutineUserId(userId)
+  const current = readStoredLifeRoutineUserId()
+  if (current === normalized) {
+    return
+  }
+  setStoredLifeRoutineUserId(normalized)
+  if (normalized === LIFE_ROUTINE_GUEST_USER_ID) {
+    clearLifeRoutineStorage()
+  } else {
+    storeLifeRoutinesLocal([])
+  }
 }
 
 export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[] | null> => {

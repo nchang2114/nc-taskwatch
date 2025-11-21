@@ -10,6 +10,7 @@ import {
 export const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
 export const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
 const HISTORY_USER_KEY = 'nc-taskwatch-history-user'
+const HISTORY_GUEST_USER_ID = '__guest__'
 export const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 export const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 export const HISTORY_LIMIT = 250
@@ -915,7 +916,17 @@ const readHistoryRecords = (): HistoryRecord[] => {
   }
   try {
     const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY)
+    const currentUserId = getStoredHistoryUserId()
+    const guestContext = !currentUserId || currentUserId === HISTORY_GUEST_USER_ID
     if (!raw) {
+      if (guestContext) {
+        const sampleRecords = createSampleHistoryRecords()
+        writeHistoryRecords(sampleRecords)
+        if (!currentUserId) {
+          setStoredHistoryUserId(HISTORY_GUEST_USER_ID)
+        }
+        return sampleRecords
+      }
       return []
     }
     const records = sanitizeHistoryRecords(JSON.parse(raw))
@@ -982,6 +993,14 @@ const broadcastHistoryRecords = (records: HistoryRecord[]): void => {
   } else {
     setTimeout(dispatch, 0)
   }
+}
+
+const clearHistoryStorage = (): void => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(HISTORY_STORAGE_KEY)
+  } catch {}
+  broadcastHistoryRecords([])
 }
 
 const sortRecordsForStorage = (records: HistoryRecord[]): HistoryRecord[] =>
@@ -1052,6 +1071,23 @@ const persistRecords = (records: HistoryRecord[]): HistoryEntry[] => {
   const activeEntries = recordsToActiveEntries(sorted)
   broadcastHistoryRecords(sorted)
   return activeEntries
+}
+
+export const ensureHistoryUser = (userId: string | null): void => {
+  if (typeof window === 'undefined') return
+  const normalized =
+    typeof userId === 'string' && userId.trim().length > 0 ? userId.trim() : HISTORY_GUEST_USER_ID
+  const current = getStoredHistoryUserId()
+  if (current === normalized) {
+    return
+  }
+  setStoredHistoryUserId(normalized)
+  if (normalized === HISTORY_GUEST_USER_ID) {
+    clearHistoryStorage()
+  } else {
+    writeHistoryRecords([])
+    broadcastHistoryRecords([])
+  }
 }
 
 const realignHistoryWithLifeRoutineSurfaces = (): void => {
