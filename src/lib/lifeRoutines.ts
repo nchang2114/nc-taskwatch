@@ -396,12 +396,13 @@ export const ensureLifeRoutineUser = (userId: string | null): void => {
   if (current === normalized) {
     return
   }
+  const migratingFromGuest = current === LIFE_ROUTINE_GUEST_USER_ID && normalized !== LIFE_ROUTINE_GUEST_USER_ID
   setStoredLifeRoutineUserId(normalized)
   if (normalized === LIFE_ROUTINE_GUEST_USER_ID) {
     if (current !== LIFE_ROUTINE_GUEST_USER_ID) {
       storeLifeRoutinesLocal(getDefaultLifeRoutines())
     }
-  } else {
+  } else if (!migratingFromGuest) {
     storeLifeRoutinesLocal([])
   }
 }

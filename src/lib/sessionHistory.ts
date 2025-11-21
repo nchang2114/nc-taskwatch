@@ -1050,6 +1050,7 @@ export const ensureHistoryUser = (userId: string | null): void => {
   if (current === normalized) {
     return
   }
+  const migratingFromGuest = current === HISTORY_GUEST_USER_ID && normalized !== HISTORY_GUEST_USER_ID
   setStoredHistoryUserId(normalized)
   if (normalized === HISTORY_GUEST_USER_ID) {
     if (current !== HISTORY_GUEST_USER_ID) {
@@ -1057,7 +1058,7 @@ export const ensureHistoryUser = (userId: string | null): void => {
       writeHistoryRecords(samples)
       broadcastHistoryRecords(samples)
     }
-  } else {
+  } else if (!migratingFromGuest) {
     writeHistoryRecords([])
     broadcastHistoryRecords([])
   }
