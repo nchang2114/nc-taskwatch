@@ -24,16 +24,21 @@ type FeatureFlags = {
   historySubtasks?: boolean
   historyRoutineTags?: boolean
 }
-const envFlagEnabled = (value: unknown): boolean => {
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase()
-    return normalized === 'true' || normalized === '1' || normalized === 'yes'
+const parseEnvToggle = (value: unknown): boolean | null => {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return null
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') {
+    return true
   }
-  return false
+  if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') {
+    return false
+  }
+  return null
 }
-const ENV_ENABLE_HISTORY_NOTES = envFlagEnabled((import.meta as any)?.env?.VITE_ENABLE_HISTORY_NOTES)
-const ENV_ENABLE_HISTORY_SUBTASKS = envFlagEnabled((import.meta as any)?.env?.VITE_ENABLE_HISTORY_SUBTASKS)
-const ENV_ENABLE_REPEAT_ORIGINAL = envFlagEnabled((import.meta as any)?.env?.VITE_ENABLE_REPEAT_ORIGINAL)
+const ENV_ENABLE_HISTORY_NOTES = parseEnvToggle((import.meta as any)?.env?.VITE_ENABLE_HISTORY_NOTES)
+const ENV_ENABLE_HISTORY_SUBTASKS = parseEnvToggle((import.meta as any)?.env?.VITE_ENABLE_HISTORY_SUBTASKS)
+const ENV_ENABLE_REPEAT_ORIGINAL = parseEnvToggle((import.meta as any)?.env?.VITE_ENABLE_REPEAT_ORIGINAL)
 const readFeatureFlags = (): FeatureFlags => {
   if (typeof window === 'undefined') return {}
   try {
@@ -50,11 +55,11 @@ const writeFeatureFlags = (flags: FeatureFlags) => {
   try { window.localStorage.setItem(FEATURE_FLAGS_STORAGE_KEY, JSON.stringify(flags)) } catch {}
 }
 const isRepeatOriginalEnabled = (): boolean => {
-  if (ENV_ENABLE_REPEAT_ORIGINAL) {
-    return true
+  if (ENV_ENABLE_REPEAT_ORIGINAL !== null) {
+    return ENV_ENABLE_REPEAT_ORIGINAL
   }
   const flags = readFeatureFlags()
-  return flags.repeatOriginal === true
+  return flags.repeatOriginal !== false
 }
 const disableRepeatOriginal = () => {
   const flags = readFeatureFlags()
@@ -63,11 +68,11 @@ const disableRepeatOriginal = () => {
   writeFeatureFlags(flags)
 }
 const isHistoryNotesEnabled = (): boolean => {
-  if (ENV_ENABLE_HISTORY_NOTES) {
-    return true
+  if (ENV_ENABLE_HISTORY_NOTES !== null) {
+    return ENV_ENABLE_HISTORY_NOTES
   }
   const flags = readFeatureFlags()
-  return flags.historyNotes === true
+  return flags.historyNotes !== false
 }
 const disableHistoryNotes = () => {
   const flags = readFeatureFlags()
@@ -76,11 +81,11 @@ const disableHistoryNotes = () => {
   writeFeatureFlags(flags)
 }
 const isHistorySubtasksEnabled = (): boolean => {
-  if (ENV_ENABLE_HISTORY_SUBTASKS) {
-    return true
+  if (ENV_ENABLE_HISTORY_SUBTASKS !== null) {
+    return ENV_ENABLE_HISTORY_SUBTASKS
   }
   const flags = readFeatureFlags()
-  return flags.historySubtasks === true
+  return flags.historySubtasks !== false
 }
 const disableHistorySubtasks = () => {
   const flags = readFeatureFlags()
