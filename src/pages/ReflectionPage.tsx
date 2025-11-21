@@ -6708,7 +6708,7 @@ useEffect(() => {
             }
             const endAtMs = (rule as any).endAtMs as number | undefined
             if (Number.isFinite(endAtMs as number)) {
-              if (scheduledStart > (endAtMs as number)) return false
+              if (scheduledStart >= (endAtMs as number)) return false
             }
             return true
           }
@@ -6945,7 +6945,7 @@ useEffect(() => {
             // End boundary: inclusive (allow selected occurrence when end_date equals its start time)
             const endAtMs = (rule as any).endAtMs as number | undefined
             if (Number.isFinite(endAtMs as number)) {
-              if (scheduledStart > (endAtMs as number)) return false
+              if (scheduledStart >= (endAtMs as number)) return false
             }
             return true
           }
@@ -9050,16 +9050,21 @@ useEffect(() => {
                       if (isGuide) {
                         // parsedGuide contains ruleId and ymd for this guide
                         if (parsedGuide) {
-                          await setRepeatToNoneAfterTimestamp(parsedGuide.ruleId, entry.startedAt)
+                          const guideMinutes = start.getHours() * 60 + start.getMinutes()
+                          const guideDay = new Date(entry.startedAt)
+                          guideDay.setHours(0, 0, 0, 0)
+                          const scheduledStart = guideDay.getTime() + guideMinutes * 60000
+                          const preciseStart = Math.max(entry.startedAt, scheduledStart)
+                          await setRepeatToNoneAfterTimestamp(parsedGuide.ruleId, preciseStart)
                           // If start and end timestamps have become equal, remove the rule locally; else set end boundary
                           setRepeatingRules((prev) => {
                             const found = prev.find((r) => r.id === parsedGuide.ruleId)
                             if (!found) return prev
                             const startMs = (found as any).startAtMs as number | undefined
-                            if (Number.isFinite(startMs as number) && (startMs as number) === entry.startedAt) {
+                            if (Number.isFinite(startMs as number) && (startMs as number) === preciseStart) {
                               return prev.filter((r) => r.id !== parsedGuide.ruleId)
                             }
-                            return prev.map((r) => (r.id === parsedGuide.ruleId ? { ...r, endAtMs: Math.max(0, entry.startedAt) } : r))
+                            return prev.map((r) => (r.id === parsedGuide.ruleId ? { ...r, endAtMs: Math.max(0, preciseStart) } : r))
                           })
                         }
                       } else {

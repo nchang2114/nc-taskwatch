@@ -1364,14 +1364,6 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       }
     })
 
-    // Normalize: any record that starts in the future must be marked as a future session
-    const normalizeNow = Date.now()
-    recordsById.forEach((record, id) => {
-      if (record.startedAt > normalizeNow && !record.futureSession) {
-        recordsById.set(id, { ...record, futureSession: true, pendingAction: 'upsert', updatedAt: normalizeNow })
-      }
-    })
-
     const pending = Array.from(recordsById.values()).filter((record) => record.pendingAction)
     const pendingUpserts = pending.filter((record) => record.pendingAction === 'upsert')
     const pendingDeletes = pending.filter((record) => record.pendingAction === 'delete')
