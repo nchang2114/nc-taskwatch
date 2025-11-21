@@ -13,6 +13,7 @@ import { clearCachedSupabaseSession, readCachedSessionTokens } from './lib/authS
 import { ensureQuickListUser } from './lib/quickList'
 import { ensureLifeRoutineUser } from './lib/lifeRoutines'
 import { ensureHistoryUser, pushPendingHistoryToSupabase } from './lib/sessionHistory'
+import { bootstrapGuestDataIfNeeded } from './lib/bootstrap'
 
 type Theme = 'light' | 'dark'
 type TabKey = 'goals' | 'focus' | 'reflection'
@@ -688,6 +689,27 @@ function MainApp() {
     }
     const client = supabase
     let mounted = true
+
+    const alignLocalStoresForUser = async (userId: string | null): Promise<void> => {
+      try {
+        await bootstrapGuestDataIfNeeded(userId)
+      } catch {}
+      ensureQuickListUser(userId)
+      ensureLifeRoutineUser(userId)
+      ensureHistoryUser(userId)
+    }
+
+    const applySessionUser = async (user: User | null | undefined): Promise<void> => {
+      if (mounted) {
+        const profile = deriveProfileFromSupabaseUser(user ?? null)
+        setUserProfile(profile)
+        if (profile) {
+          setAuthModalOpen(false)
+        }
+      }
+      await alignLocalStoresForUser(user?.id ?? null)
+    }
+
     const restoreSessionFromCache = async (): Promise<Session | null> => {
       const cachedTokens = readCachedSessionTokens()
       if (!cachedTokens) {
@@ -716,45 +738,17 @@ function MainApp() {
       if (!session) {
         session = await restoreSessionFromCache()
       }
-      if (mounted) {
-        const profile = deriveProfileFromSupabaseUser(session?.user ?? null)
-        setUserProfile(profile)
-        ensureQuickListUser(session?.user?.id ?? null)
-        ensureLifeRoutineUser(session?.user?.id ?? null)
-        ensureHistoryUser(session?.user?.id ?? null)
-        if (profile) {
-          setAuthModalOpen(false)
-        }
-      }
+      await applySessionUser(session?.user ?? null)
       try {
         const { data } = await client.auth.getUser()
-        if (!mounted) {
-          return
-        }
-        const profile = deriveProfileFromSupabaseUser(data?.user ?? session?.user ?? null)
-        setUserProfile(profile)
-        ensureQuickListUser(data?.user?.id ?? session?.user?.id ?? null)
-        ensureLifeRoutineUser(data?.user?.id ?? session?.user?.id ?? null)
-        ensureHistoryUser(data?.user?.id ?? session?.user?.id ?? null)
-        if (profile) {
-          setAuthModalOpen(false)
-        }
+        const resolvedUser = data?.user ?? session?.user ?? null
+        await applySessionUser(resolvedUser)
       } catch {}
     }
 
     void bootstrapSession()
     const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) {
-        return
-      }
-      const profile = deriveProfileFromSupabaseUser(session?.user)
-      setUserProfile(profile)
-      ensureQuickListUser(session?.user?.id ?? null)
-      ensureLifeRoutineUser(session?.user?.id ?? null)
-      ensureHistoryUser(session?.user?.id ?? null)
-      if (profile) {
-        setAuthModalOpen(false)
-      }
+      void applySessionUser(session?.user ?? null)
     })
     return () => {
       mounted = false
