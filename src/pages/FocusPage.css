@@ -582,6 +582,7 @@ html[data-theme='light'] .goal-task-row.surface-life-routine--ember { --task-row
 .task-selector__task--quick-list .goal-task-text__inner { color: inherit; }
 .task-selector__task--quick-list .task-selector__origin,
 .task-selector__task--quick-list .task-selector__origin--dropdown { color: var(--taskwatch-quick-muted, var(--text-secondary)); }
+.task-selector__origin--placeholder { display: block; visibility: hidden; min-height: 0.95rem; }
 .focus-task.surface-quick-list { color: var(--taskwatch-quick-text, var(--text-primary)); }
 .focus-task.surface-quick-list .focus-task__name,
 .focus-task.surface-quick-list .goal-task-text__inner { color: inherit; }

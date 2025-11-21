@@ -5117,10 +5117,15 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                     <span className="goal-task-text">
                                       <span className="goal-task-text__inner">{task.taskName}</span>
                                     </span>
-                                    {!isQuickListTask && (
+                                    {!isQuickListTask ? (
                                       <span className="task-selector__origin task-selector__origin--dropdown">
                                         {`${task.goalName} → ${task.bucketName}`}
                                       </span>
+                                    ) : (
+                                      <span
+                                        className="task-selector__origin task-selector__origin--dropdown task-selector__origin--placeholder"
+                                        aria-hidden="true"
+                                      />
                                     )}
                                   </div>
                                   <span className={diffBadgeClass} aria-hidden="true" />
@@ -5281,6 +5286,10 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                       <span className="goal-task-text">
                                         <span className="goal-task-text__inner">{task.taskName}</span>
                                       </span>
+                                      <span
+                                        className="task-selector__origin task-selector__origin--dropdown task-selector__origin--placeholder"
+                                        aria-hidden="true"
+                                      />
                                     </div>
                                   </div>
                                 </button>
@@ -5782,10 +5791,15 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                     <span className="goal-task-text">
                                       <span className="goal-task-text__inner">{task.taskName}</span>
                                     </span>
-                                    {!isQuickListTask && (
+                                    {!isQuickListTask ? (
                                       <span className="task-selector__origin task-selector__origin--dropdown">
                                         {`${task.goalName} → ${task.bucketName}`}
                                       </span>
+                                    ) : (
+                                      <span
+                                        className="task-selector__origin task-selector__origin--dropdown task-selector__origin--placeholder"
+                                        aria-hidden="true"
+                                      />
                                     )}
                                   </div>
                             <span className={diffBadgeClass} aria-hidden="true" />
@@ -5944,6 +5958,10 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                       <span className="goal-task-text">
                                         <span className="goal-task-text__inner">{task.taskName}</span>
                                       </span>
+                                      <span
+                                        className="task-selector__origin task-selector__origin--dropdown task-selector__origin--placeholder"
+                                        aria-hidden="true"
+                                      />
                                     </div>
                                   </div>
                                 </button>
