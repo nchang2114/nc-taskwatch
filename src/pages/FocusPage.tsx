@@ -60,7 +60,7 @@ import {
   syncHistoryWithSupabase,
   type HistoryEntry,
 } from '../lib/sessionHistory'
-import { ACCOUNT_BOOTSTRAP_EVENT } from '../lib/accountBootstrap'
+import { logDebug, logWarn } from '../lib/logging'
 
 // Minimal sync instrumentation disabled by default
 const DEBUG_SYNC = false
@@ -202,7 +202,7 @@ const makeHistoryId = () => {
       return globalThis.crypto.randomUUID()
     }
   } catch (error) {
-    console.warn('Failed to generate UUID, falling back to timestamp-based id', error)
+    logWarn('Failed to generate UUID, falling back to timestamp-based id', error)
   }
 
   return `entry-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
@@ -652,7 +652,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
             }
           }
         } catch (error) {
-          console.warn(
+          logWarn(
             `[Focus] Failed to refresh goals from Supabase${reason ? ` (${reason})` : ''}:`,
             error,
           )
@@ -803,7 +803,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         const next = readPersistedHistory()
         applyIncomingHistory(next)
       } catch (error) {
-        console.warn('Failed to sync stopwatch history from storage', error)
+        logWarn('Failed to sync stopwatch history from storage', error)
       }
     }
 
@@ -832,7 +832,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       try {
         window.localStorage.setItem(NOTEBOOK_STORAGE_KEY, JSON.stringify(notebookState))
       } catch (error) {
-        console.warn('Failed to persist Focus notebook state', error)
+        logWarn('Failed to persist Focus notebook state', error)
       }
       notebookPersistTimerRef.current = null
     }, 300)
@@ -862,11 +862,11 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
           window.localStorage.setItem(NOTEBOOK_STORAGE_KEY, JSON.stringify(notebookState))
         }
       } catch (error) {
-        console.warn('Failed to persist Focus notebook state on unload', error)
+        logWarn('Failed to persist Focus notebook state on unload', error)
       }
       notebookNotesLatestRef.current.forEach((notes, taskId) => {
         void apiUpdateTaskNotes(taskId, notes).catch((error) =>
-          console.warn('[Focus] Failed to flush pending notes on unload:', error),
+          logWarn('[Focus] Failed to flush pending notes on unload:', error),
         )
       })
       notebookNotesLatestRef.current.clear()
@@ -881,7 +881,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
           completed: subtask.completed,
           sort_index: subtask.sortIndex,
           updated_at: subtask.updatedAt ?? new Date().toISOString(),
-        }).catch((error) => console.warn('[Focus] Failed to flush pending subtask on unload:', error))
+        }).catch((error) => logWarn('[Focus] Failed to flush pending subtask on unload:', error))
       })
       notebookSubtaskLatestRef.current.clear()
     }
@@ -896,7 +896,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     try {
       window.localStorage.setItem(CURRENT_TASK_STORAGE_KEY, value)
     } catch (error) {
-      console.warn('Failed to persist current task name', error)
+      logWarn('Failed to persist current task name', error)
     }
   }, [currentTaskName])
 
@@ -909,7 +909,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         window.localStorage.removeItem(CURRENT_TASK_SOURCE_KEY)
       }
     } catch (error) {
-      console.warn('Failed to persist current task source', error)
+      logWarn('Failed to persist current task source', error)
     }
   }, [focusSource])
 
@@ -982,7 +982,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     const unsubscribe = subscribeToGoalsSnapshot((snapshot) => {
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus] snapshot received', { goals: snapshot.length })
+          logDebug('[Sync][Focus] snapshot received', { goals: snapshot.length })
         } catch {}
       }
       setGoalsSnapshot(snapshot)
@@ -1518,38 +1518,6 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     })
   }, [scheduledNowSuggestions, guideNowSuggestions, currentTime])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-    const handleBootstrap = () => {
-      console.info('[FocusPage] Account bootstrap event received; syncing data.')
-      void (async () => {
-        try {
-          const syncedHistory = await syncHistoryWithSupabase()
-          if (syncedHistory) {
-            setHistory((current) => (historiesAreEqual(current, syncedHistory) ? current : syncedHistory))
-          }
-        } catch {}
-        try {
-          const syncedRoutines = await syncLifeRoutinesWithSupabase()
-          if (syncedRoutines) {
-            setLifeRoutineTasks((current) =>
-              JSON.stringify(current) === JSON.stringify(syncedRoutines) ? current : syncedRoutines,
-            )
-          }
-        } catch {}
-        try {
-          await reloadRepeatingRules()
-        } catch {}
-      })()
-    }
-    window.addEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
-    return () => {
-      window.removeEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
-    }
-  }, [setHistory, setLifeRoutineTasks, reloadRepeatingRules])
-
   const activeFocusCandidate = useMemo(() => {
     if (!focusSource) {
       return null
@@ -1771,17 +1739,17 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       notebookNotesLatestRef.current.set(taskId, notes)
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus][Notes] schedule persist', { taskId, len: notes.length })
+          logDebug('[Sync][Focus][Notes] schedule persist', { taskId, len: notes.length })
         } catch {}
       }
       if (typeof window === 'undefined') {
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus][Notes] flush (immediate, no-window)', { taskId })
+            logDebug('[Sync][Focus][Notes] flush (immediate, no-window)', { taskId })
           } catch {}
         }
         void apiUpdateTaskNotes(taskId, notes).catch((error) =>
-          console.warn('[Focus] Failed to persist notes for task:', error),
+          logWarn('[Focus] Failed to persist notes for task:', error),
         )
         return
       }
@@ -1795,11 +1763,11 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         const latest = notebookNotesLatestRef.current.get(taskId) ?? ''
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus][Notes] flush (timer)', { taskId, len: latest.length })
+            logDebug('[Sync][Focus][Notes] flush (timer)', { taskId, len: latest.length })
           } catch {}
         }
         void apiUpdateTaskNotes(taskId, latest).catch((error) =>
-          console.warn('[Focus] Failed to persist notes for task:', error),
+          logWarn('[Focus] Failed to persist notes for task:', error),
         )
       }, 500)
       timers.set(taskId, handle)
@@ -1837,7 +1805,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
           completed: stamped.completed,
           sort_index: stamped.sortIndex,
           updated_at: stamped.updatedAt,
-        }).catch((error) => console.warn('[Focus] Failed to persist subtask:', error))
+        }).catch((error) => logWarn('[Focus] Failed to persist subtask:', error))
         return
       }
       const timers = notebookSubtaskSaveTimersRef.current
@@ -1857,7 +1825,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
           completed: latest.completed,
           sort_index: latest.sortIndex,
           updated_at: latest.updatedAt ?? new Date().toISOString(),
-        }).catch((error) => console.warn('[Focus] Failed to persist subtask:', error))
+        }).catch((error) => logWarn('[Focus] Failed to persist subtask:', error))
       }, 400)
       timers.set(key, handle)
     },
@@ -1876,7 +1844,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         updated_at: subtask.updatedAt ?? new Date().toISOString(),
       }
       void apiUpsertTaskSubtask(taskId, payload).catch((error) =>
-        console.warn('[Focus] Failed to flush subtask on blur:', error),
+        logWarn('[Focus] Failed to flush subtask on blur:', error),
       )
     },
     [apiUpsertTaskSubtask, cancelNotebookSubtaskPersist],
@@ -1965,7 +1933,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         }
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus] publish snapshot', {
+            logDebug('[Sync][Focus] publish snapshot', {
               taskId,
               subtasks: entry.subtasks.length,
               notesLen: typeof entry.notes === 'string' ? entry.notes.length : 0,
@@ -2000,7 +1968,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         updateGoalSnapshotTask(taskId, entry, true)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus] publish (in-memory snapshot)', { taskId, reason })
+            logDebug('[Sync][Focus] publish (in-memory snapshot)', { taskId, reason })
           } catch {}
         }
         return
@@ -2034,7 +2002,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
             setGoalsSnapshot(next)
             if (DEBUG_SYNC) {
               try {
-                console.debug('[Sync][Focus] publish (stored snapshot)', { taskId, reason })
+                logDebug('[Sync][Focus] publish (stored snapshot)', { taskId, reason })
               } catch {}
             }
             return
@@ -2044,7 +2012,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       // Fallback path: refresh then retry publish once.
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus] publish fallback: refresh+subscribe', { taskId, reason })
+          logDebug('[Sync][Focus] publish fallback: refresh+subscribe', { taskId, reason })
         } catch {}
       }
       try {
@@ -2062,7 +2030,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
           updateGoalSnapshotTask(taskId, entry, true)
           if (DEBUG_SYNC) {
             try {
-              console.debug('[Sync][Focus] publish (after refresh)', { taskId, reason })
+              logDebug('[Sync][Focus] publish (after refresh)', { taskId, reason })
             } catch {}
           }
           tryUnsub()
@@ -2108,7 +2076,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         publishTaskEntry(taskId, entry, reason)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus][Notes] snapshot publish (immediate)', { taskId, len: entry.notes.length, reason })
+            logDebug('[Sync][Focus][Notes] snapshot publish (immediate)', { taskId, len: entry.notes.length, reason })
           } catch {}
         }
         return
@@ -2124,14 +2092,14 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         publishTaskEntry(taskId, latest, reason)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus][Notes] snapshot publish (timer)', { taskId, len: latest.notes.length, reason })
+            logDebug('[Sync][Focus][Notes] snapshot publish (timer)', { taskId, len: latest.notes.length, reason })
           } catch {}
         }
       }, 200)
       timers.set(taskId, handle)
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus][Notes] snapshot schedule', { taskId, len: entry.notes.length, reason })
+          logDebug('[Sync][Focus][Notes] snapshot schedule', { taskId, len: entry.notes.length, reason })
         } catch {}
       }
     },
@@ -2151,7 +2119,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         publishTaskEntry(taskId, latest, reason)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus][Notes] snapshot publish (flush)', { taskId, len: latest.notes.length, reason })
+            logDebug('[Sync][Focus][Notes] snapshot publish (flush)', { taskId, len: latest.notes.length, reason })
           } catch {}
         }
       }
@@ -2206,13 +2174,13 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       const ids = Array.from(queue)
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus] subtask delete batch flush begin', { taskId, count: ids.length })
+          logDebug('[Sync][Focus] subtask delete batch flush begin', { taskId, count: ids.length })
         } catch {}
       }
       // Fire API deletes in parallel; tolerate partial failures
       await Promise.allSettled(
         ids.map((id) => apiDeleteTaskSubtask(taskId, id).catch((err) => {
-          console.warn('[Focus] Failed batched subtask delete:', err)
+          logWarn('[Focus] Failed batched subtask delete:', err)
         })),
       )
       // Compute authoritative next entry and publish once
@@ -2225,7 +2193,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         updateNotebookForKey(notebookKey, () => nextEntry)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus] subtask delete batch publish', { taskId, count: ids.length })
+            logDebug('[Sync][Focus] subtask delete batch publish', { taskId, count: ids.length })
           } catch {}
         }
       }
@@ -2249,7 +2217,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       map.set(taskId, set)
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus] subtask delete queued', { taskId, subtaskId, queuedCount: set.size })
+          logDebug('[Sync][Focus] subtask delete queued', { taskId, subtaskId, queuedCount: set.size })
         } catch {}
       }
       // Debounce per task
@@ -2347,7 +2315,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
           if (queued && queued.has(subtask.id)) {
             if (DEBUG_SYNC) {
               try {
-                console.debug('[Sync][Focus] subtask delete skip immediate (queued)', {
+                logDebug('[Sync][Focus] subtask delete skip immediate (queued)', {
                   taskId: linkedTaskId,
                   subtaskId: subtask.id,
                 })
@@ -2357,7 +2325,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
           }
           cancelNotebookSubtaskPersist(linkedTaskId, subtask.id)
           void apiDeleteTaskSubtask(linkedTaskId, subtask.id).catch((error) =>
-            console.warn('[Focus] Failed to remove subtask during sync:', error),
+            logWarn('[Focus] Failed to remove subtask during sync:', error),
           )
         }
       }
@@ -2498,7 +2466,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       blockNotebookHydration()
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus][Notes] change (enter)', { taskId: getStableLinkedTaskId(), len: value.length })
+          logDebug('[Sync][Focus][Notes] change (enter)', { taskId: getStableLinkedTaskId(), len: value.length })
         } catch {}
       }
       const result = updateNotebookForKey(notebookKey, (entry) =>
@@ -2514,7 +2482,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         scheduleNotebookNotesSnapshotPublish(linkedTaskId, entry, 'notes-change')
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus][Notes] skip publish (no linked task id)')
+          logDebug('[Sync][Focus][Notes] skip publish (no linked task id)')
         } catch {}
       }
       updateFocusSourceFromEntry(entry)
@@ -2621,7 +2589,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       if (linkedTaskId && createdSubtask.text.trim().length > 0) {
         updateGoalSnapshotTask(linkedTaskId, result.entry)
         if (DEBUG_SYNC) {
-          console.debug('[Sync][Focus] subtask add publish', {
+          logDebug('[Sync][Focus] subtask add publish', {
             taskId: linkedTaskId,
             subtaskId: createdSubtask.id,
             total: result.entry.subtasks.length,
@@ -2629,7 +2597,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         }
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus] subtask add skip publish', {
+          logDebug('[Sync][Focus] subtask add skip publish', {
             reason: linkedTaskId ? 'blank-new-entry' : 'no linked task id',
             subtaskId: createdSubtask.id,
             total: result.entry.subtasks.length,
@@ -2774,7 +2742,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         // Debounce snapshot publish to avoid per-keystroke churn
         scheduleNotebookNotesSnapshotPublish(linkedTaskId, result.entry, 'subtasks-change')
         if (DEBUG_SYNC) {
-          console.debug('[Sync][Focus] subtask text schedule publish', {
+          logDebug('[Sync][Focus] subtask text schedule publish', {
             taskId: linkedTaskId,
             subtaskId,
             textLen: updatedSubtask.text.length,
@@ -2782,7 +2750,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         }
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus] subtask text skip publish (no linked task id)', {
+          logDebug('[Sync][Focus] subtask text skip publish (no linked task id)', {
             subtaskId,
             textLen: updatedSubtask.text.length,
           })
@@ -2832,14 +2800,14 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
             flushNotebookSubtaskPersist(linkedTaskId, updated)
           }
           if (DEBUG_SYNC) {
-            console.debug('[Sync][Focus] subtask blur publish (no structural change)', {
+            logDebug('[Sync][Focus] subtask blur publish (no structural change)', {
               taskId: linkedTaskId,
               subtaskId,
             })
           }
         } else if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus] subtask blur skip publish (no linked task id, no change)', {
+            logDebug('[Sync][Focus] subtask blur skip publish (no linked task id, no change)', {
               subtaskId,
             })
           } catch {}
@@ -2855,9 +2823,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
           .then(() => {
             publishTaskEntry(linkedTaskId, entryToPublish, 'subtask-delete-blur')
           })
-          .catch((error) => console.warn('[Focus] Failed to remove subtask on blur:', error))
+          .catch((error) => logWarn('[Focus] Failed to remove subtask on blur:', error))
         if (DEBUG_SYNC) {
-          console.debug('[Sync][Focus] subtask blur/remove publish', {
+          logDebug('[Sync][Focus] subtask blur/remove publish', {
             taskId: linkedTaskId,
             subtaskId,
             removed: removedSubtask.text.trim().length === 0,
@@ -2865,7 +2833,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         }
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus] subtask blur/remove skip publish (no linked task id)', {
+          logDebug('[Sync][Focus] subtask blur/remove skip publish (no linked task id)', {
             subtaskId,
             removed: removedSubtask.text.trim().length === 0,
           })
@@ -2890,7 +2858,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     (subtaskId: string) => {
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus] toggle (enter)', { subtaskId, taskId: getStableLinkedTaskId() })
+          logDebug('[Sync][Focus] toggle (enter)', { subtaskId, taskId: getStableLinkedTaskId() })
         } catch {}
       }
       let toggled: NotebookSubtask | null = null
@@ -2913,7 +2881,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       if (!result || !result.changed || !toggled) {
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus] toggle (no change)', { subtaskId, changed: Boolean(result?.changed) })
+            logDebug('[Sync][Focus] toggle (no change)', { subtaskId, changed: Boolean(result?.changed) })
           } catch {}
         }
         // Fallback: compute from authoritative UI entry
@@ -2936,14 +2904,14 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         // isn't in the local snapshot yet.
         publishTaskEntry(linkedTaskId, result.entry, 'subtask-toggle')
         if (DEBUG_SYNC) {
-          console.debug('[Sync][Focus] subtask toggle publish', {
+          logDebug('[Sync][Focus] subtask toggle publish', {
             taskId: linkedTaskId,
             subtaskId,
           })
         }
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus] subtask toggle skip publish (no linked task id)', {
+          logDebug('[Sync][Focus] subtask toggle skip publish (no linked task id)', {
             subtaskId,
           })
         } catch {}
@@ -2966,7 +2934,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     (subtaskId: string) => {
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus] remove (enter)', { subtaskId, taskId: getStableLinkedTaskId() })
+          logDebug('[Sync][Focus] remove (enter)', { subtaskId, taskId: getStableLinkedTaskId() })
         } catch {}
       }
       let removed: NotebookSubtask | null = null
@@ -2983,7 +2951,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       if (!result || !result.changed || !removed) {
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus] remove (no change)', { subtaskId, changed: Boolean(result?.changed) })
+            logDebug('[Sync][Focus] remove (no change)', { subtaskId, changed: Boolean(result?.changed) })
           } catch {}
         }
         // Fallback: compute the next entry from the authoritative UI entry
@@ -3001,7 +2969,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
             queueSubtaskDelete(linkedTaskId, subtaskId)
             if (DEBUG_SYNC) {
               try {
-                console.debug('[Sync][Focus] subtask delete queued (fallback)', {
+                logDebug('[Sync][Focus] subtask delete queued (fallback)', {
                   taskId: linkedTaskId,
                   subtaskId,
                 })
@@ -3020,7 +2988,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         queueSubtaskDelete(linkedTaskId, removedSubtask.id)
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Focus] subtask delete queued', {
+            logDebug('[Sync][Focus] subtask delete queued', {
               taskId: linkedTaskId,
               subtaskId,
             })
@@ -3028,7 +2996,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         }
       } else if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Focus] subtask remove skip publish (no linked task id)', {
+          logDebug('[Sync][Focus] subtask remove skip publish (no linked task id)', {
             subtaskId,
           })
         } catch {}
@@ -3553,7 +3521,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       try {
         window.localStorage.removeItem(CURRENT_SESSION_STORAGE_KEY)
       } catch (error) {
-        console.warn('Failed to clear active session state', error)
+        logWarn('Failed to clear active session state', error)
       }
       try {
         const event = new CustomEvent(CURRENT_SESSION_EVENT_NAME, { detail: null })
@@ -3582,7 +3550,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     try {
       window.localStorage.setItem(CURRENT_SESSION_STORAGE_KEY, JSON.stringify(payload))
     } catch (error) {
-      console.warn('Failed to persist active session state', error)
+      logWarn('Failed to persist active session state', error)
     }
 
     try {
@@ -3759,7 +3727,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       }
     })
     setTaskDifficulty(effectiveTaskId, nextDifficulty).catch((error) => {
-      console.warn('Failed to update focus task difficulty', error)
+      logWarn('Failed to update focus task difficulty', error)
     })
   }, [
     canCycleFocusDifficulty,
@@ -3845,7 +3813,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       }
     })
     setTaskPriorityAndResort(effectiveTaskId, effectiveBucketId, wasCompleted, nextPriority).catch((error) => {
-      console.warn('Failed to update focus task priority', error)
+      logWarn('Failed to update focus task priority', error)
     })
   }, [
     canToggleFocusPriority,
@@ -4069,7 +4037,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       try {
         await setTaskCompletedAndResort(taskId, bucketId, true)
       } catch (error) {
-        console.warn('Failed to mark task complete from Focus', error)
+        logWarn('Failed to mark task complete from Focus', error)
       }
     }
 

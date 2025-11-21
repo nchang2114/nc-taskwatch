@@ -23,7 +23,6 @@ export async function fetchSnapbackOverviewRows(): Promise<DbSnapbackOverview[]>
     .eq('user_id', session.user.id)
     .order('sort_index', { ascending: true })
   if (error) {
-    console.warn('[snapbackApi] fetchSnapbackOverviewRows error', error.message ?? error)
     return []
   }
   return Array.isArray(data) ? (data as DbSnapbackOverview[]) : []
@@ -54,7 +53,6 @@ export async function upsertSnapbackOverviewByBaseKey(input: {
     .upsert(payload, { onConflict: 'user_id,base_key' })
     .select('id, user_id, base_key, trigger_name, cue_text, deconstruction_text, plan_text, sort_index, created_at, updated_at')
   if (error) {
-    console.warn('[snapbackApi] upsert by base_key error', error.message ?? error)
     return null
   }
   const rows = Array.isArray(data) ? (data as DbSnapbackOverview[]) : []
@@ -71,7 +69,6 @@ export async function updateSnapbackTriggerNameById(id: string, trigger_name: st
     .eq('id', id)
     .eq('user_id', session.user.id)
   if (error) {
-    console.warn('[snapbackApi] update name error', error.message ?? error)
     return false
   }
   return true
@@ -107,7 +104,6 @@ export async function createCustomSnapbackTrigger(trigger_name: string): Promise
     .select('id, user_id, base_key, trigger_name, cue_text, deconstruction_text, plan_text, sort_index, created_at, updated_at')
     .single()
   if (error) {
-    console.warn('[snapbackApi] create custom trigger error', error.message ?? error)
     return null
   }
   return data as DbSnapbackOverview
@@ -123,9 +119,7 @@ export async function deleteSnapbackRowById(id: string): Promise<boolean> {
     .eq('id', id)
     .eq('user_id', session.user.id)
   if (error) {
-    console.warn('[snapbackApi] delete row error', error.message ?? error)
     return false
   }
   return true
 }
-

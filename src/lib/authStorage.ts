@@ -124,9 +124,7 @@ export const readCachedSupabaseSession = (): Session | null => {
     if (parsed && typeof parsed === 'object') {
       return parsed as Session
     }
-  } catch (error) {
-    console.warn('[authStorage] Failed to parse cached Supabase session', error)
-  }
+  } catch {}
   return null
 }
 

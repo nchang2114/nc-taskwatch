@@ -9,9 +9,7 @@ import FocusPage from './pages/FocusPage'
 import { FOCUS_EVENT_TYPE } from './lib/focusChannel'
 import { SCHEDULE_EVENT_TYPE } from './lib/scheduleChannel'
 import { supabase } from './lib/supabaseClient'
-import { ensureInitialAccountBootstrap } from './lib/accountBootstrap'
 import { clearCachedSupabaseSession, readCachedSessionTokens } from './lib/authStorage'
-import { cacheGuestSnapshotForBootstrap } from './lib/guestSnapshot'
 
 type Theme = 'light' | 'dark'
 type TabKey = 'goals' | 'focus' | 'reflection'
@@ -463,10 +461,8 @@ function MainApp() {
 
   const handleGoogleSignIn = useCallback(async (emailHint?: string): Promise<boolean> => {
     if (!supabase) {
-      console.warn('Supabase client is not configured; cannot start Google OAuth.')
       return false
     }
-    await cacheGuestSnapshotForBootstrap()
     try {
       const queryParams: Record<string, string> = {}
       const trimmedHint = emailHint?.trim()
@@ -484,22 +480,18 @@ function MainApp() {
         },
       })
       if (error) {
-        console.warn('Google OAuth sign-in failed:', error.message)
         return false
       }
       return true
     } catch (error) {
-      console.warn('Unexpected error starting Google OAuth flow:', error)
       return false
     }
   }, [])
 
   const handleMicrosoftSignIn = useCallback(async () => {
     if (!supabase) {
-      console.warn('Supabase client is not configured; cannot start Microsoft OAuth.')
       return
     }
-    await cacheGuestSnapshotForBootstrap()
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'azure',
@@ -507,11 +499,7 @@ function MainApp() {
           redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
         },
       })
-      if (error) {
-        console.warn('Microsoft OAuth sign-in failed:', error.message)
-      }
     } catch (error) {
-      console.warn('Unexpected error starting Microsoft OAuth flow:', error)
     }
   }, [])
 
@@ -520,7 +508,6 @@ function MainApp() {
   const checkAuthEmailExists = useCallback(
     async (email: string): Promise<boolean | null> => {
       if (!supabase) {
-        console.warn('[Auth] Supabase is unavailable; cannot verify email.')
         return null
       }
       const normalized = email.trim().toLowerCase()
@@ -530,12 +517,10 @@ function MainApp() {
       try {
         const { data, error } = await supabase.rpc('check_auth_email_exists', { target_email: normalized })
         if (error) {
-          console.warn('[Auth] Failed to check email existence:', error.message ?? error)
           return null
         }
         return Boolean(data)
       } catch (error) {
-        console.warn('[Auth] Unexpected email verification error:', error)
         return null
       }
     },
@@ -581,7 +566,6 @@ function MainApp() {
   const handleAuthEmailSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
-      await cacheGuestSnapshotForBootstrap()
       if (!isAuthEmailValid) {
         setAuthEmailError('Please enter a valid email address.')
         return
@@ -633,7 +617,6 @@ function MainApp() {
 
   const handleAuthCreateSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    await cacheGuestSnapshotForBootstrap()
   }, [])
 
   const toggleAuthCreatePasswordVisibility = useCallback(() => {
@@ -711,12 +694,10 @@ function MainApp() {
           refresh_token: cachedTokens.refreshToken,
         })
         if (error) {
-          console.warn('Supabase cached session restore failed:', error.message)
           return null
         }
         return data.session ?? null
-      } catch (error) {
-        console.warn('Unexpected Supabase cached session restore error:', error)
+      } catch {
         return null
       }
     }
@@ -724,14 +705,9 @@ function MainApp() {
     const bootstrapSession = async () => {
       let session: Session | null = null
       try {
-        const { data, error } = await client.auth.getSession()
-        if (error) {
-          console.warn('Initial Supabase session fetch failed:', error.message)
-        }
+        const { data } = await client.auth.getSession()
         session = data.session ?? null
-      } catch (error) {
-        console.warn('Unexpected Supabase getSession error:', error)
-      }
+      } catch {}
       if (!session) {
         session = await restoreSessionFromCache()
       }
@@ -743,10 +719,7 @@ function MainApp() {
         }
       }
       try {
-        const { data, error } = await client.auth.getUser()
-        if (error) {
-          console.warn('Unable to fetch Supabase user:', error.message)
-        }
+        const { data } = await client.auth.getUser()
         if (!mounted) {
           return
         }
@@ -755,9 +728,7 @@ function MainApp() {
         if (profile) {
           setAuthModalOpen(false)
         }
-      } catch (error) {
-        console.warn('Unexpected Supabase user fetch error:', error)
-      }
+      } catch {}
     }
 
     void bootstrapSession()
@@ -778,15 +749,6 @@ function MainApp() {
   }, [])
 
   useEffect(() => {
-    if (!userProfile) {
-      return
-    }
-    void ensureInitialAccountBootstrap().catch((error) => {
-      console.warn('[App] Initial account bootstrap failed:', error)
-    })
-  }, [userProfile])
-
-  useEffect(() => {
     if (typeof document === 'undefined') {
       return
     }
@@ -805,9 +767,7 @@ function MainApp() {
     if (supabase) {
       try {
         await supabase.auth.signOut()
-      } catch (error) {
-        console.warn('Supabase sign-out failed:', error)
-      }
+      } catch {}
     }
     clearCachedSupabaseSession()
     setUserProfile(null)
@@ -1865,14 +1825,10 @@ function AuthCallbackScreen(): React.ReactElement {
       try {
         const { error } = await supabase.auth.exchangeCodeForSession(window.location.href)
         if (error) {
-          console.warn('Supabase exchangeCodeForSession error:', error.message)
-          await supabase.auth.getSession().catch((fallbackError) => {
-            console.warn('Supabase getSession fallback failed:', fallbackError)
-          })
+          await supabase.auth.getSession().catch(() => {})
         }
-      } catch (error) {
-        console.warn('Unexpected auth callback error:', error)
-      } finally {
+      } catch {}
+      finally {
         if (!cancelled) {
           window.location.replace('/')
         }

@@ -50,7 +50,6 @@ import {
   type HistorySubtask,
   areHistorySubtasksEqual,
 } from '../lib/sessionHistory'
-import { ACCOUNT_BOOTSTRAP_EVENT } from '../lib/accountBootstrap'
 import {
   fetchRepeatingSessionRules,
   createRepeatingRuleForEntry,
@@ -75,6 +74,7 @@ import {
   updateSnapbackTriggerNameById as apiUpdateSnapbackNameById,
   type DbSnapbackOverview,
 } from '../lib/snapbackApi'
+import { logWarn } from '../lib/logging'
 
 type ReflectionRangeKey = '24h' | '48h' | '7d'
 
@@ -2922,38 +2922,6 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
   }, [])
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-    const handleBootstrap = () => {
-      console.info('[ReflectionPage] Account bootstrap event received; syncing history + routines.')
-      void (async () => {
-        try {
-          const syncedHistory = await syncHistoryWithSupabase()
-          if (syncedHistory) {
-            setHistory((current) => (historiesAreEqual(current, syncedHistory) ? current : syncedHistory))
-          }
-        } catch {}
-        try {
-          const syncedRoutines = await syncLifeRoutinesWithSupabase()
-          if (syncedRoutines) {
-            setLifeRoutineTasks((current) =>
-              JSON.stringify(current) === JSON.stringify(syncedRoutines) ? current : syncedRoutines,
-            )
-          }
-        } catch {}
-        try {
-          await reloadRepeatingRules()
-        } catch {}
-      })()
-    }
-    window.addEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
-    return () => {
-      window.removeEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrap)
-    }
-  }, [setHistory, setLifeRoutineTasks, reloadRepeatingRules])
-
-  useEffect(() => {
     dragPreviewRef.current = dragPreview
   }, [dragPreview])
 
@@ -3100,7 +3068,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
         const rows = await apiFetchSnapbackRows()
         if (!cancelled && Array.isArray(rows)) setSnapDbRows(rows)
       } catch (err) {
-        console.warn('[Snapback] Failed to load overview rows', err)
+        logWarn('[Snapback] Failed to load overview rows', err)
       }
     }
     load()

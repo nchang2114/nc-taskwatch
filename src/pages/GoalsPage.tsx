@@ -42,7 +42,6 @@ import {
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
 import { DEMO_GOALS } from '../lib/demoGoals'
-import { ACCOUNT_BOOTSTRAP_EVENT } from '../lib/accountBootstrap'
 import {
   LIFE_ROUTINE_STORAGE_KEY,
   LIFE_ROUTINE_UPDATE_EVENT,
@@ -64,6 +63,7 @@ import { broadcastFocusTask } from '../lib/focusChannel'
 import { broadcastScheduleTask } from '../lib/scheduleChannel'
 import { readStoredQuickList, writeStoredQuickList, subscribeQuickList, type QuickItem, type QuickSubtask } from '../lib/quickList'
 import { fetchQuickListRemoteItems, ensureQuickListRemoteStructures, QUICK_LIST_GOAL_NAME } from '../lib/quickListRemote'
+import { logDebug, logInfo, logWarn } from '../lib/logging'
 
 // Minimal sync instrumentation disabled by default
 const DEBUG_SYNC = false
@@ -450,12 +450,12 @@ const isUuid = (value: string | undefined | null): value is string => {
 }
 const quickListDebug = (...args: any[]) => {
   if (import.meta.env.DEV) {
-    console.log('[QuickList]', ...args)
+    logDebug('[QuickList]', ...args)
   }
 }
 const quickListWarn = (...args: any[]) => {
   if (import.meta.env.DEV) {
-    console.warn('[QuickList]', ...args)
+    logWarn('[QuickList]', ...args)
   }
 }
 
@@ -1425,7 +1425,7 @@ const MilestoneLayer: React.FC<{
               // Persist correction if needed
               if (r.date !== startIso || !r.completed || r.name !== 'Goal Created') {
                 apiUpsertGoalMilestone(goal.id, fixed).catch((err) =>
-                  console.warn('[Milestones] Failed to persist start correction', err),
+                  logWarn('[Milestones] Failed to persist start correction', err),
                 )
               }
               return fixed
@@ -1436,7 +1436,7 @@ const MilestoneLayer: React.FC<{
             const start: Milestone = { id: uid(), name: 'Goal Created', date: startIso, completed: true, role: 'start' }
             reconciled.unshift(start)
             apiUpsertGoalMilestone(goal.id, start).catch((err) =>
-              console.warn('[Milestones] Failed to seed missing start', err),
+              logWarn('[Milestones] Failed to seed missing start', err),
             )
           }
           // Ensure at least one non-start milestone exists
@@ -1447,7 +1447,7 @@ const MilestoneLayer: React.FC<{
             const extra: Milestone = { id: uid(), name: 'Milestone 1', date: toStartOfDayIso(d), completed: false, role: 'normal' }
             reconciled.push(extra)
             apiUpsertGoalMilestone(goal.id, extra).catch((err) =>
-              console.warn('[Milestones] Failed to seed missing milestone', err),
+              logWarn('[Milestones] Failed to seed missing milestone', err),
             )
           }
           const withHidden = reconciled.map((r) => ({ id: r.id, name: r.name, date: r.date, completed: r.completed, role: r.role, hidden: (r as any).hidden })) as Milestone[]
@@ -1469,11 +1469,11 @@ const MilestoneLayer: React.FC<{
           try {
             await apiUpsertGoalMilestone(goal.id, m)
           } catch (err) {
-            console.warn('[Milestones] Failed to seed default milestone', m, err)
+            logWarn('[Milestones] Failed to seed default milestone', m, err)
           }
         }
       } catch (error) {
-        console.warn('[Milestones] Failed to load milestones from Supabase', error)
+        logWarn('[Milestones] Failed to load milestones from Supabase', error)
       }
     }
     load()
@@ -1515,7 +1515,7 @@ const MilestoneLayer: React.FC<{
       return arr
     })
     setExpandedMap((cur) => ({ ...cur, [created.id]: true }))
-    apiUpsertGoalMilestone(goal.id, created).catch((err) => console.warn('[Milestones] Failed to persist add', err))
+    apiUpsertGoalMilestone(goal.id, created).catch((err) => logWarn('[Milestones] Failed to persist add', err))
   }
 
   const toggleComplete = (id: string) => {
@@ -1524,7 +1524,7 @@ const MilestoneLayer: React.FC<{
     setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, completed: !m.completed } : m)))
     if (found) {
       const updated = { ...found, completed: !found.completed }
-      apiUpsertGoalMilestone(goal.id, updated).catch((err) => console.warn('[Milestones] Failed to persist toggle', err))
+      apiUpsertGoalMilestone(goal.id, updated).catch((err) => logWarn('[Milestones] Failed to persist toggle', err))
     }
   }
 
@@ -1534,7 +1534,7 @@ const MilestoneLayer: React.FC<{
     setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, name } : m)))
     if (found) {
       const updated = { ...found, name }
-      apiUpsertGoalMilestone(goal.id, updated).catch((err) => console.warn('[Milestones] Failed to persist name', err))
+      apiUpsertGoalMilestone(goal.id, updated).catch((err) => logWarn('[Milestones] Failed to persist name', err))
     }
   }
 
@@ -1547,7 +1547,7 @@ const MilestoneLayer: React.FC<{
     setMilestones((cur) => cur.map((m) => (m.id === id ? { ...m, date: iso } : m)))
     if (found) {
       const updated = { ...found, date: iso }
-      apiUpsertGoalMilestone(goal.id, updated).catch((err) => console.warn('[Milestones] Failed to persist date', err))
+      apiUpsertGoalMilestone(goal.id, updated).catch((err) => logWarn('[Milestones] Failed to persist date', err))
     }
   }
 
@@ -1560,7 +1560,7 @@ const MilestoneLayer: React.FC<{
     }
     setMilestones((cur) => cur.filter((m) => m.id !== id))
     setExpandedMap((cur) => { const copy = { ...cur }; delete copy[id]; return copy })
-    apiDeleteGoalMilestone(goal.id, id).catch((err) => console.warn('[Milestones] Failed to delete', err))
+    apiDeleteGoalMilestone(goal.id, id).catch((err) => logWarn('[Milestones] Failed to delete', err))
   }
 
   // Focus the editor when entering edit mode; for name, seed text and place caret at end
@@ -1723,7 +1723,7 @@ const MilestoneLayer: React.FC<{
       if (idNow) {
         const found = milestonesRef.current.find((m) => m.id === idNow)
         if (found) {
-          apiUpsertGoalMilestone(goal.id, found).catch((err) => console.warn('[Milestones] Failed to persist drag', err))
+          apiUpsertGoalMilestone(goal.id, found).catch((err) => logWarn('[Milestones] Failed to persist drag', err))
         }
       }
       draggingIdRef.current = null
@@ -4098,27 +4098,27 @@ const GoalRow: React.FC<GoalRowProps> = ({
                                             checkPath.style.removeProperty('stroke-dasharray')
                                             checkPath.style.removeProperty('stroke-dashoffset')
                                             checkPath.style.setProperty('--goal-check-length', dash)
-                                            console.log('[Goals] Prepared tick animation', {
+                                            logDebug('[Goals] Prepared tick animation', {
                                               bucketId: b.id,
                                               taskId: task.id,
                                               length,
                                               dash,
                                             })
                                           } else {
-                                            console.log('[Goals] Tick path length not finite', {
+                                            logDebug('[Goals] Tick path length not finite', {
                                               bucketId: b.id,
                                               taskId: task.id,
                                               length,
                                             })
                                           }
                                         } else {
-                                          console.log('[Goals] Tick path not found for task', {
+                                          logDebug('[Goals] Tick path not found for task', {
                                             bucketId: b.id,
                                             taskId: task.id,
                                           })
                                         }
                                       } catch (err) {
-                                        console.warn('[Goals] Failed to prepare tick path', err)
+                                        logWarn('[Goals] Failed to prepare tick path', err)
                                         // Ignore measurement errors; CSS defaults remain as fallback.
                                       }
 
@@ -5868,7 +5868,7 @@ export default function GoalsPage(): ReactElement {
             setQuickListItems(stored)
           }
         } catch (error) {
-          console.warn(
+          logWarn(
             `[QuickList] Failed to refresh from Supabase${reason ? ` (${reason})` : ''}:`,
             error,
           )
@@ -5923,7 +5923,7 @@ export default function GoalsPage(): ReactElement {
       try {
         await apiUpdateTaskText(taskId, nextValue)
       } catch (error) {
-        console.warn('[QuickList] Failed to update remote task text:', error)
+        logWarn('[QuickList] Failed to update remote task text:', error)
         refreshQuickListFromSupabase('text')
       }
     })()
@@ -6422,7 +6422,7 @@ export default function GoalsPage(): ReactElement {
             updated_at: payload.updatedAt,
           })
         } catch (error) {
-          console.warn('[QuickList] Failed to create remote subtask:', error)
+          logWarn('[QuickList] Failed to create remote subtask:', error)
           refreshQuickListFromSupabase('subtask-create')
         }
       })()
@@ -6461,7 +6461,7 @@ export default function GoalsPage(): ReactElement {
             updated_at: payload.updatedAt,
           })
         } catch (error) {
-          console.warn('[QuickList] Failed to update remote subtask text:', error)
+          logWarn('[QuickList] Failed to update remote subtask text:', error)
           refreshQuickListFromSupabase('subtask-text')
         }
       })()
@@ -6500,7 +6500,7 @@ export default function GoalsPage(): ReactElement {
             updated_at: payload.updatedAt,
           })
         } catch (error) {
-          console.warn('[QuickList] Failed to update remote subtask completion:', error)
+          logWarn('[QuickList] Failed to update remote subtask completion:', error)
           refreshQuickListFromSupabase('subtask-complete')
         }
       })()
@@ -6526,7 +6526,7 @@ export default function GoalsPage(): ReactElement {
           try {
             await apiDeleteTaskSubtask(taskId, subtaskId)
           } catch (error) {
-            console.warn('[QuickList] Failed to delete remote subtask:', error)
+            logWarn('[QuickList] Failed to delete remote subtask:', error)
             refreshQuickListFromSupabase('subtask-delete')
           }
         })()
@@ -6945,7 +6945,7 @@ export default function GoalsPage(): ReactElement {
             mergedCount: result.length,
             remoteUpdatedAts: remote.slice(0, 3).map((r) => r.updatedAt),
           }
-          console.debug('[Sync][Goals] merge subtasks', { taskId, sample })
+          logDebug('[Sync][Goals] merge subtasks', { taskId, sample })
         } catch {}
       }
       return result
@@ -7071,7 +7071,7 @@ export default function GoalsPage(): ReactElement {
       if (DEBUG_SYNC) {
         try {
           const first = normalized?.[0]?.buckets?.[0]?.tasks?.[0]?.subtasks?.[0]
-          console.debug('[Sync][Goals] remote payload', {
+          logDebug('[Sync][Goals] remote payload', {
             goals: normalized.length,
             sampleUpdatedAt: (first as any)?.updatedAt,
           })
@@ -7096,7 +7096,7 @@ export default function GoalsPage(): ReactElement {
           if (!isMountedRef.current) {
             return
           }
-          console.info('[GoalsPage] Supabase goals refresh', {
+          logInfo('[GoalsPage] Supabase goals refresh', {
             count: result?.goals?.length ?? 0,
             reason,
           })
@@ -7104,7 +7104,7 @@ export default function GoalsPage(): ReactElement {
             applySupabaseGoalsPayload(result.goals)
           }
         } catch (error) {
-          console.warn(
+          logWarn(
             `[GoalsPage] Failed to refresh goals from Supabase${reason ? ` (${reason})` : ''}:`,
             error,
           )
@@ -7149,7 +7149,7 @@ export default function GoalsPage(): ReactElement {
       if (DEBUG_SYNC) {
         try {
           const first = snapshot?.[0]?.buckets?.[0]?.tasks?.[0]?.subtasks?.[0]
-          console.debug('[Sync][Goals] snapshot received', {
+          logDebug('[Sync][Goals] snapshot received', {
             goals: snapshot.length,
             sampleSubtask: first ? { id: (first as any).id, sortIndex: (first as any).sortIndex } : null,
           })
@@ -7332,19 +7332,19 @@ export default function GoalsPage(): ReactElement {
       if (typeof window === 'undefined') {
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Goals][Notes] flush (immediate, no-window)', { taskId, len: notes.length })
+            logDebug('[Sync][Goals][Notes] flush (immediate, no-window)', { taskId, len: notes.length })
           } catch {}
         }
         void apiUpdateTaskNotes(taskId, notes)
           .then(() => {
             taskNotesLatestRef.current.delete(taskId)
           })
-          .catch((error) => console.warn('[GoalsPage] Failed to persist task notes:', error))
+          .catch((error) => logWarn('[GoalsPage] Failed to persist task notes:', error))
         return
       }
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Goals][Notes] schedule persist', { taskId, len: notes.length })
+          logDebug('[Sync][Goals][Notes] schedule persist', { taskId, len: notes.length })
         } catch {}
       }
       taskNotesLatestRef.current.set(taskId, notes)
@@ -7358,7 +7358,7 @@ export default function GoalsPage(): ReactElement {
         const latest = taskNotesLatestRef.current.get(taskId) ?? ''
         if (DEBUG_SYNC) {
           try {
-            console.debug('[Sync][Goals][Notes] flush (timer)', { taskId, len: latest.length })
+            logDebug('[Sync][Goals][Notes] flush (timer)', { taskId, len: latest.length })
           } catch {}
         }
         void apiUpdateTaskNotes(taskId, latest)
@@ -7367,7 +7367,7 @@ export default function GoalsPage(): ReactElement {
               taskNotesLatestRef.current.delete(taskId)
             }
           })
-          .catch((error) => console.warn('[GoalsPage] Failed to persist task notes:', error))
+          .catch((error) => logWarn('[GoalsPage] Failed to persist task notes:', error))
       }, 500)
       timers.set(taskId, handle)
     },
@@ -7419,7 +7419,7 @@ export default function GoalsPage(): ReactElement {
               subtaskLatestRef.current.delete(key)
             }
           })
-          .catch((error) => console.warn('[GoalsPage] Failed to persist subtask:', error))
+          .catch((error) => logWarn('[GoalsPage] Failed to persist subtask:', error))
         return
       }
       const timers = subtaskSaveTimersRef.current
@@ -7455,11 +7455,11 @@ export default function GoalsPage(): ReactElement {
             // If this subtask was deleted while the upsert was in-flight, ensure deletion wins
             if (subtaskDeletedRef.current.has(key)) {
               void apiDeleteTaskSubtask(taskId, payload.id)
-                .catch((error) => console.warn('[GoalsPage] Re-delete subtask after upsert:', error))
+                .catch((error) => logWarn('[GoalsPage] Re-delete subtask after upsert:', error))
                 .finally(() => subtaskDeletedRef.current.delete(key))
             }
           })
-          .catch((error) => console.warn('[GoalsPage] Failed to persist subtask:', error))
+          .catch((error) => logWarn('[GoalsPage] Failed to persist subtask:', error))
       }, 400)
       timers.set(key, handle)
     },
@@ -7494,11 +7494,11 @@ export default function GoalsPage(): ReactElement {
           }
           if (subtaskDeletedRef.current.has(key)) {
             void apiDeleteTaskSubtask(taskId, payload.id)
-              .catch((error) => console.warn('[GoalsPage] Re-delete subtask after flush:', error))
+              .catch((error) => logWarn('[GoalsPage] Re-delete subtask after flush:', error))
               .finally(() => subtaskDeletedRef.current.delete(key))
           }
         })
-        .catch((error) => console.warn('[GoalsPage] Failed to persist subtask:', error))
+        .catch((error) => logWarn('[GoalsPage] Failed to persist subtask:', error))
     },
     [apiUpsertTaskSubtask, cancelPendingSubtaskSave],
   )
@@ -7534,7 +7534,7 @@ export default function GoalsPage(): ReactElement {
               }
             })
             .catch((error) => {
-              console.warn('[GoalsPage] Failed to lazy-load task notes:', error)
+              logWarn('[GoalsPage] Failed to lazy-load task notes:', error)
             })
         }
       }
@@ -7559,7 +7559,7 @@ export default function GoalsPage(): ReactElement {
       })
       if (DEBUG_SYNC) {
         try {
-          console.debug('[Sync][Goals][Notes] change', { taskId, len: value.length })
+          logDebug('[Sync][Goals][Notes] change', { taskId, len: value.length })
         } catch {}
       }
       syncGoalTaskNotes(taskId, value)
@@ -7701,7 +7701,7 @@ export default function GoalsPage(): ReactElement {
         updateGoalTaskSubtasks(taskId, (current) => current.filter((item) => item.id !== subtaskId))
         cancelPendingSubtaskSave(taskId, subtaskId)
         void apiDeleteTaskSubtask(taskId, subtaskId).catch((error) =>
-          console.warn('[GoalsPage] Failed to delete empty subtask:', error),
+          logWarn('[GoalsPage] Failed to delete empty subtask:', error),
         )
         return
       }
@@ -7861,7 +7861,7 @@ export default function GoalsPage(): ReactElement {
       updateGoalTaskSubtasks(taskId, (current) => current.filter((item) => item.id !== subtaskId))
       cancelPendingSubtaskSave(taskId, subtaskId)
       void apiDeleteTaskSubtask(taskId, subtaskId).catch((error) =>
-        console.warn('[GoalsPage] Failed to remove subtask:', error),
+        logWarn('[GoalsPage] Failed to remove subtask:', error),
       )
     },
     [cancelPendingSubtaskSave, updateGoalTaskSubtasks, updateTaskDetails],
@@ -7926,7 +7926,7 @@ export default function GoalsPage(): ReactElement {
       subtaskSaveTimersRef.current.clear()
       taskNotesLatestRef.current.forEach((notes, taskId) => {
         void apiUpdateTaskNotes(taskId, notes).catch((error) =>
-          console.warn('[GoalsPage] Failed to flush task notes on cleanup:', error),
+          logWarn('[GoalsPage] Failed to flush task notes on cleanup:', error),
         )
       })
       subtaskLatestRef.current.forEach((subtask, compositeKey) => {
@@ -7940,27 +7940,13 @@ export default function GoalsPage(): ReactElement {
           completed: subtask.completed,
           sort_index: subtask.sortIndex,
           updated_at: subtask.updatedAt ?? new Date().toISOString(),
-        }).catch((error) => console.warn('[GoalsPage] Failed to flush subtask on cleanup:', error))
+        }).catch((error) => logWarn('[GoalsPage] Failed to flush subtask on cleanup:', error))
       })
       taskNotesLatestRef.current.clear()
       subtaskLatestRef.current.clear()
     }
   }, [])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-    const handleBootstrapComplete = () => {
-      console.info('[GoalsPage] Account bootstrap event received; refreshing Supabase data.')
-      refreshGoalsFromSupabase('bootstrap-complete')
-      refreshQuickListFromSupabase('bootstrap-complete')
-    }
-    window.addEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrapComplete)
-    return () => {
-      window.removeEventListener(ACCOUNT_BOOTSTRAP_EVENT, handleBootstrapComplete)
-    }
-  }, [refreshGoalsFromSupabase, refreshQuickListFromSupabase])
   const previousExpandedRef = useRef<Record<string, boolean> | null>(null)
   const previousBucketExpandedRef = useRef<Record<string, boolean> | null>(null)
   const previousCompletedCollapsedRef = useRef<Record<string, boolean> | null>(null)
@@ -10348,7 +10334,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
         )
       })
       .catch((error) => {
-        console.warn('[GoalsPage] Failed to persist new task:', error)
+        logWarn('[GoalsPage] Failed to persist new task:', error)
         setGoals((current) =>
           current.map((g) =>
             g.id === goalId
@@ -10560,7 +10546,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
             return
           }
           if (persisted.completed !== toggledNewCompleted) {
-            console.warn(
+            logWarn(
               '[GoalsPage] Supabase completion toggle mismatch; expected',
               toggledNewCompleted,
               'but received',
@@ -10571,7 +10557,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
           }
         })
         .catch((error) => {
-          console.warn('[GoalsPage] Failed to persist task completion toggle:', error)
+          logWarn('[GoalsPage] Failed to persist task completion toggle:', error)
           setGoals(() => previousGoals)
           setCompletedCollapsed(() => previousCompletedCollapsed)
         })
@@ -10857,7 +10843,7 @@ const normalizedSearch = searchTerm.trim().toLowerCase()
       current && current.goalId === goalId && current.bucketId === bucketId && current.taskId === taskId ? null : current,
     )
     apiDeleteTaskById(taskId, bucketId).catch((error) => {
-      console.warn('[GoalsPage] Failed to delete task', error)
+      logWarn('[GoalsPage] Failed to delete task', error)
     })
   }
 

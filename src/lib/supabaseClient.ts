@@ -22,8 +22,7 @@ export async function ensureSingleUserSession(): Promise<Session | null> {
   try {
     const { data } = await supabase.auth.getSession()
     return data.session ?? null
-  } catch (error) {
-    console.warn('[supabaseClient] Failed to resolve session', error)
+  } catch {
     return null
   }
 }

@@ -212,13 +212,8 @@ export const pushRepeatingRulesToSupabase = async (
     }
   })
   try {
-    const { error } = await supabase.from('repeating_sessions').upsert(payloads, { onConflict: 'id' })
-    if (error) {
-      console.warn('[repeatingSessions] Failed to seed repeating rules:', error)
-    }
-  } catch (error) {
-    console.warn('[repeatingSessions] Unexpected error seeding repeating rules:', error)
-  }
+    await supabase.from('repeating_sessions').upsert(payloads, { onConflict: 'id' })
+  } catch {}
   return idMap
 }
 
@@ -295,7 +290,6 @@ export async function fetchRepeatingSessionRules(): Promise<RepeatingSessionRule
     .eq('user_id', session.user.id)
     .order('created_at', { ascending: true })
   if (error) {
-    console.warn('[repeatingSessions] fetch error', error)
     return readLocalRepeatingRules()
   }
   let remote = (data ?? []).map(mapRowToRule).filter(Boolean) as RepeatingSessionRule[]
@@ -395,7 +389,6 @@ export async function createRepeatingRuleForEntry(
     .select('id, is_active, frequency, day_of_week, time_of_day_minutes, duration_minutes, task_name, goal_name, bucket_name, timezone, start_date, end_date, created_at')
     .single()
   if (error) {
-    console.warn('[repeatingSessions] create error', error)
     // Fallback: store locally so user still sees guides
     const localRule: RepeatingSessionRule = {
       id: randomRuleId(),
@@ -439,7 +432,6 @@ export async function deactivateRepeatingRule(id: string): Promise<boolean> {
     .eq('id', id)
     .eq('user_id', session.user.id)
   if (error) {
-    console.warn('[repeatingSessions] deactivate error', error)
     return false
   }
   return true
@@ -496,9 +488,7 @@ export async function deactivateMatchingRulesForEntry(entry: HistoryEntry): Prom
     .eq('goal_name', goal)
     .eq('bucket_name', bucket)
     .select('id')
-  if (dailyErr) {
-    console.warn('[repeatingSessions] deactivate daily match error', dailyErr)
-  } else if (Array.isArray(dailyRows)) {
+  if (!dailyErr && Array.isArray(dailyRows)) {
     ids.push(...dailyRows.map((r: any) => String(r.id)))
   }
 
@@ -515,9 +505,7 @@ export async function deactivateMatchingRulesForEntry(entry: HistoryEntry): Prom
     .eq('goal_name', goal)
     .eq('bucket_name', bucket)
     .select('id')
-  if (weeklyErr) {
-    console.warn('[repeatingSessions] deactivate weekly match error', weeklyErr)
-  } else if (Array.isArray(weeklyRows)) {
+  if (!weeklyErr && Array.isArray(weeklyRows)) {
     ids.push(...weeklyRows.map((r: any) => String(r.id)))
   }
 
@@ -572,9 +560,7 @@ export async function deleteMatchingRulesForEntry(entry: HistoryEntry): Promise<
     .eq('goal_name', goal)
     .eq('bucket_name', bucket)
     .select('id')
-  if (dailyErr) {
-    console.warn('[repeatingSessions] delete daily match error', dailyErr)
-  } else if (Array.isArray(dailyRows)) {
+  if (!dailyErr && Array.isArray(dailyRows)) {
     ids.push(...dailyRows.map((r: any) => String(r.id)))
   }
 
@@ -591,9 +577,7 @@ export async function deleteMatchingRulesForEntry(entry: HistoryEntry): Promise<
     .eq('goal_name', goal)
     .eq('bucket_name', bucket)
     .select('id')
-  if (weeklyErr) {
-    console.warn('[repeatingSessions] delete weekly match error', weeklyErr)
-  } else if (Array.isArray(weeklyRows)) {
+  if (!weeklyErr && Array.isArray(weeklyRows)) {
     ids.push(...weeklyRows.map((r: any) => String(r.id)))
   }
 
@@ -644,7 +628,6 @@ export async function updateRepeatingRuleEndDate(ruleId: string, endAtMs: number
     .eq('id', ruleId)
     .eq('user_id', session.user.id)
   if (error) {
-    console.warn('[repeatingSessions] update end_date error', error)
     return false
   }
   // After updating, fetch start_date and end_date. If equal, delete the row since nothing repeats.
@@ -667,14 +650,7 @@ export async function updateRepeatingRuleEndDate(ruleId: string, endAtMs: number
       const em = readEndMap()
       if (ruleId in em) { delete em[ruleId]; writeEndMap(em) }
       // Delete remotely
-      const { error: delErr } = await supabase
-        .from('repeating_sessions')
-        .delete()
-        .eq('id', ruleId)
-        .eq('user_id', session.user.id)
-      if (delErr) {
-        console.warn('[repeatingSessions] delete after equal start/end error', delErr)
-      }
+      await supabase.from('repeating_sessions').delete().eq('id', ruleId).eq('user_id', session.user.id)
     }
   }
   return true
@@ -705,7 +681,6 @@ export async function deleteRepeatingRuleById(ruleId: string): Promise<boolean> 
     .eq('id', ruleId)
     .eq('user_id', session.user.id)
   if (error) {
-    console.warn('[repeatingSessions] delete by id error', error)
     return false
   }
   return true

@@ -71,7 +71,6 @@ export async function ensureQuickListRemoteStructures(): Promise<{ goalId: strin
         .limit(1)
         .maybeSingle()
       if (goalLookupError) {
-        console.warn('[quickListRemote] Failed to look up Quick List goal:', goalLookupError)
         return null
       }
       const goalId =
@@ -90,7 +89,6 @@ export async function ensureQuickListRemoteStructures(): Promise<{ goalId: strin
         }
         const { error: goalInsertError } = await supabase.from('goals').insert(goalPayload)
         if (goalInsertError) {
-          console.warn('[quickListRemote] Failed to create Quick List goal:', goalInsertError)
           return null
         }
       }
@@ -103,7 +101,6 @@ export async function ensureQuickListRemoteStructures(): Promise<{ goalId: strin
         .limit(1)
         .maybeSingle()
       if (bucketLookupError) {
-        console.warn('[quickListRemote] Failed to look up Quick List bucket:', bucketLookupError)
         return null
       }
       const bucketId =
@@ -123,13 +120,11 @@ export async function ensureQuickListRemoteStructures(): Promise<{ goalId: strin
         }
         const { error: bucketInsertError } = await supabase.from('buckets').insert(bucketPayload)
         if (bucketInsertError) {
-          console.warn('[quickListRemote] Failed to create Quick List bucket:', bucketInsertError)
           return null
         }
       }
       return { goalId, bucketId }
-    } catch (error) {
-      console.warn('[quickListRemote] Failed to ensure Quick List goal/bucket:', error)
+    } catch {
       return null
     }
   })()
@@ -163,9 +158,6 @@ export async function fetchQuickListRemoteItems(): Promise<{
       .order('priority', { ascending: false })
       .order('sort_index', { ascending: true })
     if (taskError || !tasks) {
-      if (taskError) {
-        console.warn('[quickListRemote] Failed to fetch quick list tasks:', taskError.message ?? taskError)
-      }
       return { goalId, bucketId, items: [] }
     }
     const taskIds = tasks.map((task) => task.id)
@@ -176,9 +168,6 @@ export async function fetchQuickListRemoteItems(): Promise<{
           .in('task_id', taskIds)
           .order('sort_index', { ascending: true })
       : { data: [], error: null as any }
-    if (subtaskError) {
-      console.warn('[quickListRemote] Failed to fetch quick list subtasks:', subtaskError.message ?? subtaskError)
-    }
     const subtasksByTaskId = new Map<string, QuickSubtask[]>()
     ;(subtasks ?? []).forEach((subtask) => {
       const list = subtasksByTaskId.get(subtask.task_id) ?? []
@@ -193,8 +182,7 @@ export async function fetchQuickListRemoteItems(): Promise<{
     })
     const items = mapTasksToQuickItems(tasks, subtasksByTaskId)
     return { goalId, bucketId, items }
-  } catch (error) {
-    console.warn('[quickListRemote] Unexpected error fetching remote quick list items:', error)
+  } catch {
     return null
   }
 }

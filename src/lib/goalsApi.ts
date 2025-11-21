@@ -67,7 +67,6 @@ export async function fetchGoalCreatedAt(goalId: string): Promise<string | null>
     .eq('user_id', userId)
     .maybeSingle()
   if (error) {
-    console.warn('[goalsApi] fetchGoalCreatedAt error', error.message ?? error)
     return null
   }
   const value = (data as any)?.created_at
@@ -183,7 +182,6 @@ export async function fetchGoalsHierarchy(): Promise<
     }
   }
   if (gErr) {
-    console.warn('[goalsApi] fetchGoalsHierarchy goals error', gErr?.message ?? gErr)
     return null
   }
   if (!goals || goals.length === 0) return { goals: [] }
@@ -212,7 +210,6 @@ export async function fetchGoalsHierarchy(): Promise<
         .order('sort_index', { ascending: true })
     : { data: [], error: null as any }
   if (tErr) {
-    console.error('[goalsApi] fetchGoalsHierarchy tasks error', tErr.message ?? tErr, tErr)
     return null
   }
 
@@ -227,7 +224,6 @@ export async function fetchGoalsHierarchy(): Promise<
         .order('sort_index', { ascending: true })
     : { data: [], error: null as any }
   if (sErr) {
-    console.error('[goalsApi] fetchGoalsHierarchy subtasks error', sErr.message ?? sErr, sErr)
     return null
   }
 
@@ -321,7 +317,6 @@ export async function fetchTaskNotes(taskId: string): Promise<string> {
     .eq('user_id', userId)
     .maybeSingle()
   if (error) {
-    console.warn('[goalsApi] fetchTaskNotes error', error.message ?? error)
     return ''
   }
   const raw = (data as any)?.notes
@@ -360,7 +355,6 @@ export async function fetchGoalMilestones(goalId: string): Promise<
     }
   }
   if (error) {
-    console.warn('[goalsApi] fetchGoalMilestones error', error.message ?? error)
     return []
   }
   const rows = Array.isArray(data) ? (data as any[]) : []
@@ -514,13 +508,10 @@ async function updateTaskWithGuard(
 }
 
 // ---------- Goals ----------
-let goalSurfacePersistenceWarningLogged = false
-
 export async function createGoal(name: string, color: string, surface: string = 'glass') {
   if (!supabase) return null
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) {
-    console.warn('[goalsApi] Unable to create goal without an authenticated session.')
     return null
   }
   const sort_index = await nextSortIndex('goals')
@@ -538,7 +529,6 @@ export async function createGoal(name: string, color: string, surface: string = 
     .select('id, name, color, sort_index, starred, goal_archive')
     .single()
   if (error) {
-    console.warn('[goalsApi] Failed to create goal:', error.message ?? error)
     return null
   }
   const base = (data ?? null) as DbGoal | null
@@ -561,10 +551,6 @@ export async function setGoalColor(goalId: string, color: string) {
 export async function setGoalSurface(goalId: string, surface: string | null) {
   void goalId
   void surface
-  if (!goalSurfacePersistenceWarningLogged) {
-    goalSurfacePersistenceWarningLogged = true
-    console.warn('[goalsApi] Goal surface styles are not persisted because the card_surface column was removed.')
-  }
 }
 
 export async function setGoalStarred(goalId: string, starred: boolean) {
@@ -598,15 +584,11 @@ export async function setGoalMilestonesShown(goalId: string, shown: boolean) {
     if (error) {
       const msg = String(error.message || '').toLowerCase()
       if (msg.includes('column') && msg.includes('milestones_shown')) {
-        // Column not available; ignore gracefully
         return
       }
       throw error
     }
-  } catch (err) {
-    // Swallow errors to avoid blocking UI
-    console.warn('[goalsApi] setGoalMilestonesShown error', err)
-  }
+  } catch {}
 }
 
 export async function deleteGoalById(goalId: string) {
@@ -669,7 +651,6 @@ export async function createBucket(goalId: string, name: string, surface: string
   if (!supabase) return null
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) {
-    console.warn('[goalsApi] Unable to create bucket without an authenticated session.')
     return null
   }
   const sort_index = await nextSortIndex('buckets', { goal_id: goalId })
@@ -791,7 +772,6 @@ export async function createTask(
   if (!supabase) return null
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) {
-    console.warn('[goalsApi] Unable to create task without an authenticated session.')
     return null
   }
   const insertAtTop = Boolean(options?.insertAtTop)
@@ -1077,7 +1057,6 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
   if (!seeds || seeds.length === 0) return false
   const session = await ensureSingleUserSession()
   if (!session?.user?.id) {
-    console.warn('[goalsApi] Cannot seed goals without an authenticated session.')
     return false
   }
   const userId = session.user.id
@@ -1089,11 +1068,9 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       .neq('name', QUICK_LIST_GOAL_NAME)
       .limit(1)
     if (existingError) {
-      console.warn('[goalsApi] Unable to inspect existing goals before seeding:', existingError.message)
       return false
     }
     if (existing && existing.length > 0) {
-      console.info('[goalsApi] Skipping goal seed because account already has goals.')
       return false
     }
 
@@ -1112,9 +1089,6 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
       .insert(goalInserts)
       .select('id')
     if (goalsError || !insertedGoals) {
-      if (goalsError) {
-        console.warn('[goalsApi] Failed to seed goals:', goalsError.message)
-      }
       return false
     }
 
@@ -1156,7 +1130,6 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
         : { data: [] as any[], error: null as any }
 
     if (insertedBuckets.error) {
-      console.warn('[goalsApi] Failed to seed buckets:', insertedBuckets.error.message)
       return false
     }
 
@@ -1232,21 +1205,18 @@ export async function seedGoalsIfEmpty(seeds: GoalSeed[]): Promise<boolean> {
     if (taskInserts.length > 0) {
       const { error: tasksError } = await supabase.from('tasks').insert(taskInserts)
       if (tasksError) {
-        console.warn('[goalsApi] Failed to seed tasks:', tasksError.message)
         return false
       }
       if (taskSubtaskInserts.length > 0) {
         const { error: subtaskError } = await supabase.from('task_subtasks').insert(taskSubtaskInserts)
         if (subtaskError) {
-          console.warn('[goalsApi] Failed to seed task subtasks:', subtaskError.message)
           return false
         }
       }
     }
 
     return true
-  } catch (error) {
-    console.warn('[goalsApi] Unexpected error while seeding defaults:', error)
+  } catch {
     return false
   }
 }

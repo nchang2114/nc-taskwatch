@@ -109,11 +109,7 @@ export const upsertRepeatingException = async (
 				created_at: new Date(row.createdAtMs).toISOString(),
 				updated_at: new Date(row.updatedAtMs).toISOString(),
 			}
-			const { error } = await supabase.from('repeating_exceptions').upsert(payload, { onConflict: 'id' })
-			if (error) {
-				// Fall back to local-only if remote fails
-				console.warn('[repeatingExceptions] upsert error', error)
-			}
+			await supabase.from('repeating_exceptions').upsert(payload, { onConflict: 'id' })
 		}
 	}
 
@@ -146,20 +142,17 @@ export const deleteRescheduleExceptionFor = async (
   writeLocal(current)
 
   const ENABLE_REMOTE = Boolean((import.meta as any)?.env?.VITE_ENABLE_REPEATING_EXCEPTIONS)
-  if (supabase && ENABLE_REMOTE) {
-    try {
-      const session = await ensureSingleUserSession()
-      if (session) {
-        await supabase
-          .from('repeating_exceptions')
-          .delete()
-          .eq('id', removed.id)
-          .eq('user_id', session.user.id)
-      }
-    } catch (err) {
-      // Non-fatal: local removal already took effect for UI
-      console.warn('[repeatingExceptions] delete rescheduled error', err)
-    }
-  }
-  return true
+	if (supabase && ENABLE_REMOTE) {
+		try {
+			const session = await ensureSingleUserSession()
+			if (session) {
+				await supabase
+					.from('repeating_exceptions')
+					.delete()
+					.eq('id', removed.id)
+					.eq('user_id', session.user.id)
+			}
+		} catch {}
+	}
+	return true
 }

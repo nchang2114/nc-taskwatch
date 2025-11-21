@@ -247,13 +247,11 @@ export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]):
     .eq('user_id', session.user.id)
 
   if (remoteIdsError) {
-    console.warn('Failed to read existing life routines from Supabase', remoteIdsError)
     return
   }
 
-    if (rows.length > 0) {
-      const tryUpsert = async (payload: typeof rows) =>
-        supabase!.from('life_routines').upsert(payload, { onConflict: 'id' })
+  if (rows.length > 0) {
+    const tryUpsert = async (payload: typeof rows) => supabase!.from('life_routines').upsert(payload, { onConflict: 'id' })
 
     const { error: upsertError } = await tryUpsert(rows)
     if (upsertError) {
@@ -261,8 +259,6 @@ export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]):
       const details = (upsertError as any).details || ''
       const hint = (upsertError as any).hint || ''
       const msg = `${upsertError.message} ${details}`.toLowerCase()
-      console.warn('[lifeRoutines] Upsert failed:', { code, message: upsertError.message, details, hint })
-
       // If the backend uses a Postgres ENUM or CHECK constraint for surface_style
       // and it hasn't been updated to include new themes, a 400 error will occur.
       const looksLikeSurfaceStyleConstraint =
@@ -274,17 +270,9 @@ export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]):
         const fallbackRows = rows.map((r) => ({ ...r, surface_style: fallback }))
         const { error: retryError } = await tryUpsert(fallbackRows)
         if (retryError) {
-          console.warn(
-            'Failed to upsert life routines to Supabase even with fallback surface_style. Please apply the SQL migration to extend allowed surface styles.',
-            retryError,
-          )
           return
         }
-        console.warn(
-          '[lifeRoutines] Upsert succeeded using fallback surface_style because the backend is missing the new values. Apply the provided SQL migration to enable new themes server-side.',
-        )
       } else {
-        console.warn('Failed to upsert life routines to Supabase', upsertError)
         return
       }
     }
@@ -299,10 +287,7 @@ export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]):
     }
   })
   if (idsToDelete.length > 0) {
-    const { error: deleteError } = await supabase.from('life_routines').delete().in('id', idsToDelete)
-    if (deleteError) {
-      console.warn('Failed to delete removed life routines from Supabase', deleteError)
-    }
+    await supabase.from('life_routines').delete().in('id', idsToDelete)
   }
 }
 
@@ -364,7 +349,6 @@ export const syncLifeRoutinesWithSupabase = async (): Promise<LifeRoutineConfig[
     .order('sort_index', { ascending: true })
 
   if (error) {
-    console.warn('Failed to fetch life routines from Supabase', error)
     return null
   }
 

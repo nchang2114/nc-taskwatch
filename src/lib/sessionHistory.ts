@@ -1,6 +1,5 @@
 import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { readStoredLifeRoutines, LIFE_ROUTINE_UPDATE_EVENT } from './lifeRoutines'
-import { GUEST_SNAPSHOT_CACHE_KEY } from './guestSnapshotKeys'
 import {
   DEFAULT_SURFACE_STYLE,
   ensureSurfaceStyle,
@@ -83,17 +82,6 @@ const isConflictError = (err: any): boolean => {
 
 const toDbSurface = (value: SurfaceStyle | null | undefined): SurfaceStyle | null =>
   sanitizeSurfaceStyle(value) ?? null
-
-const isGuestBootstrapPending = (): boolean => {
-  if (typeof window === 'undefined') {
-    return false
-  }
-  try {
-    return window.sessionStorage.getItem(GUEST_SNAPSHOT_CACHE_KEY) !== null
-  } catch {
-    return false
-  }
-}
 
 const LIFE_ROUTINES_NAME = 'Daily Life'
 const LIFE_ROUTINES_GOAL_ID = 'life-routines'
@@ -834,9 +822,7 @@ const writeHistoryRecords = (records: HistoryRecord[]): void => {
   }
   try {
     window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(records))
-  } catch (error) {
-    console.warn('Failed to persist session history locally', error)
-  }
+  } catch {}
 }
 
 export const readStoredHistory = (): HistoryEntry[] => recordsToActiveEntries(readHistoryRecords())
@@ -849,9 +835,7 @@ const broadcastHistoryRecords = (records: HistoryRecord[]): void => {
     try {
       const event = new CustomEvent<HistoryRecord[]>(HISTORY_EVENT_NAME, { detail: records })
       window.dispatchEvent(event)
-    } catch (error) {
-      console.warn('Failed to broadcast history update', error)
-    }
+    } catch {}
   }
   // Dispatch on a microtask to avoid triggering state updates in other components
   // while React is rendering this component (prevents cross-component setState warnings).
@@ -950,15 +934,11 @@ const setupLifeRoutineSurfaceSync = (): void => {
   }
   try {
     realignHistoryWithLifeRoutineSurfaces()
-  } catch (error) {
-    console.warn('[sessionHistory] Failed to align history surfaces on load', error)
-  }
+  } catch {}
   const handleUpdate = () => {
     try {
       realignHistoryWithLifeRoutineSurfaces()
-    } catch (error) {
-      console.warn('[sessionHistory] Failed to align history surfaces after routine update', error)
-    }
+    } catch {}
   }
   window.addEventListener(LIFE_ROUTINE_UPDATE_EVENT, handleUpdate)
 }
@@ -1012,23 +992,8 @@ const payloadFromRecord = (
         : Date.now()
   const ENABLE_ROUTINE_TAGS = Boolean((import.meta as any)?.env?.VITE_ENABLE_ROUTINE_TAGS)
   const ENABLE_REPEAT_ORIGINAL = isRepeatOriginalEnabled()
-  const DEBUG_REPEAT = false
   const includeRepeat = ENABLE_REPEAT_ORIGINAL && !!record.repeatingSessionId
   const includeOriginal = ENABLE_REPEAT_ORIGINAL && Number.isFinite(record.originalTime as number)
-  if (DEBUG_REPEAT) {
-    try {
-      // Minimal debug to verify what we are sending to the server for this record
-      // Avoid logging large payload; only the linkage fields
-      // eslint-disable-next-line no-console
-      console.info('[history] payload linkage', {
-        id: record.id,
-        enableRepeatOriginal: ENABLE_REPEAT_ORIGINAL,
-        repeatingSessionId: record.repeatingSessionId ?? null,
-        originalTimeMs: Number.isFinite(record.originalTime as number) ? (record.originalTime as number) : null,
-        willInclude: { repeating_session_id: includeRepeat, original_time: includeOriginal },
-      })
-    } catch {}
-  }
   return {
     id: record.id,
     user_id: userId,
@@ -1148,18 +1113,7 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     const nowIso = new Date(now).toISOString()
     let localRecords = readHistoryRecords()
 
-    if (userChanged && (!lastUserId || lastUserId.length === 0) && localRecords.length > 0) {
-      if (isGuestBootstrapPending()) {
-        console.info('[sessionHistory] Guest history detected; deferring Supabase sync until bootstrap seeds data.')
-        return recordsToActiveEntries(localRecords)
-      }
-      console.info('[sessionHistory] Guest history detected but no bootstrap pending; clearing local cache for new session.')
-      writeHistoryRecords([])
-      localRecords = []
-    }
-
-    if (userChanged && lastUserId && lastUserId !== userId) {
-      console.info('[sessionHistory] Switching users; clearing local history cache for new session.')
+    if (userChanged && localRecords.length > 0) {
       writeHistoryRecords([])
       localRecords = []
     }
@@ -1203,7 +1157,6 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       }
     }
     if (fetchError) {
-      console.warn('Failed to fetch session history delta from Supabase', fetchError)
       return null
     }
 
@@ -1300,7 +1253,6 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
           return { resp, usedPayloads: stripped }
         }
         if (resp.error && isConflictError(resp.error)) {
-          console.info('[sessionHistory] Ignoring history conflict error', resp.error?.message ?? resp.error)
           const cleanResp: typeof resp = { ...resp, error: null as any }
           return { resp: cleanResp, usedPayloads: pls }
         }
@@ -1309,9 +1261,7 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
 
       let payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
       const { resp: upsertResp, usedPayloads } = await doUpsertWithFallback(payloads)
-      if (upsertResp.error) {
-        console.warn('Failed to push pending history updates to Supabase', upsertResp.error)
-      } else {
+      if (!upsertResp.error) {
         pendingUpserts.forEach((record, index) => {
           const payload = usedPayloads[index]
           const updatedIso = typeof payload.updated_at === 'string' ? payload.updated_at : nowIso
@@ -1327,9 +1277,7 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       const deleteIds = pendingDeletes.map((record) => record.id).filter((id) => isUuid(id))
       if (deleteIds.length > 0) {
         const { error: deleteError } = await supabase.from('session_history').delete().in('id', deleteIds)
-        if (deleteError) {
-          console.warn('Failed to delete session history rows from Supabase', deleteError)
-        } else {
+        if (!deleteError) {
           deleteIds.forEach((id) => {
             recordsById.delete(id)
           })
@@ -1369,19 +1317,11 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
   const userId = session.user.id
   const lastUserId = getStoredHistoryUserId()
   if (lastUserId !== null && lastUserId !== userId) {
-    console.info('[sessionHistory] User changed; deferring pending push until sync.')
     return
   }
   const records = readHistoryRecords()
   const pendingUpserts = records.filter((record) => record.pendingAction === 'upsert')
   const pendingDeletes = records.filter((record) => record.pendingAction === 'delete')
-  if (pendingUpserts.length > 0 || pendingDeletes.length > 0) {
-    console.info('[sessionHistory] pushPendingHistory run', {
-      pendingUpserts: pendingUpserts.length,
-      pendingDeletes: pendingDeletes.length,
-    })
-  }
-
   if (pendingUpserts.length > 0) {
     const client = supabase!
     const doUpsertWithFallback = async (pls: any[]) => {
@@ -1409,7 +1349,6 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
         return { resp, usedPayloads: stripped }
       }
       if (resp.error && isConflictError(resp.error)) {
-        console.info('[sessionHistory] Ignoring conflict while pushing history', resp.error?.message ?? resp.error)
         const cleanResp: typeof resp = { ...resp, error: null as any }
         return { resp: cleanResp, usedPayloads: pls }
       }
@@ -1418,9 +1357,7 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
 
     let payloads = pendingUpserts.map((record) => payloadFromRecord(record, userId, Date.now()))
     const { resp: upsertResp, usedPayloads } = await doUpsertWithFallback(payloads)
-    if (upsertResp.error) {
-      console.warn('Failed to push pending history updates to Supabase', upsertResp.error)
-    } else {
+    if (!upsertResp.error) {
       pendingUpserts.forEach((record, index) => {
         const payload = usedPayloads[index]
         const updatedIso = typeof payload.updated_at === 'string' ? payload.updated_at : new Date().toISOString()
@@ -1435,9 +1372,7 @@ export const pushPendingHistoryToSupabase = async (): Promise<void> => {
     const uuidDeleteIds = pendingDeletes.map((record) => record.id).filter((id) => isUuid(id))
     if (uuidDeleteIds.length > 0) {
       const { error: deleteError } = await supabase.from('session_history').delete().in('id', uuidDeleteIds)
-      if (deleteError) {
-        console.warn('Failed to delete session history rows from Supabase', deleteError)
-      } else {
+      if (!deleteError) {
         for (let index = records.length - 1; index >= 0; index -= 1) {
           if (uuidDeleteIds.includes(records[index].id)) {
             records.splice(index, 1)
@@ -1524,12 +1459,10 @@ export const hasRemoteHistory = async (): Promise<boolean> => {
       .select('id', { count: 'exact', head: true })
       .eq('user_id', session.user.id)
     if (error) {
-      console.warn('[sessionHistory] Unable to inspect remote history:', error)
       return true
     }
     return typeof count === 'number' && count > 0
-  } catch (error) {
-    console.warn('[sessionHistory] Unexpected remote history check error:', error)
+  } catch {
     return true
   }
 }
@@ -1548,7 +1481,6 @@ export const pushAllHistoryToSupabase = async (
   purgeDeletedHistoryRecords()
   const remoteExists = await hasRemoteHistory()
   if (remoteExists) {
-    console.info('[sessionHistory] Remote history already exists; skipping seed.')
     return
   }
   let records = readHistoryRecords()
@@ -1580,7 +1512,6 @@ export const pushAllHistoryToSupabase = async (
     return { ...record, id }
   })
   if (uuidNormalized.some((record, index) => record.id !== records[index]?.id)) {
-    console.info('[sessionHistory] Normalized history ids to UUID format')
     records = uuidNormalized
     writeHistoryRecords(records)
   }
@@ -1616,17 +1547,7 @@ export const pushAllHistoryToSupabase = async (
   const payloads = normalizedRecords.map((record, index) =>
     payloadFromRecord(record, userId, seedTimestamp ? seedTimestamp + index : Date.now() + index),
   )
-  const { error } = await supabase
-    .from('session_history')
-    .upsert(payloads, { onConflict: 'id', ignoreDuplicates: true })
-  if (error) {
-    console.warn('[sessionHistory] Failed to seed initial history:', {
-      error,
-      samplePayload: payloads[0],
-    })
-  } else {
-    console.info('[sessionHistory] Seeded session history rows:', payloads.length)
-  }
+  await supabase.from('session_history').upsert(payloads, { onConflict: 'id', ignoreDuplicates: true })
   persistRecords(normalizedRecords)
   setStoredHistoryUserId(session.user.id)
 }
