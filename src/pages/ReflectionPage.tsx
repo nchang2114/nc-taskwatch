@@ -2480,17 +2480,6 @@ export default function ReflectionPage() {
     }
   }, [])
 
-  const reloadRepeatingRules = useCallback(async () => {
-    try {
-      const rules = await fetchRepeatingSessionRules()
-      if (Array.isArray(rules)) {
-        setRepeatingRules(rules)
-      }
-    } catch {
-      // ignore
-    }
-  }, [])
-
   // Load repeating session rules once (single-user dev auth handled in supabase client)
   useEffect(() => {
     let cancelled = false

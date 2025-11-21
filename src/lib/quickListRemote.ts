@@ -161,15 +161,19 @@ export async function fetchQuickListRemoteItems(): Promise<{
       return { goalId, bucketId, items: [] }
     }
     const taskIds = tasks.map((task) => task.id)
-    const { data: subtasks, error: subtaskError } = taskIds.length
-      ? await supabase
-          .from('task_subtasks')
-          .select('id, task_id, text, completed, sort_index, updated_at')
-          .in('task_id', taskIds)
-          .order('sort_index', { ascending: true })
-      : { data: [], error: null as any }
+    let subtasks: any[] = []
+    if (taskIds.length) {
+      const { data } = await supabase
+        .from('task_subtasks')
+        .select('id, task_id, text, completed, sort_index, updated_at')
+        .in('task_id', taskIds)
+        .order('sort_index', { ascending: true })
+      if (Array.isArray(data)) {
+        subtasks = data
+      }
+    }
     const subtasksByTaskId = new Map<string, QuickSubtask[]>()
-    ;(subtasks ?? []).forEach((subtask) => {
+    subtasks.forEach((subtask) => {
       const list = subtasksByTaskId.get(subtask.task_id) ?? []
       list.push({
         id: subtask.id,

@@ -255,9 +255,7 @@ export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]):
 
     const { error: upsertError } = await tryUpsert(rows)
     if (upsertError) {
-      const code = (upsertError as any).code || 'unknown'
       const details = (upsertError as any).details || ''
-      const hint = (upsertError as any).hint || ''
       const msg = `${upsertError.message} ${details}`.toLowerCase()
       // If the backend uses a Postgres ENUM or CHECK constraint for surface_style
       // and it hasn't been updated to include new themes, a 400 error will occur.

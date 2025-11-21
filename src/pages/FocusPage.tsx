@@ -1339,14 +1339,6 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
 
   // Fetch repeating rules to surface guide tasks that overlap 'now'
   const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
-  const reloadRepeatingRules = useCallback(async () => {
-    try {
-      const rules = await fetchRepeatingSessionRules()
-      if (Array.isArray(rules)) {
-        setRepeatingRules(rules)
-      }
-    } catch {}
-  }, [])
   useEffect(() => {
     let cancelled = false
     void (async () => {

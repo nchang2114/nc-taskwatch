@@ -483,7 +483,7 @@ function MainApp() {
         return false
       }
       return true
-    } catch (error) {
+    } catch {
       return false
     }
   }, [])
@@ -499,8 +499,10 @@ function MainApp() {
           redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
         },
       })
-    } catch (error) {
-    }
+      if (error) {
+        return
+      }
+    } catch {}
   }, [])
 
   const isAuthEmailValid = useMemo(() => EMAIL_PATTERN.test(authEmailValue.trim()), [authEmailValue])
@@ -520,7 +522,7 @@ function MainApp() {
           return null
         }
         return Boolean(data)
-      } catch (error) {
+      } catch {
         return null
       }
     },
