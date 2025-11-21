@@ -1003,6 +1003,8 @@ const payloadFromRecord = (
     ended_at: new Date(record.endedAt).toISOString(),
     goal_name: record.goalName,
     bucket_name: record.bucketName,
+    notes: record.notes,
+    subtasks: Array.isArray(record.subtasks) ? record.subtasks : [],
     goal_id: isUuid(record.goalId) ? record.goalId : null,
     bucket_id: isUuid(record.bucketId) ? record.bucketId : null,
     task_id: isUuid(record.taskId) ? record.taskId : null,

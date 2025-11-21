@@ -157,10 +157,11 @@ export async function fetchQuickListRemoteItems(): Promise<{
       .order('completed', { ascending: true })
       .order('priority', { ascending: false })
       .order('sort_index', { ascending: true })
-    if (taskError || !tasks) {
-      return { goalId, bucketId, items: [] }
+    if (taskError) {
+      return null
     }
-    const taskIds = tasks.map((task) => task.id)
+    const taskRows = Array.isArray(tasks) ? tasks : []
+    const taskIds = taskRows.map((task) => task.id)
     let subtasks: any[] = []
     if (taskIds.length) {
       const { data } = await supabase
@@ -184,7 +185,7 @@ export async function fetchQuickListRemoteItems(): Promise<{
       })
       subtasksByTaskId.set(subtask.task_id, list)
     })
-    const items = mapTasksToQuickItems(tasks, subtasksByTaskId)
+    const items = mapTasksToQuickItems(taskRows, subtasksByTaskId)
     return { goalId, bucketId, items }
   } catch {
     return null

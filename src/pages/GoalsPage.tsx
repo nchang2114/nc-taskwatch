@@ -5855,18 +5855,14 @@ export default function GoalsPage(): ReactElement {
             quickListBucketIdRef.current = remote.bucketId
             quickListDebug('hydrated bucket id', remote.bucketId)
           }
-          if (remote?.items) {
-            quickListDebug('Supabase quick list refresh result', { count: remote.items.length })
-            if (remote.items.length === 0) {
-              const localSnapshot = readStoredQuickList()
-              if (localSnapshot.length > 0) {
-                quickListDebug('remote empty; retaining local quick list')
-                return
-              }
-            }
-            const stored = writeStoredQuickList(remote.items)
-            setQuickListItems(stored)
+          if (!remote) {
+            quickListWarn('Supabase quick list refresh failed; keeping local snapshot', { reason })
+            return
           }
+          const remoteItems = Array.isArray(remote.items) ? remote.items : []
+          quickListDebug('Supabase quick list refresh result', { count: remoteItems.length })
+          const stored = writeStoredQuickList(remoteItems)
+          setQuickListItems(stored)
         } catch (error) {
           logWarn(
             `[QuickList] Failed to refresh from Supabase${reason ? ` (${reason})` : ''}:`,
