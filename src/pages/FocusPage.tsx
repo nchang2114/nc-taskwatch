@@ -5251,6 +5251,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                             'task-selector__task',
                             'goal-task-row',
                             diffClass,
+                            task.priority ? 'goal-task-row--priority' : '',
                             'task-selector__task--quick-list',
                             'surface-quick-list',
                             matches ? 'task-selector__task--active' : '',
@@ -5934,14 +5935,15 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                     .join(' ')
                                 : ['goal-task-diff', 'goal-task-diff--none', 'task-selector__diff', 'task-selector__diff-chip']
                                     .join(' ')
-                            const rowClassName = [
-                              'task-selector__task',
-                              'goal-task-row',
-                              task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : '',
-                              'task-selector__task--quick-list',
-                              'surface-quick-list',
-                              matches ? 'task-selector__task--active' : '',
-                            ]
+                          const rowClassName = [
+                            'task-selector__task',
+                            'goal-task-row',
+                            task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : '',
+                            task.priority ? 'goal-task-row--priority' : '',
+                            'task-selector__task--quick-list',
+                            'surface-quick-list',
+                            matches ? 'task-selector__task--active' : '',
+                          ]
                               .filter(Boolean)
                               .join(' ')
                             return (
