@@ -5247,17 +5247,24 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                               : !isDefaultTask && candidateLower === currentTaskLower
                             const diffClass =
                               task.difficulty && task.difficulty !== 'none' ? `goal-task-row--diff-${task.difficulty}` : ''
-                            const rowClassName = [
-                              'task-selector__task',
-                              'goal-task-row',
-                              diffClass,
-                              'task-selector__task--quick-list',
-                              'surface-quick-list',
-                              matches ? 'task-selector__task--active' : '',
-                            ]
-                              .filter(Boolean)
-                              .join(' ')
-                            return (
+                          const rowClassName = [
+                            'task-selector__task',
+                            'goal-task-row',
+                            diffClass,
+                            'task-selector__task--quick-list',
+                            'surface-quick-list',
+                            matches ? 'task-selector__task--active' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')
+                          const diffBadgeClass =
+                            task.difficulty && task.difficulty !== 'none'
+                              ? ['goal-task-diff', `goal-task-diff--${task.difficulty}`, 'task-selector__diff', 'task-selector__diff-chip']
+                                  .filter(Boolean)
+                                  .join(' ')
+                              : ['goal-task-diff', 'goal-task-diff--none', 'task-selector__diff', 'task-selector__diff-chip']
+                                  .join(' ')
+                          return (
                             <li key={`quick-${task.taskId || task.taskName}`} className="task-selector__item">
                               <button
                                   type="button"
@@ -5291,6 +5298,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                         aria-hidden="true"
                                       />
                                     </div>
+                                    <span className={diffBadgeClass} aria-hidden="true" />
                                   </div>
                                 </button>
                               </li>
@@ -5919,6 +5927,13 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                 focusSource.bucketId === task.bucketId &&
                                 candidateLower === currentTaskLower
                               : !isDefaultTask && candidateLower === currentTaskLower
+                            const diffBadgeClass =
+                              task.difficulty && task.difficulty !== 'none'
+                                ? ['goal-task-diff', `goal-task-diff--${task.difficulty}`, 'task-selector__diff', 'task-selector__diff-chip']
+                                    .filter(Boolean)
+                                    .join(' ')
+                                : ['goal-task-diff', 'goal-task-diff--none', 'task-selector__diff', 'task-selector__diff-chip']
+                                    .join(' ')
                             const rowClassName = [
                               'task-selector__task',
                               'goal-task-row',
@@ -5963,6 +5978,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
                                         aria-hidden="true"
                                       />
                                     </div>
+                                    <span className={diffBadgeClass} aria-hidden="true" />
                                   </div>
                                 </button>
                               </li>
