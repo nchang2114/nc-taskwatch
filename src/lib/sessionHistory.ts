@@ -24,6 +24,16 @@ type FeatureFlags = {
   historySubtasks?: boolean
   historyRoutineTags?: boolean
 }
+const envFlagEnabled = (value: unknown): boolean => {
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return normalized === 'true' || normalized === '1' || normalized === 'yes'
+  }
+  return false
+}
+const ENV_ENABLE_HISTORY_NOTES = envFlagEnabled((import.meta as any)?.env?.VITE_ENABLE_HISTORY_NOTES)
+const ENV_ENABLE_HISTORY_SUBTASKS = envFlagEnabled((import.meta as any)?.env?.VITE_ENABLE_HISTORY_SUBTASKS)
+const ENV_ENABLE_REPEAT_ORIGINAL = envFlagEnabled((import.meta as any)?.env?.VITE_ENABLE_REPEAT_ORIGINAL)
 const readFeatureFlags = (): FeatureFlags => {
   if (typeof window === 'undefined') return {}
   try {
@@ -40,9 +50,11 @@ const writeFeatureFlags = (flags: FeatureFlags) => {
   try { window.localStorage.setItem(FEATURE_FLAGS_STORAGE_KEY, JSON.stringify(flags)) } catch {}
 }
 const isRepeatOriginalEnabled = (): boolean => {
+  if (ENV_ENABLE_REPEAT_ORIGINAL) {
+    return true
+  }
   const flags = readFeatureFlags()
-  // Default optimistic: true unless explicitly disabled
-  return flags.repeatOriginal !== false
+  return flags.repeatOriginal === true
 }
 const disableRepeatOriginal = () => {
   const flags = readFeatureFlags()
@@ -51,8 +63,11 @@ const disableRepeatOriginal = () => {
   writeFeatureFlags(flags)
 }
 const isHistoryNotesEnabled = (): boolean => {
+  if (ENV_ENABLE_HISTORY_NOTES) {
+    return true
+  }
   const flags = readFeatureFlags()
-  return flags.historyNotes !== false
+  return flags.historyNotes === true
 }
 const disableHistoryNotes = () => {
   const flags = readFeatureFlags()
@@ -61,8 +76,11 @@ const disableHistoryNotes = () => {
   writeFeatureFlags(flags)
 }
 const isHistorySubtasksEnabled = (): boolean => {
+  if (ENV_ENABLE_HISTORY_SUBTASKS) {
+    return true
+  }
   const flags = readFeatureFlags()
-  return flags.historySubtasks !== false
+  return flags.historySubtasks === true
 }
 const disableHistorySubtasks = () => {
   const flags = readFeatureFlags()
