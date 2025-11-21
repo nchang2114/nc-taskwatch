@@ -91,6 +91,10 @@ const buildHistorySelectColumns = (): string => {
   if (isHistorySubtasksEnabled()) {
     columns += ', subtasks'
   }
+  const routineEnvEnabled = Boolean((import.meta as any)?.env?.VITE_ENABLE_ROUTINE_TAGS)
+  if (routineEnvEnabled && isHistoryRoutineTagsEnabled()) {
+    columns += ', routine_id, occurrence_date'
+  }
   if (isRepeatOriginalEnabled()) {
     columns += ', repeating_session_id, original_time'
   }
@@ -166,7 +170,8 @@ const upsertHistoryPayloads = async (
     client.from('session_history').upsert(pls, { onConflict: 'id', ignoreDuplicates: true })
   let usedPayloads = payloads
   let resp = await attempt(usedPayloads)
-  if (resp.error && isColumnMissingError(resp.error)) {
+  let attempts = 0
+  while (resp.error && isColumnMissingError(resp.error) && attempts < 5) {
     const missingRoutineColumns =
       errorMentionsColumn(resp.error, 'routine_id') || errorMentionsColumn(resp.error, 'occurrence_date')
     const missingRepeatColumns =
@@ -175,29 +180,31 @@ const upsertHistoryPayloads = async (
     const missingSubtasksColumn = errorMentionsColumn(resp.error, 'subtasks')
     const removalNeeded =
       missingRoutineColumns || missingRepeatColumns || missingNotesColumn || missingSubtasksColumn
-    if (removalNeeded) {
-      if (missingRepeatColumns && isRepeatOriginalEnabled()) {
-        disableRepeatOriginal()
-      }
-      if (missingNotesColumn && isHistoryNotesEnabled()) {
-        disableHistoryNotes()
-      }
-      if (missingSubtasksColumn && isHistorySubtasksEnabled()) {
-        disableHistorySubtasks()
-      }
-      if (missingRoutineColumns && isHistoryRoutineTagsEnabled()) {
-        disableHistoryRoutineTags()
-      }
-      usedPayloads = usedPayloads.map((payload) =>
-        stripHistoryPayloadColumns(payload, {
-          routine: missingRoutineColumns,
-          repeat: missingRepeatColumns,
-          notes: missingNotesColumn,
-          subtasks: missingSubtasksColumn,
-        }),
-      )
-      resp = await attempt(usedPayloads)
+    if (!removalNeeded) {
+      break
     }
+    if (missingRepeatColumns && isRepeatOriginalEnabled()) {
+      disableRepeatOriginal()
+    }
+    if (missingNotesColumn && isHistoryNotesEnabled()) {
+      disableHistoryNotes()
+    }
+    if (missingSubtasksColumn && isHistorySubtasksEnabled()) {
+      disableHistorySubtasks()
+    }
+    if (missingRoutineColumns && isHistoryRoutineTagsEnabled()) {
+      disableHistoryRoutineTags()
+    }
+    usedPayloads = usedPayloads.map((payload) =>
+      stripHistoryPayloadColumns(payload, {
+        routine: missingRoutineColumns,
+        repeat: missingRepeatColumns,
+        notes: missingNotesColumn,
+        subtasks: missingSubtasksColumn,
+      }),
+    )
+    resp = await attempt(usedPayloads)
+    attempts += 1
   }
   return { resp, usedPayloads }
 }
@@ -904,14 +911,12 @@ const recordsToActiveEntries = (records: HistoryRecord[]): HistoryEntry[] =>
 
 const readHistoryRecords = (): HistoryRecord[] => {
   if (typeof window === 'undefined') {
-    return createSampleHistoryRecords()
+    return []
   }
   try {
     const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY)
     if (!raw) {
-      const sampleRecords = createSampleHistoryRecords()
-      writeHistoryRecords(sampleRecords)
-      return sampleRecords
+      return []
     }
     const records = sanitizeHistoryRecords(JSON.parse(raw))
     // Local normalization: ensure future entries are flagged even before remote sync
@@ -1263,45 +1268,52 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       })
     }
 
-    let selectColumns = buildHistorySelectColumns()
-
     // Limit remote fetch to a recent window to reduce egress
     const sinceIso = new Date(now - HISTORY_REMOTE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
-    let { data: remoteRows, error: fetchError } = await supabase
-      .from('session_history')
-      .select((selectColumns as unknown) as any)
-      .eq('user_id', userId)
-      .gte('updated_at', sinceIso)
-      .order('updated_at', { ascending: false })
-    if (fetchError && isColumnMissingError(fetchError)) {
+    let remoteRows: any[] | null = null
+    let fetchError: any = null
+    let attempts = 0
+    do {
+      const selectColumns = buildHistorySelectColumns()
+      const response = await supabase
+        .from('session_history')
+        .select((selectColumns as unknown) as any)
+        .eq('user_id', userId)
+        .gte('updated_at', sinceIso)
+        .order('updated_at', { ascending: false })
+      remoteRows = response.data as any
+      fetchError = response.error as any
+      if (!fetchError || !isColumnMissingError(fetchError)) {
+        break
+      }
       const missingRepeat =
         errorMentionsColumn(fetchError, 'repeating_session_id') || errorMentionsColumn(fetchError, 'original_time')
       const missingNotes = errorMentionsColumn(fetchError, 'notes')
       const missingSubtasks = errorMentionsColumn(fetchError, 'subtasks')
-      let retried = false
+      const missingRoutineTags =
+        errorMentionsColumn(fetchError, 'routine_id') || errorMentionsColumn(fetchError, 'occurrence_date')
+      let changed = false
       if (missingRepeat && isRepeatOriginalEnabled()) {
         disableRepeatOriginal()
-        retried = true
+        changed = true
       }
       if (missingNotes && isHistoryNotesEnabled()) {
         disableHistoryNotes()
-        retried = true
+        changed = true
       }
       if (missingSubtasks && isHistorySubtasksEnabled()) {
         disableHistorySubtasks()
-        retried = true
+        changed = true
       }
-      if (retried) {
-        const retry = await supabase
-          .from('session_history')
-          .select((buildHistorySelectColumns() as unknown) as any)
-          .eq('user_id', userId)
-          .gte('updated_at', sinceIso)
-          .order('updated_at', { ascending: false })
-        remoteRows = retry.data as any
-        fetchError = retry.error as any
+      if (missingRoutineTags && isHistoryRoutineTagsEnabled()) {
+        disableHistoryRoutineTags()
+        changed = true
       }
-    }
+      if (!changed) {
+        break
+      }
+      attempts += 1
+    } while (attempts < 5)
     if (fetchError) {
       return null
     }
@@ -1582,25 +1594,8 @@ export const pushAllHistoryToSupabase = async (
     return
   }
   let records = readHistoryRecords()
-  const samples = createSampleHistoryRecords()
   if (!records || records.length === 0) {
-    writeHistoryRecords(samples)
-    records = samples
-  } else {
-    const map = new Map<string, HistoryRecord>()
-    records.forEach((record) => map.set(record.id, record))
-    let added = false
-    samples.forEach((sample) => {
-      if (!map.has(sample.id)) {
-        map.set(sample.id, sample)
-        added = true
-      }
-    })
-    if (added) {
-      const merged = Array.from(map.values())
-      records = sortRecordsForStorage(merged)
-      writeHistoryRecords(records)
-    }
+    records = []
   }
   const uuidNormalized = records.map((record) => {
     if (isUuid(record.id)) {

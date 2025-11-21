@@ -9,6 +9,7 @@ import FocusPage from './pages/FocusPage'
 import { FOCUS_EVENT_TYPE } from './lib/focusChannel'
 import { SCHEDULE_EVENT_TYPE } from './lib/scheduleChannel'
 import { supabase } from './lib/supabaseClient'
+import { ensureQuickListUser } from './lib/quickList'
 import { clearCachedSupabaseSession, readCachedSessionTokens } from './lib/authStorage'
 
 type Theme = 'light' | 'dark'
@@ -716,6 +717,7 @@ function MainApp() {
       if (mounted) {
         const profile = deriveProfileFromSupabaseUser(session?.user ?? null)
         setUserProfile(profile)
+        ensureQuickListUser(session?.user?.id ?? null)
         if (profile) {
           setAuthModalOpen(false)
         }
@@ -727,6 +729,7 @@ function MainApp() {
         }
         const profile = deriveProfileFromSupabaseUser(data?.user ?? session?.user ?? null)
         setUserProfile(profile)
+        ensureQuickListUser(data?.user?.id ?? session?.user?.id ?? null)
         if (profile) {
           setAuthModalOpen(false)
         }
@@ -740,6 +743,7 @@ function MainApp() {
       }
       const profile = deriveProfileFromSupabaseUser(session?.user)
       setUserProfile(profile)
+      ensureQuickListUser(session?.user?.id ?? null)
       if (profile) {
         setAuthModalOpen(false)
       }
@@ -772,6 +776,7 @@ function MainApp() {
       } catch {}
     }
     clearCachedSupabaseSession()
+    ensureQuickListUser(null)
     setUserProfile(null)
     closeProfileMenu()
     if (typeof window !== 'undefined') {

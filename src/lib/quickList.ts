@@ -25,75 +25,30 @@ export type QuickItem = {
 
 export const QUICK_LIST_STORAGE_KEY = 'nc-taskwatch-quick-list-v1'
 export const QUICK_LIST_UPDATE_EVENT = 'nc-quick-list:updated'
+const QUICK_LIST_USER_STORAGE_KEY = 'nc-taskwatch-quick-list-user'
 
-const cloneQuickSubtask = (subtask: QuickSubtask): QuickSubtask => ({ ...subtask })
+const readStoredQuickListUserId = (): string | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const value = window.localStorage.getItem(QUICK_LIST_USER_STORAGE_KEY)
+    if (!value) return null
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : null
+  } catch {
+    return null
+  }
+}
 
-const cloneQuickItem = (item: QuickItem): QuickItem => ({
-  ...item,
-  subtasks: item.subtasks ? item.subtasks.map(cloneQuickSubtask) : [],
-})
-
-const QUICK_LIST_DEFAULT_ITEMS: QuickItem[] = [
-  {
-    id: 'quick-groceries',
-    text: 'Groceries – restock basics',
-    completed: false,
-    sortIndex: 0,
-    notes: 'Think breakfast, greens, grab-and-go snacks.',
-    difficulty: 'green',
-    priority: true,
-    subtasks: [
-      { id: 'quick-groceries-1', text: 'Fruit + greens', completed: false, sortIndex: 0 },
-      { id: 'quick-groceries-2', text: 'Breakfast staples', completed: false, sortIndex: 1 },
-      { id: 'quick-groceries-3', text: 'Snacks / treats', completed: false, sortIndex: 2 },
-    ],
-  },
-  {
-    id: 'quick-laundry',
-    text: 'Laundry + fold',
-    completed: false,
-    sortIndex: 1,
-    notes: 'Start a load before work, fold during a show.',
-    difficulty: 'green',
-    priority: false,
-  },
-  {
-    id: 'quick-clean',
-    text: '10-min reset: tidy desk & surfaces',
-    completed: false,
-    sortIndex: 2,
-    notes: 'Clear cups, wipe surfaces, light candle or diffuser.',
-    difficulty: 'yellow',
-    priority: false,
-  },
-  {
-    id: 'quick-bills',
-    text: 'Pay bills & snapshot budget',
-    completed: false,
-    sortIndex: 3,
-    notes: 'Autopay check + log any big expenses.',
-    difficulty: 'yellow',
-    priority: false,
-  },
-  {
-    id: 'quick-social',
-    text: 'Send a check-in text',
-    completed: false,
-    sortIndex: 4,
-    notes: 'Ping a friend/family member you’ve been thinking about.',
-    difficulty: 'green',
-    priority: false,
-  },
-]
-
-const getDefaultQuickList = (): QuickItem[] =>
-  QUICK_LIST_DEFAULT_ITEMS.map((item, index) =>
-    cloneQuickItem({
-      ...item,
-      sortIndex: index,
-      subtasks: item.subtasks ? item.subtasks.map((subtask, subIndex) => ({ ...subtask, sortIndex: subIndex })) : [],
-    }),
-  )
+const setStoredQuickListUserId = (userId: string | null): void => {
+  if (typeof window === 'undefined') return
+  try {
+    if (!userId) {
+      window.localStorage.removeItem(QUICK_LIST_USER_STORAGE_KEY)
+    } else {
+      window.localStorage.setItem(QUICK_LIST_USER_STORAGE_KEY, userId)
+    }
+  } catch {}
+}
 
 const sanitizeSubtask = (value: unknown, index: number): QuickSubtask | null => {
   if (typeof value !== 'object' || value === null) return null
@@ -175,10 +130,10 @@ export const sanitizeQuickList = (value: unknown): QuickItem[] => {
 }
 
 export const readStoredQuickList = (): QuickItem[] => {
-  if (typeof window === 'undefined') return getDefaultQuickList()
+  if (typeof window === 'undefined') return []
   try {
     const raw = window.localStorage.getItem(QUICK_LIST_STORAGE_KEY)
-    if (!raw) return getDefaultQuickList()
+    if (!raw) return []
     const parsed = JSON.parse(raw)
     const sanitized = sanitizeQuickList(parsed)
     if (sanitized.length > 0) {
@@ -187,9 +142,9 @@ export const readStoredQuickList = (): QuickItem[] => {
     if (Array.isArray(parsed) && parsed.length === 0) {
       return []
     }
-    return getDefaultQuickList()
+    return sanitized
   } catch {
-    return getDefaultQuickList()
+    return []
   }
 }
 
@@ -202,6 +157,17 @@ export const writeStoredQuickList = (items: QuickItem[]): QuickItem[] => {
     } catch {}
   }
   return normalized
+}
+
+export const ensureQuickListUser = (userId: string | null): void => {
+  if (typeof window === 'undefined') return
+  const normalized = typeof userId === 'string' && userId.trim().length > 0 ? userId : null
+  const current = readStoredQuickListUserId()
+  if (current === normalized) {
+    return
+  }
+  setStoredQuickListUserId(normalized)
+  writeStoredQuickList([])
 }
 
 export const subscribeQuickList = (cb: (items: QuickItem[]) => void): (() => void) => {

@@ -291,12 +291,12 @@ export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]):
 
 export const readStoredLifeRoutines = (): LifeRoutineConfig[] => {
   if (typeof window === 'undefined') {
-    return getDefaultLifeRoutines()
+    return []
   }
   try {
     const raw = window.localStorage.getItem(LIFE_ROUTINE_STORAGE_KEY)
     if (!raw) {
-      return getDefaultLifeRoutines()
+      return []
     }
     const parsed = JSON.parse(raw)
     const sanitized = sanitizeLifeRoutineList(parsed)
@@ -306,9 +306,9 @@ export const readStoredLifeRoutines = (): LifeRoutineConfig[] => {
     if (Array.isArray(parsed) && parsed.length === 0) {
       return []
     }
-    return getDefaultLifeRoutines()
+    return []
   } catch {
-    return getDefaultLifeRoutines()
+    return []
   }
 }
 
