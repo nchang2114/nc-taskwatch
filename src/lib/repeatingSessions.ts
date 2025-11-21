@@ -749,8 +749,7 @@ export async function setRepeatToNoneAfterOccurrence(
 ): Promise<boolean> {
   const occStart = parseLocalYmd(occurrenceDateYmd)
   if (!Number.isFinite(occStart)) return false
-  // Per requirement: set end_date to the SELECTED entry's start time (timestampz). Using local day start
-  // would be imprecise for DST; here we persist the exact start timestamp boundary expected by the UI.
+  // Set boundary to the start of the selected day in local time
   const ok = await updateRepeatingRuleEndDate(ruleId, occStart)
   try {
     await prunePlanned(ruleId, occurrenceDateYmd)
