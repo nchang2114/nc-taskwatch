@@ -1557,18 +1557,30 @@ export const hasRemoteHistory = async (): Promise<boolean> => {
 export const pushAllHistoryToSupabase = async (
   ruleIdMap?: Record<string, string>,
   seedTimestamp?: number,
+  options?: { skipRemoteCheck?: boolean; strict?: boolean },
 ): Promise<void> => {
+  const skipRemoteCheck = Boolean(options?.skipRemoteCheck)
+  const strict = Boolean(options?.strict)
+  const fail = (message: string, err?: unknown) => {
+    if (strict) {
+      throw err instanceof Error ? err : new Error(message)
+    }
+  }
   if (!supabase) {
+    fail('Supabase client unavailable for history sync')
     return
   }
   const session = await ensureSingleUserSession()
   if (!session) {
+    fail('No Supabase session for history sync')
     return
   }
   purgeDeletedHistoryRecords()
-  const remoteExists = await hasRemoteHistory()
-  if (remoteExists) {
-    return
+  if (!skipRemoteCheck) {
+    const remoteExists = await hasRemoteHistory()
+    if (remoteExists) {
+      return
+    }
   }
   let records = readHistoryRecords()
   if (!records || records.length === 0) {
@@ -1613,7 +1625,11 @@ export const pushAllHistoryToSupabase = async (
     payloadFromRecord(record, userId, seedTimestamp ? seedTimestamp + index : Date.now() + index),
   )
   const client = supabase!
-  await upsertHistoryPayloads(client, payloads)
+  const { resp } = await upsertHistoryPayloads(client, payloads)
+  if (resp?.error && !isConflictError(resp.error)) {
+    fail('Failed to upsert session history', resp.error)
+    return
+  }
   persistRecords(normalizedRecords)
   setStoredHistoryUserId(session.user.id)
 }

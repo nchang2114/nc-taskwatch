@@ -249,12 +249,23 @@ const mapDbRowToRoutine = (row: LifeRoutineDbRow): LifeRoutineConfig | null => {
   }
 }
 
-export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]): Promise<void> => {
+export const pushLifeRoutinesToSupabase = async (
+  routines: LifeRoutineConfig[],
+  options?: { strict?: boolean },
+): Promise<void> => {
+  const strict = Boolean(options?.strict)
+  const fail = (message: string, err?: unknown) => {
+    if (strict) {
+      throw err instanceof Error ? err : new Error(message)
+    }
+  }
   if (!supabase) {
+    fail('Supabase client unavailable')
     return
   }
   const session = await ensureSingleUserSession()
   if (!session) {
+    fail('No Supabase session for life routines sync')
     return
   }
 
@@ -278,11 +289,13 @@ export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]):
     .eq('user_id', session.user.id)
 
   if (remoteIdsError) {
+    fail('Failed to load remote life routines', remoteIdsError)
     return
   }
 
   if (rows.length > 0) {
-    const tryUpsert = async (payload: typeof rows) => supabase!.from('life_routines').upsert(payload, { onConflict: 'id' })
+    const tryUpsert = async (payload: typeof rows) =>
+      supabase!.from('life_routines').upsert(payload, { onConflict: 'id' })
 
     const { error: upsertError } = await tryUpsert(rows)
     if (upsertError) {
@@ -299,9 +312,11 @@ export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]):
         const fallbackRows = rows.map((r) => ({ ...r, surface_style: fallback }))
         const { error: retryError } = await tryUpsert(fallbackRows)
         if (retryError) {
+          fail('Failed to upsert life routines with fallback surface', retryError)
           return
         }
       } else {
+        fail('Failed to upsert life routines', upsertError)
         return
       }
     }
@@ -316,7 +331,10 @@ export const pushLifeRoutinesToSupabase = async (routines: LifeRoutineConfig[]):
     }
   })
   if (idsToDelete.length > 0) {
-    await supabase.from('life_routines').delete().in('id', idsToDelete)
+    const { error: deleteError } = await supabase.from('life_routines').delete().in('id', idsToDelete)
+    if (deleteError) {
+      fail('Failed to prune remote life routines', deleteError)
+    }
   }
 }
 

@@ -162,11 +162,19 @@ const writeEndMap = (map: EndMap) => {
 
 export const pushRepeatingRulesToSupabase = async (
   rules: RepeatingSessionRule[],
+  options?: { strict?: boolean },
 ): Promise<Record<string, string>> => {
-  if (!supabase) return {}
+  const strict = Boolean(options?.strict)
+  const fail = (message: string, err?: unknown): Record<string, string> => {
+    if (strict) {
+      throw err instanceof Error ? err : new Error(message)
+    }
+    return {}
+  }
+  if (!supabase) return fail('Supabase client unavailable for repeating rules')
   if (!rules || rules.length === 0) return {}
   const session = await ensureSingleUserSession()
-  if (!session?.user?.id) return {}
+  if (!session?.user?.id) return fail('No Supabase session for repeating rules sync')
   const idMap: Record<string, string> = {}
   const normalizedRules = rules.map((rule) => {
     const safeTaskName = deriveRuleTaskNameFromParts(rule.taskName, rule.bucketName, rule.goalName)
@@ -211,9 +219,10 @@ export const pushRepeatingRulesToSupabase = async (
       updated_at: new Date().toISOString(),
     }
   })
-  try {
-    await supabase.from('repeating_sessions').upsert(payloads, { onConflict: 'id' })
-  } catch {}
+  const { error } = await supabase.from('repeating_sessions').upsert(payloads, { onConflict: 'id' })
+  if (error) {
+    return fail('Failed to upsert repeating rules', error)
+  }
   return idMap
 }
 
