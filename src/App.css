@@ -2006,19 +2006,6 @@ html[data-theme='light'] .settings-panel__group {
   flex-shrink: 0;
 }
 
-.auth-verify__code-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  color: var(--text-primary);
-  font-size: 1.1rem;
-  letter-spacing: 0.15em;
-}
-
-.auth-verify__code-input:focus {
-  outline: none;
-}
-
 .auth-verify__message {
   margin: 0.25rem 0 0;
   font-size: 0.8rem;
