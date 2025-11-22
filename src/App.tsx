@@ -1690,15 +1690,15 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
                   </button>
                 </div>
                 <div className="auth-create__card">
-                  <label className="auth-create__field">
+                  <div className="auth-create__field">
                     <span className="auth-create__label">Email address</span>
-                    <div className="auth-create__email-row">
-                      <span className="auth-create__pill">{authEmailValue}</span>
+                    <div className="auth-create__pill">
+                      <span className="auth-create__pill-value">{authEmailValue}</span>
                       <button type="button" className="auth-create__edit" onClick={handleAuthCreateBack}>
                         Edit
                       </button>
                     </div>
-                  </label>
+                  </div>
                   <label className="auth-create__field">
                     <span className="auth-create__label">Password</span>
                     <div className="auth-create__password">
@@ -1782,23 +1782,6 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
                       </svg>
                     </span>
                     Continue with Microsoft
-                  </button>
-                  <button type="button" className="auth-provider" aria-disabled="true">
-                    <span className="auth-provider__icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" focusable="false">
-                        <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                      </svg>
-                    </span>
-                    Log in with passkey
-                  </button>
-                  <button type="button" className="auth-provider" aria-disabled="true">
-                    <span className="auth-provider__icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" focusable="false">
-                        <path d="M3 5h18v14H3z" strokeWidth="1.5" stroke="currentColor" fill="none" />
-                        <path d="M7 9h10v2H7zm0 4h6v2H7z" fill="currentColor" />
-                      </svg>
-                    </span>
-                    Single sign-on (SSO)
                   </button>
                 </div>
                 <hr className="auth-modal__divider" />
