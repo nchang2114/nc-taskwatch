@@ -5766,11 +5766,7 @@ export default function GoalsPage(): ReactElement {
 
   // Quick List (simple tasks without buckets)
   const [quickListExpanded, setQuickListExpanded] = useState(() => readStoredQuickListExpanded())
-  const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => {
-    const stored = readStoredQuickList()
-    console.log('[Goals] initial quick list items', stored.length)
-    return stored
-  })
+  const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => readStoredQuickList())
   const [quickDraft, setQuickDraft] = useState('')
   const [quickDraftActive, setQuickDraftActive] = useState(false)
   const quickDraftInputRef = useRef<HTMLInputElement | null>(null)
@@ -7221,7 +7217,6 @@ export default function GoalsPage(): ReactElement {
   }, [refreshGoalsFromSupabase, refreshQuickListFromSupabase])
   useEffect(() => {
     if (shouldSkipQuickListRemote()) {
-      console.log('[Goals] skipping quick list refresh during guest/bootstrap')
       return
     }
     refreshQuickListFromSupabase('initial-load')

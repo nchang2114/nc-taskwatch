@@ -14,6 +14,7 @@ import { ensureQuickListUser } from './lib/quickList'
 import { ensureLifeRoutineUser } from './lib/lifeRoutines'
 import { ensureHistoryUser, pushPendingHistoryToSupabase } from './lib/sessionHistory'
 import { bootstrapGuestDataIfNeeded } from './lib/bootstrap'
+import { ensureGoalsUser } from './lib/goalsSync'
 
 type Theme = 'light' | 'dark'
 type TabKey = 'goals' | 'focus' | 'reflection'
@@ -693,10 +694,13 @@ function MainApp() {
     const alignLocalStoresForUser = async (userId: string | null): Promise<void> => {
       try {
         await bootstrapGuestDataIfNeeded(userId)
-      } catch {}
+      } catch (error) {
+        console.error('[bootstrap] failed during alignLocalStoresForUser', error)
+      }
       ensureQuickListUser(userId)
       ensureLifeRoutineUser(userId)
       ensureHistoryUser(userId)
+      ensureGoalsUser(userId)
     }
 
     const applySessionUser = async (user: User | null | undefined): Promise<void> => {
@@ -784,6 +788,7 @@ function MainApp() {
     ensureQuickListUser(null)
     ensureLifeRoutineUser(null)
     ensureHistoryUser(null)
+    ensureGoalsUser(null)
     setUserProfile(null)
     closeProfileMenu()
     if (typeof window !== 'undefined') {

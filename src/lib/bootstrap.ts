@@ -12,11 +12,36 @@ import {
   upsertTaskSubtask,
 } from './goalsApi'
 import { readStoredLifeRoutines, pushLifeRoutinesToSupabase } from './lifeRoutines'
+import { readStoredGoalsSnapshot, readGoalsSnapshotOwner, GOALS_GUEST_USER_ID } from './goalsSync'
+import { QUICK_LIST_GOAL_NAME } from './quickListRemote'
 
 let bootstrapPromises = new Map<string, Promise<void>>()
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const isUuid = (value: string | undefined | null): value is string => !!value && UUID_REGEX.test(value)
 const ensureUuid = (value: string | undefined): string => (isUuid(value) ? value! : generateUuid())
+const GOAL_SORT_STEP = 1024
+const SUBTASK_SORT_STEP = 1024
+
+const sanitizeGoalName = (value: string | undefined): string =>
+  value && value.trim().length > 0 ? value.trim() : 'Personal Goal'
+
+const sanitizeBucketName = (value: string | undefined): string =>
+  value && value.trim().length > 0 ? value.trim() : 'Task List'
+
+const sanitizeTaskText = (value: string | undefined): string | null => {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+const sanitizeDifficulty = (value: string | undefined): 'none' | 'green' | 'yellow' | 'red' => {
+  if (value === 'green' || value === 'yellow' || value === 'red') {
+    return value
+  }
+  return 'none'
+}
 
 const sortByIndex = (a: { sortIndex?: number }, b: { sortIndex?: number }) => {
   const left = typeof a.sortIndex === 'number' ? a.sortIndex : 0
@@ -88,10 +113,164 @@ const uploadQuickListItems = async (items: QuickItem[]): Promise<void> => {
   }
 }
 
+const migrateGoalsSnapshot = async (): Promise<void> => {
+  const owner = readGoalsSnapshotOwner()
+  if (owner && owner !== GOALS_GUEST_USER_ID) {
+    return
+  }
+  const snapshot = readStoredGoalsSnapshot().filter(
+    (goal) => goal.name?.trim() !== QUICK_LIST_GOAL_NAME,
+  )
+  if (snapshot.length === 0) {
+    return
+  }
+  if (!supabase) {
+    throw new Error('Supabase client unavailable for goals migration')
+  }
+  const session = await ensureSingleUserSession()
+  if (!session?.user?.id) {
+    throw new Error('Missing Supabase session for goals migration')
+  }
+  const userId = session.user.id
+  const { data: existingGoals, error: existingError } = await supabase
+    .from('goals')
+    .select('id')
+    .eq('user_id', userId)
+    .limit(1)
+  if (existingError) {
+    throw existingError
+  }
+  if (existingGoals && existingGoals.length > 0) {
+    return
+  }
+
+  const goalIdMap = new Map<string, string>()
+  const bucketIdMap = new Map<string, string>()
+  const taskIdMap = new Map<string, string>()
+  const goalRows: Array<Record<string, any>> = []
+  const bucketRows: Array<Record<string, any>> = []
+  const taskRows: Array<Record<string, any>> = []
+  const subtaskRows: Array<Record<string, any>> = []
+
+  snapshot.forEach((goal, goalIndex) => {
+    const goalId = (() => {
+      if (goal.id && goalIdMap.has(goal.id)) {
+        return goalIdMap.get(goal.id)!
+      }
+      const generated = ensureUuid(goal.id)
+      if (goal.id) {
+        goalIdMap.set(goal.id, generated)
+      }
+      return generated
+    })()
+    goalRows.push({
+      id: goalId,
+      user_id: userId,
+      name: sanitizeGoalName(goal.name),
+      color: goal.color ?? 'from-sky-500 to-indigo-500',
+      sort_index: (goalIndex + 1) * GOAL_SORT_STEP,
+      starred: Boolean(goal.starred),
+      goal_archive: Boolean(goal.archived),
+      milestones_shown: typeof (goal as any).milestonesShown === 'boolean' ? (goal as any).milestonesShown : null,
+    })
+    ;(goal.buckets ?? []).forEach((bucket, bucketIndex) => {
+      const bucketId = (() => {
+        if (bucket.id && bucketIdMap.has(bucket.id)) {
+          return bucketIdMap.get(bucket.id)!
+        }
+        const generated = ensureUuid(bucket.id)
+        if (bucket.id) {
+          bucketIdMap.set(bucket.id, generated)
+        }
+        return generated
+      })()
+      bucketRows.push({
+        id: bucketId,
+        user_id: userId,
+        goal_id: goalId,
+        name: sanitizeBucketName(bucket.name),
+        favorite: Boolean(bucket.favorite),
+        sort_index: (bucketIndex + 1) * GOAL_SORT_STEP,
+        buckets_card_style: bucket.surfaceStyle ?? null,
+        bucket_archive: Boolean(bucket.archived),
+      })
+      ;(bucket.tasks ?? []).forEach((task, taskIndex) => {
+        const text = sanitizeTaskText(task.text)
+        if (!text) {
+          return
+        }
+        const taskId = (() => {
+          if (task.id && taskIdMap.has(task.id)) {
+            return taskIdMap.get(task.id)!
+          }
+          const generated = ensureUuid(task.id)
+          if (task.id) {
+            taskIdMap.set(task.id, generated)
+          }
+          return generated
+        })()
+        taskRows.push({
+          id: taskId,
+          user_id: userId,
+          bucket_id: bucketId,
+          text,
+          completed: Boolean(task.completed),
+          difficulty: sanitizeDifficulty(task.difficulty),
+          priority: Boolean(task.priority),
+          sort_index: (taskIndex + 1) * GOAL_SORT_STEP,
+          notes: typeof task.notes === 'string' ? task.notes : '',
+        })
+        ;(task.subtasks ?? []).forEach((subtask, subIndex) => {
+          const subText = sanitizeTaskText(subtask.text)
+          if (!subText) {
+            return
+          }
+          subtaskRows.push({
+            id: ensureUuid(subtask.id),
+            user_id: userId,
+            task_id: taskId,
+            text: subText,
+            completed: Boolean(subtask.completed),
+            sort_index:
+              typeof subtask.sortIndex === 'number' ? subtask.sortIndex : (subIndex + 1) * SUBTASK_SORT_STEP,
+          })
+        })
+      })
+    })
+  })
+
+  if (goalRows.length > 0) {
+    const { error } = await supabase.from('goals').insert(goalRows)
+    if (error) {
+      throw error
+    }
+  }
+  if (bucketRows.length > 0) {
+    const { error } = await supabase.from('buckets').insert(bucketRows)
+    if (error) {
+      throw error
+    }
+  }
+  if (taskRows.length > 0) {
+    const { error } = await supabase.from('tasks').insert(taskRows)
+    if (error) {
+      throw error
+    }
+  }
+  if (subtaskRows.length > 0) {
+    const { error } = await supabase.from('task_subtasks').insert(subtaskRows)
+    if (error) {
+      throw error
+    }
+  }
+}
+
 const migrateGuestData = async (): Promise<void> => {
   const rules = readLocalRepeatingRules().filter((rule) => rule.id !== SAMPLE_SLEEP_ROUTINE_ID)
   const ruleIdMap =
     rules.length > 0 ? await pushRepeatingRulesToSupabase(rules, { strict: true }) : ({} as Record<string, string>)
+
+  await migrateGoalsSnapshot()
 
   const history = readStoredHistory()
   if (history.length > 0) {

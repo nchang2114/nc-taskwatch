@@ -1050,15 +1050,6 @@ export const ensureHistoryUser = (userId: string | null): void => {
   if (current === normalized) {
     return
   }
-  try {
-    const records = readHistoryRecords()
-    console.log('[history] ensure user swap', {
-      from: current,
-      to: normalized,
-      migratingFromGuest: current === HISTORY_GUEST_USER_ID && normalized !== HISTORY_GUEST_USER_ID,
-      recordCount: Array.isArray(records) ? records.length : 0,
-    })
-  } catch {}
   const migratingFromGuest = current === HISTORY_GUEST_USER_ID && normalized !== HISTORY_GUEST_USER_ID
   setStoredHistoryUserId(normalized)
   if (normalized === HISTORY_GUEST_USER_ID) {

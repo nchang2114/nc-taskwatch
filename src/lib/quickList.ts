@@ -249,15 +249,6 @@ export const ensureQuickListUser = (userId: string | null): void => {
   const normalized = normalizeQuickListUserId(userId)
   const current = readStoredQuickListUserId()
   if (current === normalized) return
-  try {
-    const currentItems = readStoredQuickList()
-    console.log('[quickList] ensure user swap', {
-      from: current,
-      to: normalized,
-      migratingFromGuest: current === QUICK_LIST_GUEST_USER_ID && normalized !== QUICK_LIST_GUEST_USER_ID,
-      itemCount: currentItems.length,
-    })
-  } catch {}
   const migratingFromGuest = current === QUICK_LIST_GUEST_USER_ID && normalized !== QUICK_LIST_GUEST_USER_ID
   setStoredQuickListUserId(normalized)
   if (normalized === QUICK_LIST_GUEST_USER_ID) {

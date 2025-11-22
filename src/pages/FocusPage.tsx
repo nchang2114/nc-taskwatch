@@ -32,6 +32,8 @@ import {
   subscribeToGoalsSnapshot,
   type GoalSnapshot,
   type GoalTaskSnapshot,
+  GOALS_SNAPSHOT_USER_KEY,
+  GOALS_GUEST_USER_ID,
 } from '../lib/goalsSync'
 import {
   DEFAULT_SURFACE_STYLE,
@@ -672,15 +674,22 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     () => new Set(lifeRoutineTasks.map((task) => task.bucketId)),
     [lifeRoutineTasks],
   )
-  const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => {
-    const stored = readStoredQuickList()
-    console.log('[Focus] initial quick list items', stored.length)
-    return stored
-  })
+  const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => readStoredQuickList())
   const [quickListExpanded, setQuickListExpanded] = useState(false)
   const [quickListRemoteIds, setQuickListRemoteIds] = useState<{ goalId: string; bucketId: string } | null>(null)
   const quickListRefreshInFlightRef = useRef(false)
   const quickListRefreshPendingRef = useRef(false)
+  const shouldSkipGoalsRemote = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+    try {
+      const owner = window.localStorage.getItem(GOALS_SNAPSHOT_USER_KEY)
+      return !owner || owner === GOALS_GUEST_USER_ID
+    } catch {
+      return false
+    }
+  }, [])
   // Build a lookup of life routine (bucket) title -> surface style so we can restore colors for
   // history-derived life routine suggestions that may have missing bucketSurface metadata.
   const lifeRoutineSurfaceLookup = useMemo(() => {
@@ -706,6 +715,9 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
   const goalsSnapshotRefreshPendingRef = useRef(false)
   const refreshGoalsSnapshotFromSupabase = useCallback(
     (reason?: string) => {
+      if (shouldSkipGoalsRemote()) {
+        return
+      }
       if (goalsSnapshotRefreshInFlightRef.current) {
         goalsSnapshotRefreshPendingRef.current = true
         return
@@ -714,7 +726,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       ;(async () => {
         try {
           const result = await fetchGoalsHierarchy()
-          if (result?.goals) {
+          if (Array.isArray(result?.goals) && result.goals.length > 0) {
             const snapshot = createGoalsSnapshot(result.goals)
             const signature = JSON.stringify(snapshot)
             if (signature !== goalsSnapshotSignatureRef.current) {
@@ -737,7 +749,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
         }
       })()
     },
-    [setGoalsSnapshot],
+    [setGoalsSnapshot, shouldSkipGoalsRemote],
   )
   const refreshQuickListFromSupabase = useCallback(
     (reason?: string) => {
@@ -804,13 +816,15 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
   }, [])
 
 useEffect(() => {
+  if (shouldSkipGoalsRemote()) {
+    return
+  }
   refreshGoalsSnapshotFromSupabase('initial-load')
-}, [refreshGoalsSnapshotFromSupabase])
+}, [refreshGoalsSnapshotFromSupabase, shouldSkipGoalsRemote])
 useEffect(() => {
   if (typeof window !== 'undefined') {
     const quickUser = window.localStorage.getItem('nc-taskwatch-quick-list-user')
     if (!quickUser || quickUser === '__guest__') {
-      console.log('[Focus] skipping quick list refresh during guest/bootstrap')
       return
     }
   }
