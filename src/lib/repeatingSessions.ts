@@ -33,6 +33,10 @@ export const REPEATING_RULES_ACTIVATION_KEY = 'nc-taskwatch-repeating-activation
 // We also persist a local end-boundary override to ensure offline correctness.
 export const REPEATING_RULES_END_KEY = 'nc-taskwatch-repeating-end-map'
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const isUuid = (value: string | undefined | null): value is string =>
+  typeof value === 'string' && UUID_REGEX.test(value)
+
 const randomRuleId = (): string => {
   try {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -179,9 +183,12 @@ export const pushRepeatingRulesToSupabase = async (
   const normalizedRules = rules.map((rule) => {
     const safeTaskName = deriveRuleTaskNameFromParts(rule.taskName, rule.bucketName, rule.goalName)
     const baseRule = { ...rule, taskName: safeTaskName }
-    if (!rule.id || rule.id === SAMPLE_SLEEP_ROUTINE_ID) {
+    const incomingId = typeof rule.id === 'string' ? rule.id : null
+    if (!isUuid(incomingId)) {
       const newId = randomRuleId()
-      idMap[rule.id ?? SAMPLE_SLEEP_ROUTINE_ID] = newId
+      if (incomingId) {
+        idMap[incomingId] = newId
+      }
       return { ...baseRule, id: newId }
     }
     return baseRule
