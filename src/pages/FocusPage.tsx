@@ -44,6 +44,8 @@ import {
 import {
   fetchRepeatingSessionRules,
   readLocalRepeatingRules,
+  storeRepeatingRulesLocal,
+  isRepeatingRuleId,
   type RepeatingSessionRule,
 } from '../lib/repeatingSessions'
 import {
@@ -1605,19 +1607,24 @@ useEffect(() => {
   const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
   useEffect(() => {
     let cancelled = false
-    const hydrateRepeatingRules = async () => {
-      if (historyOwnerSignal > 0) {
-        try {
-          const localRules = readLocalRepeatingRules()
-          if (!cancelled) {
-            setRepeatingRules(localRules)
-          }
-        } catch {}
+  const hydrateRepeatingRules = async () => {
+      const ownerId = readHistoryOwnerId()
+      const isGuestOwner = !ownerId || ownerId === HISTORY_GUEST_USER_ID
+      try {
+        const localRules = readLocalRepeatingRules()
+        if (!cancelled) {
+          const sanitized = isGuestOwner ? localRules : localRules.filter((rule) => isRepeatingRuleId(rule.id))
+          setRepeatingRules(sanitized)
+        }
+      } catch {}
+      if (isGuestOwner) {
+        return
       }
       try {
         const rules = await fetchRepeatingSessionRules()
         if (!cancelled && Array.isArray(rules)) {
           setRepeatingRules(rules)
+          storeRepeatingRulesLocal(rules)
         }
       } catch {}
     }

@@ -60,6 +60,8 @@ import {
   deactivateMatchingRulesForEntry,
   deleteMatchingRulesForEntry,
   readLocalRepeatingRules,
+  storeRepeatingRulesLocal,
+  isRepeatingRuleId,
   type RepeatingSessionRule,
 } from '../lib/repeatingSessions'
 import {
@@ -2490,19 +2492,26 @@ export default function ReflectionPage() {
   useEffect(() => {
     let cancelled = false
     const hydrateRepeatingRules = async () => {
-      if (historyOwnerSignal > 0) {
-        try {
-          const localRules = readLocalRepeatingRules()
-          if (!cancelled) {
-            setRepeatingRules(localRules)
-          }
-        } catch (err) {
-          // ignore local read issues
+      const ownerId = readHistoryOwnerId()
+      const isGuestOwner = !ownerId || ownerId === HISTORY_GUEST_USER_ID
+      try {
+        const localRules = readLocalRepeatingRules()
+        if (!cancelled) {
+          const sanitized = isGuestOwner ? localRules : localRules.filter((rule) => isRepeatingRuleId(rule.id))
+          setRepeatingRules(sanitized)
         }
+      } catch (err) {
+        // ignore local read issues
+      }
+      if (isGuestOwner) {
+        return
       }
       try {
         const rules = await fetchRepeatingSessionRules()
-        if (!cancelled && Array.isArray(rules)) setRepeatingRules(rules)
+        if (!cancelled && Array.isArray(rules)) {
+          setRepeatingRules(rules)
+          storeRepeatingRulesLocal(rules)
+        }
       } catch (err) {
         // Silenced repeating sessions load warning
       }

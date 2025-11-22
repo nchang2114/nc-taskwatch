@@ -34,7 +34,7 @@ export const REPEATING_RULES_ACTIVATION_KEY = 'nc-taskwatch-repeating-activation
 export const REPEATING_RULES_END_KEY = 'nc-taskwatch-repeating-end-map'
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const isUuid = (value: string | undefined | null): value is string =>
+export const isRepeatingRuleId = (value: string | undefined | null): value is string =>
   typeof value === 'string' && UUID_REGEX.test(value)
 
 const randomRuleId = (): string => {
@@ -125,6 +125,9 @@ const writeLocalRules = (rules: RepeatingSessionRule[]) => {
     window.localStorage.setItem(REPEATING_RULES_STORAGE_KEY, JSON.stringify(rules))
   } catch {}
 }
+export const storeRepeatingRulesLocal = (rules: RepeatingSessionRule[]): void => {
+  writeLocalRules(rules)
+}
 
 type ActivationMap = Record<string, number>
 const readActivationMap = (): ActivationMap => {
@@ -184,7 +187,7 @@ export const pushRepeatingRulesToSupabase = async (
     const safeTaskName = deriveRuleTaskNameFromParts(rule.taskName, rule.bucketName, rule.goalName)
     const baseRule = { ...rule, taskName: safeTaskName }
     const incomingId = typeof rule.id === 'string' ? rule.id : null
-    if (!isUuid(incomingId)) {
+    if (!isRepeatingRuleId(incomingId)) {
       const newId = randomRuleId()
       if (incomingId) {
         idMap[incomingId] = newId
