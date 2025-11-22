@@ -1971,6 +1971,13 @@ html[data-theme='light'] .settings-panel__group {
   color: var(--text-secondary);
 }
 
+.auth-create__error {
+  margin: -0.4rem 0 0;
+  font-size: 0.85rem;
+  color: #ff6b6b;
+  text-align: center;
+}
+
 .auth-create__continue {
   border: none;
   border-radius: 999px;
@@ -1997,6 +2004,46 @@ html[data-theme='light'] .settings-panel__group {
 
 .auth-create__close {
   flex-shrink: 0;
+}
+
+.auth-verify__code-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  letter-spacing: 0.15em;
+}
+
+.auth-verify__code-input:focus {
+  outline: none;
+}
+
+.auth-verify__message {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.auth-verify__message--error {
+  color: #ff6b6b;
+}
+
+.auth-verify__resend {
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0.2rem 0.4rem;
+  align-self: center;
+}
+
+.auth-verify__resend:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 .auth-callback-screen {
   min-height: 100vh;

@@ -323,10 +323,17 @@ function MainApp() {
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authEmailValue, setAuthEmailValue] = useState('')
   const [authEmailError, setAuthEmailError] = useState<string | null>(null)
-  const [authEmailStage, setAuthEmailStage] = useState<'input' | 'create'>('input')
+  const [authEmailStage, setAuthEmailStage] = useState<'input' | 'create' | 'verify'>('input')
   const [authEmailChecking, setAuthEmailChecking] = useState(false)
   const [authCreatePassword, setAuthCreatePassword] = useState('')
   const [authCreatePasswordVisible, setAuthCreatePasswordVisible] = useState(false)
+  const [authCreateSubmitting, setAuthCreateSubmitting] = useState(false)
+  const [authCreateError, setAuthCreateError] = useState<string | null>(null)
+  const [authVerifyCode, setAuthVerifyCode] = useState('')
+  const [authVerifySubmitting, setAuthVerifySubmitting] = useState(false)
+  const [authVerifyError, setAuthVerifyError] = useState<string | null>(null)
+  const [authVerifyResending, setAuthVerifyResending] = useState(false)
+  const [authVerifyStatus, setAuthVerifyStatus] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [activeSettingsSection, setActiveSettingsSection] = useState(SETTINGS_SECTIONS[0]?.id ?? 'general')
@@ -384,6 +391,13 @@ function MainApp() {
     setAuthEmailChecking(false)
     setAuthCreatePassword('')
     setAuthCreatePasswordVisible(false)
+    setAuthCreateSubmitting(false)
+    setAuthCreateError(null)
+    setAuthVerifyCode('')
+    setAuthVerifySubmitting(false)
+    setAuthVerifyError(null)
+    setAuthVerifyResending(false)
+    setAuthVerifyStatus(null)
   }, [])
 
   useEffect(() => {
@@ -600,6 +614,10 @@ function MainApp() {
         if (exists === false) {
           setAuthEmailValue(trimmed)
           setAuthEmailStage('create')
+          setAuthCreatePassword('')
+          setAuthCreatePasswordVisible(false)
+          setAuthCreateError(null)
+          setAuthVerifyStatus(null)
           return
         }
         setAuthEmailError('We could not verify that email right now. Please try again.')
@@ -623,17 +641,153 @@ function MainApp() {
     setAuthEmailStage('input')
     setAuthCreatePassword('')
     setAuthCreatePasswordVisible(false)
+    setAuthCreateSubmitting(false)
+    setAuthCreateError(null)
+    setAuthVerifyCode('')
+    setAuthVerifyError(null)
+    setAuthVerifyStatus(null)
   }, [])
 
-  const handleAuthCreateSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-  }, [])
+  const handleAuthCreateSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      if (authCreateSubmitting) {
+        return
+      }
+      const trimmedPassword = authCreatePassword.trim()
+      if (trimmedPassword.length < 8) {
+        return
+      }
+      const trimmedEmail = authEmailValue.trim()
+      if (!trimmedEmail) {
+        setAuthCreateError('Enter a valid email to continue.')
+        return
+      }
+      if (!supabase) {
+        setAuthCreateError('Sign-ups are unavailable right now. Please try again later.')
+        return
+      }
+      setAuthCreateError(null)
+      setAuthVerifyStatus(null)
+      setAuthCreateSubmitting(true)
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email: trimmedEmail,
+          password: trimmedPassword,
+          options: {
+            emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+          },
+        })
+        if (error) {
+          setAuthCreateError(error.message || 'We could not create your account. Please try again.')
+          return
+        }
+        if (data?.session) {
+          closeAuthModal()
+          return
+        }
+        setAuthEmailValue(trimmedEmail)
+        setAuthEmailStage('verify')
+        setAuthVerifyCode('')
+        setAuthVerifyError(null)
+        setAuthVerifyStatus('We sent a verification code to your inbox. It may take a minute to arrive.')
+      } catch {
+        setAuthCreateError('We could not create your account. Please try again.')
+      } finally {
+        setAuthCreateSubmitting(false)
+      }
+    },
+    [authCreatePassword, authCreateSubmitting, authEmailValue, closeAuthModal],
+  )
+
+  const handleAuthVerifySubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      if (authVerifySubmitting) {
+        return
+      }
+      const trimmedCode = authVerifyCode.trim()
+      if (!trimmedCode) {
+        setAuthVerifyError('Enter the code we sent to your email.')
+        return
+      }
+      const trimmedEmail = authEmailValue.trim()
+      if (!trimmedEmail) {
+        setAuthVerifyError('Something went wrong. Please restart the sign-up flow.')
+        return
+      }
+      if (!supabase) {
+        setAuthVerifyError('Verification is unavailable right now. Please try again later.')
+        return
+      }
+      setAuthVerifyError(null)
+      setAuthVerifyStatus(null)
+      setAuthVerifySubmitting(true)
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({
+          type: 'signup',
+          email: trimmedEmail,
+          token: trimmedCode,
+        })
+        if (error) {
+          setAuthVerifyError(error.message || 'That code was invalid or expired. Please try again.')
+          return
+        }
+        if (!data?.session) {
+          await supabase.auth.getSession().catch(() => {})
+        }
+        closeAuthModal()
+      } catch {
+        setAuthVerifyError('We could not verify that code. Please try again.')
+      } finally {
+        setAuthVerifySubmitting(false)
+      }
+    },
+    [authEmailValue, authVerifyCode, authVerifySubmitting, closeAuthModal],
+  )
+
+  const handleAuthVerifyResend = useCallback(async () => {
+    if (authVerifyResending) {
+      return
+    }
+    const trimmedEmail = authEmailValue.trim()
+    if (!trimmedEmail) {
+      setAuthVerifyError('Something went wrong. Please restart the sign-up flow.')
+      return
+    }
+    if (!supabase) {
+      setAuthVerifyError('Unable to resend email right now. Please try again later.')
+      return
+    }
+    setAuthVerifyError(null)
+    setAuthVerifyStatus(null)
+    setAuthVerifyResending(true)
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: trimmedEmail,
+        options: {
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+        },
+      })
+      if (error) {
+        setAuthVerifyError(error.message || 'We could not resend the email. Please try again.')
+        return
+      }
+      setAuthVerifyStatus('Email resent. It may take a minute to arrive.')
+    } catch {
+      setAuthVerifyError('We could not resend the email. Please try again.')
+    } finally {
+      setAuthVerifyResending(false)
+    }
+  }, [authEmailValue, authVerifyResending])
 
   const toggleAuthCreatePasswordVisibility = useCallback(() => {
     setAuthCreatePasswordVisible((prev) => !prev)
   }, [])
 
-  const authCreateContinueDisabled = authCreatePassword.trim().length < 8
+  const authCreateContinueDisabled = authCreatePassword.trim().length < 8 || authCreateSubmitting
+  const authVerifyContinueDisabled = authVerifyCode.trim().length < 6 || authVerifySubmitting
 
   useEffect(() => {
     if (!authModalOpen) {
@@ -1710,7 +1864,12 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
                         autoComplete="new-password"
                         minLength={8}
                         value={authCreatePassword}
-                        onChange={(event) => setAuthCreatePassword(event.target.value)}
+                        onChange={(event) => {
+                          setAuthCreatePassword(event.target.value)
+                          if (authCreateError) {
+                            setAuthCreateError(null)
+                          }
+                        }}
                       />
                       <button
                         type="button"
@@ -1734,12 +1893,67 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
                   </label>
                 </div>
                 <button type="submit" className="auth-create__continue" disabled={authCreateContinueDisabled}>
-                  Continue
+                  {authCreateSubmitting ? 'Sending…' : 'Continue'}
                 </button>
+                {authCreateError ? (
+                  <p className="auth-create__error" role="alert">
+                    {authCreateError}
+                  </p>
+                ) : null}
                 <p className="auth-modal__terms auth-modal__terms--center">
                   By continuing, you acknowledge that you understand and agree to the <span className="auth-modal__link">Terms &amp; Conditions</span> and{' '}
                   <span className="auth-modal__link">Privacy Policy</span>.
                 </p>
+              </form>
+            ) : authEmailStage === 'verify' ? (
+              <form className="auth-create auth-verify" onSubmit={handleAuthVerifySubmit}>
+                <div className="auth-create__header">
+                  <div>
+                    <p className="auth-create__eyebrow">Taskwatch</p>
+                    <h2 className="auth-create__title">Check your inbox</h2>
+                    <p className="auth-create__subtitle">Enter the verification code we just sent to {authEmailValue}.</p>
+                  </div>
+                  <button type="button" className="auth-modal__close auth-create__close" aria-label="Close sign-in panel" onClick={closeAuthModal}>
+                    ✕
+                  </button>
+                </div>
+                <div className="auth-create__card">
+                  <label className="auth-create__field">
+                    <span className="auth-create__label">Code</span>
+                    <div className="auth-create__input">
+                      <input
+                        type="text"
+                        name="auth-verify-code"
+                        id="auth-verify-code"
+                        placeholder="123456"
+                        autoComplete="one-time-code"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={authVerifyCode}
+                        onChange={(event) => {
+                          setAuthVerifyCode(event.target.value)
+                          if (authVerifyError) {
+                            setAuthVerifyError(null)
+                          }
+                        }}
+                        className="auth-verify__code-input"
+                      />
+                    </div>
+                    {authVerifyError ? (
+                      <p className="auth-verify__message auth-verify__message--error" role="alert">
+                        {authVerifyError}
+                      </p>
+                    ) : (
+                      <p className="auth-verify__message">{authVerifyStatus ?? 'It may take a minute for the email to arrive.'}</p>
+                    )}
+                  </label>
+                </div>
+                <button type="submit" className="auth-create__continue" disabled={authVerifyContinueDisabled}>
+                  {authVerifySubmitting ? 'Verifying…' : 'Continue'}
+                </button>
+                <button type="button" className="auth-verify__resend" onClick={handleAuthVerifyResend} disabled={authVerifyResending}>
+                  {authVerifyResending ? 'Sending…' : 'Resend email'}
+                </button>
               </form>
             ) : (
               <>
