@@ -7689,13 +7689,16 @@ export default function GoalsPage(): ReactElement {
         expanded: true,
         subtasks: current.subtasks.map((item) => (item.id === subtaskId ? updated : item)),
       }))
+      updateGoalTaskSubtasks(taskId, (current) =>
+        current.map((item) => (item.id === subtaskId ? updated : item)),
+      )
       if (value.trim().length > 0) {
         scheduleSubtaskPersist(taskId, updated)
       } else {
         cancelPendingSubtaskSave(taskId, subtaskId)
       }
     },
-    [cancelPendingSubtaskSave, scheduleSubtaskPersist, updateTaskDetails],
+    [cancelPendingSubtaskSave, scheduleSubtaskPersist, updateGoalTaskSubtasks, updateTaskDetails],
   )
 
   const handleSubtaskBlur = useCallback(
