@@ -395,7 +395,10 @@ export const writeStoredLifeRoutines = (
   return stored
 }
 
-export const ensureLifeRoutineUser = (userId: string | null): void => {
+export const ensureLifeRoutineUser = (
+  userId: string | null,
+  options?: { suppressGuestDefaults?: boolean },
+): void => {
   if (typeof window === 'undefined') return
   const normalized = normalizeLifeRoutineUserId(userId)
   const current = readStoredLifeRoutineUserId()
@@ -405,7 +408,7 @@ export const ensureLifeRoutineUser = (userId: string | null): void => {
   const migratingFromGuest = current === LIFE_ROUTINE_GUEST_USER_ID && normalized !== LIFE_ROUTINE_GUEST_USER_ID
   setStoredLifeRoutineUserId(normalized)
   if (normalized === LIFE_ROUTINE_GUEST_USER_ID) {
-    if (current !== LIFE_ROUTINE_GUEST_USER_ID) {
+    if (current !== LIFE_ROUTINE_GUEST_USER_ID && !options?.suppressGuestDefaults) {
       storeLifeRoutinesLocal(getDefaultLifeRoutines())
     }
   } else if (!migratingFromGuest) {

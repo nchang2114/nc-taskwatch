@@ -696,7 +696,7 @@ function MainApp() {
 
     const resetLocalStoresToGuest = (options?: { suppressGoalsSnapshot?: boolean }) => {
       ensureQuickListUser(null)
-      ensureLifeRoutineUser(null)
+      ensureLifeRoutineUser(null, { suppressGuestDefaults: true })
       ensureHistoryUser(null)
       ensureGoalsUser(null, options?.suppressGoalsSnapshot ? { suppressGuestSnapshot: true } : undefined)
       ensureRepeatingRulesUser(null)
