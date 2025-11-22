@@ -2783,6 +2783,7 @@ export default function ReflectionPage() {
   const [calendarInspectorEntryId, setCalendarInspectorEntryId] = useState<string | null>(null)
 const calendarEditorRef = useRef<HTMLDivElement | null>(null)
 const calendarInspectorRef = useRef<HTMLDivElement | null>(null)
+const historyBlockRef = useRef<HTMLDivElement | null>(null)
 const [calendarViewportVersion, setCalendarViewportVersion] = useState(0)
 const [showInspectorExtras, setShowInspectorExtras] = useState(false)
 const [showEditorExtras, setShowEditorExtras] = useState(false)
@@ -2790,6 +2791,7 @@ const [showInlineExtras, setShowInlineExtras] = useState(false)
 const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string | null>(null)
   // Ref to the session name input inside the calendar editor modal (for autofocus on new entries)
   const calendarEditorNameInputRef = useRef<HTMLInputElement | null>(null)
+
   const [activeTooltipOffsets, setActiveTooltipOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [activeTooltipPlacement, setActiveTooltipPlacement] = useState<'above' | 'below'>('above')
   const dragStateRef = useRef<DragState | null>(null)
@@ -3261,6 +3263,18 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
       setActiveRange('7d')
       setCalendarView('3d')
       setMultiDayCount(6)
+      // Scroll calendar into view
+      setTimeout(() => {
+        if (historyBlockRef.current) {
+          const element = historyBlockRef.current
+          const rect = element.getBoundingClientRect()
+          const scrollTop = window.scrollY || document.documentElement.scrollTop
+          const elementTop = rect.top + scrollTop
+          // Center the element in the viewport
+          const targetY = elementTop + (rect.height / 2) - (window.innerHeight / 2)
+          window.scrollTo({ top: targetY, behavior: 'smooth' })
+        }
+      }, 100)
       // Compute a start time one hour from now, snapped to minute
       const now = Date.now()
       const start = Math.max(now + 60 * 60 * 1000, now + 60 * 1000)
@@ -10572,7 +10586,7 @@ useEffect(() => {
         {/* Subtitle removed for cleaner header */}
       </div>
 
-      <div className="history-block">
+      <div className="history-block" ref={historyBlockRef}>
         <div className="history-section__heading">
           <h2 className="reflection-section__title">Session History Calendar</h2>
           {/* History section description removed */}
