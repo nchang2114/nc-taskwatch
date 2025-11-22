@@ -1605,10 +1605,16 @@ useEffect(() => {
 
   // Fetch repeating rules to surface guide tasks that overlap 'now'
   const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
+  const lastRepeatingRulesOwnerRef = useRef<string | null>(null)
   useEffect(() => {
     let cancelled = false
-  const hydrateRepeatingRules = async () => {
+    const hydrateRepeatingRules = async () => {
       const ownerId = readHistoryOwnerId()
+      const ownerKey = ownerId && ownerId.length > 0 ? ownerId : HISTORY_GUEST_USER_ID
+      if (lastRepeatingRulesOwnerRef.current === ownerKey && ownerId) {
+        return
+      }
+      lastRepeatingRulesOwnerRef.current = ownerKey
       const isGuestOwner = !ownerId || ownerId === HISTORY_GUEST_USER_ID
       try {
         const localRules = readLocalRepeatingRules()
