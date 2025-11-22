@@ -2269,42 +2269,6 @@ useEffect(() => {
         }
         return
       }
-      // Try the last stored snapshot (from localStorage) as a secondary source
-      try {
-        const stored = readStoredGoalsSnapshot()
-        if (Array.isArray(stored) && taskExistsIn(stored, taskId)) {
-          let changed = false
-          const next = stored.map((goal) => {
-            let goalMutated = false
-            const nextBuckets = goal.buckets.map((bucket) => {
-              const index = bucket.tasks.findIndex((t) => t.id === taskId)
-              if (index === -1) return bucket
-              goalMutated = true
-              changed = true
-              const originalTask = bucket.tasks[index]
-              const updatedTask: GoalTaskSnapshot = {
-                ...originalTask,
-                notes: entry.notes,
-                subtasks: notebookSubtasksToSnapshot(entry.subtasks),
-              }
-              const tasks = [...bucket.tasks]
-              tasks[index] = updatedTask
-              return { ...bucket, tasks }
-            })
-            return goalMutated ? { ...goal, buckets: nextBuckets } : goal
-          })
-          if (changed) {
-            publishGoalsSnapshot(next)
-            setGoalsSnapshot(next)
-            if (DEBUG_SYNC) {
-              try {
-                logDebug('[Sync][Focus] publish (stored snapshot)', { taskId, reason })
-              } catch {}
-            }
-            return
-          }
-        }
-      } catch {}
       // Fallback path: refresh then retry publish once.
       if (DEBUG_SYNC) {
         try {
