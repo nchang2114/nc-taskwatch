@@ -2475,7 +2475,6 @@ export default function ReflectionPage() {
   const calendarPanDesiredOffsetRef = useRef<number>(historyDayOffset)
   // Repeating sessions (rules fetched from backend)
   const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
-  const lastRepeatingRulesOwnerRef = useRef<string | null>(null)
   const [historyOwnerSignal, setHistoryOwnerSignal] = useState(0)
 
   const clearCalendarPanFallbackTimeout = useCallback(() => {
@@ -2495,11 +2494,6 @@ export default function ReflectionPage() {
     const hydrateRepeatingRules = async () => {
       const ownerId = readHistoryOwnerId()
       const isGuestOwner = !ownerId || ownerId === HISTORY_GUEST_USER_ID
-      const ownerKey = ownerId && ownerId.length > 0 ? ownerId : HISTORY_GUEST_USER_ID
-      if (lastRepeatingRulesOwnerRef.current === ownerKey && ownerId) {
-        return
-      }
-      lastRepeatingRulesOwnerRef.current = ownerKey
       try {
         const localRules = readLocalRepeatingRules()
         if (!cancelled) {
