@@ -672,7 +672,11 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     () => new Set(lifeRoutineTasks.map((task) => task.bucketId)),
     [lifeRoutineTasks],
   )
-  const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => readStoredQuickList())
+  const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => {
+    const stored = readStoredQuickList()
+    console.log('[Focus] initial quick list items', stored.length)
+    return stored
+  })
   const [quickListExpanded, setQuickListExpanded] = useState(false)
   const [quickListRemoteIds, setQuickListRemoteIds] = useState<{ goalId: string; bucketId: string } | null>(null)
   const quickListRefreshInFlightRef = useRef(false)

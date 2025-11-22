@@ -5766,7 +5766,11 @@ export default function GoalsPage(): ReactElement {
 
   // Quick List (simple tasks without buckets)
   const [quickListExpanded, setQuickListExpanded] = useState(() => readStoredQuickListExpanded())
-  const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => readStoredQuickList())
+  const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => {
+    const stored = readStoredQuickList()
+    console.log('[Goals] initial quick list items', stored.length)
+    return stored
+  })
   const [quickDraft, setQuickDraft] = useState('')
   const [quickDraftActive, setQuickDraftActive] = useState(false)
   const quickDraftInputRef = useRef<HTMLInputElement | null>(null)
