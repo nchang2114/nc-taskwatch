@@ -175,14 +175,22 @@ type HistoryPayload = Record<string, unknown>
 
 const stripHistoryPayloadColumns = (
   payload: HistoryPayload,
-  removal: { repeat?: boolean; notes?: boolean; subtasks?: boolean; future?: boolean },
+  removal: {
+    repeat?: boolean
+    notes?: boolean
+    subtasks?: boolean
+    future?: boolean
+    repeatingOnly?: boolean
+  },
 ): HistoryPayload => {
-  if (!removal.repeat && !removal.notes && !removal.subtasks && !removal.future) {
+  if (!removal.repeat && !removal.notes && !removal.subtasks && !removal.future && !removal.repeatingOnly) {
     return payload
   }
   const next = { ...payload }
-  if (removal.repeat) {
+  if (removal.repeat || removal.repeatingOnly) {
     delete (next as any).repeating_session_id
+  }
+  if (removal.repeat) {
     delete (next as any).original_time
   }
   if (removal.notes) {
@@ -1399,7 +1407,9 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
         const details =
           String((upsertResp.error as any)?.details || '') + ' ' + String((upsertResp.error as any)?.message || '')
         if (code === '23503' && details.toLowerCase().includes('repeating_sessions')) {
-          const stripped = usedPayloads.map((payload) => stripHistoryPayloadColumns(payload, { repeat: true }))
+          const stripped = usedPayloads.map((payload) =>
+            stripHistoryPayloadColumns(payload, { repeat: true, repeatingOnly: true }),
+          )
           upsertResp = await client.from('session_history').upsert(stripped, { onConflict: 'id' })
           usedPayloads = stripped
         } else if (isConflictError(upsertResp.error)) {
