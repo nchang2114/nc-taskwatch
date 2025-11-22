@@ -32,6 +32,8 @@ export const REPEATING_RULES_STORAGE_KEY = 'nc-taskwatch-repeating-rules'
 export const REPEATING_RULES_ACTIVATION_KEY = 'nc-taskwatch-repeating-activation-map'
 // We also persist a local end-boundary override to ensure offline correctness.
 export const REPEATING_RULES_END_KEY = 'nc-taskwatch-repeating-end-map'
+const REPEATING_RULES_USER_KEY = 'nc-taskwatch-repeating-user'
+const REPEATING_RULES_GUEST_USER_ID = '__guest__'
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 export const isRepeatingRuleId = (value: string | undefined | null): value is string =>
@@ -234,6 +236,51 @@ export const pushRepeatingRulesToSupabase = async (
     return fail('Failed to upsert repeating rules', error)
   }
   return idMap
+}
+
+const readStoredRepeatingRuleUserId = (): string | null => {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    const raw = window.localStorage.getItem(REPEATING_RULES_USER_KEY)
+    return raw && raw.trim().length > 0 ? raw.trim() : null
+  } catch {
+    return null
+  }
+}
+
+const setStoredRepeatingRuleUserId = (userId: string | null): void => {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    if (!userId) {
+      window.localStorage.removeItem(REPEATING_RULES_USER_KEY)
+    } else {
+      window.localStorage.setItem(REPEATING_RULES_USER_KEY, userId)
+    }
+  } catch {}
+}
+
+const normalizeRepeatingRuleUserId = (userId: string | null | undefined): string =>
+  typeof userId === 'string' && userId.trim().length > 0 ? userId.trim() : REPEATING_RULES_GUEST_USER_ID
+
+export const ensureRepeatingRulesUser = (userId: string | null): void => {
+  if (typeof window === 'undefined') return
+  const normalized = normalizeRepeatingRuleUserId(userId)
+  const current = readStoredRepeatingRuleUserId()
+  if (current === normalized) {
+    return
+  }
+  setStoredRepeatingRuleUserId(normalized)
+  if (normalized === REPEATING_RULES_GUEST_USER_ID) {
+    writeLocalRules(getSampleRepeatingRules())
+  } else {
+    writeLocalRules([])
+    writeActivationMap({})
+    writeEndMap({})
+  }
 }
 
 const mapRowToRule = (row: any): RepeatingSessionRule | null => {

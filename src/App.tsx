@@ -13,6 +13,7 @@ import { clearCachedSupabaseSession, readCachedSessionTokens } from './lib/authS
 import { ensureQuickListUser } from './lib/quickList'
 import { ensureLifeRoutineUser } from './lib/lifeRoutines'
 import { ensureHistoryUser, pushPendingHistoryToSupabase } from './lib/sessionHistory'
+import { ensureRepeatingRulesUser } from './lib/repeatingSessions'
 import { bootstrapGuestDataIfNeeded } from './lib/bootstrap'
 import { ensureGoalsUser } from './lib/goalsSync'
 
@@ -703,11 +704,13 @@ function MainApp() {
         ensureLifeRoutineUser(null)
         ensureHistoryUser(null)
         ensureGoalsUser(null)
+        ensureRepeatingRulesUser(null)
       }
       ensureQuickListUser(userId)
       ensureLifeRoutineUser(userId)
       ensureHistoryUser(userId)
       ensureGoalsUser(userId)
+      ensureRepeatingRulesUser(userId)
     }
 
     const applySessionUser = async (user: User | null | undefined): Promise<void> => {
@@ -796,6 +799,7 @@ function MainApp() {
     ensureLifeRoutineUser(null)
     ensureHistoryUser(null)
     ensureGoalsUser(null)
+    ensureRepeatingRulesUser(null)
     setUserProfile(null)
     closeProfileMenu()
     if (typeof window !== 'undefined') {
