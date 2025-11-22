@@ -801,6 +801,8 @@ function MainApp() {
   }, [settingsOpen, authModalOpen])
 
   const handleLogOut = useCallback(async () => {
+    setActiveTab('focus')
+    closeProfileMenu()
     if (supabase) {
       try {
         await pushPendingHistoryToSupabase()
@@ -816,7 +818,6 @@ function MainApp() {
     ensureGoalsUser(null)
     ensureRepeatingRulesUser(null)
     setUserProfile(null)
-    closeProfileMenu()
     if (typeof window !== 'undefined') {
       const preservedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
       try {
@@ -834,7 +835,7 @@ function MainApp() {
         window.location.replace(window.location.origin)
       }, 10)
     }
-  }, [closeProfileMenu])
+  }, [closeProfileMenu, setActiveTab])
 
   const handleContinueGuest = useCallback(() => {
     setUserProfile(null)
