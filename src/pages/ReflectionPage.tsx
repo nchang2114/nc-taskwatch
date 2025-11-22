@@ -2258,11 +2258,9 @@ const resolveGoalMetadata = (
     return { label: labelCandidate, colorInfo: surfaceInfo }
   }
 
-  const storedGoalSurfaceInfo = entry.goalSurface ? getSurfaceColorInfo(entry.goalSurface) : undefined
-
   const goalName = entry.goalName?.trim()
   if (goalName && goalName.length > 0) {
-    const colorInfo = storedGoalSurfaceInfo ?? goalColorLookup.get(goalName.toLowerCase()) ?? storedGoalSurfaceInfo
+    const colorInfo = goalColorLookup.get(goalName.toLowerCase())
     return { label: goalName, colorInfo }
   }
 
@@ -2274,7 +2272,7 @@ const resolveGoalMetadata = (
     }
   }
 
-  const fallbackSurfaceInfo = storedGoalSurfaceInfo ?? getSurfaceColorInfo(entry.goalSurface)
+  const fallbackSurfaceInfo = getSurfaceColorInfo(entry.goalSurface)
   return { label: UNCATEGORISED_LABEL, colorInfo: fallbackSurfaceInfo }
 }
 
