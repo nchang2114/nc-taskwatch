@@ -5778,6 +5778,17 @@ export default function GoalsPage(): ReactElement {
   const quickListBucketIdRef = useRef<string | null>(null)
   const quickListRefreshInFlightRef = useRef(false)
   const quickListRefreshPendingRef = useRef(false)
+  const shouldSkipQuickListRemote = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+    try {
+      const quickUser = window.localStorage.getItem('nc-taskwatch-quick-list-user')
+      return !quickUser || quickUser === '__guest__'
+    } catch {
+      return false
+    }
+  }, [])
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
@@ -7209,8 +7220,12 @@ export default function GoalsPage(): ReactElement {
     refreshGoalsFromSupabase('initial-load')
   }, [refreshGoalsFromSupabase, refreshQuickListFromSupabase])
   useEffect(() => {
+    if (shouldSkipQuickListRemote()) {
+      console.log('[Goals] skipping quick list refresh during guest/bootstrap')
+      return
+    }
     refreshQuickListFromSupabase('initial-load')
-  }, [refreshQuickListFromSupabase])
+  }, [refreshQuickListFromSupabase, shouldSkipQuickListRemote])
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -7219,13 +7234,17 @@ export default function GoalsPage(): ReactElement {
     const handleFocus = () => {
       if (!document.hidden) {
         refreshGoalsFromSupabase('window-focus')
-        refreshQuickListFromSupabase('window-focus')
+        if (!shouldSkipQuickListRemote()) {
+          refreshQuickListFromSupabase('window-focus')
+        }
       }
     }
     const handleVisibility = () => {
       if (!document.hidden) {
         refreshGoalsFromSupabase('document-visible')
-        refreshQuickListFromSupabase('document-visible')
+        if (!shouldSkipQuickListRemote()) {
+          refreshQuickListFromSupabase('document-visible')
+        }
       }
     }
     window.addEventListener('focus', handleFocus)
@@ -7234,7 +7253,7 @@ export default function GoalsPage(): ReactElement {
       window.removeEventListener('focus', handleFocus)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [refreshGoalsFromSupabase])
+  }, [refreshGoalsFromSupabase, shouldSkipQuickListRemote])
 
   useEffect(() => {
     const validTaskIds = new Set<string>()

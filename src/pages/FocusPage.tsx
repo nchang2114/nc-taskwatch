@@ -803,12 +803,19 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     }
   }, [])
 
-  useEffect(() => {
-    refreshGoalsSnapshotFromSupabase('initial-load')
-  }, [refreshGoalsSnapshotFromSupabase])
-  useEffect(() => {
-    refreshQuickListFromSupabase('initial-load')
-  }, [refreshQuickListFromSupabase])
+useEffect(() => {
+  refreshGoalsSnapshotFromSupabase('initial-load')
+}, [refreshGoalsSnapshotFromSupabase])
+useEffect(() => {
+  if (typeof window !== 'undefined') {
+    const quickUser = window.localStorage.getItem('nc-taskwatch-quick-list-user')
+    if (!quickUser || quickUser === '__guest__') {
+      console.log('[Focus] skipping quick list refresh during guest/bootstrap')
+      return
+    }
+  }
+  refreshQuickListFromSupabase('initial-load')
+}, [refreshQuickListFromSupabase])
 
   useEffect(() => {
     setCurrentTime(Date.now())
@@ -1105,13 +1112,19 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     const handleFocus = () => {
       if (!document.hidden) {
         refreshGoalsSnapshotFromSupabase('window-focus')
-        refreshQuickListFromSupabase('window-focus')
+        const quickUser = typeof window !== 'undefined' ? window.localStorage.getItem('nc-taskwatch-quick-list-user') : null
+        if (quickUser && quickUser !== '__guest__') {
+          refreshQuickListFromSupabase('window-focus')
+        }
       }
     }
     const handleVisibility = () => {
       if (!document.hidden) {
         refreshGoalsSnapshotFromSupabase('document-visible')
-        refreshQuickListFromSupabase('document-visible')
+        const quickUser = typeof window !== 'undefined' ? window.localStorage.getItem('nc-taskwatch-quick-list-user') : null
+        if (quickUser && quickUser !== '__guest__') {
+          refreshQuickListFromSupabase('document-visible')
+        }
       }
     }
     window.addEventListener('focus', handleFocus)
