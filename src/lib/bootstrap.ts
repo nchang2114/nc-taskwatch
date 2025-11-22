@@ -2,7 +2,7 @@ import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { readStoredHistory, pushAllHistoryToSupabase, SAMPLE_SLEEP_ROUTINE_ID } from './sessionHistory'
 import { readLocalRepeatingRules, pushRepeatingRulesToSupabase } from './repeatingSessions'
 import { readStoredQuickList, type QuickItem } from './quickList'
-import { ensureQuickListRemoteStructures, generateUuid } from './quickListRemote'
+import { ensureQuickListRemoteStructures, generateUuid, fetchQuickListRemoteItems } from './quickListRemote'
 import {
   createTask,
   updateTaskNotes,
@@ -77,39 +77,61 @@ const uploadQuickListItems = async (items: QuickItem[]): Promise<void> => {
     ...items.filter((item) => item.completed).sort(sortByIndex),
   ]
   for (const item of ordered) {
-    const baseText = item.text?.trim().length ? item.text.trim() : 'Quick task'
-    const created = await createTask(bucketId, baseText)
-    const taskId = created?.id
-    if (!taskId) {
-      throw new Error('Failed to create Quick List task during migration')
-    }
-    const subtasks = Array.isArray(item.subtasks) ? [...item.subtasks].sort(sortByIndex) : []
-    for (let idx = 0; idx < subtasks.length; idx += 1) {
-      const sub = subtasks[idx]
-      const sortIndex = typeof sub.sortIndex === 'number' ? sub.sortIndex : idx
-      await upsertTaskSubtask(taskId, {
-        id: ensureUuid(sub.id),
-        text: sub.text,
-        completed: Boolean(sub.completed),
-        sort_index: sortIndex,
-        updated_at: sub.updatedAt,
-      })
-    }
-    if (item.notes && item.notes.trim().length > 0) {
-      await updateTaskNotes(taskId, item.notes)
-    }
-    if (item.difficulty && item.difficulty !== 'none') {
-      await setTaskDifficulty(taskId, item.difficulty)
-    }
-    if (item.priority) {
-      await setTaskPriorityAndResort(taskId, bucketId, false, true)
-    }
-    if (item.completed) {
-      await setTaskCompletedAndResort(taskId, bucketId, true)
-      if (item.priority) {
-        await setTaskPriorityAndResort(taskId, bucketId, true, true)
+    try {
+      const baseText = item.text?.trim().length ? item.text.trim() : 'Quick task'
+      const created = await createTask(bucketId, baseText)
+      const taskId = created?.id
+      if (!taskId) {
+        throw new Error('Failed to create Quick List task during migration')
       }
+      const subtasks = Array.isArray(item.subtasks) ? [...item.subtasks].sort(sortByIndex) : []
+      for (let idx = 0; idx < subtasks.length; idx += 1) {
+        const sub = subtasks[idx]
+        const sortIndex = typeof sub.sortIndex === 'number' ? sub.sortIndex : idx
+        await upsertTaskSubtask(taskId, {
+          id: ensureUuid(sub.id),
+          text: sub.text,
+          completed: Boolean(sub.completed),
+          sort_index: sortIndex,
+          updated_at: sub.updatedAt,
+        })
+      }
+      if (item.notes && item.notes.trim().length > 0) {
+        await updateTaskNotes(taskId, item.notes)
+      }
+      if (item.difficulty && item.difficulty !== 'none') {
+        await setTaskDifficulty(taskId, item.difficulty)
+      }
+      if (item.priority) {
+        await setTaskPriorityAndResort(taskId, bucketId, false, true)
+      }
+      if (item.completed) {
+        await setTaskCompletedAndResort(taskId, bucketId, true)
+        if (item.priority) {
+          await setTaskPriorityAndResort(taskId, bucketId, true, true)
+        }
+      }
+    } catch (err) {
+      throw err instanceof Error ? err : new Error('Failed to migrate Quick List task')
     }
+  }
+
+  const verification = await fetchQuickListRemoteItems()
+  if (!verification) {
+    throw new Error('Failed to verify Quick List migration')
+  }
+  const remoteItems = verification.items
+  const mismatch = ordered.some((local, idx) => {
+    const remote = remoteItems[idx]
+    if (!remote) return true
+    const sameBaseText = (remote.text ?? '').trim() === (local.text ?? '').trim()
+    const sameCompleted = Boolean(remote.completed) === Boolean(local.completed)
+    const subtasksMatch =
+      (remote.subtasks?.length ?? 0) === (local.subtasks?.length ?? 0)
+    return !sameBaseText || !sameCompleted || !subtasksMatch
+  })
+  if (mismatch) {
+    throw new Error('Quick List verification detected missing items')
   }
 }
 
