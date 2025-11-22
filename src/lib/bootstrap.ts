@@ -2,7 +2,7 @@ import { supabase, ensureSingleUserSession } from './supabaseClient'
 import { readStoredHistory, pushAllHistoryToSupabase, SAMPLE_SLEEP_ROUTINE_ID } from './sessionHistory'
 import { readLocalRepeatingRules, pushRepeatingRulesToSupabase } from './repeatingSessions'
 import { readStoredQuickList, type QuickItem } from './quickList'
-import { ensureQuickListRemoteStructures, generateUuid, fetchQuickListRemoteItems } from './quickListRemote'
+import { ensureQuickListRemoteStructures, generateUuid } from './quickListRemote'
 import {
   createTask,
   updateTaskNotes,
@@ -113,33 +113,6 @@ const uploadQuickListItems = async (items: QuickItem[]): Promise<void> => {
       }
     } catch (err) {
       throw err instanceof Error ? err : new Error('Failed to migrate Quick List task')
-    }
-  }
-
-  const verification = await fetchQuickListRemoteItems()
-  if (!verification?.items) {
-    throw new Error('Failed to verify Quick List migration')
-  }
-  const remoteItems = [...verification.items]
-  if (remoteItems.length !== ordered.length) {
-    throw new Error('Quick List verification detected missing items')
-  }
-  const normalizeText = (value?: string | null) => (value ?? '').trim()
-  for (const local of ordered) {
-    const idx = remoteItems.findIndex(
-      (remote) =>
-        normalizeText(remote.text) === normalizeText(local.text) &&
-        Boolean(remote.completed) === Boolean(local.completed),
-    )
-    if (idx === -1) {
-      throw new Error('Quick List verification detected missing items')
-    }
-    const remote = remoteItems[idx]
-    remoteItems.splice(idx, 1)
-    const remoteSubtasks = Array.isArray(remote.subtasks) ? remote.subtasks.length : 0
-    const localSubtasks = Array.isArray(local.subtasks) ? local.subtasks.length : 0
-    if (remoteSubtasks !== localSubtasks) {
-      throw new Error('Quick List verification detected missing subtasks')
     }
   }
 }
