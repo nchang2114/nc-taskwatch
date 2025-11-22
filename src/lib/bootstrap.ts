@@ -15,7 +15,7 @@ import { readStoredLifeRoutines, pushLifeRoutinesToSupabase } from './lifeRoutin
 import { readStoredGoalsSnapshot, readGoalsSnapshotOwner, GOALS_GUEST_USER_ID } from './goalsSync'
 import { QUICK_LIST_GOAL_NAME } from './quickListRemote'
 
-let bootstrapPromises = new Map<string, Promise<void>>()
+let bootstrapPromises = new Map<string, Promise<boolean>>()
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const isUuid = (value: string | undefined | null): value is string => !!value && UUID_REGEX.test(value)
 const ensureUuid = (value: string | undefined): string => (isUuid(value) ? value! : generateUuid())
@@ -292,13 +292,12 @@ const migrateGuestData = async (): Promise<void> => {
   }
 }
 
-export const bootstrapGuestDataIfNeeded = async (userId: string | null | undefined): Promise<void> => {
+export const bootstrapGuestDataIfNeeded = async (userId: string | null | undefined): Promise<boolean> => {
   if (!userId || !supabase) {
-    return
+    return false
   }
   if (bootstrapPromises.has(userId)) {
-    await bootstrapPromises.get(userId)
-    return
+    return bootstrapPromises.get(userId) ?? false
   }
   const task = (async () => {
     const { data, error } = await supabase
@@ -310,7 +309,7 @@ export const bootstrapGuestDataIfNeeded = async (userId: string | null | undefin
       throw error
     }
     if (data?.bootstrap_completed) {
-      return
+      return false
     }
     await migrateGuestData()
     const { error: updateError } = await supabase
@@ -320,10 +319,11 @@ export const bootstrapGuestDataIfNeeded = async (userId: string | null | undefin
     if (updateError) {
       throw updateError
     }
+    return true
   })()
   bootstrapPromises.set(userId, task)
   try {
-    await task
+    return await task
   } finally {
     bootstrapPromises.delete(userId)
   }

@@ -692,10 +692,17 @@ function MainApp() {
     let mounted = true
 
     const alignLocalStoresForUser = async (userId: string | null): Promise<void> => {
+      let migrated = false
       try {
-        await bootstrapGuestDataIfNeeded(userId)
+        migrated = await bootstrapGuestDataIfNeeded(userId)
       } catch (error) {
         console.error('[bootstrap] failed during alignLocalStoresForUser', error)
+      }
+      if (!migrated && userId) {
+        ensureQuickListUser(null)
+        ensureLifeRoutineUser(null)
+        ensureHistoryUser(null)
+        ensureGoalsUser(null)
       }
       ensureQuickListUser(userId)
       ensureLifeRoutineUser(userId)
