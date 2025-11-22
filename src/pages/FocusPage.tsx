@@ -62,9 +62,13 @@ import {
   CURRENT_SESSION_EVENT_NAME,
   CURRENT_SESSION_STORAGE_KEY,
   HISTORY_EVENT_NAME,
+  HISTORY_GUEST_USER_ID,
   HISTORY_LIMIT,
   HISTORY_STORAGE_KEY,
+  HISTORY_USER_EVENT,
+  HISTORY_USER_KEY,
   persistHistorySnapshot,
+  readHistoryOwnerId,
   readStoredHistory as readPersistedHistory,
   syncHistoryWithSupabase,
   type HistoryEntry,
@@ -679,6 +683,7 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
   const [quickListRemoteIds, setQuickListRemoteIds] = useState<{ goalId: string; bucketId: string } | null>(null)
   const quickListRefreshInFlightRef = useRef(false)
   const quickListRefreshPendingRef = useRef(false)
+  const [historyOwnerSignal, setHistoryOwnerSignal] = useState(0)
   const shouldSkipGoalsRemote = useCallback(() => {
     if (typeof window === 'undefined') {
       return false
@@ -706,6 +711,25 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       try {
         unsubscribe()
       } catch {}
+    }
+  }, [])
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const bump = () => {
+      setHistoryOwnerSignal((current) => current + 1)
+    }
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === HISTORY_USER_KEY) {
+        bump()
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener(HISTORY_USER_EVENT, bump)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener(HISTORY_USER_EVENT, bump)
     }
   }, [])
   useEffect(() => {
@@ -899,6 +923,10 @@ useEffect(() => {
   }, [history])
 
   useEffect(() => {
+    const owner = readHistoryOwnerId()
+    if (!owner || owner === HISTORY_GUEST_USER_ID) {
+      return
+    }
     let cancelled = false
     void (async () => {
       const synced = await syncHistoryWithSupabase()
@@ -910,7 +938,7 @@ useEffect(() => {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [historyOwnerSignal])
 
   useEffect(() => {
     if (typeof window === 'undefined') {

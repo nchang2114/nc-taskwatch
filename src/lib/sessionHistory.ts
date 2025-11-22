@@ -9,8 +9,9 @@ import {
 
 export const HISTORY_STORAGE_KEY = 'nc-taskwatch-history'
 export const HISTORY_EVENT_NAME = 'nc-taskwatch:history-update'
-const HISTORY_USER_KEY = 'nc-taskwatch-history-user'
-const HISTORY_GUEST_USER_ID = '__guest__'
+export const HISTORY_USER_KEY = 'nc-taskwatch-history-user'
+export const HISTORY_GUEST_USER_ID = '__guest__'
+export const HISTORY_USER_EVENT = 'nc-taskwatch-history-user-updated'
 export const CURRENT_SESSION_STORAGE_KEY = 'nc-taskwatch-current-session'
 export const CURRENT_SESSION_EVENT_NAME = 'nc-taskwatch:session-update'
 export const HISTORY_LIMIT = 250
@@ -121,6 +122,7 @@ const getStoredHistoryUserId = (): string | null => {
     return null
   }
 }
+export const readHistoryOwnerId = (): string | null => getStoredHistoryUserId()
 const setStoredHistoryUserId = (userId: string | null): void => {
   if (typeof window === 'undefined') return
   try {
@@ -129,6 +131,9 @@ const setStoredHistoryUserId = (userId: string | null): void => {
     } else {
       window.localStorage.setItem(HISTORY_USER_KEY, userId)
     }
+    try {
+      window.dispatchEvent(new Event(HISTORY_USER_EVENT))
+    } catch {}
   } catch {}
 }
 const getErrorContext = (err: any): string => {

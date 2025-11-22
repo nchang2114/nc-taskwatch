@@ -42,7 +42,11 @@ import {
   CURRENT_SESSION_EVENT_NAME,
   CURRENT_SESSION_STORAGE_KEY,
   HISTORY_EVENT_NAME,
+  HISTORY_GUEST_USER_ID,
   HISTORY_STORAGE_KEY,
+  HISTORY_USER_EVENT,
+  HISTORY_USER_KEY,
+  readHistoryOwnerId,
   readStoredHistory as readPersistedHistory,
   persistHistorySnapshot,
   syncHistoryWithSupabase,
@@ -2713,6 +2717,7 @@ export default function ReflectionPage() {
   // Snapback overview uses its own range and defaults to All Time
   const [snapActiveRange] = useState<SnapRangeKey>('all')
   const [history, setHistory] = useState<HistoryEntry[]>(() => readPersistedHistory())
+  const [historyOwnerSignal, setHistoryOwnerSignal] = useState(0)
   const [repeatingExceptions, setRepeatingExceptions] = useState<RepeatingException[]>(() => readRepeatingExceptions())
   const latestHistoryRef = useRef(history)
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())
@@ -3134,6 +3139,26 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     latestHistoryRef.current = history
   }, [history])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const bump = () => {
+      setHistoryOwnerSignal((current) => current + 1)
+    }
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === HISTORY_USER_KEY) {
+        bump()
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener(HISTORY_USER_EVENT, bump)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener(HISTORY_USER_EVENT, bump)
+    }
+  }, [])
+
   
 
   // Subscribe to repeating exceptions updates
@@ -3146,6 +3171,10 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
   }, [])
 
   useEffect(() => {
+    const owner = readHistoryOwnerId()
+    if (!owner || owner === HISTORY_GUEST_USER_ID) {
+      return
+    }
     let cancelled = false
     void (async () => {
       const synced = await syncHistoryWithSupabase()
@@ -3157,7 +3186,7 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [historyOwnerSignal])
 
   const goalLookup = useMemo(() => createGoalTaskMap(goalsSnapshot), [goalsSnapshot])
   const goalColorLookup = useMemo(() => createGoalColorMap(goalsSnapshot), [goalsSnapshot])
