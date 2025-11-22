@@ -1295,9 +1295,9 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
       return null
     }
 
-    const userId = session.user.id
-    const lastUserId = getStoredHistoryUserId()
-    const userChanged = lastUserId !== userId
+  const userId = session.user.id
+  const lastUserId = getStoredHistoryUserId()
+  const userChanged = lastUserId !== userId
     const now = Date.now()
     const nowIso = new Date(now).toISOString()
     let localRecords = readHistoryRecords()
@@ -1449,7 +1449,9 @@ export const syncHistoryWithSupabase = async (): Promise<HistoryEntry[] | null> 
     const recordList = Array.from(recordsById.values())
     const { records: enrichedRecords } = applyLifeRoutineSurfaces(recordList)
     const persisted = persistRecords(enrichedRecords)
+  if (getStoredHistoryUserId() !== userId) {
     setStoredHistoryUserId(userId)
+  }
     return persisted
   })()
 
