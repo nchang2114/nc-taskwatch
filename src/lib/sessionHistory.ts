@@ -211,8 +211,7 @@ const upsertHistoryPayloads = async (
     const missingNotesColumn = errorMentionsColumn(resp.error, 'notes')
     const missingSubtasksColumn = errorMentionsColumn(resp.error, 'subtasks')
     const missingFutureColumn = errorMentionsColumn(resp.error, 'future_session')
-    const removalNeeded =
-      missingRepeatColumns || missingNotesColumn || missingSubtasksColumn || missingFutureColumn
+    const removalNeeded = missingRepeatColumns || missingNotesColumn || missingSubtasksColumn || missingFutureColumn
     if (!removalNeeded) {
       break
     }
@@ -1173,7 +1172,8 @@ const payloadFromRecord = (
   const ENABLE_REPEAT_ORIGINAL = isRepeatOriginalEnabled()
   const INCLUDE_NOTES = isHistoryNotesEnabled()
   const INCLUDE_SUBTASKS = isHistorySubtasksEnabled()
-  const includeRepeat = ENABLE_REPEAT_ORIGINAL && !!record.repeatingSessionId
+  const validRepeatId = isUuid(record.repeatingSessionId)
+  const includeRepeat = ENABLE_REPEAT_ORIGINAL && !!validRepeatId
   const includeOriginal = ENABLE_REPEAT_ORIGINAL && Number.isFinite(record.originalTime as number)
   const includeFuture = isHistoryFutureSessionEnabled() && typeof record.futureSession === 'boolean'
   return {
