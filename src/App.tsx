@@ -858,10 +858,6 @@ function MainApp() {
     setSettingsOpen(false)
   }, [])
 
-  if (isSigningOut) {
-    return <SignOutScreen />
-  }
-
   const isCompactBrand = viewportWidth <= COMPACT_BRAND_BREAKPOINT
 
   const evaluateNavCollapse = useCallback(() => {
@@ -1498,6 +1494,10 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
     : undefined
 
   const mainClassName = 'site-main'
+
+  if (isSigningOut) {
+    return <SignOutScreen />
+  }
 
   return (
     <div className="page">
