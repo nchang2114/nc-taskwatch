@@ -3257,9 +3257,10 @@ const [inspectorFallbackMessage, setInspectorFallbackMessage] = useState<string 
     const handler = (event: Event) => {
       const detail = (event as ScheduleBroadcastEvent).detail
       if (!detail) return
-      // Ensure week view
+      // Ensure 6D view
       setActiveRange('7d')
-      setCalendarView('week')
+      setCalendarView('3d')
+      setMultiDayCount(6)
       // Compute a start time one hour from now, snapped to minute
       const now = Date.now()
       const start = Math.max(now + 60 * 60 * 1000, now + 60 * 1000)
