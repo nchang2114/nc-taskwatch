@@ -2472,6 +2472,7 @@ export default function ReflectionPage() {
   const calendarPanDesiredOffsetRef = useRef<number>(historyDayOffset)
   // Repeating sessions (rules fetched from backend)
   const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
+  const [historyOwnerSignal, setHistoryOwnerSignal] = useState(0)
 
   const clearCalendarPanFallbackTimeout = useCallback(() => {
     const timeoutId = calendarPanFallbackTimeoutRef.current
@@ -2484,7 +2485,7 @@ export default function ReflectionPage() {
     }
   }, [])
 
-  // Load repeating session rules once (single-user dev auth handled in supabase client)
+  // Load repeating session rules once and refresh when account ownership changes
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -2499,7 +2500,7 @@ export default function ReflectionPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [historyOwnerSignal])
 
   const stopCalendarPanAnimation = useCallback(
     (options?: { commit?: boolean }) => {
@@ -2717,7 +2718,6 @@ export default function ReflectionPage() {
   // Snapback overview uses its own range and defaults to All Time
   const [snapActiveRange] = useState<SnapRangeKey>('all')
   const [history, setHistory] = useState<HistoryEntry[]>(() => readPersistedHistory())
-  const [historyOwnerSignal, setHistoryOwnerSignal] = useState(0)
   const [repeatingExceptions, setRepeatingExceptions] = useState<RepeatingException[]>(() => readRepeatingExceptions())
   const latestHistoryRef = useRef(history)
   const [goalsSnapshot, setGoalsSnapshot] = useState<GoalSnapshot[]>(() => readStoredGoalsSnapshot())

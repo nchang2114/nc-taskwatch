@@ -1608,7 +1608,7 @@ useEffect(() => {
       } catch {}
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [historyOwnerSignal])
 
   const guideNowSuggestions = useMemo<ScheduledSuggestion[]>(() => {
     if (repeatingRules.length === 0) return []
