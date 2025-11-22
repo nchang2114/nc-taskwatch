@@ -1884,20 +1884,24 @@ html[data-theme='light'] .settings-panel__group {
   color: var(--text-secondary);
 }
 
-.auth-create__pill,
-.auth-create__password {
+.auth-create__input {
   border-radius: 0.85rem;
   border: 1px solid rgba(148, 164, 255, 0.4);
   display: flex;
   align-items: center;
   padding: 0.4rem 0.2rem 0.4rem 0.8rem;
   background: rgba(255, 255, 255, 0.02);
+  width: 100%;
 }
 
 .auth-create__pill {
   gap: 0.4rem;
-  width: 100%;
+  pointer-events: none;
   cursor: default;
+}
+
+.auth-create__pill .auth-create__edit {
+  pointer-events: auto;
 }
 
 .auth-create__pill-value {
@@ -1908,6 +1912,7 @@ html[data-theme='light'] .settings-panel__group {
   white-space: nowrap;
   min-width: 0;
   flex: 1;
+  font-size: 0.95rem;
 }
 
 .auth-create__edit {
@@ -1916,6 +1921,18 @@ html[data-theme='light'] .settings-panel__group {
   color: #6aa2ff;
   font-weight: 600;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.6rem 0 0rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+}
+
+.auth-create__edit:hover,
+.auth-create__edit:focus-visible {
+  text-decoration: underline;
+  outline: none;
 }
 
 .auth-create__password input {

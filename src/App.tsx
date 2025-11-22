@@ -1692,7 +1692,7 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
                 <div className="auth-create__card">
                   <div className="auth-create__field">
                     <span className="auth-create__label">Email address</span>
-                    <div className="auth-create__pill">
+                    <div className="auth-create__input auth-create__pill">
                       <span className="auth-create__pill-value">{authEmailValue}</span>
                       <button type="button" className="auth-create__edit" onClick={handleAuthCreateBack}>
                         Edit
@@ -1701,7 +1701,7 @@ const nextThemeLabel = theme === 'dark' ? 'light' : 'dark'
                   </div>
                   <label className="auth-create__field">
                     <span className="auth-create__label">Password</span>
-                    <div className="auth-create__password">
+                    <div className="auth-create__input auth-create__password">
                       <input
                         type={authCreatePasswordVisible ? 'text' : 'password'}
                         name="auth-create-password"
