@@ -23,6 +23,7 @@ type FeatureFlags = {
   repeatOriginal?: boolean
   historyNotes?: boolean
   historySubtasks?: boolean
+  historyFutureSession?: boolean
 }
 const parseEnvToggle = (value: unknown): boolean | null => {
   if (typeof value !== 'string') return null
@@ -39,6 +40,9 @@ const parseEnvToggle = (value: unknown): boolean | null => {
 const ENV_ENABLE_HISTORY_NOTES = parseEnvToggle((import.meta as any)?.env?.VITE_ENABLE_HISTORY_NOTES)
 const ENV_ENABLE_HISTORY_SUBTASKS = parseEnvToggle((import.meta as any)?.env?.VITE_ENABLE_HISTORY_SUBTASKS)
 const ENV_ENABLE_REPEAT_ORIGINAL = parseEnvToggle((import.meta as any)?.env?.VITE_ENABLE_REPEAT_ORIGINAL)
+const ENV_ENABLE_HISTORY_FUTURE_SESSION = parseEnvToggle(
+  (import.meta as any)?.env?.VITE_ENABLE_HISTORY_FUTURE_SESSION,
+)
 const readFeatureFlags = (): FeatureFlags => {
   if (typeof window === 'undefined') return {}
   try {
@@ -68,6 +72,20 @@ const disableRepeatOriginal = () => {
   const flags = readFeatureFlags()
   if (flags.repeatOriginal === false) return
   flags.repeatOriginal = false
+  writeFeatureFlags(flags)
+}
+const isHistoryFutureSessionEnabled = (): boolean => {
+  const override = envOverride(ENV_ENABLE_HISTORY_FUTURE_SESSION)
+  if (override !== null) {
+    return override
+  }
+  const flags = readFeatureFlags()
+  return flags.historyFutureSession !== false
+}
+const disableHistoryFutureSession = () => {
+  const flags = readFeatureFlags()
+  if (flags.historyFutureSession === false) return
+  flags.historyFutureSession = false
   writeFeatureFlags(flags)
 }
 const isHistoryNotesEnabled = (): boolean => {
@@ -157,9 +175,9 @@ type HistoryPayload = Record<string, unknown>
 
 const stripHistoryPayloadColumns = (
   payload: HistoryPayload,
-  removal: { repeat?: boolean; notes?: boolean; subtasks?: boolean },
+  removal: { repeat?: boolean; notes?: boolean; subtasks?: boolean; future?: boolean },
 ): HistoryPayload => {
-  if (!removal.repeat && !removal.notes && !removal.subtasks) {
+  if (!removal.repeat && !removal.notes && !removal.subtasks && !removal.future) {
     return payload
   }
   const next = { ...payload }
@@ -172,6 +190,9 @@ const stripHistoryPayloadColumns = (
   }
   if (removal.subtasks) {
     delete (next as any).subtasks
+  }
+  if (removal.future) {
+    delete (next as any).future_session
   }
   return next
 }
@@ -189,7 +210,9 @@ const upsertHistoryPayloads = async (
       errorMentionsColumn(resp.error, 'repeating_session_id') || errorMentionsColumn(resp.error, 'original_time')
     const missingNotesColumn = errorMentionsColumn(resp.error, 'notes')
     const missingSubtasksColumn = errorMentionsColumn(resp.error, 'subtasks')
-    const removalNeeded = missingRepeatColumns || missingNotesColumn || missingSubtasksColumn
+    const missingFutureColumn = errorMentionsColumn(resp.error, 'future_session')
+    const removalNeeded =
+      missingRepeatColumns || missingNotesColumn || missingSubtasksColumn || missingFutureColumn
     if (!removalNeeded) {
       break
     }
@@ -202,11 +225,15 @@ const upsertHistoryPayloads = async (
     if (missingSubtasksColumn && isHistorySubtasksEnabled()) {
       disableHistorySubtasks()
     }
+    if (missingFutureColumn && isHistoryFutureSessionEnabled()) {
+      disableHistoryFutureSession()
+    }
     usedPayloads = usedPayloads.map((payload) =>
       stripHistoryPayloadColumns(payload, {
         repeat: missingRepeatColumns,
         notes: missingNotesColumn,
         subtasks: missingSubtasksColumn,
+        future: missingFutureColumn,
       }),
     )
     resp = await attempt(usedPayloads)
@@ -1148,6 +1175,7 @@ const payloadFromRecord = (
   const INCLUDE_SUBTASKS = isHistorySubtasksEnabled()
   const includeRepeat = ENABLE_REPEAT_ORIGINAL && !!record.repeatingSessionId
   const includeOriginal = ENABLE_REPEAT_ORIGINAL && Number.isFinite(record.originalTime as number)
+  const includeFuture = isHistoryFutureSessionEnabled() && typeof record.futureSession === 'boolean'
   return {
     id: record.id,
     user_id: userId,
@@ -1171,6 +1199,7 @@ const payloadFromRecord = (
     // Include server-side resolution metadata if enabled
     ...(includeRepeat ? { repeating_session_id: record.repeatingSessionId } : {}),
     ...(includeOriginal ? { original_time: new Date(record.originalTime as number).toISOString() } : {}),
+    ...(includeFuture ? { future_session: record.futureSession } : {}),
   }
 }
 
