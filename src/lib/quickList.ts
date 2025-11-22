@@ -25,8 +25,9 @@ export type QuickItem = {
 
 export const QUICK_LIST_STORAGE_KEY = 'nc-taskwatch-quick-list-v1'
 export const QUICK_LIST_UPDATE_EVENT = 'nc-quick-list:updated'
-const QUICK_LIST_USER_STORAGE_KEY = 'nc-taskwatch-quick-list-user'
-const QUICK_LIST_GUEST_USER_ID = '__guest__'
+export const QUICK_LIST_USER_STORAGE_KEY = 'nc-taskwatch-quick-list-user'
+export const QUICK_LIST_GUEST_USER_ID = '__guest__'
+export const QUICK_LIST_USER_EVENT = 'nc-quick-list:user-updated'
 
 const QUICK_LIST_DEFAULT_ITEMS: QuickItem[] = [
   {
@@ -112,6 +113,9 @@ const setStoredQuickListUserId = (userId: string | null): void => {
     } else {
       window.localStorage.setItem(QUICK_LIST_USER_STORAGE_KEY, userId)
     }
+    try {
+      window.dispatchEvent(new Event(QUICK_LIST_USER_EVENT))
+    } catch {}
   } catch {}
 }
 
@@ -120,6 +124,8 @@ const normalizeQuickListUserId = (userId: string | null | undefined): string =>
 
 const isGuestQuickListUser = (userId: string | null): boolean =>
   !userId || userId === QUICK_LIST_GUEST_USER_ID
+
+export const readQuickListOwnerId = (): string | null => readStoredQuickListUserId()
 
 const sanitizeSubtask = (value: unknown, index: number): QuickSubtask | null => {
   if (typeof value !== 'object' || value === null) return null

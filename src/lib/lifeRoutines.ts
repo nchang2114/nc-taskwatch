@@ -12,8 +12,9 @@ export type LifeRoutineConfig = {
 
 export const LIFE_ROUTINE_STORAGE_KEY = 'nc-taskwatch-life-routines-v1'
 export const LIFE_ROUTINE_UPDATE_EVENT = 'nc-life-routines:updated'
-const LIFE_ROUTINE_USER_STORAGE_KEY = 'nc-taskwatch-life-routines-user'
-const LIFE_ROUTINE_GUEST_USER_ID = '__guest__'
+export const LIFE_ROUTINE_USER_STORAGE_KEY = 'nc-taskwatch-life-routines-user'
+export const LIFE_ROUTINE_GUEST_USER_ID = '__guest__'
+export const LIFE_ROUTINE_USER_EVENT = 'nc-life-routines:user-updated'
 
 const cloneRoutine = (routine: LifeRoutineConfig): LifeRoutineConfig => ({ ...routine })
 
@@ -209,6 +210,9 @@ const setStoredLifeRoutineUserId = (userId: string | null): void => {
     } else {
       window.localStorage.setItem(LIFE_ROUTINE_USER_STORAGE_KEY, userId)
     }
+    try {
+      window.dispatchEvent(new Event(LIFE_ROUTINE_USER_EVENT))
+    } catch {}
   } catch {}
 }
 
@@ -217,6 +221,8 @@ const normalizeLifeRoutineUserId = (userId: string | null | undefined): string =
 
 const isGuestLifeRoutineUser = (userId: string | null): boolean =>
   !userId || userId === LIFE_ROUTINE_GUEST_USER_ID
+
+export const readLifeRoutineOwnerId = (): string | null => readStoredLifeRoutineUserId()
 
 // Read raw local value without default seeding; returns null when key is absent
 const readRawLifeRoutinesLocal = (): unknown | null => {

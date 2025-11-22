@@ -46,9 +46,13 @@ import {
   LIFE_ROUTINE_STORAGE_KEY,
   LIFE_ROUTINE_UPDATE_EVENT,
   readStoredLifeRoutines,
+  readLifeRoutineOwnerId,
   sanitizeLifeRoutineList,
   syncLifeRoutinesWithSupabase,
   writeStoredLifeRoutines,
+  LIFE_ROUTINE_USER_STORAGE_KEY,
+  LIFE_ROUTINE_GUEST_USER_ID,
+  LIFE_ROUTINE_USER_EVENT,
   type LifeRoutineConfig,
 } from '../lib/lifeRoutines'
 import {
@@ -61,7 +65,17 @@ import {
 } from '../lib/goalsSync'
 import { broadcastFocusTask } from '../lib/focusChannel'
 import { broadcastScheduleTask } from '../lib/scheduleChannel'
-import { readStoredQuickList, writeStoredQuickList, subscribeQuickList, type QuickItem, type QuickSubtask } from '../lib/quickList'
+import {
+  readStoredQuickList,
+  writeStoredQuickList,
+  subscribeQuickList,
+  readQuickListOwnerId,
+  QUICK_LIST_USER_STORAGE_KEY,
+  QUICK_LIST_GUEST_USER_ID,
+  QUICK_LIST_USER_EVENT,
+  type QuickItem,
+  type QuickSubtask,
+} from '../lib/quickList'
 import { fetchQuickListRemoteItems, ensureQuickListRemoteStructures, QUICK_LIST_GOAL_NAME } from '../lib/quickListRemote'
 import { logDebug, logInfo, logWarn } from '../lib/logging'
 
@@ -5670,6 +5684,7 @@ export default function GoalsPage(): ReactElement {
   const submittingEdits = useRef(new Set<string>())
   const [lifeRoutinesExpanded, setLifeRoutinesExpanded] = useState(false)
   const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
+  const [lifeRoutineOwnerSignal, setLifeRoutineOwnerSignal] = useState(0)
   const initialLifeRoutineCountRef = useRef(lifeRoutineTasks.length)
   const [lifeRoutineMenuOpenId, setLifeRoutineMenuOpenId] = useState<string | null>(null)
   const lifeRoutineMenuRef = useRef<HTMLDivElement | null>(null)
@@ -5702,6 +5717,47 @@ export default function GoalsPage(): ReactElement {
       cancelled = true
     }
   }, [])
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const bump = () => setLifeRoutineOwnerSignal((value) => value + 1)
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === LIFE_ROUTINE_USER_STORAGE_KEY) {
+        bump()
+      }
+    }
+    window.addEventListener(LIFE_ROUTINE_USER_EVENT, bump as EventListener)
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener(LIFE_ROUTINE_USER_EVENT, bump as EventListener)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
+  useEffect(() => {
+    if (lifeRoutineOwnerSignal === 0) {
+      return
+    }
+    try {
+      setLifeRoutineTasks(readStoredLifeRoutines())
+    } catch {}
+    const ownerId = readLifeRoutineOwnerId()
+    if (!ownerId || ownerId === LIFE_ROUTINE_GUEST_USER_ID) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const synced = await syncLifeRoutinesWithSupabase()
+      if (!cancelled && synced) {
+        setLifeRoutineTasks((current) =>
+          JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
+        )
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [lifeRoutineOwnerSignal])
 
   const [editingLifeRoutineDescriptionId, setEditingLifeRoutineDescriptionId] = useState<string | null>(null)
   const [lifeRoutineDescriptionDraft, setLifeRoutineDescriptionDraft] = useState('')
@@ -5767,6 +5823,7 @@ export default function GoalsPage(): ReactElement {
   // Quick List (simple tasks without buckets)
   const [quickListExpanded, setQuickListExpanded] = useState(() => readStoredQuickListExpanded())
   const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => readStoredQuickList())
+  const [quickListOwnerSignal, setQuickListOwnerSignal] = useState(0)
   const [quickDraft, setQuickDraft] = useState('')
   const [quickDraftActive, setQuickDraftActive] = useState(false)
   const quickDraftInputRef = useRef<HTMLInputElement | null>(null)
@@ -5793,6 +5850,25 @@ export default function GoalsPage(): ReactElement {
       window.localStorage.setItem(QUICK_LIST_EXPANDED_STORAGE_KEY, quickListExpanded ? 'true' : 'false')
     } catch {}
   }, [quickListExpanded])
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const bump = () => {
+      setQuickListOwnerSignal((value) => value + 1)
+    }
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === QUICK_LIST_USER_STORAGE_KEY) {
+        bump()
+      }
+    }
+    window.addEventListener(QUICK_LIST_USER_EVENT, bump as EventListener)
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener(QUICK_LIST_USER_EVENT, bump as EventListener)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
   // Quick List header menu
   const [quickListMenuOpen, setQuickListMenuOpen] = useState(false)
   const quickListMenuRef = useRef<HTMLDivElement | null>(null)
@@ -5890,6 +5966,19 @@ export default function GoalsPage(): ReactElement {
     },
     [],
   )
+  useEffect(() => {
+    if (quickListOwnerSignal === 0) {
+      return
+    }
+    try {
+      setQuickListItems(readStoredQuickList())
+    } catch {}
+    const ownerId = readQuickListOwnerId()
+    if (!ownerId || ownerId === QUICK_LIST_GUEST_USER_ID) {
+      return
+    }
+    refreshQuickListFromSupabase('owner-change')
+  }, [quickListOwnerSignal, refreshQuickListFromSupabase])
   // Quick List: inline edit mechanics to match bucket tasks
   const [quickEdits, setQuickEdits] = useState<Record<string, string>>({})
   const quickEditRefs = useRef(new Map<string, HTMLSpanElement>())

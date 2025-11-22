@@ -58,11 +58,24 @@ import {
   LIFE_ROUTINE_STORAGE_KEY,
   LIFE_ROUTINE_UPDATE_EVENT,
   readStoredLifeRoutines,
+  readLifeRoutineOwnerId,
   sanitizeLifeRoutineList,
   syncLifeRoutinesWithSupabase,
+  LIFE_ROUTINE_USER_STORAGE_KEY,
+  LIFE_ROUTINE_GUEST_USER_ID,
+  LIFE_ROUTINE_USER_EVENT,
   type LifeRoutineConfig,
 } from '../lib/lifeRoutines'
-import { readStoredQuickList, subscribeQuickList, writeStoredQuickList, type QuickItem } from '../lib/quickList'
+import {
+  readStoredQuickList,
+  subscribeQuickList,
+  writeStoredQuickList,
+  readQuickListOwnerId,
+  QUICK_LIST_USER_STORAGE_KEY,
+  QUICK_LIST_GUEST_USER_ID,
+  QUICK_LIST_USER_EVENT,
+  type QuickItem,
+} from '../lib/quickList'
 import { fetchQuickListRemoteItems } from '../lib/quickListRemote'
 import {
   CURRENT_SESSION_EVENT_NAME,
@@ -679,12 +692,14 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
   const [expandedBuckets, setExpandedBuckets] = useState<Set<string>>(() => new Set())
   const [lifeRoutinesExpanded, setLifeRoutinesExpanded] = useState(false)
   const [lifeRoutineTasks, setLifeRoutineTasks] = useState<LifeRoutineConfig[]>(() => readStoredLifeRoutines())
+  const [lifeRoutineOwnerSignal, setLifeRoutineOwnerSignal] = useState(0)
   const initialLifeRoutineCountRef = useRef(lifeRoutineTasks.length)
   const lifeRoutineBucketIds = useMemo(
     () => new Set(lifeRoutineTasks.map((task) => task.bucketId)),
     [lifeRoutineTasks],
   )
   const [quickListItems, setQuickListItems] = useState<QuickItem[]>(() => readStoredQuickList())
+  const [quickListOwnerSignal, setQuickListOwnerSignal] = useState(0)
   const [quickListExpanded, setQuickListExpanded] = useState(false)
   const [quickListRemoteIds, setQuickListRemoteIds] = useState<{ goalId: string; bucketId: string } | null>(null)
   const quickListRefreshInFlightRef = useRef(false)
@@ -717,6 +732,23 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       try {
         unsubscribe()
       } catch {}
+    }
+  }, [])
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const bump = () => setQuickListOwnerSignal((value) => value + 1)
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === QUICK_LIST_USER_STORAGE_KEY) {
+        bump()
+      }
+    }
+    window.addEventListener(QUICK_LIST_USER_EVENT, bump as EventListener)
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener(QUICK_LIST_USER_EVENT, bump as EventListener)
+      window.removeEventListener('storage', handleStorage)
     }
   }, [])
   useEffect(() => {
@@ -814,6 +846,19 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
     },
     [],
   )
+  useEffect(() => {
+    if (quickListOwnerSignal === 0) {
+      return
+    }
+    try {
+      setQuickListItems(readStoredQuickList())
+    } catch {}
+    const ownerId = readQuickListOwnerId()
+    if (!ownerId || ownerId === QUICK_LIST_GUEST_USER_ID) {
+      return
+    }
+    refreshQuickListFromSupabase('owner-change')
+  }, [quickListOwnerSignal, refreshQuickListFromSupabase])
   const [focusSource, setFocusSource] = useState<FocusSource | null>(() => readStoredFocusSource())
   const [customTaskDraft, setCustomTaskDraft] = useState('')
   const [isCompletingFocus, setIsCompletingFocus] = useState(false)
@@ -844,6 +889,47 @@ export function FocusPage({ viewportWidth: _viewportWidth }: FocusPageProps) {
       cancelled = true
     }
   }, [])
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const bump = () => setLifeRoutineOwnerSignal((value) => value + 1)
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === LIFE_ROUTINE_USER_STORAGE_KEY) {
+        bump()
+      }
+    }
+    window.addEventListener(LIFE_ROUTINE_USER_EVENT, bump as EventListener)
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener(LIFE_ROUTINE_USER_EVENT, bump as EventListener)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
+  useEffect(() => {
+    if (lifeRoutineOwnerSignal === 0) {
+      return
+    }
+    try {
+      setLifeRoutineTasks(readStoredLifeRoutines())
+    } catch {}
+    const ownerId = readLifeRoutineOwnerId()
+    if (!ownerId || ownerId === LIFE_ROUTINE_GUEST_USER_ID) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const synced = await syncLifeRoutinesWithSupabase()
+      if (!cancelled && synced) {
+        setLifeRoutineTasks((current) =>
+          JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
+        )
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [lifeRoutineOwnerSignal])
 
 useEffect(() => {
   if (shouldSkipGoalsRemote()) {
