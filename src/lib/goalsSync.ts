@@ -271,7 +271,10 @@ const getGuestSnapshot = (): GoalSnapshot[] => {
   }
 }
 
-export const ensureGoalsUser = (userId: string | null): void => {
+export const ensureGoalsUser = (
+  userId: string | null,
+  options?: { suppressGuestSnapshot?: boolean },
+): void => {
   if (typeof window === 'undefined') {
     return
   }
@@ -284,7 +287,7 @@ export const ensureGoalsUser = (userId: string | null): void => {
   const migratingFromGuest = current === GOALS_GUEST_USER_ID && normalized !== GOALS_GUEST_USER_ID
   setStoredGoalsSnapshotUserId(normalized)
   if (normalized === GOALS_GUEST_USER_ID) {
-    if (current !== GOALS_GUEST_USER_ID) {
+    if (current !== GOALS_GUEST_USER_ID && !options?.suppressGuestSnapshot) {
       const snapshot = getGuestSnapshot()
       publishGoalsSnapshot(snapshot)
     }

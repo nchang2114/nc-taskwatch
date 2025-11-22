@@ -347,6 +347,7 @@ function MainApp() {
   const authModalRef = useRef<HTMLDivElement | null>(null)
   const previousProfileRef = useRef<UserProfile | null>(null)
   const authEmailLookupReqIdRef = useRef(0)
+  const lastAlignedUserIdRef = useRef<string | null | undefined>(undefined)
   const isSignedIn = Boolean(userProfile)
   const userInitials = useMemo(() => {
     if (!userProfile?.name) {
@@ -692,25 +693,39 @@ function MainApp() {
     const client = supabase
     let mounted = true
 
+    const resetLocalStoresToGuest = (options?: { suppressGoalsSnapshot?: boolean }) => {
+      ensureQuickListUser(null)
+      ensureLifeRoutineUser(null)
+      ensureHistoryUser(null)
+      ensureGoalsUser(null, options?.suppressGoalsSnapshot ? { suppressGuestSnapshot: true } : undefined)
+      ensureRepeatingRulesUser(null)
+    }
+
     const alignLocalStoresForUser = async (userId: string | null): Promise<void> => {
+      const previousUserId = lastAlignedUserIdRef.current
+      const userChanged = previousUserId !== userId
       let migrated = false
       try {
         migrated = await bootstrapGuestDataIfNeeded(userId)
       } catch (error) {
         console.error('[bootstrap] failed during alignLocalStoresForUser', error)
       }
-      if (!migrated && userId) {
-        ensureQuickListUser(null)
-        ensureLifeRoutineUser(null)
-        ensureHistoryUser(null)
-        ensureGoalsUser(null)
-        ensureRepeatingRulesUser(null)
+      if (!userChanged && !migrated) {
+        return
       }
-      ensureQuickListUser(userId)
-      ensureLifeRoutineUser(userId)
-      ensureHistoryUser(userId)
-      ensureGoalsUser(userId)
-      ensureRepeatingRulesUser(userId)
+      if (userId) {
+        if (!migrated) {
+          resetLocalStoresToGuest({ suppressGoalsSnapshot: true })
+        }
+        ensureQuickListUser(userId)
+        ensureLifeRoutineUser(userId)
+        ensureHistoryUser(userId)
+        ensureGoalsUser(userId)
+        ensureRepeatingRulesUser(userId)
+      } else {
+        resetLocalStoresToGuest()
+      }
+      lastAlignedUserIdRef.current = userId
     }
 
     const applySessionUser = async (user: User | null | undefined): Promise<void> => {

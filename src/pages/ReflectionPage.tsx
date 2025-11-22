@@ -2223,6 +2223,7 @@ const resolveGoalMetadata = (
   const bucketNameRaw = entry.bucketName?.trim()
   const normalizedGoalName = goalNameRaw?.toLowerCase() ?? ''
   const normalizedBucketName = bucketNameRaw?.toLowerCase() ?? ''
+  const storedGoalSurfaceInfo = entry.goalSurface ? getSurfaceColorInfo(entry.goalSurface) : undefined
   // Treat logged Snapback markers as a virtual goal with crimson/orange accent
   const parseSnapbackReason = (taskName: string): string | null => {
     const prefix = 'Snapback • '
@@ -2260,7 +2261,7 @@ const resolveGoalMetadata = (
 
   const goalName = entry.goalName?.trim()
   if (goalName && goalName.length > 0) {
-    const colorInfo = goalColorLookup.get(goalName.toLowerCase())
+    const colorInfo = goalColorLookup.get(goalName.toLowerCase()) ?? storedGoalSurfaceInfo
     return { label: goalName, colorInfo }
   }
 
@@ -2272,7 +2273,7 @@ const resolveGoalMetadata = (
     }
   }
 
-  const fallbackSurfaceInfo = getSurfaceColorInfo(entry.goalSurface)
+  const fallbackSurfaceInfo = storedGoalSurfaceInfo ?? getSurfaceColorInfo(entry.goalSurface)
   return { label: UNCATEGORISED_LABEL, colorInfo: fallbackSurfaceInfo }
 }
 
