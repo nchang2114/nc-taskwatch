@@ -26,7 +26,7 @@
   gap: clamp(0.35rem, 1.2vw, 0.6rem);
   max-width: 70%; 
 }
- 
+  
 .snapback-tool__title {
   margin: 0;
   font-family: var(--font-display);
