@@ -5699,18 +5699,20 @@ export default function GoalsPage(): ReactElement {
   const lifeRoutinesSyncedRef = useRef(false)
   useEffect(() => {
     let cancelled = false
+    lifeRoutinesSyncedRef.current = false
     void (async () => {
       const synced = await syncLifeRoutinesWithSupabase()
       if (!cancelled) {
-        lifeRoutinesSyncedRef.current = true
         if (synced) {
           if (synced.length === 0 && initialLifeRoutineCountRef.current > 0) {
+            lifeRoutinesSyncedRef.current = true
             return
           }
           setLifeRoutineTasks((current) =>
             JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
           )
         }
+        lifeRoutinesSyncedRef.current = true
       }
     })()
     return () => {
@@ -5738,20 +5740,25 @@ export default function GoalsPage(): ReactElement {
     if (lifeRoutineOwnerSignal === 0) {
       return
     }
+    lifeRoutinesSyncedRef.current = false
     try {
       setLifeRoutineTasks(readStoredLifeRoutines())
     } catch {}
     const ownerId = readLifeRoutineOwnerId()
     if (!ownerId || ownerId === LIFE_ROUTINE_GUEST_USER_ID) {
+      lifeRoutinesSyncedRef.current = true
       return
     }
     let cancelled = false
     void (async () => {
       const synced = await syncLifeRoutinesWithSupabase()
-      if (!cancelled && synced) {
-        setLifeRoutineTasks((current) =>
-          JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
-        )
+      if (!cancelled) {
+        if (synced) {
+          setLifeRoutineTasks((current) =>
+            JSON.stringify(current) === JSON.stringify(synced) ? current : synced,
+          )
+        }
+        lifeRoutinesSyncedRef.current = true
       }
     })()
     return () => {
