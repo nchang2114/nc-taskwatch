@@ -1083,6 +1083,7 @@ export const ensureHistoryUser = (userId: string | null): void => {
   }
   const migratingFromGuest = current === HISTORY_GUEST_USER_ID && normalized !== HISTORY_GUEST_USER_ID
   setStoredHistoryUserId(normalized)
+  try { window.dispatchEvent(new Event(HISTORY_USER_EVENT)) } catch {}
   if (normalized === HISTORY_GUEST_USER_ID) {
     if (current !== HISTORY_GUEST_USER_ID) {
       const samples = createSampleHistoryRecords()
