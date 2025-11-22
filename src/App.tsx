@@ -328,6 +328,7 @@ function MainApp() {
   const [authCreatePassword, setAuthCreatePassword] = useState('')
   const [authCreatePasswordVisible, setAuthCreatePasswordVisible] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
   const [activeSettingsSection, setActiveSettingsSection] = useState(SETTINGS_SECTIONS[0]?.id ?? 'general')
   const [authEmailLookupValue, setAuthEmailLookupValue] = useState('')
   const [authEmailLookupResult, setAuthEmailLookupResult] = useState<boolean | null>(null)
@@ -801,6 +802,7 @@ function MainApp() {
   }, [settingsOpen, authModalOpen])
 
   const handleLogOut = useCallback(async () => {
+    setIsSigningOut(true)
     setActiveTab('focus')
     closeProfileMenu()
     if (supabase) {
@@ -835,7 +837,7 @@ function MainApp() {
         window.location.replace(window.location.origin)
       }, 10)
     }
-  }, [closeProfileMenu, setActiveTab])
+  }, [closeProfileMenu, setActiveTab, setIsSigningOut])
 
   const handleContinueGuest = useCallback(() => {
     setUserProfile(null)
@@ -855,6 +857,10 @@ function MainApp() {
   const closeSettingsPanel = useCallback(() => {
     setSettingsOpen(false)
   }, [])
+
+  if (isSigningOut) {
+    return <SignOutScreen />
+  }
 
   const isCompactBrand = viewportWidth <= COMPACT_BRAND_BREAKPOINT
 
@@ -1899,6 +1905,17 @@ function AuthCallbackScreen(): React.ReactElement {
       <div className="auth-callback-panel">
         <p className="auth-callback-title">Signing you in…</p>
         <p className="auth-callback-text">Hang tight while we finish connecting your account.</p>
+      </div>
+    </div>
+  )
+}
+
+function SignOutScreen(): React.ReactElement {
+  return (
+    <div className="auth-callback-screen">
+      <div className="auth-callback-panel">
+        <p className="auth-callback-title">Signing you out…</p>
+        <p className="auth-callback-text">Hang tight while we wrap things up.</p>
       </div>
     </div>
   )
