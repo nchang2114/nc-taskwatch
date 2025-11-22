@@ -6564,18 +6564,32 @@ export default function GoalsPage(): ReactElement {
     [quickListItems, refreshQuickListFromSupabase],
   )
   const deleteAllCompletedQuickItems = useCallback(() => {
-    const completedIds = quickListItems.filter((it) => it.completed && isUuid(it.id)).map((it) => it.id)
-    if (completedIds.length === 0) {
+    const removable = quickListItems.filter((it) => it.completed)
+    if (removable.length === 0) {
       return
     }
-    const stored = writeStoredQuickList(quickListItems.filter((it) => !it.completed).map((it, i) => ({ ...it, sortIndex: i })))
+    const kept = quickListItems
+      .filter((it) => !it.completed)
+      .map((it, i) => ({ ...it, sortIndex: i }))
+    const stored = writeStoredQuickList(kept)
     setQuickListItems(stored)
     void (async () => {
       const bucketId = await ensureQuickListBucketId()
       if (!bucketId) return
-      quickListDebug('bulk deleting remote completed tasks', { bucketId, count: completedIds.length })
+      quickListDebug('bulk deleting remote completed tasks', { bucketId, count: removable.length })
       try {
-        await Promise.allSettled(completedIds.map((taskId) => apiDeleteTaskById(taskId, bucketId)))
+        const remoteIds = removable.filter((it) => isUuid(it.id)).map((it) => it.id as string)
+        await Promise.allSettled(remoteIds.map((taskId) => apiDeleteTaskById(taskId, bucketId)))
+        const localIds = removable.filter((it) => !isUuid(it.id)).map((it) => it.id)
+        if (localIds.length > 0) {
+          try {
+            const current = quickListItems
+              .filter((it) => !localIds.includes(it.id))
+              .map((it, i) => ({ ...it, sortIndex: i }))
+            writeStoredQuickList(current)
+            setQuickListItems(current)
+          } catch {}
+        }
       } catch (error) {
         quickListWarn('failed bulk delete remote tasks', error)
         refreshQuickListFromSupabase('delete-completed')
