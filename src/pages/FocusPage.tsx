@@ -41,7 +41,11 @@ import {
   sanitizeSurfaceStyle,
   type SurfaceStyle,
 } from '../lib/surfaceStyles'
-import { fetchRepeatingSessionRules, type RepeatingSessionRule } from '../lib/repeatingSessions'
+import {
+  fetchRepeatingSessionRules,
+  readLocalRepeatingRules,
+  type RepeatingSessionRule,
+} from '../lib/repeatingSessions'
 import {
   readRepeatingExceptions,
   subscribeRepeatingExceptions,
@@ -1601,13 +1605,26 @@ useEffect(() => {
   const [repeatingRules, setRepeatingRules] = useState<RepeatingSessionRule[]>([])
   useEffect(() => {
     let cancelled = false
-    void (async () => {
+    const hydrateRepeatingRules = async () => {
+      if (historyOwnerSignal > 0) {
+        try {
+          const localRules = readLocalRepeatingRules()
+          if (!cancelled) {
+            setRepeatingRules(localRules)
+          }
+        } catch {}
+      }
       try {
         const rules = await fetchRepeatingSessionRules()
-        if (!cancelled && Array.isArray(rules)) setRepeatingRules(rules)
+        if (!cancelled && Array.isArray(rules)) {
+          setRepeatingRules(rules)
+        }
       } catch {}
-    })()
-    return () => { cancelled = true }
+    }
+    void hydrateRepeatingRules()
+    return () => {
+      cancelled = true
+    }
   }, [historyOwnerSignal])
 
   const guideNowSuggestions = useMemo<ScheduledSuggestion[]>(() => {

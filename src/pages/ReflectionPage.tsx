@@ -59,6 +59,7 @@ import {
   createRepeatingRuleForEntry,
   deactivateMatchingRulesForEntry,
   deleteMatchingRulesForEntry,
+  readLocalRepeatingRules,
   type RepeatingSessionRule,
 } from '../lib/repeatingSessions'
 import {
@@ -2488,7 +2489,17 @@ export default function ReflectionPage() {
   // Load repeating session rules once and refresh when account ownership changes
   useEffect(() => {
     let cancelled = false
-    const load = async () => {
+    const hydrateRepeatingRules = async () => {
+      if (historyOwnerSignal > 0) {
+        try {
+          const localRules = readLocalRepeatingRules()
+          if (!cancelled) {
+            setRepeatingRules(localRules)
+          }
+        } catch (err) {
+          // ignore local read issues
+        }
+      }
       try {
         const rules = await fetchRepeatingSessionRules()
         if (!cancelled && Array.isArray(rules)) setRepeatingRules(rules)
@@ -2496,7 +2507,7 @@ export default function ReflectionPage() {
         // Silenced repeating sessions load warning
       }
     }
-    void load()
+    void hydrateRepeatingRules()
     return () => {
       cancelled = true
     }
